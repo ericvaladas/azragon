@@ -11,7 +11,7 @@ You are a skyscraper-sized alien that has crash-landed on Earth. Flatten the cit
 | Orbit camera | Drag | Drag (left or right button) |
 | Zoom | — | Mouse wheel |
 | Leap | Tap Leap button, then tap a spot | Space, then click |
-| Dash (level-up pick) | Tap Dash button, then tap a direction | E, then click |
+| Dash (level-up pick) | Tap Dash button (charges straight ahead) | E |
 | Roar (level-up pick) | Tap Roar button | R |
 
 ## Threats

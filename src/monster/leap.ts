@@ -14,3 +14,8 @@ export function leapPosition(from: Vec2, to: Vec2, t: number, duration: number, 
   const k = Math.min(1, Math.max(0, t / duration));
   return { x: from.x + (to.x - from.x) * k, y: peak * 4 * k * (1 - k), z: from.z + (to.z - from.z) * k };
 }
+
+/** Dash destination: `range` straight ahead along the monster's facing (forward = (sin yaw, cos yaw)). */
+export function dashTarget(from: Vec2, yaw: number, range: number): Vec2 {
+  return { x: from.x + Math.sin(yaw) * range, z: from.z + Math.cos(yaw) * range };
+}

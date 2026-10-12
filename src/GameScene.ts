@@ -39,7 +39,7 @@ import { LevelUpMoment } from './systems/levelUpMoment';
 import { LevelUpAura } from './systems/LevelUpAura';
 import { ShieldFx } from './systems/ShieldFx';
 import { shieldHitPoint } from './systems/shieldHit';
-import { leapTarget } from './monster/leap';
+import { dashTarget, leapTarget } from './monster/leap';
 import { footTargets, strikePlan } from './monster/strike';
 import { mortarTargets, nearestWithin } from './systems/targeting';
 import { Passives } from './systems/Passives';
@@ -391,24 +391,28 @@ export class GameScene {
       if (this.abilities.trigger('roar')) this.roar();
       return;
     }
+    if (id === 'dash') {
+      this.dash();
+      return;
+    }
     const aiming = this.abilities.toggleAim(id);
     this.monster.crouch = aiming === 'leap';
     if (!aiming) this.markers.setAim(null, 0);
   }
 
-  /** Aim-ring placement and radius for the ability being aimed. */
+  /** Leap aim-ring placement: the ground point clamped to Leap range. */
   private aimPoint(ground: THREE.Vector3): { to: Vec2; radius: number } {
     const m = this.monster.position;
-    const aim = this.abilities.aiming === 'dash' ? CONFIG.abilities.dash : CONFIG.abilities.leap;
-    const to = leapTarget({ x: m.x, z: m.z }, { x: ground.x, z: ground.z }, aim.range);
-    return { to, radius: this.abilities.aiming === 'dash' ? CONFIG.abilities.dash.crushRadius : CONFIG.abilities.leap.landRadius };
+    const to = leapTarget({ x: m.x, z: m.z }, { x: ground.x, z: ground.z }, CONFIG.abilities.leap.range);
+    return { to, radius: CONFIG.abilities.leap.landRadius };
   }
 
-  private dashTo(ground: THREE.Vector3): void {
+  /** Dash: charge the full range straight ahead, the way the monster is facing. */
+  private dash(): void {
     const m = this.monster;
-    const { to } = this.aimPoint(ground);
-    if (!this.abilities.trigger('dash')) return;
-        m.crouch = false;
+    if (m.busy || !this.abilities.trigger('dash')) return;
+    const to = dashTarget({ x: m.position.x, z: m.position.z }, m.yaw, CONFIG.abilities.dash.range);
+    m.crouch = false;
     m.startDash(to);
     this.order = null;
     this.markers.setTarget(null);
@@ -708,10 +712,7 @@ export class GameScene {
     if (this.abilities.aiming) {
       this.setRay(x, y);
       const g = this.raycaster.ray.intersectPlane(this.groundPlane, this.tmpV);
-      if (g) {
-        if (this.abilities.aiming === 'dash') this.dashTo(g.clone());
-        else this.leapTo(g.clone());
-      }
+      if (g) this.leapTo(g.clone());
       return;
     }
     const target = this.pickTarget(x, y);

@@ -40,14 +40,18 @@ describe('Abilities', () => {
     expect(a.ready('dash')).toBe(true);
   });
 
-  it('aims leap or dash, one at a time; pressing the same button again cancels', () => {
+  it('only Leap aims; pressing Leap again cancels', () => {
+    const a = new Abilities();
+    expect(a.toggleAim('leap')).toBe('leap');
+    expect(a.toggleAim('leap')).toBeNull();
+  });
+
+  it('firing Dash cancels a pending Leap aim', () => {
     const a = new Abilities();
     a.setRank('dash', 1);
-    expect(a.toggleAim('leap')).toBe('leap');
-    expect(a.toggleAim('dash')).toBe('dash');
-    expect(a.toggleAim('dash')).toBeNull();
-    a.setRank('dash', 0);
-    expect(a.toggleAim('dash')).toBeNull();
+    a.toggleAim('leap');
+    expect(a.trigger('dash')).toBe(true);
+    expect(a.aiming).toBeNull();
   });
 
   it('triggering the aimed ability ends aiming; aim needs the ability ready', () => {

@@ -1,8 +1,8 @@
 import { CONFIG } from '../config';
 
 export type ActiveId = 'leap' | 'dash' | 'roar';
-/** Abilities that need a ground point picked before they fire. */
-export type AimId = 'leap' | 'dash';
+/** Abilities that need a ground point picked before they fire (Dash fires straight ahead instead). */
+export type AimId = 'leap';
 export type AbilityView = { id: ActiveId; ready: boolean; cdFrac: number; aiming: boolean };
 
 /** Button order, left to right. */
@@ -10,7 +10,7 @@ const IDS: readonly ActiveId[] = ['leap', 'dash', 'roar'];
 
 /**
  * Active abilities: Leap is owned from the start; Dash and Roar are owned once picked at a level-up
- * (rank ≥ 1), and higher ranks shorten their cooldown. Also tracks the aim mode for Leap/Dash.
+ * (rank ≥ 1), and higher ranks shorten their cooldown. Also tracks Leap's aim mode.
  */
 export class Abilities {
   aiming: AimId | null = null;
@@ -52,7 +52,8 @@ export class Abilities {
   trigger(id: ActiveId): boolean {
     if (!this.ready(id)) return false;
     this.cd[id] = this.cooldown(id);
-    if (this.aiming === id) this.aiming = null;
+    // Firing any ability ends a pending Leap aim.
+    this.aiming = null;
     return true;
   }
 
