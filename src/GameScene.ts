@@ -770,12 +770,14 @@ export class GameScene {
     const pos = { x: m.position.x, z: m.position.z };
     if (!m.busy) {
       const auto = nearestInRange(pos, this.enemyTargets(), CONFIG.monster.spikeRange);
+      const autoMelee = nearestInRange(pos, this.enemyTargets().filter((t) => !t.airborne), CONFIG.monster.meleeRange);
       const order: BrainOrder =
         this.order?.kind === 'attack' ? { kind: 'attack', target: this.toBrain(this.order.target) } : this.order;
       const d = decide({
         pos,
         order,
         auto: auto ? this.toBrain(auto) : null,
+        autoMelee: autoMelee ? this.toBrain(autoMelee) : null,
         meleeRange: CONFIG.monster.meleeRange,
         spikeRange: CONFIG.monster.spikeRange,
         meleeReady: m.meleeReady(),
@@ -788,8 +790,8 @@ export class GameScene {
       }
       if (d.moveTo) m.moveToward(d.moveTo, dt, s.moveSpeedMult);
       else if (d.face) m.faceToward(d.face, dt);
-      if (d.attack === 'melee' && d.face) {
-        const plan = strikePlan(pos, m.yaw, d.face, CONFIG.monster.meleeRange);
+      if (d.attack === 'melee' && d.meleeAt) {
+        const plan = strikePlan(pos, m.yaw, d.meleeAt, CONFIG.monster.meleeRange);
         m.startMelee(s.cooldownMult, plan.leg, plan.point);
       }
       if (d.attack === 'ranged') this.fireSpikes(d.attackOn === 'order' && this.order?.kind === 'attack' ? this.order.target : auto);
