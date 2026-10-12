@@ -631,10 +631,10 @@ export class GameScene {
         return { position: self.monster.position, alive: self.monster.alive, airborne: self.monster.airborne };
       },
       get difficulty() {
-        return difficulty(self.runTime);
+        return difficulty(self.progression.level);
       },
-      get minutes() {
-        return self.runTime / 60;
+      get level() {
+        return self.progression.level;
       },
       rng: this.rng,
       particles: this.particles,
@@ -666,7 +666,7 @@ export class GameScene {
       this.overload(source, attacker);
       return;
     }
-    const r = resolveHit(amount, source, { dmgMult: difficulty(this.runTime).dmgMult, deflectChance: this.deflectChance(), airborne: m.airborne, invulnerable: this.passives.bubbleActive() }, Math.random());
+    const r = resolveHit(amount, source, { dmgMult: difficulty(this.progression.level).dmgMult, deflectChance: this.deflectChance(), airborne: m.airborne, invulnerable: this.passives.bubbleActive() }, Math.random());
     if (r.deflected) {
       this.particles.emit('spark', m.position.clone().setY(300 * CONFIG.monster.scale), 8);
       return;

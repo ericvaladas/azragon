@@ -7,30 +7,31 @@ import { mulberry32 } from '../util/rng';
 const none = (): Record<EnemyKind, number> => Object.fromEntries(ENEMY_KINDS.map((k) => [k, 0])) as Record<EnemyKind, number>;
 
 describe('difficulty', () => {
-  it('starts at 1x and grows linearly per minute', () => {
-    expect(difficulty(0)).toEqual({ hpMult: 1, dmgMult: 1 });
-    const d = difficulty(240);
-    expect(d.hpMult).toBeCloseTo(1 + 4 * CONFIG.difficulty.hpPerMin);
-    expect(d.dmgMult).toBeCloseTo(1 + 4 * CONFIG.difficulty.dmgPerMin);
+  it('is 1x at level 1 and grows linearly per level', () => {
+    expect(difficulty(1)).toEqual({ hpMult: 1, dmgMult: 1 });
+    const d = difficulty(9);
+    expect(d.hpMult).toBeCloseTo(1 + 8 * CONFIG.difficulty.hpPerLevel);
+    expect(d.dmgMult).toBeCloseTo(1 + 8 * CONFIG.difficulty.dmgPerLevel);
   });
 });
 
 describe('openKinds', () => {
-  it('follows the unlock timeline', () => {
-    expect(openKinds(0, none())).toEqual(['tank']);
-    expect(openKinds(19.9, none())).toEqual(['tank']);
-    expect(openKinds(20, none())).toEqual(['tank', 'jet']);
-    expect(openKinds(45, none())).toContain('blimp');
-    expect(openKinds(90, none())).toContain('sam');
-    expect(openKinds(150, none())).toContain('artillery');
-    expect(openKinds(210, none())).toContain('truck');
-    expect(openKinds(270, none())).toEqual([...ENEMY_KINDS]);
+  it('follows the unlock levels', () => {
+    expect(openKinds(1, none())).toEqual(['tank']);
+    expect(openKinds(2, none())).toEqual(['tank', 'jet']);
+    expect(openKinds(3, none())).toContain('blimp');
+    expect(openKinds(4, none())).not.toContain('sam');
+    expect(openKinds(5, none())).toContain('sam');
+    expect(openKinds(7, none())).toContain('artillery');
+    expect(openKinds(9, none())).toContain('truck');
+    expect(openKinds(10, none())).not.toContain('laser');
+    expect(openKinds(11, none())).toEqual([...ENEMY_KINDS]);
   });
   it('excludes kinds at their cap', () => {
     const alive = none();
     alive.laser = CONFIG.spawns.laser.cap;
     alive.tank = CONFIG.spawns.tank.cap;
-    const open = openKinds(300, alive);
+    const open = openKinds(20, alive);
     expect(open).not.toContain('laser');
     expect(open).not.toContain('tank');
   });
@@ -43,8 +44,7 @@ describe('pickKind', () => {
     let tanks = 0;
     let jets = 0;
     for (let i = 0; i < 10000; i++) {
-      const k = pickKind(['tank', 'jet'], rng);
-      if (k === 'tank') tanks++;
+      if (pickKind(['tank', 'jet'], rng) === 'tank') tanks++;
       else jets++;
     }
     const expected = CONFIG.spawns.tank.weight / CONFIG.spawns.jet.weight;

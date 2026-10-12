@@ -1,14 +1,15 @@
 import { CONFIG } from '../config';
 import { ENEMY_KINDS, type Difficulty, type EnemyKind } from './types';
 
-export function difficulty(tSec: number): Difficulty {
-  const m = Math.max(0, tSec) / 60;
-  return { hpMult: 1 + CONFIG.difficulty.hpPerMin * m, dmgMult: 1 + CONFIG.difficulty.dmgPerMin * m };
+/** Enemy HP/damage multipliers for the player's current level (1x at level 1). */
+export function difficulty(level: number): Difficulty {
+  const l = Math.max(0, level - 1);
+  return { hpMult: 1 + CONFIG.difficulty.hpPerLevel * l, dmgMult: 1 + CONFIG.difficulty.dmgPerLevel * l };
 }
 
-/** Kinds unlocked at tSec whose concurrent count is under cap, in ENEMY_KINDS order. */
-export function openKinds(tSec: number, alive: Record<EnemyKind, number>): EnemyKind[] {
-  return ENEMY_KINDS.filter((k) => tSec >= CONFIG.spawns[k].unlock && alive[k] < CONFIG.spawns[k].cap);
+/** Kinds unlocked at the player's level whose concurrent count is under cap, in ENEMY_KINDS order. */
+export function openKinds(level: number, alive: Record<EnemyKind, number>): EnemyKind[] {
+  return ENEMY_KINDS.filter((k) => level >= CONFIG.spawns[k].unlockLevel && alive[k] < CONFIG.spawns[k].cap);
 }
 
 /** Weighted random pick by CONFIG.spawns[k].weight. */

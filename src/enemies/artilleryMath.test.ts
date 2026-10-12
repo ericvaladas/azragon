@@ -23,10 +23,11 @@ describe('strikeHits', () => {
 });
 
 describe('salvoSize', () => {
-  it('starts at baseSalvo when artillery unlocks, grows with time, and caps', () => {
-    expect(salvoSize(A.unlockMin)).toBe(A.baseSalvo);
-    expect(salvoSize(A.unlockMin + A.minutesPerExtra)).toBe(A.baseSalvo + 1);
-    expect(salvoSize(0)).toBe(A.baseSalvo);
+  const L = CONFIG.spawns.artillery.unlockLevel;
+  it('starts at baseSalvo at the artillery unlock level, +1 every levelsPerExtra, capped', () => {
+    expect(salvoSize(L)).toBe(A.baseSalvo);
+    expect(salvoSize(L + A.levelsPerExtra)).toBe(A.baseSalvo + 1);
+    expect(salvoSize(1)).toBe(A.baseSalvo);
     expect(salvoSize(999)).toBe(A.maxSalvo);
   });
 });

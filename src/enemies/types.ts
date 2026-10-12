@@ -12,8 +12,8 @@ export type Difficulty = { hpMult: number; dmgMult: number };
 export interface WorldContext {
   readonly monster: { readonly position: THREE.Vector3; readonly alive: boolean; readonly airborne: boolean };
   readonly difficulty: Difficulty;
-  /** Run time in minutes (for salvo sizes etc.). */
-  readonly minutes: number;
+  /** Player level: drives unlocks, spawn rate, difficulty, and salvo sizes. */
+  readonly level: number;
   readonly rng: () => number;
   readonly particles: Particles;
   /** `attacker` is the enemy dealing the hit, when there is one (Overload fires beams back at it). */

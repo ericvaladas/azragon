@@ -9,10 +9,10 @@ export function strikeHits(monster: Vec2, strike: Vec2, radius: number): boolean
   return Math.hypot(monster.x - strike.x, monster.z - strike.z) <= radius;
 }
 
-/** Strikes per salvo: baseSalvo at unlock, +1 every minutesPerExtra, capped at maxSalvo. */
-export function salvoSize(minutes: number): number {
+/** Strikes per salvo: baseSalvo at the artillery unlock level, +1 every levelsPerExtra levels, capped at maxSalvo. */
+export function salvoSize(level: number): number {
   const A = CONFIG.artillery;
-  const extra = Math.floor(Math.max(0, minutes - A.unlockMin) / A.minutesPerExtra);
+  const extra = Math.floor(Math.max(0, level - CONFIG.spawns.artillery.unlockLevel) / A.levelsPerExtra);
   return Math.min(A.maxSalvo, A.baseSalvo + extra);
 }
 

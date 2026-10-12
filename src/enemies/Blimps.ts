@@ -48,6 +48,8 @@ export class Blimps implements EnemySystem {
   private envelope: THREE.InstancedMesh;
   private trim: THREE.InstancedMesh;
   private ctx: WorldContext | null = null;
+  /** Local clock for the blinking light. */
+  private clock = 0;
 
   constructor(scene: THREE.Scene) {
     const P = CONFIG.palette;
@@ -129,7 +131,8 @@ export class Blimps implements EnemySystem {
       b.position.y += Math.sin(b.phase * 1.3) * 6 * dt;
       b.yaw = Math.atan2(_aim.x - b.position.x, _aim.z - b.position.z);
     }
-    this.draw(ctx.minutes * 60);
+    this.clock += dt;
+    this.draw(this.clock);
   }
 
   private draw(time: number): void {

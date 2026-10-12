@@ -136,7 +136,7 @@ export class Artillery implements EnemySystem {
       if (b.salvoT <= 0 && ctx.monster.alive) {
         b.salvoT = A.salvoEvery;
         for (const g of b.guns) ctx.particles.emit('fire', _p.copy(g.position).setY(A.size), 3, 0.3);
-        for (const at of strikePoints({ x: m.x, z: m.z }, salvoSize(ctx.minutes), A.spread, ctx.rng)) {
+        for (const at of strikePoints({ x: m.x, z: m.z }, salvoSize(ctx.level), A.spread, ctx.rng)) {
           if (this.strikes.length < MAX_STRIKES) this.strikes.push({ at, t: 0 });
         }
       }

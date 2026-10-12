@@ -129,7 +129,7 @@ export const CONFIG = {
   artillery: {
     hp: 120, exp: 20, size: 40, guns: 3, gunSpacing: 70, distMin: 2500, distMax: 3500,
     salvoEvery: 6, fillTime: 3.2, radius: 90, damage: 60, buildingDamage: 200, spread: 260,
-    baseSalvo: 3, unlockMin: 2.5, minutesPerExtra: 1.5, maxSalvo: 8,
+    baseSalvo: 3, levelsPerExtra: 3, maxSalvo: 8,
   },
   passives: {
     acid: { radius: 60, life: 3, radiusPerRank: 0.2, lifePerRank: 1, dps: 30 },
@@ -173,21 +173,23 @@ export const CONFIG = {
   jet: { hp: 60, speed: 260, altitude: 430 * MONSTER_SCALE, turnRate: 0.9, damage: 10, rocketsPerSalvo: 3, salvoMin: 700, salvoMax: 1600, rocketSpeed: 650, exp: 15, size: 70, hitRadius: 90, exitDistance: 2600 },
   director: {
     baseRate: 0.6,
-    rateGrowthPerMin: 0.6,
+    /** Spawn budget points per second gained per player level above 1. */
+    rateGrowthPerLevel: 0.3,
     budgetCap: 12,
     spawnRing: 2000,
   },
-  /** Per-kind spawn rules: unlock time (s), budget cost, concurrent cap, pick weight. */
+  /** Per-kind spawn rules: player level that unlocks it, budget cost, concurrent cap, pick weight. */
   spawns: {
-    tank: { unlock: 0, cost: 1, cap: 40, weight: 10 },
-    jet: { unlock: 20, cost: 4, cap: 8, weight: 4 },
-    blimp: { unlock: 45, cost: 3, cap: 6, weight: 3 },
-    sam: { unlock: 90, cost: 5, cap: 4, weight: 2 },
-    artillery: { unlock: 150, cost: 8, cap: 2, weight: 2 },
-    truck: { unlock: 210, cost: 5, cap: 4, weight: 2 },
-    laser: { unlock: 270, cost: 10, cap: 1, weight: 4 },
+    tank: { unlockLevel: 1, cost: 1, cap: 40, weight: 10 },
+    jet: { unlockLevel: 2, cost: 4, cap: 8, weight: 4 },
+    blimp: { unlockLevel: 3, cost: 3, cap: 6, weight: 3 },
+    sam: { unlockLevel: 5, cost: 5, cap: 4, weight: 2 },
+    artillery: { unlockLevel: 7, cost: 8, cap: 2, weight: 2 },
+    truck: { unlockLevel: 9, cost: 5, cap: 4, weight: 2 },
+    laser: { unlockLevel: 11, cost: 10, cap: 1, weight: 4 },
   },
-  difficulty: { hpPerMin: 0.25, dmgPerMin: 0.15 },
+  /** Enemy HP and damage multipliers grow with the player's level (not run time). */
+  difficulty: { hpPerLevel: 0.12, dmgPerLevel: 0.075 },
   progression: { expBase: 20, expExponent: 1.55, offerCount: 3 },
   /** One-off wave at the start of every run, outside the spawn budget. */
   opening: { time: 5, count: 8, radius: 1200 },
