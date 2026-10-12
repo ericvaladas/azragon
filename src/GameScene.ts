@@ -15,6 +15,10 @@ import { pickEnemy } from './systems/tap';
 import { Particles } from './systems/Particles';
 import { Projectiles, type Hit } from './systems/Projectiles';
 import { spikeTargets } from './systems/projectileMath';
+import { SpawnDirector } from './enemies/SpawnDirector';
+import { TankFleet } from './enemies/TankFleet';
+import { JetSquadron } from './enemies/JetSquadron';
+import { mulberry32 } from './util/rng';
 import { decide, nearestInRange, type BrainOrder, type BrainTarget } from './monster/brain';
 import { generateCityLayout } from './world/cityLayout';
 
@@ -45,6 +49,10 @@ export class GameScene {
   private tmpV = new THREE.Vector3();
   private particles: Particles;
   private projectiles: Projectiles;
+  private director: SpawnDirector;
+  private tanks: TankFleet;
+  private jets: JetSquadron;
+  private rng = mulberry32(CONFIG.world.seed + 7);
 
   constructor(private container: HTMLDivElement) {
     this.pixel = new PixelRenderer(container);
@@ -59,6 +67,20 @@ export class GameScene {
     this.projectiles = new Projectiles(this.scene);
     this.projectiles.onTrail = (p) => this.particles.emit('smoke', p, 1, 0.2);
     this.projectiles.onHit = this.onProjectileHit;
+    this.director = new SpawnDirector(this.rng);
+    const fire = (from: THREE.Vector3, to: THREE.Vector3, damage: number, kind: 'shell' | 'rocket') => {
+      if (kind === 'shell') this.projectiles.fireShell(from, to, damage);
+      else this.projectiles.fireRocket(from, to, damage);
+      this.particles.emit('fire', from, 2, 0.3);
+    };
+    this.tanks = new TankFleet(this.scene, this.city.layout, this.onTargetDestroyed, (f, t, d) => fire(f, t, d, 'shell'));
+    this.jets = new JetSquadron(this.scene, this.onTargetDestroyed, (f, t, d) => fire(f, t, d, 'rocket'));
+    this.jets.onTrail = (p) => this.particles.emit('smoke', p, 1, 0.3);
+    this.jets.onCrash = (p) => {
+      this.particles.explosion(p, 2);
+      this.particles.ring('dust', p, 120, 12);
+      this.rig.addTrauma(0.3);
+    };
     this.city.onCollapseStart = (pos, size) => {
       this.particles.ring('dust', pos, size, 14);
       this.particles.emit('debris', pos.clone().setY(30), 8);
@@ -112,7 +134,15 @@ export class GameScene {
     this.animationFrameId = requestAnimationFrame(this.update);
     const dt = clampDelta(this.clock.getDelta());
     this.elapsed += dt;
-    if (this.state === 'playing') this.updateMonster(dt);
+    if (this.state === 'playing') {
+      for (const kind of this.director.update(dt, { tanks: this.tanks.count(), jets: this.jets.count() })) {
+        if (kind === 'tank') this.tanks.spawn(this.monster.position, this.rng);
+        else this.jets.spawn(this.monster.position, this.rng);
+      }
+      this.tanks.update(dt, this.monster.position);
+      this.updateMonster(dt);
+    }
+    this.jets.update(dt, this.monster.position);
     this.monster.animate(dt, this.elapsed);
     this.markers.update(dt);
     this.projectiles.update(dt);
@@ -126,7 +156,7 @@ export class GameScene {
 
   /** Enemies the player can target. Filled in by Task 9. */
   enemyTargets(): Target[] {
-    return [];
+    return [...this.tanks.targets(), ...this.jets.targets()].filter((t) => t.isAlive());
   }
 
   private setRay(x: number, y: number): void {
@@ -249,12 +279,18 @@ export class GameScene {
       this.particles.emit('fire', h.point, 3, 0.5);
       return;
     }
-    // shells and rockets: Task 9 applies damage to the monster
     this.particles.explosion(h.point, 0.6);
+    if (this.monster.alive) {
+      this.monster.hp = Math.max(0, this.monster.hp - h.damage);
+      this.monster.flash();
+      this.rig.addTrauma(0.05);
+    }
   };
 
   // Task 10 adds EXP; until then only kills are counted.
   private onTargetDestroyed = (target: Target, exp: number): void => {
+    if (target.kind === 'tank') this.particles.explosion(target.position, 1);
+    if (target.kind === 'jet') this.particles.explosion(target.position, 1.2);
     if (target.kind !== 'building') this.kills++;
     void exp;
   };
