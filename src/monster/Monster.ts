@@ -6,6 +6,7 @@ import { didLand, footState } from './gait';
 import { solveTwoBone, placeSegment } from './ik';
 import { leapPosition } from './leap';
 import { STRIKE_TIMES, strikeFootPose } from './strike';
+import { SWAT_TIMES, swatWeight } from './tailSwat';
 
 const FEMUR = 300;
 const TIBIA = 400;
@@ -21,8 +22,7 @@ const _target = new THREE.Vector3();
 /** Foot offset (model units) for the cocked leg: high and pulled back. */
 const _strikeLift = new THREE.Vector3(0, 420, -80);
 const { strike: STRIKE, recover: RECOVER } = STRIKE_TIMES;
-/** Tail Swat lash duration (s). */
-const SWAT_TIME = 0.4;
+const _swat = new THREE.Vector3();
 
 export class Monster {
   readonly model = new InsectTitanModel();
@@ -43,7 +43,10 @@ export class Monster {
   private leapTo = { x: 0, z: 0 };
   private roarT = -1;
   private swatT = -1;
-  private swatSide = 1;
+  private swatTarget: THREE.Vector3 | null = null;
+  private swatHit = false;
+  /** Fires once per swat, when the tail tip reaches the target. */
+  onSwatImpact: () => void = () => {};
 
   get airborne(): boolean {
     return this.leapT >= 0;
@@ -75,10 +78,15 @@ export class Monster {
     this.meleeT = -1;
   }
 
-  /** Tail Swat: lash toward side +1 (monster's left) or -1 (right). */
-  startSwat(side: number): void {
+  /** Tail Swat: lash the tail tip onto `target` (a live world position, followed as it moves). */
+  startSwat(target: THREE.Vector3): void {
     this.swatT = 0;
-    this.swatSide = side >= 0 ? 1 : -1;
+    this.swatTarget = target;
+    this.swatHit = false;
+  }
+
+  get swatting(): boolean {
+    return this.swatT >= 0;
   }
 
   startRoar(): void {
@@ -115,6 +123,7 @@ export class Monster {
     this.leapT = -1;
     this.roarT = -1;
     this.swatT = -1;
+    this.swatTarget = null;
     this.dashT = -1;
     this.crouch = false;
     this.position.y = 0;
@@ -203,8 +212,11 @@ export class Monster {
     const twitch = this.roarT >= 0 ? 0.55 : 0.18 + Math.sin(time * 7) * 0.08;
     this.model.mandibles[0]!.rotation.y = -twitch;
     this.model.mandibles[1]!.rotation.y = twitch;
-    const swing = this.swatT >= 0 ? this.swatSide * Math.sin(Math.PI * Math.min(1, this.swatT / SWAT_TIME)) : 0;
-    this.model.updateTail(time, swing);
+    if (this.swatT >= 0 && this.swatTarget) {
+      this.model.updateTail(time, this.model.body.worldToLocal(_swat.copy(this.swatTarget)), swatWeight(this.swatT));
+    } else {
+      this.model.updateTail(time);
+    }
 
     if (this.flashT > 0) this.flashT -= dt;
     for (const m of this.model.materials) {
@@ -284,7 +296,14 @@ export class Monster {
     }
     if (this.swatT >= 0) {
       this.swatT += dt;
-      if (this.swatT >= SWAT_TIME) this.swatT = -1;
+      if (!this.swatHit && this.swatT >= SWAT_TIMES.impact) {
+        this.swatHit = true;
+        this.onSwatImpact();
+      }
+      if (this.swatT >= SWAT_TIMES.total) {
+        this.swatT = -1;
+        this.swatTarget = null;
+      }
     }
     if (this.roarT >= 0) {
       this.roarT += dt;

@@ -498,24 +498,25 @@ export class GameScene {
   /** Base kit: the tail lashes at the nearest flyers near the head on a rank-based cooldown. */
   private tailSwat(dt: number): void {
     this.swatCd = Math.max(0, this.swatCd - dt);
-    if (this.swatCd > 0 || this.monster.airborne) return;
+    if (this.swatCd > 0 || this.monster.airborne || this.monster.swatting) return;
     const sw = this.passives.swat();
     const head = this.bodyPoint(CONFIG.passives.swat.headHeight);
     const flyers = this.enemyTargets().filter((t) => t.airborne && t.isAlive());
     const hits = nearestWithin(head, sw.range, flyers, sw.targets, (t) => t.position);
     if (hits.length === 0) return;
     this.swatCd = sw.cooldown;
-    const m = this.monster;
-    const first = hits[0]!.position;
-    const dx = first.x - m.position.x;
-    const dz = first.z - m.position.z;
-    m.startSwat(dx * Math.cos(m.yaw) - dz * Math.sin(m.yaw));
     const dmg = sw.damage * this.progression.stats.damageMult;
-    for (const t of hits) {
-      t.applyDamage(dmg);
-      this.particles.emit('spark', t.position, 10, 1.2);
-    }
-    this.rig.addTrauma(0.15);
+    // Damage lands when the tail tip arrives at the first target (it follows that target as it moves).
+    this.monster.onSwatImpact = () => {
+      for (const t of hits) {
+        if (!t.isAlive()) continue;
+        t.applyDamage(dmg);
+        this.particles.emit('spark', t.position, 12, 1.3);
+        this.particles.emit('fire', t.position, 4, 0.6);
+      }
+      this.rig.addTrauma(0.18);
+    };
+    this.monster.startSwat(hits[0]!.position);
   }
 
   /** Something is about to hit: shells/rockets/missiles or blimps nearby, a laser locking on, or a strike circle underfoot. */
