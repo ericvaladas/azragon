@@ -8,6 +8,7 @@ import { clampDelta } from './util/math';
 import type { Target } from './combat';
 import { City } from './world/City';
 import { Monster } from './monster/Monster';
+import { CameraRig } from './systems/CameraRig';
 import { generateCityLayout } from './world/cityLayout';
 
 export class GameScene {
@@ -25,20 +26,19 @@ export class GameScene {
   private kills = 0;
   private monster: Monster;
   private elapsed = 0;
+  private rig: CameraRig;
 
   constructor(private container: HTMLDivElement) {
     this.pixel = new PixelRenderer(container);
-    this.camera.near = CONFIG.camera.near;
-    this.camera.far = CONFIG.camera.far;
+    this.rig = new CameraRig(this.camera);
     this.lighting = new Lighting(this.scene);
     this.lighting.attachSky(createSky(this.scene));
 
     this.city = new City(this.scene, generateCityLayout(CONFIG.world.seed), this.onTargetDestroyed);
     this.monster = new Monster(this.scene);
+    this.monster.onFootLand = () => this.rig.addTrauma(0.08);
     this.pixel.domElement.addEventListener('pointerdown', this.debugSmash);
 
-    this.camera.position.set(-150, 820, -950);
-    this.camera.lookAt(0, 300, 300);
     this.lighting.follow(new THREE.Vector3());
 
     this.resizeObserver = new ResizeObserver(this.onResize);
@@ -68,8 +68,7 @@ export class GameScene {
     const { width: w, height: h } = entry.contentRect;
     if (w === 0 || h === 0) return;
     this.pixel.resize(w, h);
-    this.camera.aspect = w / h;
-    this.camera.updateProjectionMatrix();
+    this.rig.setAspect(w / h);
   };
 
   private update = () => {
@@ -80,6 +79,7 @@ export class GameScene {
     const t = this.elapsed * 0.15;
     this.monster.moveToward({ x: Math.sin(t) * 260, z: Math.cos(t) * 260 }, dt, 1);
     this.monster.animate(dt, this.elapsed);
+    this.rig.update(dt, this.monster.position);
     this.lighting.follow(this.monster.position);
     this.city.update(dt);
     this.lighting.followCamera(this.camera);
