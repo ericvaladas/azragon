@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { CONFIG } from '../config';
 import { faceted } from '../render/toon';
 
-export type ParticleKind = 'dust' | 'debris' | 'fire' | 'smoke' | 'spark' | 'acid';
+export type ParticleKind = 'dust' | 'debris' | 'fire' | 'smoke' | 'spark' | 'acid' | 'trail';
 
 type Preset = { color: number; life: number; size0: number; size1: number; speed: number; up: number; gravity: number; drag: number };
 
@@ -12,6 +12,8 @@ const PRESETS: Record<ParticleKind, Preset> = {
   debris: { color: P.debris, life: 1.6, size0: 12, size1: 8, speed: 160, up: 260, gravity: 420, drag: 0.3 },
   fire: { color: P.fire, life: 0.55, size0: 34, size1: 4, speed: 70, up: 60, gravity: -40, drag: 1.5 },
   smoke: { color: P.smoke, life: 1.4, size0: 18, size1: 60, speed: 40, up: 70, gravity: -20, drag: 1.2 },
+  /** Long-lived streak puffs for artillery shells, so their arc points back to the guns. */
+  trail: { color: 0xe9e4da, life: 2.6, size0: 16, size1: 30, speed: 4, up: 4, gravity: 0, drag: 2 },
   acid: { color: P.acid, life: 0.7, size0: 26, size1: 6, speed: 150, up: 90, gravity: 120, drag: 1 },
   spark: { color: P.eye, life: 0.3, size0: 10, size1: 2, speed: 260, up: 80, gravity: 200, drag: 0.5 },
 };
@@ -26,7 +28,7 @@ const HIDDEN = new THREE.Matrix4().makeScale(0, 0, 0);
 /** Opacity per draw layer. Smoke and dust are see-through so trails never hide units behind them. */
 const LAYER_OPACITY = { solid: 1, dust: 0.65, smoke: 0.35 } as const;
 type LayerName = keyof typeof LAYER_OPACITY;
-const LAYER_OF: Record<ParticleKind, LayerName> = { dust: 'dust', smoke: 'smoke', debris: 'solid', fire: 'solid', spark: 'solid', acid: 'solid' };
+const LAYER_OF: Record<ParticleKind, LayerName> = { dust: 'dust', smoke: 'smoke', debris: 'solid', fire: 'solid', spark: 'solid', acid: 'solid', trail: 'dust' };
 const LAYER_MAX: Record<LayerName, number> = { solid: 500, dust: 400, smoke: 500 };
 
 /** One pooled InstancedMesh: swap-remove on death, no per-frame allocation. */

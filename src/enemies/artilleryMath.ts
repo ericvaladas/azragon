@@ -26,3 +26,13 @@ export function strikePoints(center: Vec2, n: number, spread: number, rng: () =>
   }
   return out;
 }
+
+/**
+ * Flight progress (0..1) of a strike's shell at strike age t, or null before it launches.
+ * The shell launches `flight` seconds before the circle fills, so it lands exactly on the fill.
+ */
+export function shellProgress(t: number, fillTime: number, flight: number): number | null {
+  const start = fillTime - flight;
+  if (t < start) return null;
+  return Math.min(1, (t - start) / flight);
+}

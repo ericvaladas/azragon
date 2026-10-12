@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { salvoSize, strikeFill, strikeHits, strikePoints } from './artilleryMath';
+import { salvoSize, shellProgress, strikeFill, strikeHits, strikePoints } from './artilleryMath';
 import { CONFIG } from '../config';
 import { mulberry32 } from '../util/rng';
 
@@ -39,5 +39,19 @@ describe('strikePoints', () => {
     expect(pts).toHaveLength(5);
     expect(pts[0]).toEqual(c);
     for (const p of pts) expect(Math.hypot(p.x - c.x, p.z - c.z)).toBeLessThanOrEqual(260);
+  });
+});
+
+describe('shellProgress', () => {
+  const fill = 3.2;
+  const flight = 1.8;
+  it('is null before launch, so the shell only appears for its flight', () => {
+    expect(shellProgress(0, fill, flight)).toBeNull();
+    expect(shellProgress(fill - flight - 0.01, fill, flight)).toBeNull();
+  });
+  it('runs 0 → 1 over the flight and lands exactly when the circle fills', () => {
+    expect(shellProgress(fill - flight, fill, flight)).toBeCloseTo(0);
+    expect(shellProgress(fill - flight / 2, fill, flight)).toBeCloseTo(0.5);
+    expect(shellProgress(fill, fill, flight)).toBeCloseTo(1);
   });
 });

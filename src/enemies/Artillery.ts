@@ -3,13 +3,19 @@ import { CONFIG } from '../config';
 import type { Target } from '../combat';
 import { faceted, toonMat } from '../render/toon';
 import type { Vec2 } from '../util/math';
-import { salvoSize, strikeFill, strikeHits, strikePoints } from './artilleryMath';
+import { salvoSize, shellProgress, strikeFill, strikeHits, strikePoints } from './artilleryMath';
+import { ballistic } from '../systems/projectileMath';
 import type { EnemySystem, WorldContext } from './types';
 
 const A = CONFIG.artillery;
 const MAX_BATTERIES = CONFIG.spawns.artillery.cap;
 const MAX_GUNS = MAX_BATTERIES * A.guns;
 const MAX_STRIKES = 32;
+/** Seconds between smoke puffs along a shell's arc, and the glowing shell's size (m). */
+const TRAIL_EVERY = 0.025;
+const SHELL_SIZE = 26;
+const _land = new THREE.Vector3();
+const _shell = new THREE.Vector3();
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
 const _s = new THREE.Vector3();
@@ -44,7 +50,8 @@ class Gun implements Target {
 }
 
 type Battery = { guns: Gun[]; salvoT: number };
-type Strike = { at: Vec2; t: number };
+/** A telegraphed strike: the circle at `at`, and its shell fired from the gun muzzle `from`. */
+type Strike = { at: Vec2; t: number; from: THREE.Vector3; launched: boolean; trailT: number };
 
 /** Far-off gun batteries; each salvo paints red circles that fill, then shells land. */
 export class Artillery implements EnemySystem {
@@ -54,6 +61,7 @@ export class Artillery implements EnemySystem {
   private gunMesh: THREE.InstancedMesh;
   private ringMesh: THREE.InstancedMesh;
   private fillMesh: THREE.InstancedMesh;
+  private shellMesh: THREE.InstancedMesh;
   private ctx: WorldContext | null = null;
 
   constructor(scene: THREE.Scene) {
@@ -63,6 +71,10 @@ export class Artillery implements EnemySystem {
     this.gunMesh = new THREE.InstancedMesh(gunGeo, toonMat(P.artillery), MAX_GUNS * 2);
     this.ringMesh = new THREE.InstancedMesh(new THREE.RingGeometry(0.9, 1, 24).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: P.strike, transparent: true, opacity: 0.9, depthWrite: false, depthTest: false, fog: false }), MAX_STRIKES);
     this.fillMesh = new THREE.InstancedMesh(new THREE.CircleGeometry(1, 24).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: P.strike, transparent: true, opacity: 0.35, depthWrite: false }), MAX_STRIKES);
+    this.shellMesh = new THREE.InstancedMesh(faceted(new THREE.IcosahedronGeometry(0.5, 0)), new THREE.MeshBasicMaterial({ color: P.eye, fog: false }), MAX_STRIKES);
+    this.shellMesh.count = 0;
+    this.shellMesh.frustumCulled = false;
+    scene.add(this.shellMesh);
     this.gunMesh.castShadow = true;
     for (const m of [this.gunMesh, this.ringMesh, this.fillMesh]) {
       m.frustumCulled = false;
@@ -135,15 +147,31 @@ export class Artillery implements EnemySystem {
       b.salvoT -= dt;
       if (b.salvoT <= 0 && ctx.monster.alive) {
         b.salvoT = A.salvoEvery;
-        for (const g of b.guns) ctx.particles.emit('fire', _p.copy(g.position).setY(A.size), 3, 0.3);
-        for (const at of strikePoints({ x: m.x, z: m.z }, salvoSize(ctx.level), A.spread, ctx.rng)) {
-          if (this.strikes.length < MAX_STRIKES) this.strikes.push({ at, t: 0 });
-        }
+        strikePoints({ x: m.x, z: m.z }, salvoSize(ctx.level), A.spread, ctx.rng).forEach((at, k) => {
+          if (this.strikes.length >= MAX_STRIKES) return;
+          const g = b.guns[k % b.guns.length]!;
+          const from = g.position.clone().setY(A.size * 0.8);
+          this.strikes.push({ at, t: 0, from, launched: false, trailT: 0 });
+        });
       }
     }
     for (let i = this.strikes.length - 1; i >= 0; i--) {
       const s = this.strikes[i]!;
       s.t += dt;
+      const k = shellProgress(s.t, A.fillTime, A.shellFlight);
+      if (k !== null) {
+        if (!s.launched) {
+          s.launched = true;
+          ctx.particles.emit('fire', s.from, 4, 0.4);
+          ctx.particles.emit('smoke', s.from, 3, 0.4);
+        }
+        // Smoke trail along the arc, leading back to the gun.
+        s.trailT += dt;
+        if (s.trailT >= TRAIL_EVERY && k < 1) {
+          s.trailT = 0;
+          ctx.particles.emit('trail', this.shellPos(s, k), 1, 0.05);
+        }
+      }
       if (s.t < A.fillTime) continue;
       _p.set(s.at.x, 10, s.at.z);
       ctx.particles.explosion(_p, 1.4);
@@ -156,7 +184,21 @@ export class Artillery implements EnemySystem {
     this.draw();
   }
 
+  private shellPos(s: Strike, k: number): THREE.Vector3 {
+    _land.set(s.at.x, 0, s.at.z);
+    return ballistic(s.from, _land, A.shellArc, k, _shell);
+  }
+
   private draw(): void {
+    let shells = 0;
+    for (const s of this.strikes) {
+      const k = shellProgress(s.t, A.fillTime, A.shellFlight);
+      if (k === null) continue;
+      _m.compose(this.shellPos(s, k), _q.identity(), _s.setScalar(SHELL_SIZE));
+      this.shellMesh.setMatrixAt(shells++, _m);
+    }
+    this.shellMesh.count = shells;
+    this.shellMesh.instanceMatrix.needsUpdate = true;
     let n = 0;
     for (const b of this.batteries) {
       for (const g of b.guns) {
