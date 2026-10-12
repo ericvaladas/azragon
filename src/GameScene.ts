@@ -39,6 +39,7 @@ import { Shockwave } from './systems/Shockwave';
 import { LevelUpMoment } from './systems/levelUpMoment';
 import { LevelUpAura } from './systems/LevelUpAura';
 import { ShieldFx } from './systems/ShieldFx';
+import { shieldHitPoint } from './systems/shieldHit';
 import { leapTarget } from './monster/leap';
 import { footTargets, strikePlan } from './monster/strike';
 import { mortarTargets, nearestWithin } from './systems/targeting';
@@ -355,7 +356,7 @@ export class GameScene {
       this.particles.update(dt);
       this.shockwave.update(dt);
       this.novaWave.update(dt);
-      this.shieldFx.update(dt, this.monster.position, this.passives.bubbleActive(), this.passives.reflectActive());
+      this.shieldFx.update(dt, this.monster.position, this.passives.bubbleActive());
       if (this.moment.update(realDt) && this.state === 'playing' && this.progression.pendingLevels > 0) this.enterLevelUp();
       const dm = this.progression.stats.damageMult;
       this.acid.update(dt, this.enemyTargets(), dm);
@@ -538,9 +539,12 @@ export class GameScene {
     const center = this.bodyPoint(300);
     const dmg = R.damage * this.progression.stats.damageMult;
     const bounce = (from: THREE.Vector3) => {
+      // The shield is invisible except for a patch flashing where the shot struck it.
+      const at = shieldHitPoint(center, R.radius, from, new THREE.Vector3());
+      this.shieldFx.reflectHit(at, at.clone().sub(center));
       const target = nearestInRange({ x: from.x, z: from.z }, this.enemyTargets(), CONFIG.monster.spikeRange * 1.5);
-      if (target) this.projectiles.fireSpike(from.clone(), target, dmg, 0);
-      this.particles.emit('spark', from, 8, 0.6);
+      if (target) this.projectiles.fireSpike(at.clone(), target, dmg, 0);
+      this.particles.emit('spark', at, 8, 0.6);
     };
     for (const s of [...this.projectiles.incoming()]) {
       if (s.pos.distanceTo(center) > R.radius) continue;
