@@ -4,8 +4,10 @@ import { GameEventEmitter, type GameState } from './GameEvents';
 import { Lighting } from './render/Lighting';
 import { PixelRenderer } from './render/PixelRenderer';
 import { createSky } from './render/Sky';
-import { faceted, toonMat } from './render/toon';
 import { clampDelta } from './util/math';
+import type { Target } from './combat';
+import { City } from './world/City';
+import { generateCityLayout } from './world/cityLayout';
 
 export class GameScene {
   readonly events = new GameEventEmitter();
@@ -18,7 +20,8 @@ export class GameScene {
   private clock = new THREE.Clock();
   private animationFrameId = 0;
   private resizeObserver: ResizeObserver;
-  private tmpLookCheck: THREE.Group | null = null; // removed in Task 3
+  private city: City;
+  private kills = 0;
 
   constructor(private container: HTMLDivElement) {
     this.pixel = new PixelRenderer(container);
@@ -27,23 +30,9 @@ export class GameScene {
     this.lighting = new Lighting(this.scene);
     this.lighting.attachSky(createSky(this.scene));
 
-    // Temporary look-check content (Task 3 replaces with the city)
-    this.tmpLookCheck = new THREE.Group();
-    const ground = new THREE.Mesh(new THREE.PlaneGeometry(8000, 8000), toonMat(CONFIG.palette.ground));
-    ground.rotation.x = -Math.PI / 2;
-    ground.receiveShadow = true;
-    const pillar = new THREE.Mesh(faceted(new THREE.CylinderGeometry(60, 90, 550, 6)), toonMat(CONFIG.palette.carapace));
-    pillar.position.y = 275;
-    pillar.castShadow = true;
-    for (let i = 0; i < 30; i++) {
-      const h = 20 + ((i * 37) % 100);
-      const b = new THREE.Mesh(new THREE.BoxGeometry(60, h, 60), toonMat(CONFIG.palette.buildingFacades[i % 5]!));
-      b.position.set(((i % 6) - 3) * 160, h / 2, Math.floor(i / 6) * 160 + 200);
-      b.castShadow = b.receiveShadow = true;
-      this.tmpLookCheck.add(b);
-    }
-    this.tmpLookCheck.add(ground, pillar);
-    this.scene.add(this.tmpLookCheck);
+    this.city = new City(this.scene, generateCityLayout(CONFIG.world.seed), this.onTargetDestroyed);
+    this.pixel.domElement.addEventListener('pointerdown', this.debugSmash);
+
     this.camera.position.set(-120, 430 + 380, -820);
     this.camera.lookAt(0, 300, 400);
     this.lighting.follow(new THREE.Vector3());
@@ -82,12 +71,28 @@ export class GameScene {
   private update = () => {
     this.animationFrameId = requestAnimationFrame(this.update);
     const dt = clampDelta(this.clock.getDelta());
-    void dt;
+    this.city.update(dt);
     this.lighting.followCamera(this.camera);
     this.pixel.render(this.scene, this.camera);
   };
 
+  // Task 10 adds EXP; until then only kills are counted.
+  private onTargetDestroyed = (target: Target, exp: number): void => {
+    if (target.kind !== 'building') this.kills++;
+    void exp;
+  };
+
+  // TEMP (replaced in Task 6): click a building to destroy it.
+  private debugSmash = (e: PointerEvent) => {
+    const r = this.pixel.domElement.getBoundingClientRect();
+    const ray = new THREE.Raycaster();
+    ray.setFromCamera(new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), this.camera);
+    const hit = ray.intersectObject(this.city.buildingMesh)[0];
+    if (hit?.instanceId !== undefined) this.city.targetForInstance(hit.instanceId)?.applyDamage(9999);
+  };
+
   dispose(): void {
+    this.pixel.domElement.removeEventListener('pointerdown', this.debugSmash);
     cancelAnimationFrame(this.animationFrameId);
     this.resizeObserver.disconnect();
     this.pixel.dispose();
