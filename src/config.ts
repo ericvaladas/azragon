@@ -196,6 +196,34 @@ export const CONFIG = {
   progression: { expBase: 20, expExponent: 1.55, offerCount: 3 },
   /** One-off wave at the start of every run, outside the spawn budget. */
   opening: { time: 5, count: 8, radius: 1200 },
+  intro: {
+    /** Phase start times (s); `done` is the intro length. The cut to the game world is at `clouds`. */
+    starts: { space: 0, reentry: 3.5, clouds: 5.5, descent: 8.5, impact: 10.5, settle: 11, emerge: 13, done: 15 },
+    /** Pod drop in the game world: starts this high and this far behind (-Z), lands at the origin. */
+    dropHeight: 4200,
+    dropBack: 1400,
+    /** Pod rests half-buried after impact (world y). */
+    podRestY: -40,
+    /** Camera offsets from the pod while falling (start of clouds) and the wide shot at impact (absolute). */
+    camFollow: [0, 260, -700] as const,
+    camWide: [-900, 650, -1700] as const,
+    lookFollow: [0, -300, 600] as const,
+    lookImpact: [0, 100, 0] as const,
+    /** Monster rises from this depth (× monster scale) over the first riseTime s of emerge. */
+    riseDepth: 300,
+    riseTime: 1.4,
+    clouds: { count: 80, minY: 1500, maxY: 4000, spreadX: 1500, minZ: -2200, maxZ: 900, minSize: 500, maxSize: 1100 },
+    /** Fog while inside the cloud band (eases back to CONFIG.fog through the descent). */
+    cloudFog: { near: 250, far: 2000 },
+    /** Cocoon length (m): about 60% of the standing monster. Tune by eye against the monster. */
+    podLength: 190,
+    /** Screen wash: builds over `rise` s before the cut, holds, fades; a smaller flash at impact. */
+    flash: { rise: 1.0, hold: 0.15, fade: 0.7, impactPeak: 0.8, impactFade: 0.45 },
+    /** Camera shake offset (m) at full trauma. */
+    shakeAmp: 40,
+    /** Space scene (its own units): Earth size, pod-to-Earth distance at t=0 and at the cut, Earth below the path. */
+    space: { earthRadius: 1000, earthStart: 9000, earthEnd: 1250, earthDrop: 650, stars: 700, podLength: 60 },
+  },
   readability: {
     threatKinds: ['blimp', 'sam', 'artillery', 'truck'] as readonly string[],
     maxArrows: 8,
