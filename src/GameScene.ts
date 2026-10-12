@@ -12,6 +12,8 @@ import { CameraRig } from './systems/CameraRig';
 import { Input } from './systems/Input';
 import { Markers } from './systems/Markers';
 import { pickEnemy } from './systems/tap';
+import { Particles } from './systems/Particles';
+import { decide, nearestInRange, type BrainOrder, type BrainTarget } from './monster/brain';
 import { generateCityLayout } from './world/cityLayout';
 
 type Order = { kind: 'move'; to: Vec2 } | { kind: 'attack'; target: Target } | null;
@@ -39,23 +41,34 @@ export class GameScene {
   private ndc = new THREE.Vector2();
   private groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
   private tmpV = new THREE.Vector3();
+  private particles: Particles;
 
   constructor(private container: HTMLDivElement) {
     this.pixel = new PixelRenderer(container);
+    this.lighting = new Lighting(this.scene);
+    this.lighting.attachSky(createSky(this.scene));
+
+    this.city = new City(this.scene, generateCityLayout(CONFIG.world.seed), this.onTargetDestroyed);
+    this.monster = new Monster(this.scene);
     this.rig = new CameraRig(this.camera);
     this.markers = new Markers(this.scene);
+    this.particles = new Particles(this.scene);
+    this.city.onCollapseStart = (pos, size) => {
+      this.particles.ring('dust', pos, size, 14);
+      this.particles.emit('debris', pos.clone().setY(30), 8);
+      this.rig.addTrauma(0.12);
+    };
+    this.monster.onFootLand = (p) => {
+      this.particles.ring('dust', p, 60, 7);
+      this.rig.addTrauma(0.06);
+    };
+    this.monster.onMeleeImpact = (p) => this.meleeImpact(p);
     this.input = new Input(this.pixel.domElement, {
       tap: this.onTap,
       drag: (dx, dy) => this.rig.drag(dx, dy),
       wheel: (dy) => this.rig.zoom(dy),
       hover: this.onHover,
     });
-    this.lighting = new Lighting(this.scene);
-    this.lighting.attachSky(createSky(this.scene));
-
-    this.city = new City(this.scene, generateCityLayout(CONFIG.world.seed), this.onTargetDestroyed);
-    this.monster = new Monster(this.scene);
-    this.monster.onFootLand = () => this.rig.addTrauma(0.08);
 
     this.lighting.follow(new THREE.Vector3());
 
@@ -93,21 +106,10 @@ export class GameScene {
     this.animationFrameId = requestAnimationFrame(this.update);
     const dt = clampDelta(this.clock.getDelta());
     this.elapsed += dt;
-    if (this.state === 'playing') {
-      if (this.order?.kind === 'move') {
-        if (this.monster.moveToward(this.order.to, dt, 1)) this.order = null;
-      } else if (this.order?.kind === 'attack') {
-        const t = this.order.target;
-        if (!t.isAlive()) {
-          this.order = null;
-          this.markers.setTarget(null);
-        } else {
-          this.monster.moveToward({ x: t.position.x, z: t.position.z }, dt, 1);
-        }
-      }
-    }
+    if (this.state === 'playing') this.updateMonster(dt);
     this.monster.animate(dt, this.elapsed);
     this.markers.update(dt);
+    this.particles.update(dt);
     this.rig.update(dt, this.monster.position);
     this.lighting.follow(this.monster.position);
     this.city.update(dt);
@@ -170,6 +172,57 @@ export class GameScene {
     this.markers.setHover(t);
     this.container.classList.toggle('can-target', t !== null);
   };
+
+  private toBrain(t: Target): BrainTarget {
+    return { x: t.position.x, z: t.position.z, radius: t.radius, airborne: t.airborne, alive: t.isAlive() };
+  }
+
+  private meleeImpact(p: THREE.Vector3): void {
+    const r = CONFIG.monster.meleeRadius;
+    const dmg = CONFIG.monster.meleeDamage;
+    this.city.forEachStandingInRadius({ x: p.x, z: p.z }, r, (t) => t.applyDamage(dmg));
+    for (const t of this.enemyTargets()) {
+      if (!t.airborne && t.isAlive() && Math.hypot(t.position.x - p.x, t.position.z - p.z) <= r + t.radius) t.applyDamage(dmg);
+    }
+    this.particles.ring('dust', p, r, 18);
+    this.particles.emit('debris', p.clone().setY(10), 10, 1.3);
+    this.rig.addTrauma(0.35);
+  }
+
+  /** Order → brain → monster actions. Task 8 handles 'ranged'; Task 10 adds stat multipliers. */
+  private updateMonster(dt: number): void {
+    const m = this.monster;
+    const pos = { x: m.position.x, z: m.position.z };
+    const auto = nearestInRange(pos, this.enemyTargets(), CONFIG.monster.spikeRange);
+    const order: BrainOrder =
+      this.order?.kind === 'attack' ? { kind: 'attack', target: this.toBrain(this.order.target) } : this.order;
+    const d = decide({
+      pos,
+      order,
+      auto: auto ? this.toBrain(auto) : null,
+      meleeRange: CONFIG.monster.meleeRange,
+      spikeRange: CONFIG.monster.spikeRange,
+      meleeReady: m.meleeReady(),
+      spikeReady: m.spikeReady(),
+      arriveRadius: CONFIG.monster.arriveRadius,
+    });
+    if (d.orderDone) {
+      this.order = null;
+      this.markers.setTarget(null);
+    }
+    if (d.moveTo) m.moveToward(d.moveTo, dt, 1);
+    else if (d.face) m.faceToward(d.face, dt);
+    if (d.attack === 'melee') m.startMelee(1);
+    if (d.attack === 'ranged') this.fireSpikes(d.attackOn === 'order' && this.order?.kind === 'attack' ? this.order.target : auto);
+    m.tick(dt);
+
+    this.city.forEachStandingInRadius(pos, CONFIG.monster.bodyRadius, (t) => t.applyDamage(CONFIG.monster.contactDps * dt));
+  }
+
+  /** Implemented in Task 8. */
+  private fireSpikes(target: Target | null): void {
+    void target;
+  }
 
   // Task 10 adds EXP; until then only kills are counted.
   private onTargetDestroyed = (target: Target, exp: number): void => {

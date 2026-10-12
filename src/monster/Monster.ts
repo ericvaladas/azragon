@@ -42,6 +42,9 @@ export class Monster {
     this.alive = true;
     this.cycle = 0;
     this.pose.dip = this.pose.pitch = this.pose.collapse = 0;
+    this.meleeCd = 0;
+    this.spikeCd = 0;
+    this.meleeT = -1;
   }
 
   forward(out: THREE.Vector3): THREE.Vector3 {
@@ -126,4 +129,55 @@ export class Monster {
   }
 
   private lastCycle = 0;
+
+  onMeleeImpact: (p: THREE.Vector3) => void = () => {};
+  private meleeCd = 0;
+  private spikeCd = 0;
+  private meleeT = -1; // -1 = not attacking; else time since start
+  private impactDone = false;
+
+  meleeReady(): boolean {
+    return this.alive && this.meleeCd <= 0 && this.meleeT < 0;
+  }
+
+  spikeReady(): boolean {
+    return this.alive && this.spikeCd <= 0;
+  }
+
+  startMelee(cooldownMult: number): void {
+    this.meleeCd = CONFIG.monster.meleeCooldown * cooldownMult;
+    this.meleeT = 0;
+    this.impactDone = false;
+  }
+
+  consumeSpike(cooldownMult: number): void {
+    this.spikeCd = CONFIG.monster.spikeCooldown * cooldownMult;
+  }
+
+  /** Cooldowns and the stomp pose: rear up during windup, slam, recover. */
+  tick(dt: number): void {
+    this.meleeCd = Math.max(0, this.meleeCd - dt);
+    this.spikeCd = Math.max(0, this.spikeCd - dt);
+    if (this.meleeT < 0) {
+      this.pose.pitch *= Math.exp(-10 * dt);
+      this.pose.dip *= Math.exp(-10 * dt);
+      return;
+    }
+    this.meleeT += dt;
+    const w = CONFIG.monster.meleeWindup;
+    if (this.meleeT < w) {
+      const k = this.meleeT / w;
+      this.pose.pitch = -0.3 * k;
+      this.pose.dip = -20 * k;
+    } else {
+      if (!this.impactDone) {
+        this.impactDone = true;
+        this.pose.pitch = 0.18;
+        this.pose.dip = 45;
+        const f = this.forward(new THREE.Vector3());
+        this.onMeleeImpact(f.multiplyScalar(CONFIG.monster.meleeRange * 0.6).add(this.position).setY(0));
+      }
+      if (this.meleeT > w + 0.35) this.meleeT = -1;
+    }
+  }
 }
