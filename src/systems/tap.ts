@@ -38,3 +38,8 @@ export function abilityKey(e: { code: string; repeat: boolean; metaKey: boolean;
   if (e.code === 'KeyR') return 'roar';
   return null;
 }
+
+/** Wheel-equivalent zoom for a pinch: fingers moving apart zoom in (negative), together zoom out. */
+export function pinchToWheel(prevDist: number, curDist: number): number {
+  return (prevDist - curDist) * CONFIG.input.pinchSensitivity;
+}

@@ -74,7 +74,7 @@ export const CONFIG = {
     shakeMaxOffset: 22,
     shakeDecay: 1.6,
   },
-  input: { tapMaxMovePx: 10, tapMaxMs: 300, pickRadiusPx: 28 },
+  input: { tapMaxMovePx: 10, tapMaxMs: 300, pickRadiusPx: 28, /** Wheel units per pixel of pinch. */ pinchSensitivity: 3.5 },
   world: {
     seed: 1337,
     /** City blocks per chunk side; chunks stream in around the monster. */
