@@ -1,5 +1,5 @@
 /** Uniform scale of the monster model; world-space monster and camera distances below are multiplied by it. */
-const MONSTER_SCALE = 0.8;
+const MONSTER_SCALE = 0.6;
 
 /** All tunable constants. World units are metres; times are seconds. */
 export const CONFIG = {
@@ -35,6 +35,26 @@ export const CONFIG = {
     smoke: 0x4d4a48,
     dust: 0xcbb592,
     debris: 0x8a8378,
+    chevron: 0xff3b2f,
+    acid: 0x9bff3a,
+    drone: 0x3b5d18,
+    blimp: 0xe6e2da,
+    samHatch: 0x2e3236,
+    truck: 0xd2512b,
+    laserFaint: 0xcfe8ff,
+    laserCore: 0xf0ffff,
+    scorch: 0x2a2620,
+    truckDark: 0x3d3328,
+    cable: 0x1d1f22,
+    strike: 0xff3b2f,
+    artillery: 0x5f6b45,
+    samLauncher: 0xeceae2,
+    samTube: 0xd8322a,
+    samHazard: 0xf2c230,
+    samHazardDark: 0x2b2b2b,
+    missile: 0xf2f2ee,
+    blimpTrim: 0xd8322a,
+    blimpTrimDark: 0x5a1612,
   },
   fog: { near: 1200, far: 4600 },
   camera: {
@@ -57,7 +77,7 @@ export const CONFIG = {
     shakeMaxOffset: 22,
     shakeDecay: 1.6,
   },
-  input: { tapMaxMovePx: 10, tapMaxMs: 300, pickRadiusPx: 28 },
+  input: { tapMaxMovePx: 10, tapMaxMs: 300, pickRadiusPx: 28, /** Wheel units per pixel of pinch. */ pinchSensitivity: 3.5 },
   world: {
     seed: 1337,
     /** City blocks per chunk side; chunks stream in around the monster. */
@@ -77,7 +97,8 @@ export const CONFIG = {
     maxBuildingH: 120,
     groundExtent: 30000,
     buildingHpPerMetre: 1.5,
-    buildingExpPerHp: 0.05,
+    /** EXP per building HP, rounded per building (min 1); 0.0365 is ~30% below the original 0.05 on average. */
+    buildingExpPerHp: 0.0365,
     collapseTime: 1.4,
   },
   monster: {
@@ -85,39 +106,103 @@ export const CONFIG = {
     height: 550 * MONSTER_SCALE,
     maxHp: 1000,
     regenPerSec: 4,
-    moveSpeed: 70 * MONSTER_SCALE,
-    turnRate: 1.4,
+    moveSpeed: 130,
+    turnRate: 2.4,
     arriveRadius: 25 * MONSTER_SCALE,
     bodyRadius: 170 * MONSTER_SCALE,
-    contactDps: 220,
+    contactDps: 60,
+    /** Each landed foot damages ground targets and buildings within footRadius. */
+    footRadius: 45,
+    footDamage: 120,
     /** In model units (before MONSTER_SCALE). */
     strideLength: 260,
-    meleeRange: 300 * MONSTER_SCALE,
+    /** Leg-strike reach from the monster's root. */
+    meleeRange: 480,
     meleeRadius: 170 * MONSTER_SCALE,
     meleeDamage: 60,
-    meleeCooldown: 1.2,
+    meleeCooldown: 0.7,
     meleeWindup: 0.3,
     spikeRange: 1700,
-    spikeDamage: 40,
-    spikeCooldown: 0.9,
+    spikeDamage: 45,
+    spikeCooldown: 1.0,
     spikeSpeed: 1100,
     spikeSpreadRad: 0.12,
     deathTime: 2.2,
   },
+  artillery: {
+    hp: 120, exp: 20, size: 40, guns: 3, gunSpacing: 70, distMin: 2500, distMax: 3500,
+    salvoEvery: 6, fillTime: 3.2, shellFlight: 1.8, shellArc: 750, radius: 90, damage: 60, buildingDamage: 200, spread: 260,
+    baseSalvo: 3, levelsPerExtra: 3, maxSalvo: 8,
+  },
+  passives: {
+    acid: { radius: 60, life: 3, radiusPerRank: 0.2, lifePerRank: 1, dps: 30 },
+    storm: { interval: 6, intervalStep: 1, spikes: 6, extraSpikes: 3 },
+    chitin: { perRank: 0.15 },
+    frenzy: { perRank: 6 },
+    brood: { interval: 10, drones: 3, extraDrones: 2, life: 8, speed: 450, damage: 40, hitCooldown: 0.5 },
+    /** Overload: absorb the next beam/orbital hit and fire it back (truck destroyed; orbital = energy blast). */
+    overload: { cooldown: [0, 20, 15, 11], blastRadius: 450, blastDamage: 250, reflectDamage: 400 },
+    /** Arrays are indexed by rank (0 = not taken; Tail Swat rank 0 is the base kit). */
+    spines: { rate: [0, 2, 3, 4.5], radius: [0, 500, 600, 700] },
+    swat: { cooldown: [2.5, 2, 1.6, 1.3], range: [450, 500, 550, 600], damage: [120, 180, 240, 320], targets: [1, 2, 3, 4], headHeight: 380 },
+    nova: { interval: [0, 7, 6, 5], radius: [0, 600, 700, 800], damage: [0, 80, 120, 170] },
+    mortar: { interval: [0, 4, 3.5, 3], globs: [0, 2, 3, 4], splash: [0, 90, 110, 130], damage: 90, range: 1800, flightTime: 1.2, arc: 300 },
+    bubble: { duration: [0, 3, 3.5, 4], cooldown: [0, 25, 21, 17] },
+    reflect: { duration: [0, 4, 5, 6], cooldown: [0, 20, 17, 14], radius: 380, damage: 60 },
+    /** Auto-shields trigger only when something is about to hit: projectiles or blimps within this range. */
+    threatRange: 700,
+    earlyAbilityPicks: 3,
+  },
+  abilities: {
+    /** Cooldown multiplier by rank (Dash/Roar ranks come from level-up picks; Leap is always rank 1). */
+    rankCooldown: [1, 1, 0.8, 0.65],
+    dash: { cooldown: 10, range: 900, duration: 0.6, crushRadius: 95 },
+    leap: { cooldown: 8, range: 1600, duration: 1.4, peak: 340, landRadius: 260, damage: 150 },
+    roar: { cooldown: 20, radius: 600, duration: 1.2, damage: 120, buildingDamage: 300 },
+  },
+  laser: {
+    trackTime: 2.5, lockTime: 0.8, fireTime: 1.5, cooldownMin: 20, cooldownMax: 30,
+    trackSpeed: 80, startOffset: 150, radius: 110, dps: 220, buildingDps: 400, beamHeight: 4000, scorchLife: 10,
+  },
+  /** Laser Cannon Truck: deploys, tracks with a sight line, locks, then fires a beam along the locked line. */
+  truck: { hp: 70, exp: 22, size: 110, speed: 45, range: 1200, deployTime: 0.8, aimTime: 2, lockTime: 1.2, fireTime: 1.2, cooldown: 5, beamWidth: 50, beamLength: 1700, hitRadius: 93, dps: 140, buildingDps: 300, aimHeight: 250 },
+  sam: {
+    hp: 260, exp: 30, size: 130, spawnMin: 600, spawnMax: 1400,
+    riseTime: 1, upTime: 6, sinkTime: 1, downMin: 4, downMax: 6, fireDelay: 1.2,
+    missiles: 4, missileSpeed: 300, missileTurn: 1.6, missileDamage: 35, missileExp: 2, missileTtl: 12, missileHitDist: 120,
+  },
+  blimp: { hp: 180, speed: 40, size: 170, spawnDist: 2200, altitude: 520, headHeight: 330, triggerDist: 190, damage: 120, exp: 25 },
   tank: { hp: 30, speed: 45, range: 950, damage: 6, fireCooldown: 3.2, shellFlightTime: 1.6, shellArc: 140, exp: 5, size: 40 },
   jet: { hp: 60, speed: 260, altitude: 430 * MONSTER_SCALE, turnRate: 0.9, damage: 10, rocketsPerSalvo: 3, salvoMin: 700, salvoMax: 1600, rocketSpeed: 650, exp: 15, size: 70, hitRadius: 90, exitDistance: 2600 },
   director: {
-    baseRate: 0.35,
-    rateGrowthPerMin: 0.45,
+    baseRate: 0.6,
+    /** Spawn budget points per second gained per player level above 1. */
+    rateGrowthPerLevel: 0.3,
     budgetCap: 12,
-    tankCost: 1,
-    jetCost: 4,
-    jetUnlockTime: 30,
-    jetChance: 0.3,
-    maxTanks: 40,
-    maxJets: 8,
     spawnRing: 2000,
   },
-  progression: { expBase: 40, expExponent: 1.35, offerCount: 3 },
+  /** Per-kind spawn rules: player level that unlocks it, budget cost, concurrent cap, pick weight. */
+  spawns: {
+    tank: { unlockLevel: 1, cost: 1, cap: 40, weight: 10 },
+    jet: { unlockLevel: 2, cost: 4, cap: 8, weight: 4 },
+    blimp: { unlockLevel: 3, cost: 3, cap: 6, weight: 3 },
+    sam: { unlockLevel: 5, cost: 5, cap: 4, weight: 2 },
+    artillery: { unlockLevel: 7, cost: 8, cap: 2, weight: 2 },
+    truck: { unlockLevel: 9, cost: 5, cap: 4, weight: 2 },
+    laser: { unlockLevel: 11, cost: 10, cap: 1, weight: 4 },
+  },
+  /** Enemy HP and damage multipliers grow with the player's level (not run time). */
+  difficulty: { hpPerLevel: 0.12, dmgPerLevel: 0.075 },
+  progression: { expBase: 20, expExponent: 1.55, offerCount: 3 },
+  /** One-off wave at the start of every run, outside the spawn budget. */
+  opening: { time: 5, count: 8, radius: 1200 },
+  readability: {
+    threatKinds: ['blimp', 'sam', 'artillery', 'truck'] as readonly string[],
+    maxArrows: 8,
+    arrowMarginPx: 28,
+    chevronMax: 80,
+  },
+  /** Level-up moment: slow-motion beat with the gold aura before the upgrade cards appear. */
+  levelUp: { momentTime: 1.2, timeScale: 0.35, auraTime: 1.6, auraRadius: 230, auraHeight: 760, color: 0xffd23f },
   hudHz: 10,
 } as const;

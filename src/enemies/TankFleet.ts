@@ -1,13 +1,14 @@
 import * as THREE from 'three';
 import { CONFIG } from '../config';
-import type { OnDestroyed, Target } from '../combat';
+import type { Target } from '../combat';
+import type { EnemySystem, WorldContext } from './types';
 import { toonMat } from '../render/toon';
 import { dist2, type Vec2 } from '../util/math';
 import { ROAD_ORIGIN } from '../world/chunks';
 import { planRoadPath, snapToRoad } from '../world/roads';
 
 const REPLAN_EVERY = 4;
-const MAX_TANKS = CONFIG.director.maxTanks;
+const MAX_TANKS = CONFIG.spawns.tank.cap;
 const S = CONFIG.tank.size;
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
@@ -42,17 +43,15 @@ class Tank implements Target {
 }
 
 /** Up to maxTanks tanks drawn as three InstancedMeshes (hull, turret, barrel). */
-export class TankFleet {
+export class TankFleet implements EnemySystem {
+  readonly kind = 'tank' as const;
+  private ctx: WorldContext | null = null;
   private tanks: Tank[] = [];
   private hull: THREE.InstancedMesh;
   private turret: THREE.InstancedMesh;
   private barrel: THREE.InstancedMesh;
 
-  constructor(
-    scene: THREE.Scene,
-    private onDestroyed: OnDestroyed,
-    private fire: (from: THREE.Vector3, to: THREE.Vector3, damage: number) => void,
-  ) {
+  constructor(scene: THREE.Scene) {
     const box = new THREE.BoxGeometry(1, 1, 1);
     const mk = (color: number) => {
       const m = new THREE.InstancedMesh(box, toonMat(color), MAX_TANKS);
@@ -81,16 +80,21 @@ export class TankFleet {
     this.draw();
   }
 
-  /** Spawn on a north-south road at roughly spawnRing distance from `around`. */
-  spawn(around: THREE.Vector3, rng: () => number): void {
+  spawn(ctx: WorldContext): void {
+    this.ctx = ctx;
+    const a = ctx.rng() * Math.PI * 2;
+    const r = CONFIG.director.spawnRing * (0.8 + ctx.rng() * 0.3);
+    const around = ctx.monster.position;
+    this.spawnAt(snapToRoad(around.x + Math.cos(a) * r, ROAD_ORIGIN, CONFIG.world.blockSize), around.z + Math.sin(a) * r, ctx);
+  }
+
+  /** Spawn a tank at an exact point (assumed on a road), HP scaled by difficulty. */
+  spawnAt(x: number, z: number, ctx: WorldContext): void {
     if (this.tanks.length >= MAX_TANKS) return;
-    const a = rng() * Math.PI * 2;
-    const r = CONFIG.director.spawnRing * (0.8 + rng() * 0.3);
-    const x = snapToRoad(around.x + Math.cos(a) * r, ROAD_ORIGIN, CONFIG.world.blockSize);
-    const z = around.z + Math.sin(a) * r;
     const t = new Tank(this.damage);
+    t.hp = CONFIG.tank.hp * ctx.difficulty.hpMult;
     t.position.set(x, S * 0.3, z);
-    t.fireCd = 1 + rng() * CONFIG.tank.fireCooldown;
+    t.fireCd = 1 + ctx.rng() * CONFIG.tank.fireCooldown;
     this.tanks.push(t);
   }
 
@@ -100,11 +104,13 @@ export class TankFleet {
     t.flashT = 0.1;
     if (t.hp <= 0) {
       t.alive = false;
-      this.onDestroyed(t, CONFIG.tank.exp);
+      this.ctx?.onDestroyed(t, CONFIG.tank.exp);
     }
   };
 
-  update(dt: number, monster: THREE.Vector3): void {
+  update(dt: number, ctx: WorldContext): void {
+    this.ctx = ctx;
+    const monster = ctx.monster.position;
     const T = CONFIG.tank;
     const goal = { x: monster.x, z: monster.z };
     for (let i = this.tanks.length - 1; i >= 0; i--) {
@@ -124,7 +130,7 @@ export class TankFleet {
           t.fireCd = T.fireCooldown;
           const muzzle = new THREE.Vector3(Math.sin(t.turretYaw), 0, Math.cos(t.turretYaw)).multiplyScalar(S * 0.8).add(t.position).setY(S * 0.5);
           const aim = monster.clone().add(new THREE.Vector3((Math.random() - 0.5) * 160, (220 + Math.random() * 200) * CONFIG.monster.scale, (Math.random() - 0.5) * 160));
-          this.fire(muzzle, aim, T.damage);
+          ctx.fireShell(muzzle, aim, T.damage);
         }
         continue;
       }

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { classifyGesture, pickEnemy, canTap } from './tap';
+import { abilityKey, classifyGesture, pickEnemy, canTap, pinchToWheel } from './tap';
+import { CONFIG } from '../config';
 
 describe('classifyGesture', () => {
   it('short, still release is a tap', () => {
@@ -44,5 +45,36 @@ describe('canTap', () => {
   it('touch and pen always tap', () => {
     expect(canTap('touch', 0)).toBe(true);
     expect(canTap('pen', 0)).toBe(true);
+  });
+});
+
+describe('abilityKey', () => {
+  const k = (code: string, mods: Partial<{ repeat: boolean; metaKey: boolean; ctrlKey: boolean; altKey: boolean }> = {}) =>
+    abilityKey({ code, repeat: false, metaKey: false, ctrlKey: false, altKey: false, ...mods });
+  it('maps Space to leap and R to roar', () => {
+    expect(k('Space')).toBe('leap');
+    expect(k('KeyR')).toBe('roar');
+    expect(k('KeyE')).toBe('dash');
+  });
+  it('leaves browser shortcuts alone (Cmd/Ctrl/Alt+R reload, etc.)', () => {
+    expect(k('KeyR', { metaKey: true })).toBeNull();
+    expect(k('KeyR', { ctrlKey: true })).toBeNull();
+    expect(k('Space', { altKey: true })).toBeNull();
+  });
+  it('ignores key repeat and other keys', () => {
+    expect(k('Space', { repeat: true })).toBeNull();
+    expect(k('KeyQ')).toBeNull();
+  });
+});
+
+describe('pinchToWheel', () => {
+  it('spreading fingers zooms in (negative wheel), pinching zooms out (positive)', () => {
+    expect(pinchToWheel(100, 160)).toBeLessThan(0);
+    expect(pinchToWheel(160, 100)).toBeGreaterThan(0);
+    expect(pinchToWheel(120, 120)).toBe(0);
+  });
+  it('is proportional to the change in finger distance', () => {
+    expect(pinchToWheel(100, 160)).toBeCloseTo(-60 * CONFIG.input.pinchSensitivity);
+    expect(pinchToWheel(100, 220)).toBeCloseTo(2 * pinchToWheel(100, 160));
   });
 });

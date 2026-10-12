@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { CONFIG } from '../config';
-import type { OnDestroyed, Target } from '../combat';
+import type { Target } from '../combat';
+import type { EnemySystem, WorldContext } from './types';
 import { faceted, toonMat } from '../render/toon';
 import { steerToward } from './steer';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -43,9 +44,9 @@ class Jet implements Target {
 }
 
 /** Jets fly strafing passes: attack run past the monster's head, fire a salvo, exit, loop back. */
-export class JetSquadron {
-  onTrail: (p: THREE.Vector3) => void = () => {};
-  onCrash: (p: THREE.Vector3) => void = () => {};
+export class JetSquadron implements EnemySystem {
+  readonly kind = 'jet' as const;
+  private ctx: WorldContext | null = null;
   private jets: Jet[] = [];
   /** Fuselage, wings and tail fin merged so each jet is one draw call. */
   private body = mergeGeometries([
@@ -54,11 +55,7 @@ export class JetSquadron {
     faceted(new THREE.BoxGeometry(S * 0.04, S * 0.26, S * 0.2)).translate(0, S * 0.15, -S * 0.4),
   ])!;
 
-  constructor(
-    private scene: THREE.Scene,
-    private onDestroyed: OnDestroyed,
-    private fire: (from: THREE.Vector3, to: THREE.Vector3, damage: number) => void,
-  ) {}
+  constructor(private scene: THREE.Scene) {}
 
   targets(): readonly Target[] {
     return this.jets;
@@ -73,7 +70,10 @@ export class JetSquadron {
     this.jets = [];
   }
 
-  spawn(around: THREE.Vector3, rng: () => number): void {
+  spawn(ctx: WorldContext): void {
+    this.ctx = ctx;
+    const around = ctx.monster.position;
+    const rng = ctx.rng;
     const mat = toonMat(CONFIG.palette.jet);
     const j = new Jet(mat, this.damage);
     const mesh = new THREE.Mesh(this.body, mat);
@@ -81,6 +81,7 @@ export class JetSquadron {
     j.group.add(mesh);
     const a = rng() * Math.PI * 2;
     const r = CONFIG.director.spawnRing * 1.2;
+    j.hp = CONFIG.jet.hp * ctx.difficulty.hpMult;
     j.position.set(around.x + Math.cos(a) * r, CONFIG.jet.altitude, around.z + Math.sin(a) * r);
     j.dir.set(-Math.cos(a), 0, -Math.sin(a));
     j.offset.set((rng() - 0.5) * 400, (rng() - 0.5) * 120, (rng() - 0.5) * 400);
@@ -95,11 +96,13 @@ export class JetSquadron {
     if (j.hp <= 0) {
       j.mode = 'crashing';
       j.spin = (Math.random() < 0.5 ? -1 : 1) * 4;
-      this.onDestroyed(j, CONFIG.jet.exp);
+      this.ctx?.onDestroyed(j, CONFIG.jet.exp);
     }
   };
 
-  update(dt: number, monster: THREE.Vector3): void {
+  update(dt: number, ctx: WorldContext): void {
+    this.ctx = ctx;
+    const monster = ctx.monster.position;
     const J = CONFIG.jet;
     for (let i = this.jets.length - 1; i >= 0; i--) {
       const j = this.jets[i]!;
@@ -114,10 +117,13 @@ export class JetSquadron {
         j.trailT += dt;
         if (j.trailT > 0.05) {
           j.trailT = 0;
-          this.onTrail(j.position);
+          ctx.particles.emit('smoke', j.position, 1, 0.3);
         }
         if (j.position.y <= 0) {
-          this.onCrash(j.position.clone().setY(0));
+          const p = j.position.clone().setY(0);
+          ctx.particles.explosion(p, 2);
+          ctx.particles.ring('dust', p, 120, 12);
+          ctx.shake(0.3);
           this.scene.remove(j.group);
           this.jets.splice(i, 1);
           continue;
@@ -130,7 +136,7 @@ export class JetSquadron {
             j.salvoFired = true;
             for (let k = 0; k < J.rocketsPerSalvo; k++) {
               const aim = monster.clone().add(new THREE.Vector3((Math.random() - 0.5) * 200, (250 + Math.random() * 250) * CONFIG.monster.scale, (Math.random() - 0.5) * 200));
-              this.fire(j.position.clone(), aim, J.damage);
+              ctx.fireRocket(j.position.clone(), aim, J.damage);
             }
           }
           if (j.position.distanceTo(j.waypoint) < 300) {

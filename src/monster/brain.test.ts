@@ -5,6 +5,7 @@ const base: BrainInput = {
   pos: { x: 0, z: 0 },
   order: null,
   auto: null,
+  autoMelee: null,
   meleeRange: 300,
   spikeRange: 1700,
   meleeReady: true,
@@ -58,9 +59,40 @@ describe('decide', () => {
     const d = decide({ ...base, meleeReady: false, spikeReady: false, order: { kind: 'attack', target: ground(250) } });
     expect(d.attack).toBeNull();
   });
-  it('does not auto-fire while executing a move order', () => {
+  it('keeps auto-firing spikes while walking a move order', () => {
     const d = decide({ ...base, order: { kind: 'move', to: { x: 500, z: 0 } }, auto: air(800) });
-    expect(d.attack).toBeNull();
+    expect(d.moveTo).toEqual({ x: 500, z: 0 });
+    expect(d.attack).toBe('ranged');
+    expect(d.attackOn).toBe('auto');
+  });
+  it('walking without a ready spike or target just walks', () => {
+    expect(decide({ ...base, spikeReady: false, order: { kind: 'move', to: { x: 500, z: 0 } }, auto: air(800) }).attack).toBeNull();
+    expect(decide({ ...base, order: { kind: 'move', to: { x: 500, z: 0 } } }).attack).toBeNull();
+  });
+});
+
+describe('decide: auto melee', () => {
+  it('strikes a ground enemy in reach when idle, without being ordered', () => {
+    const d = decide({ ...base, autoMelee: ground(250), auto: air(800) });
+    expect(d.attack).toBe('melee');
+    expect(d.attackOn).toBe('auto');
+    expect(d.meleeAt).toEqual({ x: 250, z: 0 });
+  });
+  it('strikes while walking a move order, without stopping', () => {
+    const d = decide({ ...base, order: { kind: 'move', to: { x: 900, z: 0 } }, autoMelee: ground(250) });
+    expect(d.moveTo).toEqual({ x: 900, z: 0 });
+    expect(d.attack).toBe('melee');
+    expect(d.meleeAt).toEqual({ x: 250, z: 0 });
+  });
+  it('falls back to spikes when the strike is on cooldown', () => {
+    const d = decide({ ...base, meleeReady: false, autoMelee: ground(250), auto: air(800) });
+    expect(d.attack).toBe('ranged');
+  });
+  it('ignores a dead auto-melee target', () => {
+    expect(decide({ ...base, autoMelee: ground(250, false) }).attack).toBeNull();
+  });
+  it('ordered melee reports where to strike', () => {
+    expect(decide({ ...base, order: { kind: 'attack', target: ground(250) } }).meleeAt).toEqual({ x: 250, z: 0 });
   });
 });
 

@@ -1,16 +1,15 @@
 import { CONFIG } from '../config';
-
-export type SpawnKind = 'tank' | 'jet';
+import { openKinds, pickKind } from './spawnTable';
+import type { EnemyKind } from './types';
 
 /**
- * Budget-based escalation: spending points per second grow linearly with time.
- * The next enemy kind is rolled first and saved up for, so expensive jets are not starved by cheap tanks.
- * Caps limit concurrent enemies.
+ * Budget-based escalation over the spawn table, driven by the player's level. The next kind is rolled first and saved up for,
+ * so expensive enemies are not starved by cheap ones. Caps limit concurrent enemies per kind.
  */
 export class SpawnDirector {
   elapsed = 0;
   private budget = 0;
-  private next: SpawnKind | null = null;
+  private next: EnemyKind | null = null;
 
   constructor(private rng: () => number) {}
 
@@ -20,30 +19,26 @@ export class SpawnDirector {
     this.next = null;
   }
 
-  update(dt: number, alive: { tanks: number; jets: number }): SpawnKind[] {
+  /** Spawns for this frame; the spending rate and unlocked kinds follow the player's level. */
+  update(dt: number, alive: Record<EnemyKind, number>, level: number): EnemyKind[] {
     const D = CONFIG.director;
     this.elapsed += dt;
-    const rate = D.baseRate + (D.rateGrowthPerMin * this.elapsed) / 60;
+    const rate = D.baseRate + D.rateGrowthPerLevel * Math.max(0, level - 1);
     this.budget = Math.min(D.budgetCap, this.budget + rate * dt);
-    const out: SpawnKind[] = [];
-    let tanks = alive.tanks;
-    let jets = alive.jets;
+    const counts = { ...alive };
+    const out: EnemyKind[] = [];
     for (;;) {
-      if (this.next === null) {
-        const jetsOpen = this.elapsed >= D.jetUnlockTime && jets < D.maxJets;
-        this.next = jetsOpen && this.rng() < D.jetChance ? 'jet' : 'tank';
-      }
-      const atCap = this.next === 'jet' ? jets >= D.maxJets : tanks >= D.maxTanks;
-      if (atCap) {
+      if (this.next === null) this.next = pickKind(openKinds(level, counts), this.rng);
+      if (this.next === null) break;
+      const rule = CONFIG.spawns[this.next];
+      if (counts[this.next] >= rule.cap) {
         this.next = null;
         break;
       }
-      const cost = this.next === 'jet' ? D.jetCost : D.tankCost;
-      if (this.budget < cost) break;
-      this.budget -= cost;
+      if (this.budget < rule.cost) break;
+      this.budget -= rule.cost;
       out.push(this.next);
-      if (this.next === 'jet') jets++;
-      else tanks++;
+      counts[this.next]++;
       this.next = null;
     }
     return out;

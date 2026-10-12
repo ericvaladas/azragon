@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { CONFIG } from '../config';
 import { faceted, toonMat } from '../render/toon';
 import { placeSegment } from './ik';
+import { tailSwatPoints } from './tailSwat';
 
 export type LegRig = {
   side: 1 | -1;
@@ -103,12 +104,19 @@ export class InsectTitanModel {
     this.root.add(this.body);
   }
 
-  /** Curl and sway the tail chain; the stinger and spike origin ride on the last point. */
-  updateTail(time: number): void {
+  /**
+   * Curl and sway the tail chain; the stinger and spike origin ride on the last point.
+   * For Tail Swat, `swatTarget` (body space) and weight `w` bend the chain so the tip reaches the target.
+   */
+  updateTail(time: number, swatTarget: THREE.Vector3 | null = null, w = 0): void {
     for (let i = 1; i < this.tailPts.length; i++) {
       const base = TAIL_BASE[i]!;
       const k = i / (this.tailPts.length - 1);
       this.tailPts[i]!.set(base.x + Math.sin(time * 1.3) * 25 * k, base.y + Math.sin(time * 2.1 + i) * 10 * k, base.z);
+    }
+    if (swatTarget && w !== 0) {
+      const bent = tailSwatPoints(this.tailPts, swatTarget, w);
+      bent.forEach((p, i) => this.tailPts[i]!.copy(p));
     }
     for (let i = 0; i < this.tailSegs.length; i++) {
       placeSegment(this.tailSegs[i]!, this.tailPts[i]!, this.tailPts[i + 1]!);

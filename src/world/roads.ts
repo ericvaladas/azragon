@@ -20,3 +20,14 @@ export function planRoadPath(start: Vec2, goal: Vec2, origin: number, pitch: num
   if (end.x !== corner.x || end.z !== corner.z) path.push(end);
   return path;
 }
+/** n points around `center` at radius r, alternately snapped to the nearest north-south or east-west road line. */
+export function ringOnRoads(center: Vec2, n: number, r: number, origin: number, pitch: number): Vec2[] {
+  const out: Vec2[] = [];
+  for (let k = 0; k < n; k++) {
+    const a = (k / n) * Math.PI * 2;
+    const x = center.x + Math.cos(a) * r;
+    const z = center.z + Math.sin(a) * r;
+    out.push(k % 2 === 0 ? { x: snapToRoad(x, origin, pitch), z } : { x, z: snapToRoad(z, origin, pitch) });
+  }
+  return out;
+}

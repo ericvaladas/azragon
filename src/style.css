@@ -280,3 +280,68 @@ body {
   cursor: pointer;
 }
 .btn-primary:active { transform: scale(0.95); }
+
+.edge-arrows { position: absolute; inset: 0; pointer-events: none; }
+.edge-arrow { position: absolute; left: 0; top: 0; width: 0; height: 0; transition: transform 100ms linear; }
+.edge-arrow-head {
+  position: absolute; left: -9px; top: -9px; width: 18px; height: 18px;
+  clip-path: polygon(100% 50%, 0 0, 25% 50%, 0 100%);
+  background: var(--color-danger, #ff3b2f);
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.8));
+}
+.edge-arrow-icon { position: absolute; left: -10px; top: 10px; font-size: 14px; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9); }
+
+.ability-bar {
+  position: absolute;
+  right: calc(var(--safe-right) + 14px);
+  bottom: calc(var(--safe-bottom) + 18px);
+  display: flex;
+  gap: 12px;
+  pointer-events: auto;
+}
+.ability-btn {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.14);
+  background: rgba(0, 0, 0, 0.6);
+  color: var(--color-text);
+  font: inherit;
+  cursor: pointer;
+  overflow: hidden;
+  touch-action: none;
+  transition: transform 100ms ease-out;
+}
+.ability-btn:active { transform: scale(0.92); }
+.ability-btn.ready { border-color: var(--color-primary); box-shadow: 0 0 12px rgba(155, 226, 45, 0.55); animation: ability-pulse 1.2s ease-in-out infinite; }
+.ability-btn.aiming { background: var(--color-primary); color: #0d1110; }
+.ability-btn.locked { opacity: 0.45; filter: grayscale(0.6); }
+.ability-icon { font-size: 26px; line-height: 64px; }
+.ability-lock { position: absolute; left: 0; right: 0; bottom: 6px; font-size: 10px; font-weight: 700; }
+.ability-key { position: absolute; left: 0; right: 0; top: 4px; font-size: 8px; opacity: 0.7; letter-spacing: 0.08em; }
+.ability-cd { position: absolute; inset: 0; border-radius: 50%; }
+@keyframes ability-pulse { 50% { transform: scale(1.06); } }
+@media (pointer: coarse) { .ability-key { display: none; } }
+
+.bar-exp.full .bar-fill { background: #ffd23f; animation: exp-full-flash 160ms steps(2) infinite; }
+@keyframes exp-full-flash { 50% { opacity: 0.55; } }
+.level-up-banner {
+  position: absolute;
+  pointer-events: none;
+  left: 50%;
+  top: 34%;
+  font-size: 40px;
+  font-weight: 700;
+  color: #ffd23f;
+  text-shadow: 0 0 14px rgba(255, 210, 63, 0.85), 0 2px 4px rgba(0, 0, 0, 0.9);
+  white-space: nowrap;
+  animation: level-up-pop 1.2s ease-out both;
+}
+@keyframes level-up-pop {
+  0% { transform: translate(-50%, 0) scale(0.4); opacity: 0; }
+  18% { transform: translate(-50%, 0) scale(1.15); opacity: 1; }
+  30% { transform: translate(-50%, 0) scale(1); }
+  85% { opacity: 1; }
+  100% { transform: translate(-50%, -12px) scale(1); opacity: 0; }
+}

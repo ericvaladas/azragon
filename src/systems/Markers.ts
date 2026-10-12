@@ -19,13 +19,14 @@ export class Markers {
   private tap = ring(CONFIG.palette.carapace, 0.7);
   private target = ring(CONFIG.palette.fire, 0.82);
   private hover = ring(0xffffff, 0.88);
+  private aim = ring(CONFIG.palette.stinger, 0.9);
   private tapT = 0;
   private targetRef: Target | null = null;
   private hoverRef: Target | null = null;
   private time = 0;
 
   constructor(scene: THREE.Scene) {
-    scene.add(this.tap, this.target, this.hover);
+    scene.add(this.tap, this.target, this.hover, this.aim);
   }
 
   tapAt(p: THREE.Vector3): void {
@@ -40,6 +41,14 @@ export class Markers {
 
   setHover(t: Target | null): void {
     this.hoverRef = t;
+  }
+
+  setAim(p: THREE.Vector3 | null, radius: number): void {
+    this.aim.visible = p !== null;
+    if (p) {
+      this.aim.position.set(p.x, 4, p.z);
+      this.aim.scale.setScalar(radius * (1 + Math.sin(this.time * 10) * 0.04));
+    }
   }
 
   update(dt: number): void {

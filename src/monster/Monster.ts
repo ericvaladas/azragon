@@ -4,6 +4,9 @@ import { angleDelta, dist2, yawTo, type Vec2 } from '../util/math';
 import { InsectTitanModel } from './InsectTitanModel';
 import { didLand, footState } from './gait';
 import { solveTwoBone, placeSegment } from './ik';
+import { leapPosition } from './leap';
+import { STRIKE_TIMES, strikeFootPose } from './strike';
+import { SWAT_TIMES, swatWeight } from './tailSwat';
 
 const FEMUR = 300;
 const TIBIA = 400;
@@ -14,6 +17,12 @@ const _foot = new THREE.Vector3();
 const _knee = new THREE.Vector3();
 const _pole = new THREE.Vector3();
 const _world = new THREE.Vector3();
+const _gait = new THREE.Vector3();
+const _target = new THREE.Vector3();
+/** Foot offset (model units) for the cocked leg: high and pulled back. */
+const _strikeLift = new THREE.Vector3(0, 420, -80);
+const { strike: STRIKE, recover: RECOVER } = STRIKE_TIMES;
+const _swat = new THREE.Vector3();
 
 export class Monster {
   readonly model = new InsectTitanModel();
@@ -22,6 +31,68 @@ export class Monster {
   hp: number = CONFIG.monster.maxHp;
   maxHp: number = CONFIG.monster.maxHp;
   alive = true;
+  onLeapLand: (p: THREE.Vector3) => void = () => {};
+  crouch = false;
+  /** Gold level-up glow, 0..1; the hit flash takes priority. */
+  glow = 0;
+  private leapT = -1;
+  private dashT = -1;
+  private dashFrom = { x: 0, z: 0 };
+  private dashTo = { x: 0, z: 0 };
+  private leapFrom = { x: 0, z: 0 };
+  private leapTo = { x: 0, z: 0 };
+  private roarT = -1;
+  private swatT = -1;
+  private swatTarget: THREE.Vector3 | null = null;
+  private swatHit = false;
+  /** Fires once per swat, when the tail tip reaches the target. */
+  onSwatImpact: () => void = () => {};
+
+  get airborne(): boolean {
+    return this.leapT >= 0;
+  }
+
+  /** Leaping or roaring: the brain must not move or attack. */
+  get busy(): boolean {
+    return this.leapT >= 0 || this.roarT >= 0 || this.dashT >= 0;
+  }
+
+  get dashing(): boolean {
+    return this.dashT >= 0;
+  }
+
+  /** Dash: charge in a straight line along the ground to `to`. */
+  startDash(to: Vec2): void {
+    this.dashFrom = { x: this.position.x, z: this.position.z };
+    this.dashTo = { x: to.x, z: to.z };
+    this.dashT = 0;
+    this.yaw = yawTo(this.dashFrom, this.dashTo);
+    this.meleeT = -1;
+  }
+
+  startLeap(to: Vec2): void {
+    this.leapFrom = { x: this.position.x, z: this.position.z };
+    this.leapTo = { x: to.x, z: to.z };
+    this.leapT = 0;
+    this.yaw = yawTo(this.leapFrom, this.leapTo);
+    this.meleeT = -1;
+  }
+
+  /** Tail Swat: lash the tail tip onto `target` (a live world position, followed as it moves). */
+  startSwat(target: THREE.Vector3): void {
+    this.swatT = 0;
+    this.swatTarget = target;
+    this.swatHit = false;
+  }
+
+  get swatting(): boolean {
+    return this.swatT >= 0;
+  }
+
+  startRoar(): void {
+    this.roarT = 0;
+    this.meleeT = -1;
+  }
   onFootLand: (p: THREE.Vector3) => void = () => {};
 
   private cycle = 0;
@@ -46,6 +117,14 @@ export class Monster {
     this.meleeCd = 0;
     this.spikeCd = 0;
     this.meleeT = -1;
+    this.strikeLeg = -1;
+    this.leapT = -1;
+    this.roarT = -1;
+    this.swatT = -1;
+    this.swatTarget = null;
+    this.dashT = -1;
+    this.crouch = false;
+    this.position.y = 0;
   }
 
   forward(out: THREE.Vector3): THREE.Vector3 {
@@ -109,24 +188,31 @@ export class Monster {
         fs.lift * LIFT * this.motion,
         leg.restFoot.z + fs.stride * (CONFIG.monster.strideLength / 2) * this.motion,
       );
+      if (i === this.strikeLeg && this.meleeT >= 0) this.strikeFoot(_foot);
       _pole.copy(_hip).add(_knee.set(leg.side * 120, 700, 0));
       solveTwoBone(_hip, _foot, FEMUR, TIBIA, _pole, _knee);
       placeSegment(leg.femur, _hip, _knee);
       placeSegment(leg.tibia, _knee, _foot);
       leg.knee.position.copy(_knee);
-      if (this.motion > 0.3 && didLand(prevCycle, this.cycle, i)) {
+      if (this.motion > 0.3 && i !== this.strikeLeg && didLand(prevCycle, this.cycle, i)) {
         this.onFootLand(_world.copy(_foot).applyMatrix4(root.matrixWorld));
       }
     }
 
-    const twitch = 0.18 + Math.sin(time * 7) * 0.08;
+    const twitch = this.roarT >= 0 ? 0.55 : 0.18 + Math.sin(time * 7) * 0.08;
     this.model.mandibles[0]!.rotation.y = -twitch;
     this.model.mandibles[1]!.rotation.y = twitch;
-    this.model.updateTail(time);
+    if (this.swatT >= 0 && this.swatTarget) {
+      this.model.updateTail(time, this.model.body.worldToLocal(_swat.copy(this.swatTarget)), swatWeight(this.swatT));
+    } else {
+      this.model.updateTail(time);
+    }
 
     if (this.flashT > 0) this.flashT -= dt;
-    const e = this.flashT > 0 ? 0xffffff : 0x000000;
-    for (const m of this.model.materials) m.emissive.setHex(e);
+    for (const m of this.model.materials) {
+      if (this.flashT > 0) m.emissive.setHex(0xffffff);
+      else m.emissive.setHex(CONFIG.levelUp.color).multiplyScalar(this.glow);
+    }
   }
 
   private lastCycle = 0;
@@ -136,6 +222,8 @@ export class Monster {
   private spikeCd = 0;
   private meleeT = -1; // -1 = not attacking; else time since start
   private impactDone = false;
+  private strikeLeg = -1;
+  private strikePoint = new THREE.Vector3();
 
   meleeReady(): boolean {
     return this.alive && this.meleeCd <= 0 && this.meleeT < 0;
@@ -145,40 +233,96 @@ export class Monster {
     return this.alive && this.spikeCd <= 0;
   }
 
-  startMelee(cooldownMult: number): void {
+  /** Leg strike: `leg` (a front leg index) spears down onto `point` (world XZ, already clamped to reach). */
+  startMelee(cooldownMult: number, leg: number, point: Vec2): void {
     this.meleeCd = CONFIG.monster.meleeCooldown * cooldownMult;
     this.meleeT = 0;
     this.impactDone = false;
+    this.strikeLeg = leg;
+    this.strikePoint.set(point.x, 0, point.z);
+  }
+
+  /**
+   * Strike timeline (s after start, w = windup): raise the foot high and back until w, spear onto the
+   * target by w + STRIKE, hold until w + HOLD, then ease back to the gait pose by w + RECOVER.
+   */
+  private strikeFoot(foot: THREE.Vector3): void {
+    _target.copy(this.strikePoint);
+    this.model.root.worldToLocal(_target);
+    _target.y = 0;
+    _gait.copy(foot);
+    strikeFootPose(this.meleeT, CONFIG.monster.meleeWindup, _gait, _strikeLift, _target, foot);
   }
 
   consumeSpike(cooldownMult: number): void {
     this.spikeCd = CONFIG.monster.spikeCooldown * cooldownMult;
   }
 
-  /** Cooldowns and the stomp pose: rear up during windup, slam, recover. */
+  /** Cooldowns, the leg-strike timing, and leap/roar poses. */
   tick(dt: number): void {
+    const L = CONFIG.abilities.leap;
+    if (this.leapT >= 0) {
+      this.leapT += dt;
+      const p = leapPosition(this.leapFrom, this.leapTo, this.leapT, L.duration, L.peak);
+      this.position.set(p.x, p.y, p.z);
+      this.pose.pitch = 0.25 * Math.sin(Math.PI * Math.min(1, this.leapT / L.duration)) - 0.1;
+      if (this.leapT >= L.duration) {
+        this.leapT = -1;
+        this.position.y = 0;
+        this.pose.dip = 60;
+        this.onLeapLand(this.position.clone());
+      }
+    }
+    if (this.dashT >= 0) {
+      const D = CONFIG.abilities.dash;
+      this.dashT += dt;
+      const p = leapPosition(this.dashFrom, this.dashTo, this.dashT, D.duration, 0);
+      const step = Math.hypot(p.x - this.position.x, p.z - this.position.z);
+      this.position.set(p.x, 0, p.z);
+      this.cycle += step / (CONFIG.monster.strideLength * CONFIG.monster.scale);
+      this.motion = 1;
+      this.pose.pitch = 0.18;
+      if (this.dashT >= D.duration) this.dashT = -1;
+    }
+    if (this.swatT >= 0) {
+      this.swatT += dt;
+      if (!this.swatHit && this.swatT >= SWAT_TIMES.impact) {
+        this.swatHit = true;
+        this.onSwatImpact();
+      }
+      if (this.swatT >= SWAT_TIMES.total) {
+        this.swatT = -1;
+        this.swatTarget = null;
+      }
+    }
+    if (this.roarT >= 0) {
+      this.roarT += dt;
+      const k = this.roarT / CONFIG.abilities.roar.duration;
+      this.pose.pitch = -0.45 * Math.sin(Math.PI * Math.min(1, k));
+      if (k >= 1) this.roarT = -1;
+    }
     this.meleeCd = Math.max(0, this.meleeCd - dt);
     this.spikeCd = Math.max(0, this.spikeCd - dt);
     if (this.meleeT < 0) {
-      this.pose.pitch *= Math.exp(-10 * dt);
-      this.pose.dip *= Math.exp(-10 * dt);
+      if (this.leapT < 0 && this.roarT < 0) this.pose.pitch *= Math.exp(-10 * dt);
+      this.pose.dip += ((this.crouch ? 35 : 0) - this.pose.dip) * (1 - Math.exp(-10 * dt));
       return;
     }
     this.meleeT += dt;
     const w = CONFIG.monster.meleeWindup;
     if (this.meleeT < w) {
+      // Rear back slightly while the leg cocks.
       const k = this.meleeT / w;
-      this.pose.pitch = -0.3 * k;
-      this.pose.dip = -20 * k;
-    } else {
-      if (!this.impactDone) {
-        this.impactDone = true;
-        this.pose.pitch = 0.18;
-        this.pose.dip = 45;
-        const f = this.forward(new THREE.Vector3());
-        this.onMeleeImpact(f.multiplyScalar(CONFIG.monster.meleeRange * 0.6).add(this.position).setY(0));
-      }
-      if (this.meleeT > w + 0.35) this.meleeT = -1;
+      this.pose.pitch = -0.12 * k;
+    } else if (this.meleeT >= w + STRIKE && !this.impactDone) {
+      this.impactDone = true;
+      this.pose.pitch = 0.1;
+      this.pose.dip = 25;
+      this.onMeleeImpact(this.strikePoint.clone());
+    }
+    if (this.meleeT > w + RECOVER) {
+      this.meleeT = -1;
+      this.strikeLeg = -1;
     }
   }
 }

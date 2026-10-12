@@ -29,3 +29,17 @@ export function pickEnemy(points: ScreenPoint[], x: number, y: number, radiusPx:
   }
   return best;
 }
+
+/** Ability for a keydown: Space = Leap, E = Dash, R = Roar. Modified keys (Cmd/Ctrl/Alt) and repeats are left to the browser. */
+export function abilityKey(e: { code: string; repeat: boolean; metaKey: boolean; ctrlKey: boolean; altKey: boolean }): 'leap' | 'dash' | 'roar' | null {
+  if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return null;
+  if (e.code === 'Space') return 'leap';
+  if (e.code === 'KeyE') return 'dash';
+  if (e.code === 'KeyR') return 'roar';
+  return null;
+}
+
+/** Wheel-equivalent zoom for a pinch: fingers moving apart zoom in (negative), together zoom out. */
+export function pinchToWheel(prevDist: number, curDist: number): number {
+  return (prevDist - curDist) * CONFIG.input.pinchSensitivity;
+}

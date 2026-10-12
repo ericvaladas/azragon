@@ -1,0 +1,21 @@
+import type { Vec2 } from '../util/math';
+
+/** Clamp a leap destination to maxRange along the same direction. */
+export function leapTarget(from: Vec2, to: Vec2, maxRange: number): Vec2 {
+  const dx = to.x - from.x;
+  const dz = to.z - from.z;
+  const d = Math.hypot(dx, dz);
+  if (d <= maxRange) return { x: to.x, z: to.z };
+  return { x: from.x + (dx / d) * maxRange, z: from.z + (dz / d) * maxRange };
+}
+
+/** Parabolic arc: ground at both ends, `peak` at the midpoint; t is clamped to [0, duration]. */
+export function leapPosition(from: Vec2, to: Vec2, t: number, duration: number, peak: number): { x: number; y: number; z: number } {
+  const k = Math.min(1, Math.max(0, t / duration));
+  return { x: from.x + (to.x - from.x) * k, y: peak * 4 * k * (1 - k), z: from.z + (to.z - from.z) * k };
+}
+
+/** Dash destination: `range` straight ahead along the monster's facing (forward = (sin yaw, cos yaw)). */
+export function dashTarget(from: Vec2, yaw: number, range: number): Vec2 {
+  return { x: from.x + Math.sin(yaw) * range, z: from.z + Math.cos(yaw) * range };
+}
