@@ -19,6 +19,8 @@ import { SpawnDirector } from './enemies/SpawnDirector';
 import { TankFleet } from './enemies/TankFleet';
 import { JetSquadron } from './enemies/JetSquadron';
 import { mulberry32 } from './util/rng';
+import { Progression, expToNext } from './systems/Progression';
+import { regen } from './monster/vitals';
 import { decide, nearestInRange, type BrainOrder, type BrainTarget } from './monster/brain';
 import { generateCityLayout } from './world/cityLayout';
 
@@ -53,6 +55,11 @@ export class GameScene {
   private tanks: TankFleet;
   private jets: JetSquadron;
   private rng = mulberry32(CONFIG.world.seed + 7);
+  private progression = new Progression(mulberry32(CONFIG.world.seed + 13));
+  private runTime = 0;
+  private dyingT = 0;
+  private hudT = 0;
+  private stateBeforePause: GameState = 'playing';
 
   constructor(private container: HTMLDivElement) {
     this.pixel = new PixelRenderer(container);
@@ -111,8 +118,74 @@ export class GameScene {
     return this.state;
   }
 
+  /** Called by the React level-up cards. */
+  chooseUpgrade(id: string): void {
+    if (this.state !== 'levelup' || !this.progression.choose(id)) return;
+    const s = this.progression.stats;
+    const m = this.monster;
+    const newMax = Math.round(CONFIG.monster.maxHp * s.maxHpMult);
+    if (id === 'vitality') m.hp = Math.min(newMax, m.hp + newMax * 0.3);
+    m.maxHp = newMax;
+    this.emitHud();
+    if (this.progression.pendingLevels > 0) this.events.emit('levelUpOffer', this.progression.offer());
+    else this.setState('playing');
+  }
+
+  pause(): void {
+    if (this.state === 'paused' || this.state === 'gameover') return;
+    this.stateBeforePause = this.state;
+    this.setState('paused');
+  }
+
+  resume(): void {
+    if (this.state === 'paused') this.setState(this.stateBeforePause);
+  }
+
   restart(): void {
+    this.city.reset();
+    this.tanks.clear();
+    this.jets.clear();
+    this.projectiles.clear();
+    this.particles.clear();
+    this.monster.reset();
+    this.progression.reset();
+    this.director.reset();
+    this.rig.reset();
+    this.order = null;
+    this.markers.setTarget(null);
+    this.kills = 0;
+    this.runTime = 0;
+    this.dyingT = 0;
     this.setState('playing');
+    this.emitHud();
+  }
+
+  private enterLevelUp(): void {
+    this.setState('levelup');
+    this.events.emit('levelUpOffer', this.progression.offer());
+    this.emitHud();
+  }
+
+  private emitHud(): void {
+    const m = this.monster;
+    this.events.emit('hud', {
+      hp: Math.ceil(m.hp),
+      maxHp: m.maxHp,
+      exp: this.progression.exp,
+      expToNext: expToNext(this.progression.level),
+      level: this.progression.level,
+      timeSec: Math.floor(this.runTime),
+    });
+  }
+
+  private startDying(): void {
+    this.monster.alive = false;
+    this.order = null;
+    this.markers.setTarget(null);
+    this.dyingT = 0;
+    this.setState('dying');
+    this.particles.ring('dust', this.monster.position, 400, 30);
+    this.rig.addTrauma(0.8);
   }
 
   private setState(next: GameState): void {
@@ -133,26 +206,53 @@ export class GameScene {
   private update = () => {
     this.animationFrameId = requestAnimationFrame(this.update);
     const dt = clampDelta(this.clock.getDelta());
-    this.elapsed += dt;
-    if (this.state === 'playing') {
-      for (const kind of this.director.update(dt, { tanks: this.tanks.count(), jets: this.jets.count() })) {
-        if (kind === 'tank') this.tanks.spawn(this.monster.position, this.rng);
-        else this.jets.spawn(this.monster.position, this.rng);
+    const frozen = this.state === 'levelup' || this.state === 'paused' || this.state === 'loading';
+
+    if (!frozen) {
+      this.elapsed += dt;
+      if (this.state === 'playing') {
+        this.runTime += dt;
+        for (const kind of this.director.update(dt, { tanks: this.tanks.count(), jets: this.jets.count() })) {
+          if (kind === 'tank') this.tanks.spawn(this.monster.position, this.rng);
+          else this.jets.spawn(this.monster.position, this.rng);
+        }
+        this.tanks.update(dt, this.monster.position);
+        this.updateMonster(dt);
+        if (this.monster.hp <= 0 && this.monster.alive) this.startDying();
       }
-      this.tanks.update(dt, this.monster.position);
-      this.updateMonster(dt);
+      if (this.state === 'dying') {
+        this.dyingT += dt;
+        this.monster.pose.collapse = Math.min(1, this.dyingT / CONFIG.monster.deathTime);
+        if (this.dyingT >= CONFIG.monster.deathTime) {
+          this.setState('gameover');
+          this.events.emit('gameOver', {
+            timeSec: Math.floor(this.runTime),
+            kills: this.kills,
+            buildings: this.city.destroyedCount(),
+            level: this.progression.level,
+          });
+        }
+      }
+      this.jets.update(dt, this.monster.position);
+      this.projectiles.update(dt);
+      this.city.update(dt);
+      this.monster.animate(dt, this.elapsed);
+      this.particles.update(dt);
+      this.markers.update(dt);
+
+      this.hudT -= dt;
+      if (this.hudT <= 0) {
+        this.hudT = 1 / CONFIG.hudHz;
+        this.emitHud();
+      }
     }
-    this.jets.update(dt, this.monster.position);
-    this.monster.animate(dt, this.elapsed);
-    this.markers.update(dt);
-    this.projectiles.update(dt);
-    this.particles.update(dt);
-    this.rig.update(dt, this.monster.position);
+
+    this.rig.update(frozen ? 0 : dt, this.monster.position);
     this.lighting.follow(this.monster.position);
-    this.city.update(dt);
     this.lighting.followCamera(this.camera);
     this.pixel.render(this.scene, this.camera);
   };
+
 
   /** Enemies the player can target. Filled in by Task 9. */
   enemyTargets(): Target[] {
@@ -215,8 +315,9 @@ export class GameScene {
   }
 
   private meleeImpact(p: THREE.Vector3): void {
-    const r = CONFIG.monster.meleeRadius;
-    const dmg = CONFIG.monster.meleeDamage;
+    const s = this.progression.stats;
+    const r = CONFIG.monster.meleeRadius * s.stompRadiusMult;
+    const dmg = CONFIG.monster.meleeDamage * s.damageMult;
     this.city.forEachStandingInRadius({ x: p.x, z: p.z }, r, (t) => t.applyDamage(dmg));
     for (const t of this.enemyTargets()) {
       if (!t.airborne && t.isAlive() && Math.hypot(t.position.x - p.x, t.position.z - p.z) <= r + t.radius) t.applyDamage(dmg);
@@ -229,6 +330,7 @@ export class GameScene {
   /** Order → brain → monster actions. Task 8 handles 'ranged'; Task 10 adds stat multipliers. */
   private updateMonster(dt: number): void {
     const m = this.monster;
+    const s = this.progression.stats;
     const pos = { x: m.position.x, z: m.position.z };
     const auto = nearestInRange(pos, this.enemyTargets(), CONFIG.monster.spikeRange);
     const order: BrainOrder =
@@ -247,29 +349,31 @@ export class GameScene {
       this.order = null;
       this.markers.setTarget(null);
     }
-    if (d.moveTo) m.moveToward(d.moveTo, dt, 1);
+    if (d.moveTo) m.moveToward(d.moveTo, dt, s.moveSpeedMult);
     else if (d.face) m.faceToward(d.face, dt);
-    if (d.attack === 'melee') m.startMelee(1);
+    if (d.attack === 'melee') m.startMelee(s.cooldownMult);
     if (d.attack === 'ranged') this.fireSpikes(d.attackOn === 'order' && this.order?.kind === 'attack' ? this.order.target : auto);
     m.tick(dt);
 
     this.city.forEachStandingInRadius(pos, CONFIG.monster.bodyRadius, (t) => t.applyDamage(CONFIG.monster.contactDps * dt));
+    m.hp = regen(m.hp, m.maxHp, CONFIG.monster.regenPerSec + s.regenBonus, dt);
   }
 
   private fireSpikes(target: Target | null): void {
     if (!target) return;
     const m = this.monster;
-    const count = 1; // Task 10: + progression.stats.extraSpikes
+    const s = this.progression.stats;
+    const count = 1 + s.extraSpikes;
     const pos = { x: m.position.x, z: m.position.z };
     const others = this.enemyTargets()
       .filter((t) => t.isAlive() && Math.hypot(t.position.x - pos.x, t.position.z - pos.z) <= CONFIG.monster.spikeRange)
       .sort((a, b) => a.position.distanceToSquared(target.position) - b.position.distanceToSquared(target.position));
     const from = m.model.stingerTip.getWorldPosition(new THREE.Vector3());
     spikeTargets(target, others, count).forEach((t, i) => {
-      this.projectiles.fireSpike(from, t, CONFIG.monster.spikeDamage, (i - (count - 1) / 2) * CONFIG.monster.spikeSpreadRad);
+      this.projectiles.fireSpike(from, t, CONFIG.monster.spikeDamage * s.damageMult, (i - (count - 1) / 2) * CONFIG.monster.spikeSpreadRad);
     });
     this.particles.emit('spark', from, 4);
-    m.consumeSpike(1);
+    m.consumeSpike(s.cooldownMult);
   }
 
   private onProjectileHit = (h: Hit): void => {
@@ -280,19 +384,22 @@ export class GameScene {
       return;
     }
     this.particles.explosion(h.point, 0.6);
-    if (this.monster.alive) {
+    if (this.monster.alive && this.state === 'playing') {
       this.monster.hp = Math.max(0, this.monster.hp - h.damage);
       this.monster.flash();
       this.rig.addTrauma(0.05);
+      if (this.monster.hp <= 0) this.startDying();
     }
   };
 
-  // Task 10 adds EXP; until then only kills are counted.
   private onTargetDestroyed = (target: Target, exp: number): void => {
     if (target.kind === 'tank') this.particles.explosion(target.position, 1);
     if (target.kind === 'jet') this.particles.explosion(target.position, 1.2);
     if (target.kind !== 'building') this.kills++;
-    void exp;
+    if (!this.monster.alive) return;
+    this.progression.addExp(exp);
+    this.events.emit('expGain', exp);
+    if (this.progression.pendingLevels > 0 && this.state === 'playing') this.enterLevelUp();
   };
 
   dispose(): void {
