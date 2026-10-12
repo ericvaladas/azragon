@@ -8,6 +8,8 @@ function App() {
   const sceneRef = useCallback((container: HTMLDivElement | null) => {
     if (container && !gameRef.current) {
       gameRef.current = new GameScene(container);
+      // Dev-only handle for scripted browser checks.
+      if (import.meta.env.DEV) (window as unknown as { __game: GameScene }).__game = gameRef.current;
     }
   }, []);
 
