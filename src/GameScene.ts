@@ -128,7 +128,7 @@ export class GameScene {
     this.enemies.add(new LaserTrucks(this.scene));
     this.enemies.add(new OrbitalLaser(this.scene));
     this.ctx = this.buildContext();
-    this.intro = new IntroCinematic({ scene: this.scene, camera: this.camera, overlay: container, monster: this.monster, city: this.city, particles: this.particles, shockwave: this.shockwave });
+    this.intro = new IntroCinematic({ scene: this.scene, camera: this.camera, overlay: container, monster: this.monster, city: this.city, particles: this.particles });
     this.city.onCollapseStart = (pos, size) => {
       this.particles.ring('dust', pos, size, 14);
       this.particles.emit('debris', pos.clone().setY(30), 8);

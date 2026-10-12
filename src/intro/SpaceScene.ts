@@ -5,7 +5,7 @@ import { fovForAspect } from '../systems/orbit';
 import { mulberry32 } from '../util/rng';
 import { earthTexture } from './earthTexture';
 import { PodModel } from './PodModel';
-import { earthDistance, heatAt, heatColor, starDirections } from './spaceMath';
+import { earthCenter, heatAt, heatColor, starDirections } from './spaceMath';
 import { shakeAt } from './timeline';
 
 const SP = CONFIG.intro.space;
@@ -47,20 +47,20 @@ export class SpaceScene {
     const R = SP.earthRadius;
     const globe = new THREE.Mesh(faceted(new THREE.SphereGeometry(R, 40, 24)), toonMat(0xffffff, { map: earthTexture() }));
     const rim = new THREE.Mesh(
-      new THREE.SphereGeometry(R * 1.06, 40, 24),
+      new THREE.SphereGeometry(R * SP.atmosphere, 40, 24),
       new THREE.MeshBasicMaterial({ color: 0x7fe0ff, transparent: true, opacity: 0.4, side: THREE.BackSide, depthWrite: false }),
     );
     globe.rotation.z = 0.35;
     this.earth.add(globe, rim);
     this.scene.add(this.earth, this.pod.root);
 
-    const h = L * 1.7;
-    // Apex just ahead of the nose, flaring back around the shell like a bow shock.
+    // Bow shock: flattened glowing domes capping the nose (+Z, the leading side), where re-entry burns.
     // Two additive layers: a saturated orange outer shock and a tighter yellow-white core.
-    for (const [r, color] of [[0.62, 0xff5a14], [0.46, 0xffe08a]] as const) {
+    for (const [r, color] of [[0.62, 0xff5a14], [0.48, 0xffe08a]] as const) {
       const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
       this.sheathMats.push(mat);
-      this.sheath.add(new THREE.Mesh(new THREE.ConeGeometry(L * r, h, 10, 1, true).rotateX(Math.PI / 2).translate(0, 0, L * 0.6 - h / 2), mat));
+      const dome = new THREE.SphereGeometry(L * r, 14, 7, 0, Math.PI * 2, 0, Math.PI / 2).rotateX(Math.PI / 2).scale(1, 1, 0.6).translate(0, 0, L * 0.3);
+      this.sheath.add(new THREE.Mesh(dome, mat));
     }
     this.scene.add(this.sheath);
 
@@ -82,18 +82,17 @@ export class SpaceScene {
 
   update(t: number, dt: number): void {
     // Earth sits below the flight path (lower half of the frame) and swells as it closes in.
-    const d = earthDistance(t);
-    this.earth.position.set(0, -(SP.earthDrop + d * 0.3), d);
+    earthCenter(t, this.earth.position);
     this.earth.rotation.y = t * 0.04;
     this.pod.root.rotation.z = t * 0.5;
 
     const h = heatAt(t);
     this.pod.setHeat(heatColor(h, _heat));
     this.sheath.visible = h > 0;
-    this.sheathMats[0]!.opacity = 0.75 * h;
-    this.sheathMats[1]!.opacity = 0.6 * h * h;
+    this.sheathMats[0]!.opacity = 0.85 * Math.min(1, h * 2);
+    this.sheathMats[1]!.opacity = 0.8 * h;
     const flicker = 1 + 0.12 * Math.sin(t * 47) + 0.08 * Math.sin(t * 83);
-    this.sheath.scale.set(flicker, flicker, 0.7 + 0.3 * h);
+    this.sheath.scale.set(flicker, flicker, 0.6 + 0.6 * h);
 
     // Embers stream backward, past the camera, and respawn at the nose.
     this.embers.visible = h > 0;

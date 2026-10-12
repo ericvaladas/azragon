@@ -3,7 +3,7 @@ import { CONFIG } from '../config';
 import type { OnDestroyed, Target } from '../combat';
 import type { Vec2 } from '../util/math';
 import { mulberry32 } from '../util/rng';
-import { chunksInRadius, DestroyedLog, generateChunk, planStreaming, type BuildingSpec, type ChunkContent } from './chunks';
+import { blastTopples, chunksInRadius, DestroyedLog, generateChunk, planStreaming, type BuildingSpec, type ChunkContent } from './chunks';
 import { blockGroundTexture, craterTexture, facadeTexture } from './pixelTextures';
 import { faceted, toonMat } from '../render/toon';
 
@@ -19,7 +19,10 @@ class Building implements Target {
   hp: number;
   state: BuildingState = 'standing';
   rubbleSlot = -1;
+  /** Collapse time; negative while waiting for the impact's shock front to arrive. */
   t = 0;
+  /** Collapse dust is due when the delayed collapse actually starts. */
+  dustPending = false;
   tiltAxis = new THREE.Vector3();
 
   constructor(
@@ -218,29 +221,38 @@ export class City {
   }
 
   /** Start a building's collapse. `award` false (the crater blast) gives no EXP and doesn't count in the stats. */
-  private collapse(b: Building, award: boolean): void {
+  private collapse(b: Building, award: boolean, delay = 0): void {
     b.state = 'collapsing';
-    b.t = 0;
+    b.t = -delay;
+    b.dustPending = delay > 0;
     const rng = mulberry32(b.slot + 99);
     b.tiltAxis.set(rng() - 0.5, 0, rng() - 0.5).normalize();
     this.collapsing.push(b);
     this.destroyed.mark(b.chunk, b.index, award);
-    this.onCollapseStart(new THREE.Vector3(b.spec.x, 0, b.spec.z), Math.max(b.spec.w, b.spec.d));
+    if (!b.dustPending) this.collapseDust(b);
     if (award) this.onDestroyed(b, Math.max(1, Math.round(b.maxHp * CONFIG.world.buildingExpPerHp)));
   }
 
+  private collapseDust(b: Building): void {
+    this.onCollapseStart(new THREE.Vector3(b.spec.x, 0, b.spec.z), Math.max(b.spec.w, b.spec.d));
+  }
+
   /**
-   * The pod's impact: flatten every building touching the radius with no EXP and no stat, and show the
-   * crater decal. `instant` (a skipped intro) writes rubble now, finishing any collapse already under way.
+   * The pod's impact, with no EXP and no stat: flatten every building touching the crater radius `r`, topple a
+   * thinning share of those out to `outer` (see blastTopples), and show the crater decal. Collapses start as the
+   * shock front reaches them, travelling at `speed` m/s. `instant` (a skipped intro) writes rubble now,
+   * finishing any collapse already under way.
    */
-  blast(p: Vec2, r: number, instant: boolean): void {
-    for (const ref of chunksInRadius(p.x, p.z, r + CONFIG.world.blockSize)) {
+  blast(p: Vec2, r: number, instant: boolean, outer = r, speed = Infinity): void {
+    for (const ref of chunksInRadius(p.x, p.z, outer + CONFIG.world.blockSize)) {
       const chunk = this.chunks.get(ref.key);
       if (!chunk) continue;
       for (const b of chunk.buildings) {
-        if (b.state === 'rubble' || Math.hypot(b.spec.x - p.x, b.spec.z - p.z) > r + b.radius) continue;
+        if (b.state === 'rubble') continue;
+        const d = Math.hypot(b.spec.x - p.x, b.spec.z - p.z) - b.radius;
+        if (!blastTopples(b.spec.x, b.spec.z, d, r, outer)) continue;
         if (!instant) {
-          if (b.state === 'standing') this.collapse(b, false);
+          if (b.state === 'standing') this.collapse(b, false, Math.max(0, d) / speed);
           continue;
         }
         if (b.state === 'collapsing') this.collapsing.splice(this.collapsing.indexOf(b), 1);
@@ -259,6 +271,11 @@ export class City {
     for (let i = this.collapsing.length - 1; i >= 0; i--) {
       const b = this.collapsing[i]!;
       b.t += dt;
+      if (b.t < 0) continue;
+      if (b.dustPending) {
+        b.dustPending = false;
+        this.collapseDust(b);
+      }
       const k = Math.min(1, b.t / T);
       if (k >= 1) {
         this.collapsing.splice(i, 1);

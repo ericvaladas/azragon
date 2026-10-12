@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { CHUNK_SIZE, DestroyedLog, chunkKey, chunksInRadius, generateChunk, planStreaming } from './chunks';
+import { CHUNK_SIZE, DestroyedLog, blastTopples, chunkKey, chunksInRadius, generateChunk, planStreaming } from './chunks';
 import { CONFIG } from '../config';
 
 const W = CONFIG.world;
@@ -98,5 +98,20 @@ describe('DestroyedLog', () => {
     log.clear();
     expect(log.has('3,4', 7)).toBe(false);
     expect(log.count).toBe(0);
+  });
+});
+
+describe('blastTopples', () => {
+  const lots = Array.from({ length: 400 }, (_, i) => ({ x: (i % 20) * 37.3 - 300, z: Math.floor(i / 20) * 41.7 - 400 }));
+  const share = (d: number) => lots.filter((l) => blastTopples(l.x, l.z, d, 500, 1000)).length / lots.length;
+  it('flattens everything inside the crater and nothing past the outer blast radius', () => {
+    expect(share(400)).toBe(1);
+    expect(share(1001)).toBe(0);
+  });
+  it('topples fewer buildings the farther they are from the crater, deterministically per lot', () => {
+    expect(share(600)).toBeGreaterThan(share(900));
+    expect(share(750)).toBeGreaterThan(0.3);
+    expect(share(750)).toBeLessThan(0.7);
+    for (const l of lots) expect(blastTopples(l.x, l.z, 750, 500, 1000)).toBe(blastTopples(l.x, l.z, 750, 500, 1000));
   });
 });

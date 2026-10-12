@@ -3,18 +3,31 @@ import { CONFIG } from '../config';
 import { CUT_TIME } from './timeline';
 
 const SP = CONFIG.intro.space;
-const S = CONFIG.intro.starts;
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
 
-/** Pod-to-Earth distance: closes slowly at first, then rushes in, reaching earthEnd at the cut. */
+const easeInOut = (u: number) => (u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2);
+
+/** Earth's distance ahead: eases in to the atmosphere by entryTime, then a slow dive to earthEnd at the cut. */
 export function earthDistance(t: number): number {
-  const u = clamp01(t / CUT_TIME);
-  return SP.earthStart + (SP.earthEnd - SP.earthStart) * u * u;
+  if (t <= SP.entryTime) return SP.earthStart + (SP.earthEntry - SP.earthStart) * easeInOut(clamp01(t / SP.entryTime));
+  return SP.earthEntry + (SP.earthEnd - SP.earthEntry) * clamp01((t - SP.entryTime) / (CUT_TIME - SP.entryTime));
 }
 
-/** Re-entry heat 0..1: zero in space, rising through re-entry, white-hot at the cut. */
+/** Earth's centre relative to the pod (which sits at the origin, flying +Z): ahead and below. */
+export function earthCenter(t: number, out: THREE.Vector3): THREE.Vector3 {
+  const d = earthDistance(t);
+  return out.set(0, -(SP.earthDrop + d * 0.3), d);
+}
+
+const _c = new THREE.Vector3();
+/** Height of the pod above Earth's surface. */
+export function podAltitude(t: number): number {
+  return earthCenter(t, _c).length() - SP.earthRadius;
+}
+
+/** Re-entry heat 0..1: zero until the pod enters the atmosphere, white-hot at the cut. */
 export function heatAt(t: number): number {
-  return clamp01((t - S.reentry) / (S.clouds - S.reentry));
+  return clamp01((t - SP.entryTime) / (CUT_TIME - SP.entryTime));
 }
 
 const BLACK = new THREE.Color(0x000000);

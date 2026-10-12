@@ -133,3 +133,15 @@ export class DestroyedLog {
     this.count = 0;
   }
 }
+
+/**
+ * Whether the pod's impact topples the building on lot (x, z), `d` metres from the impact: always inside the
+ * crater radius `r`, never past `outer`, and in between with odds falling off linearly (a fixed hash per lot,
+ * so a skipped and a played intro agree).
+ */
+export function blastTopples(x: number, z: number, d: number, r: number, outer: number): boolean {
+  if (d <= r) return true;
+  if (d >= outer) return false;
+  const h = Math.sin(x * 12.9898 + z * 78.233) * 43758.5453;
+  return h - Math.floor(h) < 1 - (d - r) / (outer - r);
+}

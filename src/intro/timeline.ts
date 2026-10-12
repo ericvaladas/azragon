@@ -108,7 +108,8 @@ export function shakeAt(t: number): number {
     case 'impact':
       return 1;
     case 'settle':
-      return 0.6 * Math.max(0, 1 - k * 3);
+      // The ground keeps rumbling as the city falls around the crater.
+      return 0.85 * (1 - k) * (1 - k);
     case 'emerge':
       return k < 0.3 ? 0.35 : 0;
     default:

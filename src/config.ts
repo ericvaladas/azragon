@@ -91,7 +91,8 @@ export const CONFIG = {
     maxRubble: 2500,
     blockSize: 200,
     roadWidth: 36,
-    clearRadius: 380,
+    /** Crater around the origin (the pod's impact site; the decal is half a block wider), sized to the cocoon. */
+    clearRadius: 650,
     parkChance: 0.12,
     minBuildingH: 20,
     maxBuildingH: 120,
@@ -205,24 +206,45 @@ export const CONFIG = {
     /** Pod rests half-buried after impact (world y). */
     podRestY: 0,
     /** Camera offsets from the pod while falling (start of clouds) and the wide shot at impact (absolute). */
-    camFollow: [0, 260, -700] as const,
-    camWide: [-560, 400, -1050] as const,
-    lookFollow: [0, -300, 600] as const,
-    lookImpact: [0, 60, 0] as const,
+    camFollow: [0, 650, -1700] as const,
+    camWide: [-1100, 720, -1900] as const,
+    lookFollow: [0, -600, 1200] as const,
+    lookImpact: [0, 120, 0] as const,
     /** Monster rises from this depth (× monster scale) over the first riseTime s of emerge. */
     riseDepth: 300,
     riseTime: 1.4,
     clouds: { count: 80, minY: 1500, maxY: 4000, spreadX: 1500, minZ: -2200, maxZ: 900, minSize: 500, maxSize: 1100 },
     /** Fog while inside the cloud band (eases back to CONFIG.fog through the descent). */
-    cloudFog: { near: 250, far: 2000 },
-    /** Cocoon length (m): about 60% of the standing monster. Tune by eye against the monster. */
-    podLength: 230,
-    /** Screen wash: builds over `rise` s before the cut, holds, fades; a smaller flash at impact. */
-    flash: { rise: 1.0, hold: 0.15, fade: 0.7, impactPeak: 0.8, impactFade: 0.45 },
+    cloudFog: { near: 700, far: 3400 },
+    /** Cocoon length (m): big enough to hold the curled-up monster (about 480 × 450 × 340 m at scale 0.6). */
+    podLength: 620,
+    /** Screen wash: builds over `rise` s before the cut, holds, fades; a full white-out at impact. */
+    flash: { rise: 1.0, hold: 0.15, fade: 0.7, impactPeak: 1, impactFade: 0.9 },
     /** Camera shake offset (m) at full trauma. */
-    shakeAmp: 40,
-    /** Space scene (its own units): Earth size, pod-to-Earth distance at t=0 and at the cut, Earth below the path. */
-    space: { earthRadius: 1000, earthStart: 9000, earthEnd: 1250, earthDrop: 650, stars: 700, podLength: 60 },
+    shakeAmp: 75,
+    /**
+     * The crash. Buildings topple out to `outer` × crater radius (thinning with distance) as the shock front
+     * passes at `shockSpeed` m/s; three staggered rings (radius × crater radius, life s); boulders hurled outward;
+     * a ring of secondary fireballs; crater fires per second during the settle.
+     */
+    impact: {
+      outer: 2,
+      shockSpeed: 1400,
+      rings: [
+        { radius: 2.4, life: 0.8, delay: 0 },
+        { radius: 3.2, life: 1.1, delay: 0.1 },
+        { radius: 4.2, life: 1.9, delay: 0.25 },
+      ],
+      boulders: 40,
+      fireballs: 10,
+      fireRate: 14,
+    },
+    /**
+     * Space scene (its own units). Earth's centre sits at (0, -(earthDrop + 0.3d), d) from the pod; d closes from
+     * earthStart to earthEntry by entryTime (the pod touches the atmosphere, rim radius × `atmosphere`), then dives
+     * slowly to earthEnd at the cut. Burning starts at entryTime.
+     */
+    space: { earthRadius: 1000, atmosphere: 1.08, earthStart: 9000, earthEntry: 670, earthEnd: 600, entryTime: 4.2, earthDrop: 650, stars: 700, podLength: 60 },
   },
   readability: {
     threatKinds: ['blimp', 'sam', 'artillery', 'truck'] as readonly string[],
