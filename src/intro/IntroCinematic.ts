@@ -9,7 +9,7 @@ import { CloudLayer } from './CloudLayer';
 import { PodModel } from './PodModel';
 import { SpaceScene } from './SpaceScene';
 import { heatColor } from './spaceMath';
-import { CUT_TIME, EMERGE_TIME, IMPACT_TIME, INTRO_LENGTH, cameraPath, flashAt, monsterRiseY, podPath, shakeAt } from './timeline';
+import { CUT_TIME, EMERGE_TIME, IMPACT_TIME, INTRO_LENGTH, cameraPath, flashAt, monsterCrouch, podPath, shakeAt } from './timeline';
 
 export type IntroHost = {
   scene: THREE.Scene;
@@ -83,7 +83,9 @@ export class IntroCinematic {
     this.pod.setGlow(0);
     this.clouds.visible = false;
     const m = this.host.monster;
-    m.position.set(0, monsterRiseY(0), 0);
+    // Standing on the crater floor, curled up inside the (as yet unseen) cocoon.
+    m.position.set(0, 0, 0);
+    m.pose.dip = I.crouchDip;
     m.model.root.visible = false;
     this.flashEl.style.opacity = '0';
     this.space.update(0, 0);
@@ -152,7 +154,7 @@ export class IntroCinematic {
       }
       this.updateFragments(t, dt);
     } else {
-      h.monster.position.y = monsterRiseY(t);
+      h.monster.pose.dip = I.crouchDip * monsterCrouch(t);
       this.updateFragments(t, dt);
     }
 
@@ -231,7 +233,6 @@ export class IntroCinematic {
     h.particles.emit('acid', _p.set(0, I.podLength * 0.3, 0), 60, 3);
     h.particles.ring('dust', ORIGIN, CRATER_RADIUS * 0.6, 24);
     h.monster.model.root.visible = true;
-    h.monster.position.y = monsterRiseY(EMERGE_TIME);
   }
 
   /** Boulders and shell fragments arc out, land, and shrink away over the last 0.6 s so nothing pops at play start. */
@@ -282,6 +283,7 @@ export class IntroCinematic {
     fog.far = CONFIG.fog.far;
     const m = this.host.monster;
     m.position.set(0, 0, 0);
+    m.pose.dip = 0;
     m.model.root.visible = true;
   }
 

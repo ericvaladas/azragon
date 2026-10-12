@@ -117,9 +117,8 @@ export function shakeAt(t: number): number {
   }
 }
 
-/** Monster root y while it climbs out: riseDepth (× monster scale) below the crater floor up to 0, eased out. */
-export function monsterRiseY(t: number): number {
+/** How curled up the monster is, 1..0: fully crouched inside the cocoon, straightening (eased out) over riseTime after the split. */
+export function monsterCrouch(t: number): number {
   const u = clamp01((t - EMERGE_TIME) / I.riseTime);
-  const e = 1 - (1 - u) * (1 - u);
-  return u >= 1 ? 0 : -I.riseDepth * CONFIG.monster.scale * (1 - e);
+  return (1 - u) * (1 - u);
 }

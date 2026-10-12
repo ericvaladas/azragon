@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
-import { CUT_TIME, EMERGE_TIME, IMPACT_TIME, INTRO_LENGTH, cameraPath, flashAt, gameplayPose, monsterRiseY, phaseAt, podPath, shakeAt } from './timeline';
+import { CUT_TIME, EMERGE_TIME, IMPACT_TIME, INTRO_LENGTH, cameraPath, flashAt, gameplayPose, monsterCrouch, phaseAt, podPath, shakeAt } from './timeline';
 import { CONFIG } from '../config';
 
 const S = CONFIG.intro.starts;
@@ -96,12 +96,13 @@ describe('shakeAt', () => {
   });
 });
 
-describe('monsterRiseY', () => {
-  it('rises from below the crater floor to standing within riseTime of the split', () => {
-    const depth = CONFIG.intro.riseDepth * CONFIG.monster.scale;
-    expect(monsterRiseY(EMERGE_TIME)).toBeCloseTo(-depth);
-    expect(monsterRiseY(EMERGE_TIME + CONFIG.intro.riseTime / 2)).toBeGreaterThan(-depth / 2);
-    expect(monsterRiseY(EMERGE_TIME + CONFIG.intro.riseTime)).toBeCloseTo(0);
-    expect(monsterRiseY(INTRO_LENGTH)).toBe(0);
+describe('monsterCrouch', () => {
+  it('stays fully curled inside the cocoon until it splits, then stands up within riseTime', () => {
+    expect(monsterCrouch(0)).toBe(1);
+    expect(monsterCrouch(EMERGE_TIME - 0.01)).toBe(1);
+    expect(monsterCrouch(EMERGE_TIME)).toBe(1);
+    expect(monsterCrouch(EMERGE_TIME + CONFIG.intro.riseTime / 2)).toBeLessThan(0.5);
+    expect(monsterCrouch(EMERGE_TIME + CONFIG.intro.riseTime)).toBe(0);
+    expect(monsterCrouch(INTRO_LENGTH)).toBe(0);
   });
 });

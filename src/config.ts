@@ -210,8 +210,8 @@ export const CONFIG = {
     camWide: [-1100, 720, -1900] as const,
     lookFollow: [0, -600, 1200] as const,
     lookImpact: [0, 120, 0] as const,
-    /** Monster rises from this depth (× monster scale) over the first riseTime s of emerge. */
-    riseDepth: 300,
+    /** Inside the cocoon the monster stands curled down by crouchDip (model units of body drop); it straightens over riseTime s after the split. */
+    crouchDip: 170,
     riseTime: 1.4,
     clouds: { count: 80, minY: 1500, maxY: 4000, spreadX: 1500, minZ: -2200, maxZ: 900, minSize: 500, maxSize: 1100 },
     /** Fog while inside the cloud band (eases back to CONFIG.fog through the descent). */
