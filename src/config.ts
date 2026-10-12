@@ -50,7 +50,7 @@ export const CONFIG = {
     minDistance: 900 * MONSTER_SCALE,
     maxDistance: 2400 * MONSTER_SCALE,
     shoulderHeight: 350 * MONSTER_SCALE,
-    shoulderOffset: 260 * MONSTER_SCALE,
+    shoulderOffset: 0,
     lookAhead: 800 * MONSTER_SCALE,
     dragSensitivity: 0.006,
     wheelSensitivity: 0.8,

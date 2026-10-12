@@ -6,11 +6,12 @@ const C = CONFIG.camera;
 const base: OrbitState = { yaw: 0, pitch: C.defaultPitch, distance: C.defaultDistance };
 
 describe('cameraPose', () => {
-  it('at yaw 0 sits behind (-Z), above, and to the right (-X) of the target, looking ahead (+Z)', () => {
+  it('at yaw 0 sits directly behind (-Z) and above the target, centred, looking ahead (+Z)', () => {
     const { pos, look } = cameraPose(base, { x: 0, y: 0, z: 0 });
     expect(pos[2]).toBeLessThan(0);
     expect(pos[1]).toBeGreaterThan(C.shoulderHeight);
-    expect(pos[0]).toBeLessThan(0);
+    expect(pos[0]).toBeCloseTo(0);
+    expect(look[0]).toBeCloseTo(0);
     expect(look[2]).toBeGreaterThan(0);
   });
   it('at yaw π/2 sits on the -X side, looking toward +X', () => {
