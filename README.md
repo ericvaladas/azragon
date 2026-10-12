@@ -26,7 +26,7 @@ You are a skyscraper-sized alien that has crash-landed on Earth. Flatten the cit
 | Laser cannon truck | 3:30 | Step out of its red sight line once it locks, kill it, or take Overload to fire the beam back |
 | Orbital laser | 4:30 | Walk out of the faint beam before it locks, or Leap |
 
-Level-ups offer stat boosts and six rankable abilities (Acid Footprints, Spike Storm, Chitin Deflection, Feeding Frenzy, Brood Swarm, Overload, and more).
+Level-ups offer stat boosts and rankable abilities (Dash, Roar, Spine Shield, Venom Nova, Acid Mortar, Shield Bubble, Reflect Shield, Acid Footprints, Spike Storm, Chitin Deflection, Feeding Frenzy, Brood Swarm, Overload, and more).
 
 ## Develop
 
