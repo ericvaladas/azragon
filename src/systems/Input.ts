@@ -1,4 +1,4 @@
-import { classifyGesture } from './tap';
+import { canTap, classifyGesture } from './tap';
 
 export type InputHandlers = {
   tap(x: number, y: number): void;
@@ -16,6 +16,7 @@ export class Input {
   private lastY = 0;
   private startT = 0;
   private dragging = false;
+  private tapAllowed = true;
 
   constructor(
     private el: HTMLElement,
@@ -43,6 +44,7 @@ export class Input {
     this.lastY = this.startY;
     this.startT = performance.now();
     this.dragging = false;
+    this.tapAllowed = canTap(e.pointerType, e.button);
   };
 
   private onMove = (e: PointerEvent) => {
@@ -65,13 +67,15 @@ export class Input {
     if (e.pointerId !== this.activeId) return;
     const [x, y] = this.local(e);
     const moved = Math.hypot(x - this.startX, y - this.startY);
-    if (!this.dragging && classifyGesture(moved, performance.now() - this.startT, true) === 'tap') this.h.tap(x, y);
+    if (this.tapAllowed && !this.dragging && classifyGesture(moved, performance.now() - this.startT, true) === 'tap') this.h.tap(x, y);
     this.activeId = null;
     this.dragging = false;
   };
 
   private onCancel = (e: PointerEvent) => {
-    if (e.pointerId === this.activeId) this.activeId = null;
+    if (e.pointerId !== this.activeId) return;
+    this.activeId = null;
+    this.dragging = false;
   };
 
   private onWheel = (e: WheelEvent) => {

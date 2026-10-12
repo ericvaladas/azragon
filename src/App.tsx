@@ -25,7 +25,7 @@ function App() {
   const gameRef = useRef<GameScene | null>(null);
   const [state, setState] = useState<GameState>('loading');
   const [hud, setHud] = useState<HudSnapshot>(EMPTY_HUD);
-  const [offers, setOffers] = useState<UpgradeOffer[]>([]);
+  const [offer, setOffer] = useState<{ seq: number; offers: UpgradeOffer[] } | null>(null);
   const [stats, setStats] = useState<RunStats | null>(null);
   const [expPop, setExpPop] = useState<{ amount: number; key: number } | null>(null);
 
@@ -37,7 +37,7 @@ function App() {
     if (import.meta.env.DEV) (window as unknown as { __game: GameScene }).__game = game;
     game.events.on('stateChange', setState);
     game.events.on('hud', setHud);
-    game.events.on('levelUpOffer', setOffers);
+    game.events.on('levelUpOffer', setOffer);
     game.events.on('gameOver', setStats);
     game.events.on('expGain', (amount) => setExpPop((p) => ({ amount, key: (p?.key ?? 0) + 1 })));
     // The constructor already entered 'playing' before these subscriptions existed.
@@ -54,7 +54,7 @@ function App() {
     if (el) applySafeArea(el);
   }, []);
 
-  const pick = useCallback((id: string) => gameRef.current?.chooseUpgrade(id), []);
+  const pick = useCallback((id: string, seq: number) => gameRef.current?.chooseUpgrade(id, seq), []);
   const restart = useCallback(() => {
     setStats(null);
     gameRef.current?.restart();
@@ -65,7 +65,9 @@ function App() {
       <div ref={sceneRef} className="scene-container" />
       <div ref={hudRef} className="hud">
         {state !== 'loading' && <Hud hud={hud} expPop={expPop} />}
-        {state === 'levelup' && offers.length > 0 && <LevelUpCards offers={offers} onPick={pick} />}
+        {state === 'levelup' && offer && (
+          <LevelUpCards key={offer.seq} offers={offer.offers} onPick={(id) => pick(id, offer.seq)} />
+        )}
         {state === 'gameover' && stats && <GameOver stats={stats} onRestart={restart} />}
       </div>
     </div>

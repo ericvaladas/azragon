@@ -214,7 +214,19 @@ body {
   text-shadow: 0 0 12px rgba(155, 226, 45, 0.45);
 }
 
-.cards { display: flex; flex-direction: column; gap: 10px; width: 100%; max-width: 360px; }
+.cards {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  max-width: 360px;
+  /* Ignore taps briefly after each new offer so a double-tap can't pick from an unseen offer. */
+  animation: cards-guard 250ms step-end;
+}
+@keyframes cards-guard {
+  from { pointer-events: none; }
+  to { pointer-events: auto; }
+}
 @media (min-aspect-ratio: 1/1) {
   .cards { flex-direction: row; max-width: 720px; }
   .card { flex: 1; }

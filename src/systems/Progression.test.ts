@@ -55,4 +55,16 @@ describe('Progression', () => {
     expect(p.pendingLevels).toBe(0);
     expect(p.stats).toEqual(BASE_STATS);
   });
+
+  it('rejects a pick made against a superseded offer (double-tap safe across levels)', () => {
+    const p = new Progression(mulberry32(6));
+    p.addExp(40 + 102);
+    const first = p.offer();
+    const firstSeq = p.offerSeq;
+    expect(p.choose(first[0]!.id, firstSeq)).toBe(true);
+    p.offer();
+    expect(p.choose(first[1]!.id, firstSeq)).toBe(false);
+    expect(p.pendingLevels).toBe(1);
+    expect(p.choose(first[1]!.id, p.offerSeq)).toBe(true);
+  });
 });

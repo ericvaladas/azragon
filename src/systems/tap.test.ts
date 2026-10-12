@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { classifyGesture, pickEnemy } from './tap';
+import { classifyGesture, pickEnemy, canTap } from './tap';
 
 describe('classifyGesture', () => {
   it('short, still release is a tap', () => {
@@ -32,5 +32,17 @@ describe('pickEnemy', () => {
   });
   it('returns null when nothing is close enough', () => {
     expect(pickEnemy(pts, 300, 300, 28)).toBeNull();
+  });
+});
+
+describe('canTap', () => {
+  it('only the primary mouse button taps; right/middle are drag-only', () => {
+    expect(canTap('mouse', 0)).toBe(true);
+    expect(canTap('mouse', 2)).toBe(false);
+    expect(canTap('mouse', 1)).toBe(false);
+  });
+  it('touch and pen always tap', () => {
+    expect(canTap('touch', 0)).toBe(true);
+    expect(canTap('pen', 0)).toBe(true);
   });
 });

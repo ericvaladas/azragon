@@ -17,7 +17,7 @@ export type GameEventMap = {
   stateChange: GameState;
   hud: HudSnapshot;
   expGain: number;
-  levelUpOffer: UpgradeOffer[];
+  levelUpOffer: { seq: number; offers: UpgradeOffer[] };
   gameOver: RunStats;
 };
 

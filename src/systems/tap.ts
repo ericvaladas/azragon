@@ -8,6 +8,11 @@ export function classifyGesture(movedPx: number, elapsedMs: number, released: bo
   return elapsedMs <= CONFIG.input.tapMaxMs ? 'tap' : 'none';
 }
 
+/** Mouse taps come only from the primary button; right/middle buttons are for orbiting. Touch and pen always tap. */
+export function canTap(pointerType: string, button: number): boolean {
+  return pointerType !== 'mouse' || button === 0;
+}
+
 export type ScreenPoint = { index: number; x: number; y: number; visible: boolean };
 
 /** Nearest visible screen point within radiusPx of (x, y). Generous radius makes tiny targets tappable on phones. */

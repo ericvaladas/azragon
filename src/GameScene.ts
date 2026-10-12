@@ -122,15 +122,15 @@ export class GameScene {
   }
 
   /** Called by the React level-up cards. */
-  chooseUpgrade(id: string): void {
-    if (this.state !== 'levelup' || !this.progression.choose(id)) return;
+  chooseUpgrade(id: string, seq: number): void {
+    if (this.state !== 'levelup' || !this.progression.choose(id, seq)) return;
     const s = this.progression.stats;
     const m = this.monster;
     const newMax = Math.round(CONFIG.monster.maxHp * s.maxHpMult);
     if (id === 'vitality') m.hp = Math.min(newMax, m.hp + newMax * 0.3);
     m.maxHp = newMax;
     this.emitHud();
-    if (this.progression.pendingLevels > 0) this.events.emit('levelUpOffer', this.progression.offer());
+    if (this.progression.pendingLevels > 0) this.emitOffer();
     else this.setState('playing');
   }
 
@@ -165,8 +165,13 @@ export class GameScene {
 
   private enterLevelUp(): void {
     this.setState('levelup');
-    this.events.emit('levelUpOffer', this.progression.offer());
+    this.emitOffer();
     this.emitHud();
+  }
+
+  private emitOffer(): void {
+    const offers = this.progression.offer();
+    this.events.emit('levelUpOffer', { seq: this.progression.offerSeq, offers });
   }
 
   private emitHud(): void {

@@ -43,6 +43,8 @@ export class Progression {
   exp = 0;
   stats: Stats = { ...BASE_STATS };
   pendingLevels = 0;
+  /** Increments with every offer; a pick must name the offer it was made against. */
+  offerSeq = 0;
 
   constructor(private rng: () => number) {}
 
@@ -67,13 +69,15 @@ export class Progression {
   }
 
   offer(): UpgradeOffer[] {
+    this.offerSeq++;
     const ids = shuffle(Object.keys(UPGRADES) as UpgradeId[], this.rng).slice(0, CONFIG.progression.offerCount);
     return ids.map((id) => ({ id, title: UPGRADES[id].title, desc: UPGRADES[id].desc, icon: UPGRADES[id].icon }));
   }
 
-  /** Applies an upgrade if a level is pending. Returns false (no-op) otherwise. */
-  choose(id: string): boolean {
+  /** Applies an upgrade if a level is pending and `seq` (when given) is the current offer. Returns false (no-op) otherwise. */
+  choose(id: string, seq?: number): boolean {
     if (this.pendingLevels <= 0 || !(id in UPGRADES)) return false;
+    if (seq !== undefined && seq !== this.offerSeq) return false;
     this.stats = UPGRADES[id as UpgradeId].apply(this.stats);
     this.pendingLevels--;
     return true;
