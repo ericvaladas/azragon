@@ -10,6 +10,7 @@ export class Passives {
   private novaT = 0;
   private mortarT = 0;
   private interceptBank = 0;
+  private overloadCd = 0;
   private bubbleT = 0;
   private bubbleCd = 0;
   private reflectT = 0;
@@ -17,12 +18,12 @@ export class Passives {
 
   constructor(private ranks: () => Record<AbilityId, number>) {}
 
-  tetherMult(): number {
-    return P.thrash.tetherMult[this.ranks().thrash] ?? 1;
-  }
-
-  thrashDamage(): number {
-    return this.ranks().thrash > 0 ? P.thrash.damage : 0;
+  /** Overload: if taken and off cooldown, absorb this beam/orbital hit (starting the cooldown). */
+  tryOverload(): boolean {
+    const r = this.ranks().overload;
+    if (r <= 0 || this.overloadCd > 0) return false;
+    this.overloadCd = P.overload.cooldown[r]!;
+    return true;
   }
 
   deflectChance(): number {
@@ -115,6 +116,7 @@ export class Passives {
         mortar = P.mortar.globs[r.mortar]!;
       }
     }
+    this.overloadCd = Math.max(0, this.overloadCd - dt);
     this.bubbleT = Math.max(0, this.bubbleT - dt);
     this.bubbleCd = Math.max(0, this.bubbleCd - dt);
     this.reflectT = Math.max(0, this.reflectT - dt);
@@ -147,5 +149,6 @@ export class Passives {
     this.mortarT = 0;
     this.interceptBank = 0;
     this.bubbleT = this.bubbleCd = this.reflectT = this.reflectCd = 0;
+    this.overloadCd = 0;
   }
 }

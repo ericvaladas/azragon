@@ -27,9 +27,8 @@ import { JetSquadron } from './enemies/JetSquadron';
 import { Blimps } from './enemies/Blimps';
 import { SamSilos } from './enemies/SamSilos';
 import { Artillery } from './enemies/Artillery';
-import { GrappleTrucks } from './enemies/GrappleTrucks';
+import { LaserTrucks } from './enemies/LaserTrucks';
 import { OrbitalLaser } from './enemies/OrbitalLaser';
-import { clampToTethers } from './monster/tether';
 import { mulberry32 } from './util/rng';
 import { Progression, expToNext } from './systems/Progression';
 import { healOnKill, regen } from './monster/vitals';
@@ -124,9 +123,8 @@ export class GameScene {
     this.enemies.add(new Blimps(this.scene));
     this.enemies.add(new SamSilos(this.scene));
     this.enemies.add(new Artillery(this.scene));
-    this.enemies.add(new GrappleTrucks(this.scene));
+    this.enemies.add(new LaserTrucks(this.scene));
     this.enemies.add(new OrbitalLaser(this.scene));
-    this.monster.constrain = (from, to) => clampToTethers(from, to, this.enemies.get<GrappleTrucks>('truck').activeTethers());
     this.ctx = this.buildContext();
     this.city.onCollapseStart = (pos, size) => {
       this.particles.ring('dust', pos, size, 14);
@@ -271,7 +269,6 @@ export class GameScene {
       levelingUp: this.moment.active,
       level: this.progression.level,
       timeSec: Math.floor(this.runTime),
-      tethered: this.enemies.get<GrappleTrucks>('truck').tethered(),
     });
   }
 
@@ -411,8 +408,7 @@ export class GameScene {
     const m = this.monster;
     const { to } = this.aimPoint(ground);
     if (!this.abilities.trigger('dash')) return;
-    this.trucks().snapAll();
-    m.crouch = false;
+        m.crouch = false;
     m.startDash(to);
     this.order = null;
     this.markers.setTarget(null);
@@ -429,16 +425,11 @@ export class GameScene {
     this.particles.emit('dust', p.clone().setY(10), 2, 0.8);
   }
 
-    private trucks(): GrappleTrucks {
-      return this.enemies.get<GrappleTrucks>('truck');
-    }
-
     private leapTo(ground: THREE.Vector3): void {
       const m = this.monster;
       const to = leapTarget({ x: m.position.x, z: m.position.z }, { x: ground.x, z: ground.z }, CONFIG.abilities.leap.range);
       if (!this.abilities.trigger('leap')) return;
-      this.trucks().snapAll();
-      m.crouch = false;
+            m.crouch = false;
       m.startLeap(to);
       this.order = null;
       this.markers.setTarget(null);
@@ -464,8 +455,7 @@ export class GameScene {
       const p = m.position;
       m.startRoar();
       this.order = null;
-      this.trucks().snapAll();
-      this.shockwave.start(p, R.radius);
+            this.shockwave.start(p, R.radius);
       const dmg = R.damage * this.progression.stats.damageMult;
       this.city.forEachStandingInRadius({ x: p.x, z: p.z }, R.radius, (t) => t.applyDamage(R.buildingDamage));
       for (const t of [...this.enemyTargets()]) {
@@ -520,6 +510,30 @@ export class GameScene {
     this.monster.startSwat(hits[0]!.position);
   }
 
+  /**
+   * Overload: the absorbed energy fires back. A truck beam returns down the line and blows up the truck;
+   * an orbital strike is cut short and released as a blast around the monster.
+   */
+  private overload(source: DamageSource, attacker?: Target): void {
+    const O = CONFIG.passives.overload;
+    const mult = this.progression.stats.damageMult;
+    const from = this.bodyPoint(300);
+    if (source === 'beam' && attacker) {
+      for (let k = 0; k <= 10; k++) this.particles.emit('spark', from.clone().lerp(attacker.position, k / 10), 3, 0.4);
+      attacker.applyDamage(O.reflectDamage * mult);
+    } else {
+      this.enemies.get<OrbitalLaser>('laser').cancel();
+      const p = this.monster.position;
+      this.novaWave.start(p, O.blastRadius);
+      this.city.forEachStandingInRadius({ x: p.x, z: p.z }, O.blastRadius, (t) => t.applyDamage(O.blastDamage * mult));
+      for (const t of this.enemyTargets()) {
+        if (Math.hypot(t.position.x - p.x, t.position.z - p.z) <= O.blastRadius + t.radius) t.applyDamage(O.blastDamage * mult);
+      }
+    }
+    this.particles.emit('spark', from, 20, 1.5);
+    this.rig.addTrauma(0.4);
+  }
+
   /** Something is about to hit: shells/rockets/missiles or blimps nearby, a laser locking on, or a strike circle underfoot. */
   private threatImminent(): boolean {
     const center = this.bodyPoint(300);
@@ -530,6 +544,7 @@ export class GameScene {
     const laser = this.enemies.get<OrbitalLaser>('laser').current();
     const m = this.monster.position;
     if ((laser.phase === 'locked' || laser.phase === 'firing') && Math.hypot(laser.x - m.x, laser.z - m.z) <= CONFIG.laser.radius * 1.5) return true;
+    if (this.enemies.get<LaserTrucks>('truck').threatening(m)) return true;
     return this.enemies.get<Artillery>('artillery').strikeNear({ x: m.x, z: m.z });
   }
 
@@ -623,13 +638,7 @@ export class GameScene {
       },
       rng: this.rng,
       particles: this.particles,
-      get tetherDurationMult() {
-        return self.passiveTetherMult();
-      },
-      get thrashDamage() {
-        return self.passiveThrashDamage();
-      },
-      damageMonster: (amount, source) => this.damageMonster(amount, source),
+      damageMonster: (amount, source, attacker) => this.damageMonster(amount, source, attacker),
       damageBuildings: (p, r, amount) => this.city.forEachStandingInRadius(p, r, (t) => t.applyDamage(amount)),
       fireShell: (from, to, damage) => {
         this.projectiles.fireShell(from, to, damage);
@@ -644,22 +653,19 @@ export class GameScene {
     };
   }
 
-  /** Thrash: tether duration multiplier and snap damage. */
-  private passiveTetherMult(): number {
-    return this.passives.tetherMult();
-  }
-  private passiveThrashDamage(): number {
-    return this.passives.thrashDamage();
-  }
   /** Chitin Deflection chance. */
   private deflectChance(): number {
     return this.passives.deflectChance();
   }
 
   /** The only way the monster takes damage. */
-  damageMonster(amount: number, source: DamageSource): void {
+  damageMonster(amount: number, source: DamageSource, attacker?: Target): void {
     const m = this.monster;
     if (!m.alive || this.state !== 'playing') return;
+    if ((source === 'beam' || source === 'laser') && !this.passives.bubbleActive() && this.passives.tryOverload()) {
+      this.overload(source, attacker);
+      return;
+    }
     const r = resolveHit(amount, source, { dmgMult: difficulty(this.runTime).dmgMult, deflectChance: this.deflectChance(), airborne: m.airborne, invulnerable: this.passives.bubbleActive() }, Math.random());
     if (r.deflected) {
       this.particles.emit('spark', m.position.clone().setY(300 * CONFIG.monster.scale), 8);

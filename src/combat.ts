@@ -16,7 +16,7 @@ export interface Target {
 
 export type OnDestroyed = (target: Target, exp: number) => void;
 
-export type DamageSource = 'shell' | 'rocket' | 'missile' | 'blimp' | 'artillery' | 'laser';
+export type DamageSource = 'shell' | 'rocket' | 'missile' | 'blimp' | 'artillery' | 'laser' | 'beam';
 
 const AREA: ReadonlySet<DamageSource> = new Set(['laser', 'artillery']);
 const DEFLECTABLE: ReadonlySet<DamageSource> = new Set(['shell', 'rocket', 'missile', 'blimp']);

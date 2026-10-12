@@ -291,17 +291,6 @@ body {
 }
 .edge-arrow-icon { position: absolute; left: -10px; top: 10px; font-size: 14px; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9); }
 
-.hud-tethered {
-  margin: 8px auto 0;
-  width: max-content;
-  padding: 4px 10px;
-  border-radius: 3px;
-  background: rgba(255, 59, 47, 0.85);
-  font-weight: 700;
-  animation: tethered-blink 600ms steps(2) infinite;
-}
-@keyframes tethered-blink { 50% { opacity: 0.45; } }
-
 .ability-bar {
   position: absolute;
   right: calc(var(--safe-right) + 14px);

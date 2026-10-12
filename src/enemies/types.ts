@@ -16,10 +16,8 @@ export interface WorldContext {
   readonly minutes: number;
   readonly rng: () => number;
   readonly particles: Particles;
-  /** Thrash: multiplier on tether duration, and damage dealt to a truck when its tether snaps. */
-  readonly tetherDurationMult: number;
-  readonly thrashDamage: number;
-  damageMonster(amount: number, source: DamageSource): void;
+  /** `attacker` is the enemy dealing the hit, when there is one (Overload fires beams back at it). */
+  damageMonster(amount: number, source: DamageSource, attacker?: Target): void;
   damageBuildings(p: Vec2, r: number, amount: number): void;
   fireShell(from: THREE.Vector3, to: THREE.Vector3, damage: number): void;
   fireRocket(from: THREE.Vector3, to: THREE.Vector3, damage: number): void;

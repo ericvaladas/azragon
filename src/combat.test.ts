@@ -25,4 +25,7 @@ describe('resolveHit', () => {
       expect(resolveHit(10, src, { ...base, invulnerable: true }, 0.99)).toEqual({ damage: 0, deflected: false });
     }
   });
+  it('beams are never deflected and still hit an airborne monster', () => {
+    expect(resolveHit(10, 'beam', { ...base, airborne: true }, 0)).toEqual({ damage: 15, deflected: false });
+  });
 });

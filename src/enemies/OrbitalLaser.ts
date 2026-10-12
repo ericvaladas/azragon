@@ -50,6 +50,12 @@ export class OrbitalLaser implements EnemySystem {
     return this.state;
   }
 
+  /** Cut a strike short (Overload): straight to cooldown. */
+  cancel(): void {
+    if (this.state.phase === 'idle' || this.state.phase === 'cooldown') return;
+    this.state = { ...this.state, phase: 'cooldown', t: 0, cooldownFor: L.cooldownMin };
+  }
+
   targets(): readonly Target[] {
     return [];
   }

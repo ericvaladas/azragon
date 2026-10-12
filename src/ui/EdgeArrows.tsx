@@ -1,6 +1,6 @@
 import type { ThreatArrow } from '../GameEvents';
 
-const ICON: Partial<Record<ThreatArrow['kind'], string>> = { blimp: '🎈', sam: '🚀', artillery: '💣', truck: '🪝' };
+const ICON: Partial<Record<ThreatArrow['kind'], string>> = { blimp: '🎈', sam: '🚀', artillery: '💣', truck: '🔫' };
 
 export function EdgeArrows({ arrows }: { arrows: ThreatArrow[] }) {
   return (

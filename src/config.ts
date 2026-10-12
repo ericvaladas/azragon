@@ -136,7 +136,8 @@ export const CONFIG = {
     chitin: { perRank: 0.15 },
     frenzy: { perRank: 6 },
     brood: { interval: 10, drones: 3, extraDrones: 2, life: 8, speed: 450, damage: 40, hitCooldown: 0.5 },
-    thrash: { tetherMult: [1, 0.5, 0.3, 0.15], damage: 40 },
+    /** Overload: absorb the next beam/orbital hit and fire it back (truck destroyed; orbital = energy blast). */
+    overload: { cooldown: [0, 20, 15, 11], blastRadius: 450, blastDamage: 250, reflectDamage: 400 },
     /** Arrays are indexed by rank (0 = not taken; Tail Swat rank 0 is the base kit). */
     spines: { rate: [0, 2, 3, 4.5], radius: [0, 500, 600, 700] },
     swat: { cooldown: [2.5, 2, 1.6, 1.3], range: [450, 500, 550, 600], damage: [120, 180, 240, 320], targets: [1, 2, 3, 4], headHeight: 380 },
@@ -159,7 +160,8 @@ export const CONFIG = {
     trackTime: 2.5, lockTime: 0.8, fireTime: 1.5, cooldownMin: 20, cooldownMax: 30,
     trackSpeed: 80, startOffset: 150, radius: 110, dps: 220, buildingDps: 400, beamHeight: 4000, scorchLife: 10,
   },
-  truck: { hp: 70, exp: 22, size: 60, speed: 40, range: 900, anchorTime: 1, harpoonTime: 0.5, tetherTime: 6, slack: 50, cooldown: 4 },
+  /** Laser Cannon Truck: deploys, tracks with a sight line, locks, then fires a beam along the locked line. */
+  truck: { hp: 70, exp: 22, size: 60, speed: 45, range: 1200, deployTime: 0.8, aimTime: 2, lockTime: 1.2, fireTime: 1.2, cooldown: 5, beamWidth: 50, beamLength: 1700, hitRadius: 93, dps: 140, buildingDps: 300, aimHeight: 250 },
   sam: {
     hp: 260, exp: 30, size: 70, spawnMin: 600, spawnMax: 1400,
     riseTime: 1, upTime: 6, sinkTime: 1, downMin: 4, downMax: 6, fireDelay: 1.2,

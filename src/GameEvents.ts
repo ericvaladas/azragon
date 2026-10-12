@@ -12,7 +12,6 @@ export type HudSnapshot = {
   expToNext: number;
   level: number;
   timeSec: number;
-  tethered: boolean;
   /** True during the level-up moment (EXP bar shown full, banner visible). */
   levelingUp: boolean;
 };
