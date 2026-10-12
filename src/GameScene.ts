@@ -1,22 +1,53 @@
 import * as THREE from 'three';
+import { CONFIG } from './config';
 import { GameEventEmitter, type GameState } from './GameEvents';
+import { Lighting } from './render/Lighting';
+import { PixelRenderer } from './render/PixelRenderer';
+import { createSky } from './render/Sky';
+import { faceted, toonMat } from './render/toon';
 import { clampDelta } from './util/math';
 
 export class GameScene {
   readonly events = new GameEventEmitter();
 
   private state: GameState = 'loading';
-  private renderer: THREE.WebGLRenderer;
+  private pixel: PixelRenderer;
+  private lighting: Lighting;
   private scene = new THREE.Scene();
   private camera = new THREE.PerspectiveCamera(60, 1, 5, 12000);
   private clock = new THREE.Clock();
   private animationFrameId = 0;
   private resizeObserver: ResizeObserver;
+  private tmpLookCheck: THREE.Group | null = null; // removed in Task 3
 
   constructor(private container: HTMLDivElement) {
-    this.renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
-    this.renderer.setClearColor(0x6f9fd8);
-    container.appendChild(this.renderer.domElement);
+    this.pixel = new PixelRenderer(container);
+    this.camera.near = CONFIG.camera.near;
+    this.camera.far = CONFIG.camera.far;
+    this.lighting = new Lighting(this.scene);
+    this.lighting.attachSky(createSky(this.scene));
+
+    // Temporary look-check content (Task 3 replaces with the city)
+    this.tmpLookCheck = new THREE.Group();
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(8000, 8000), toonMat(CONFIG.palette.ground));
+    ground.rotation.x = -Math.PI / 2;
+    ground.receiveShadow = true;
+    const pillar = new THREE.Mesh(faceted(new THREE.CylinderGeometry(60, 90, 550, 6)), toonMat(CONFIG.palette.carapace));
+    pillar.position.y = 275;
+    pillar.castShadow = true;
+    for (let i = 0; i < 30; i++) {
+      const h = 20 + ((i * 37) % 100);
+      const b = new THREE.Mesh(new THREE.BoxGeometry(60, h, 60), toonMat(CONFIG.palette.buildingFacades[i % 5]!));
+      b.position.set(((i % 6) - 3) * 160, h / 2, Math.floor(i / 6) * 160 + 200);
+      b.castShadow = b.receiveShadow = true;
+      this.tmpLookCheck.add(b);
+    }
+    this.tmpLookCheck.add(ground, pillar);
+    this.scene.add(this.tmpLookCheck);
+    this.camera.position.set(-120, 430 + 380, -820);
+    this.camera.lookAt(0, 300, 400);
+    this.lighting.follow(new THREE.Vector3());
+
     this.resizeObserver = new ResizeObserver(this.onResize);
     this.resizeObserver.observe(container);
     this.clock.start();
@@ -43,10 +74,7 @@ export class GameScene {
     if (!entry) return;
     const { width: w, height: h } = entry.contentRect;
     if (w === 0 || h === 0) return;
-    const dpr = Math.min(window.devicePixelRatio, 2);
-    this.renderer.setSize(w * dpr, h * dpr, false);
-    this.renderer.domElement.style.width = `${w}px`;
-    this.renderer.domElement.style.height = `${h}px`;
+    this.pixel.resize(w, h);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
   };
@@ -55,14 +83,14 @@ export class GameScene {
     this.animationFrameId = requestAnimationFrame(this.update);
     const dt = clampDelta(this.clock.getDelta());
     void dt;
-    this.renderer.render(this.scene, this.camera);
+    this.lighting.followCamera(this.camera);
+    this.pixel.render(this.scene, this.camera);
   };
 
   dispose(): void {
     cancelAnimationFrame(this.animationFrameId);
     this.resizeObserver.disconnect();
-    this.renderer.dispose();
-    this.renderer.domElement.remove();
+    this.pixel.dispose();
     this.events.removeAll();
     void this.container;
   }
