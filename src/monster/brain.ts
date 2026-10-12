@@ -28,7 +28,11 @@ export function decide(i: BrainInput): Decision {
   let orderDone = false;
 
   if (o?.kind === 'move') {
-    if (dist2(i.pos, o.to) > i.arriveRadius) return { ...IDLE, moveTo: o.to };
+    if (dist2(i.pos, o.to) > i.arriveRadius) {
+      // Keep shooting back while walking.
+      const fire = !!(i.auto && i.auto.alive && i.spikeReady);
+      return { ...IDLE, moveTo: o.to, attack: fire ? 'ranged' : null, attackOn: fire ? 'auto' : null };
+    }
     orderDone = true;
   } else if (o?.kind === 'attack') {
     const t = o.target;

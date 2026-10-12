@@ -4,7 +4,7 @@ import type { AbilityId } from './Progression';
 import { CONFIG } from '../config';
 
 const P = CONFIG.passives;
-const ranks = (r: Partial<Record<AbilityId, number>>) => () => ({ acid: 0, storm: 0, chitin: 0, frenzy: 0, brood: 0, thrash: 0, ...r });
+const ranks = (r: Partial<Record<AbilityId, number>>) => () => ({ acid: 0, storm: 0, chitin: 0, frenzy: 0, brood: 0, thrash: 0, spines: 0, swat: 0, nova: 0, mortar: 0, ...r });
 
 describe('Passives', () => {
   it('has no effect at rank 0', () => {
@@ -14,7 +14,7 @@ describe('Passives', () => {
     expect(p.deflectChance()).toBe(0);
     expect(p.frenzyHeal()).toBe(0);
     expect(p.acidPool()).toBeNull();
-    expect(p.update(100)).toEqual({ storm: 0, brood: 0 });
+    expect(p.update(100)).toEqual({ storm: 0, brood: 0, nova: 0, mortar: 0, intercepts: 0 });
   });
 
   it('scales simple passives by rank', () => {
@@ -44,5 +44,42 @@ describe('Passives', () => {
     p.update(P.storm.interval - 0.5);
     p.reset();
     expect(p.update(1).storm).toBe(0);
+  });
+
+  it('gives the base-kit Tail Swat at rank 0 and improves it per rank', () => {
+    const base = new Passives(ranks({}));
+    expect(base.swat()).toEqual({ cooldown: P.swat.cooldown[0], range: P.swat.range[0], damage: P.swat.damage[0], targets: 1 });
+    const r3 = new Passives(ranks({ swat: 3 }));
+    expect(r3.swat().cooldown).toBeLessThan(P.swat.cooldown[0]!);
+    expect(r3.swat().targets).toBe(P.swat.targets[3]);
+  });
+
+  it('fires Venom Nova on its rank interval with rank radius and damage', () => {
+    const p = new Passives(ranks({ nova: 2 }));
+    expect(p.update(P.nova.interval[2]! - 0.1).nova).toBe(0);
+    expect(p.update(0.2).nova).toBe(1);
+    expect(p.nova()).toEqual({ radius: P.nova.radius[2], damage: P.nova.damage[2] });
+  });
+
+  it('fires Acid Mortar volleys with rank glob counts', () => {
+    const p = new Passives(ranks({ mortar: 3 }));
+    expect(p.update(P.mortar.interval[3]! + 0.01).mortar).toBe(P.mortar.globs[3]);
+  });
+
+  it('accumulates Spine Shield intercepts at the rank rate', () => {
+    const p = new Passives(ranks({ spines: 1 }));
+    let total = 0;
+    for (let i = 0; i < 100; i++) {
+      const n = p.update(0.02).intercepts;
+      total += n;
+      p.spendIntercepts(n);
+    }
+    expect(total).toBe(Math.floor(2 * P.spines.rate[1]!));
+    expect(p.spineRadius()).toBe(P.spines.radius[1]);
+  });
+
+  it('banks at most one second of intercepts while nothing needs shooting down', () => {
+    const p = new Passives(ranks({ spines: 3 }));
+    expect(p.update(10).intercepts).toBe(Math.floor(P.spines.rate[3]!));
   });
 });

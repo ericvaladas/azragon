@@ -137,6 +137,11 @@ export const CONFIG = {
     frenzy: { perRank: 6 },
     brood: { interval: 10, drones: 3, extraDrones: 2, life: 8, speed: 450, damage: 40, hitCooldown: 0.5 },
     thrash: { tetherMult: [1, 0.5, 0.3, 0.15], damage: 40 },
+    /** Arrays are indexed by rank (0 = not taken; Tail Swat rank 0 is the base kit). */
+    spines: { rate: [0, 2, 3, 4.5], radius: [0, 500, 600, 700] },
+    swat: { cooldown: [2.5, 2, 1.6, 1.3], range: [450, 500, 550, 600], damage: [120, 180, 240, 320], targets: [1, 2, 3, 4], headHeight: 380 },
+    nova: { interval: [0, 7, 6, 5], radius: [0, 600, 700, 800], damage: [0, 80, 120, 170] },
+    mortar: { interval: [0, 4, 3.5, 3], globs: [0, 2, 3, 4], splash: [0, 90, 110, 130], damage: 90, range: 1800, flightTime: 1.2, arc: 300 },
     earlyAbilityPicks: 3,
   },
   abilities: {

@@ -40,6 +40,7 @@ import { LevelUpMoment } from './systems/levelUpMoment';
 import { LevelUpAura } from './systems/LevelUpAura';
 import { leapTarget } from './monster/leap';
 import { footTargets, strikePlan } from './monster/strike';
+import { mortarTargets, nearestWithin } from './systems/targeting';
 import { Passives } from './systems/Passives';
 import { AcidPools } from './systems/AcidPools';
 import { BroodDrones } from './systems/BroodDrones';
@@ -87,6 +88,8 @@ export class GameScene {
   private shockwave: Shockwave;
   private moment = new LevelUpMoment();
   private aura: LevelUpAura;
+  private novaWave: Shockwave;
+  private swatCd = 0;
   private passives: Passives;
   private acid: AcidPools;
   private brood: BroodDrones;
@@ -104,6 +107,7 @@ export class GameScene {
     this.chevrons = new Chevrons(this.scene);
     this.shockwave = new Shockwave(this.scene);
     this.aura = new LevelUpAura(this.scene);
+    this.novaWave = new Shockwave(this.scene, CONFIG.palette.acid);
     this.passives = new Passives(() => this.progression.ranks);
     this.acid = new AcidPools(this.scene);
     this.brood = new BroodDrones(this.scene);
@@ -197,6 +201,7 @@ export class GameScene {
     this.runTime = 0;
     this.openingDone = false;
     this.abilities.reset();
+    this.swatCd = 0;
     this.moment.reset();
     this.aura.clear();
     this.monster.glow = 0;
@@ -310,6 +315,10 @@ export class GameScene {
         const fire = this.passives.update(dt);
         if (fire.storm > 0) this.spikeStorm(fire.storm);
         if (fire.brood > 0) this.brood.spawn(fire.brood, this.monster.model.stingerTip.getWorldPosition(new THREE.Vector3()));
+        if (fire.nova > 0) this.venomNova();
+        if (fire.mortar > 0) this.acidMortar(fire.mortar);
+        if (fire.intercepts > 0) this.passives.spendIntercepts(this.spineShield(fire.intercepts));
+        this.tailSwat(dt);
         if (!this.openingDone && this.runTime >= CONFIG.opening.time) {
           this.openingDone = true;
           const c = { x: this.monster.position.x, z: this.monster.position.z };
@@ -337,6 +346,7 @@ export class GameScene {
       this.monster.animate(dt, this.elapsed);
       this.particles.update(dt);
       this.shockwave.update(dt);
+      this.novaWave.update(dt);
       if (this.moment.update(realDt) && this.state === 'playing' && this.progression.pendingLevels > 0) this.enterLevelUp();
       const dm = this.progression.stats.damageMult;
       this.acid.update(dt, this.enemyTargets(), dm);
@@ -440,6 +450,78 @@ export class GameScene {
       }
       this.particles.emit('spark', from, 10, 1.5);
     }
+
+  /** Head-height point the tail swats around and spines fire from (world space). */
+  private bodyPoint(height: number): THREE.Vector3 {
+    return this.monster.position.clone().setY(this.monster.position.y + height * CONFIG.monster.scale);
+  }
+
+  /** Base kit: the tail lashes at the nearest flyers near the head on a rank-based cooldown. */
+  private tailSwat(dt: number): void {
+    this.swatCd = Math.max(0, this.swatCd - dt);
+    if (this.swatCd > 0 || this.monster.airborne) return;
+    const sw = this.passives.swat();
+    const head = this.bodyPoint(CONFIG.passives.swat.headHeight);
+    const flyers = this.enemyTargets().filter((t) => t.airborne && t.isAlive());
+    const hits = nearestWithin(head, sw.range, flyers, sw.targets, (t) => t.position);
+    if (hits.length === 0) return;
+    this.swatCd = sw.cooldown;
+    const m = this.monster;
+    const first = hits[0]!.position;
+    const dx = first.x - m.position.x;
+    const dz = first.z - m.position.z;
+    m.startSwat(dx * Math.cos(m.yaw) - dz * Math.sin(m.yaw));
+    const dmg = sw.damage * this.progression.stats.damageMult;
+    for (const t of hits) {
+      t.applyDamage(dmg);
+      this.particles.emit('spark', t.position, 10, 1.2);
+    }
+    this.rig.addTrauma(0.15);
+  }
+
+  /** Spine Shield: shoot down up to `budget` incoming shells, rockets, and SAM missiles. Returns shots used. */
+  private spineShield(budget: number): number {
+    const center = this.bodyPoint(300);
+    const r = this.passives.spineRadius();
+    type Threat = { pos: THREE.Vector3; kill(): void };
+    const threats: Threat[] = [
+      ...this.projectiles.incoming().map((s) => ({ pos: s.pos, kill: () => this.projectiles.intercept(s) })),
+      ...this.enemyTargets()
+        .filter((t) => t.kind === 'missile' && t.isAlive())
+        .map((t) => ({ pos: t.position, kill: () => t.applyDamage(1e9) })),
+    ];
+    const picks = nearestWithin(center, r, threats, budget, (t) => t.pos);
+    for (const t of picks) {
+      this.particles.emit('spark', t.pos, 8, 0.6);
+      this.particles.emit('smoke', t.pos, 1, 0.3);
+      t.kill();
+    }
+    if (picks.length > 0) this.particles.emit('spark', center, 3, 0.4);
+    return picks.length;
+  }
+
+  /** Venom Nova: an acid pulse damaging every ground enemy and building in radius. */
+  private venomNova(): void {
+    const { radius, damage } = this.passives.nova();
+    const p = this.monster.position;
+    const dmg = damage * this.progression.stats.damageMult;
+    this.novaWave.start(p, radius);
+    this.city.forEachStandingInRadius({ x: p.x, z: p.z }, radius, (t) => t.applyDamage(dmg));
+    for (const t of footTargets({ x: p.x, z: p.z }, radius, this.enemyTargets())) t.applyDamage(dmg);
+    this.particles.ring('acid', p, radius * 0.6, 24);
+    this.rig.addTrauma(0.25);
+  }
+
+  /** Acid Mortar: lob globs at priority ground threats (artillery, SAMs, trucks, then tanks). */
+  private acidMortar(globs: number): void {
+    const M = CONFIG.passives.mortar;
+    const targets = mortarTargets(this.monster.position, M.range, this.enemyTargets(), globs);
+    if (targets.length === 0) return;
+    const from = this.monster.model.stingerTip.getWorldPosition(new THREE.Vector3());
+    const dmg = M.damage * this.progression.stats.damageMult;
+    targets.forEach((t) => this.projectiles.fireGlob(from, t.position.clone().setY(0), dmg));
+    this.particles.emit('acid', from, 6, 0.6);
+  }
 
   /** Live targetable enemies (cached per frame by the registry). */
   enemyTargets(): Target[] {
@@ -654,6 +736,14 @@ export class GameScene {
   }
 
   private onProjectileHit = (h: Hit): void => {
+    if (h.kind === 'glob') {
+      const r = this.passives.mortarSplash();
+      this.city.forEachStandingInRadius({ x: h.point.x, z: h.point.z }, r, (t) => t.applyDamage(h.damage));
+      for (const t of footTargets({ x: h.point.x, z: h.point.z }, r, this.enemyTargets())) t.applyDamage(h.damage);
+      this.particles.ring('acid', h.point, r, 14);
+      this.particles.emit('acid', h.point, 10, 1);
+      return;
+    }
     if (h.kind === 'spike') {
       h.target?.applyDamage(h.damage);
       this.particles.emit('spark', h.point, 6);

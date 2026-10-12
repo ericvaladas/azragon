@@ -103,12 +103,20 @@ export class InsectTitanModel {
     this.root.add(this.body);
   }
 
-  /** Curl and sway the tail chain; the stinger and spike origin ride on the last point. */
-  updateTail(time: number): void {
+  /**
+   * Curl and sway the tail chain; the stinger and spike origin ride on the last point.
+   * `swing` in [-1, 1] lashes the tail sideways (+ toward the monster's left) and up for Tail Swat.
+   */
+  updateTail(time: number, swing = 0): void {
+    const lash = Math.abs(swing);
     for (let i = 1; i < this.tailPts.length; i++) {
       const base = TAIL_BASE[i]!;
       const k = i / (this.tailPts.length - 1);
-      this.tailPts[i]!.set(base.x + Math.sin(time * 1.3) * 25 * k, base.y + Math.sin(time * 2.1 + i) * 10 * k, base.z);
+      this.tailPts[i]!.set(
+        base.x + Math.sin(time * 1.3) * 25 * k + swing * 260 * k,
+        base.y + Math.sin(time * 2.1 + i) * 10 * k + lash * 90 * k,
+        base.z + lash * 140 * k,
+      );
     }
     for (let i = 0; i < this.tailSegs.length; i++) {
       placeSegment(this.tailSegs[i]!, this.tailPts[i]!, this.tailPts[i + 1]!);

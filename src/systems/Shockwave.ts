@@ -10,8 +10,8 @@ export class Shockwave {
   private t = -1;
   private radius = 1;
 
-  constructor(scene: THREE.Scene) {
-    this.mat = new THREE.MeshBasicMaterial({ color: CONFIG.palette.stinger, transparent: true, depthWrite: false, fog: false });
+  constructor(scene: THREE.Scene, color: number = CONFIG.palette.stinger) {
+    this.mat = new THREE.MeshBasicMaterial({ color, transparent: true, depthWrite: false, fog: false });
     this.mesh = new THREE.Mesh(new THREE.RingGeometry(0.88, 1, 48).rotateX(-Math.PI / 2), this.mat);
     this.mesh.visible = false;
     this.mesh.renderOrder = 3;
