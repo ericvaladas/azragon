@@ -23,12 +23,15 @@ describe('generateChunk', () => {
     }
   });
 
-  it('keeps the crater clearing at the origin empty', () => {
+  it('builds on the crater site (the impact flattens it) but plants no parks there', () => {
+    let inside = 0;
     for (const r of chunksInRadius(0, 0, W.clearRadius + CHUNK_SIZE)) {
-      for (const b of generateChunk(1337, r.cx, r.cz).buildings) {
-        expect(Math.hypot(b.x, b.z)).toBeGreaterThan(W.clearRadius);
-      }
+      const c = generateChunk(1337, r.cx, r.cz);
+      inside += c.buildings.filter((b) => Math.hypot(b.x, b.z) < W.clearRadius).length;
+      // Park blocks start one half-block outside the crater; trees scatter at most ~0.6 blocks from their block centre.
+      for (const t of c.trees) expect(Math.hypot(t.x, t.z)).toBeGreaterThan(W.clearRadius - W.blockSize * 0.25);
     }
+    expect(inside).toBeGreaterThan(4);
   });
 
   it('fills chunks far from the origin densely', () => {
@@ -72,6 +75,17 @@ describe('planStreaming', () => {
 });
 
 describe('DestroyedLog', () => {
+  it('remembers uncounted marks (the crater blast) without adding to the count', () => {
+    const log = new DestroyedLog();
+    log.mark('0,0', 3, false);
+    expect(log.has('0,0', 3)).toBe(true);
+    expect(log.count).toBe(0);
+    log.mark('0,0', 3);
+    expect(log.count).toBe(0);
+    log.mark('0,0', 4);
+    expect(log.count).toBe(1);
+  });
+
   it('remembers destroyed buildings per chunk across unload/reload, and clears on reset', () => {
     const log = new DestroyedLog();
     log.mark('3,4', 7);

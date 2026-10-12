@@ -62,6 +62,9 @@ const _s = new THREE.Vector3();
 const _hit = new THREE.Vector3();
 const _c = new THREE.Color();
 
+/** Radius of the pod's crater (and its ground decal) around the origin. */
+export const CRATER_RADIUS = CONFIG.world.clearRadius + CONFIG.world.blockSize * 0.5;
+
 /**
  * Endless city streamed in chunks around a centre point (the monster). Buildings of all loaded
  * chunks share fixed-size instanced pools whose slots are recycled, so draw calls stay constant.
@@ -72,6 +75,7 @@ export class City {
   private rubbleMesh: THREE.InstancedMesh;
   private treeMesh: THREE.InstancedMesh;
   private ground: THREE.Mesh;
+  private crater: THREE.Mesh;
   private chunks = new Map<string, LoadedChunk>();
   private loadedKeys = new Set<string>();
   private slotOwner: (Building | null)[];
@@ -99,15 +103,16 @@ export class City {
     this.ground.rotation.x = -Math.PI / 2;
     this.ground.receiveShadow = true;
 
-    const craterR = world.clearRadius + world.blockSize * 0.5;
     const craterMat = toonMat(0xffffff, { map: craterTexture() });
     craterMat.alphaTest = 0.5;
     craterMat.polygonOffset = true;
     craterMat.polygonOffsetFactor = -2;
-    const crater = new THREE.Mesh(new THREE.CircleGeometry(craterR, 32).rotateX(-Math.PI / 2), craterMat);
-    crater.position.y = 0.5;
-    crater.receiveShadow = true;
-    scene.add(this.ground, crater);
+    this.crater = new THREE.Mesh(new THREE.CircleGeometry(CRATER_RADIUS, 32).rotateX(-Math.PI / 2), craterMat);
+    this.crater.position.y = 0.5;
+    this.crater.receiveShadow = true;
+    // Hidden until the pod lands.
+    this.crater.visible = false;
+    scene.add(this.ground, this.crater);
 
     // Unit box with base at y=0; per-face materials: sides = facade, top = roof.
     const box = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
@@ -160,6 +165,7 @@ export class City {
 
   /** Forget all destruction and rebuild the city around the origin. */
   reset(): void {
+    this.crater.visible = false;
     for (const key of [...this.loadedKeys]) this.unloadChunk(key);
     this.collapsing = [];
     this.destroyed.clear();
@@ -208,14 +214,42 @@ export class City {
     if (b.state !== 'standing') return;
     b.hp -= amount;
     if (b.hp > 0) return;
+    this.collapse(b, true);
+  }
+
+  /** Start a building's collapse. `award` false (the crater blast) gives no EXP and doesn't count in the stats. */
+  private collapse(b: Building, award: boolean): void {
     b.state = 'collapsing';
     b.t = 0;
     const rng = mulberry32(b.slot + 99);
     b.tiltAxis.set(rng() - 0.5, 0, rng() - 0.5).normalize();
     this.collapsing.push(b);
-    this.destroyed.mark(b.chunk, b.index);
+    this.destroyed.mark(b.chunk, b.index, award);
     this.onCollapseStart(new THREE.Vector3(b.spec.x, 0, b.spec.z), Math.max(b.spec.w, b.spec.d));
-    this.onDestroyed(b, Math.max(1, Math.round(b.maxHp * CONFIG.world.buildingExpPerHp)));
+    if (award) this.onDestroyed(b, Math.max(1, Math.round(b.maxHp * CONFIG.world.buildingExpPerHp)));
+  }
+
+  /**
+   * The pod's impact: flatten every building touching the radius with no EXP and no stat, and show the
+   * crater decal. `instant` (a skipped intro) writes rubble now, finishing any collapse already under way.
+   */
+  blast(p: Vec2, r: number, instant: boolean): void {
+    for (const ref of chunksInRadius(p.x, p.z, r + CONFIG.world.blockSize)) {
+      const chunk = this.chunks.get(ref.key);
+      if (!chunk) continue;
+      for (const b of chunk.buildings) {
+        if (b.state === 'rubble' || Math.hypot(b.spec.x - p.x, b.spec.z - p.z) > r + b.radius) continue;
+        if (!instant) {
+          if (b.state === 'standing') this.collapse(b, false);
+          continue;
+        }
+        if (b.state === 'collapsing') this.collapsing.splice(this.collapsing.indexOf(b), 1);
+        this.destroyed.mark(b.chunk, b.index, false);
+        this.writeRubble(b);
+      }
+    }
+    this.crater.visible = true;
+    this.dirty = true;
   }
 
   /** Animate collapses and stream chunks around `center`. */

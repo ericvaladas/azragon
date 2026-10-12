@@ -8,7 +8,7 @@ import { PixelRenderer } from './render/PixelRenderer';
 import { createSky } from './render/Sky';
 import { clampDelta, type Vec2 } from './util/math';
 import { resolveHit, type DamageSource, type Target } from './combat';
-import { City } from './world/City';
+import { City, CRATER_RADIUS } from './world/City';
 import { ringOnRoads } from './world/roads';
 import { ROAD_ORIGIN } from './world/chunks';
 import { Monster } from './monster/Monster';
@@ -158,6 +158,7 @@ export class GameScene {
     this.resizeObserver = new ResizeObserver(this.onResize);
     this.resizeObserver.observe(container);
     this.clock.start();
+    this.city.blast({ x: 0, z: 0 }, CRATER_RADIUS, true);
     this.update();
     this.setState('playing');
   }
@@ -192,6 +193,7 @@ export class GameScene {
 
   restart(): void {
     this.city.reset();
+    this.city.blast({ x: 0, z: 0 }, CRATER_RADIUS, true);
     this.projectiles.clear();
     this.particles.clear();
     this.monster.reset();
