@@ -149,9 +149,11 @@ export const CONFIG = {
     earlyAbilityPicks: 3,
   },
   abilities: {
-    dash: { unlockLevel: 3, cooldown: 10, range: 900, duration: 0.6, crushRadius: 95 },
-    leap: { unlockLevel: 1, cooldown: 8, range: 1600, duration: 1.4, peak: 340, landRadius: 260, damage: 150 },
-    roar: { unlockLevel: 5, cooldown: 20, radius: 600, duration: 1.2, damage: 120, buildingDamage: 300 },
+    /** Cooldown multiplier by rank (Dash/Roar ranks come from level-up picks; Leap is always rank 1). */
+    rankCooldown: [1, 1, 0.8, 0.65],
+    dash: { cooldown: 10, range: 900, duration: 0.6, crushRadius: 95 },
+    leap: { cooldown: 8, range: 1600, duration: 1.4, peak: 340, landRadius: 260, damage: 150 },
+    roar: { cooldown: 20, radius: 600, duration: 1.2, damage: 120, buildingDamage: 300 },
   },
   laser: {
     trackTime: 2.5, lockTime: 0.8, fireTime: 1.5, cooldownMin: 20, cooldownMax: 30,

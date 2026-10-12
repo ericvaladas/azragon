@@ -171,6 +171,7 @@ export class GameScene {
   /** Called by the React level-up cards. */
   chooseUpgrade(id: string, seq: number): void {
     if (this.state !== 'levelup' || !this.progression.choose(id, seq)) return;
+    if (id === 'dash' || id === 'roar') this.abilities.setRank(id, this.progression.ranks[id]);
     const s = this.progression.stats;
     const m = this.monster;
     const newMax = Math.round(CONFIG.monster.maxHp * s.maxHpMult);
@@ -368,7 +369,7 @@ export class GameScene {
         this.hudT = 1 / CONFIG.hudHz;
         this.emitHud();
         this.emitThreats();
-        this.events.emit('abilities', this.abilities.view(this.progression.level));
+        this.events.emit('abilities', this.abilities.view());
       }
     }
 
@@ -389,12 +390,11 @@ export class GameScene {
 
   pressAbility(id: ActiveId): void {
     if (this.state !== 'playing' || !this.monster.alive) return;
-    const level = this.progression.level;
     if (id === 'roar') {
-      if (this.abilities.trigger('roar', level)) this.roar();
+      if (this.abilities.trigger('roar')) this.roar();
       return;
     }
-    const aiming = this.abilities.toggleAim(id, level);
+    const aiming = this.abilities.toggleAim(id);
     this.monster.crouch = aiming === 'leap';
     if (!aiming) this.markers.setAim(null, 0);
   }
@@ -410,7 +410,7 @@ export class GameScene {
   private dashTo(ground: THREE.Vector3): void {
     const m = this.monster;
     const { to } = this.aimPoint(ground);
-    if (!this.abilities.trigger('dash', this.progression.level)) return;
+    if (!this.abilities.trigger('dash')) return;
     this.trucks().snapAll();
     m.crouch = false;
     m.startDash(to);
@@ -436,7 +436,7 @@ export class GameScene {
     private leapTo(ground: THREE.Vector3): void {
       const m = this.monster;
       const to = leapTarget({ x: m.position.x, z: m.position.z }, { x: ground.x, z: ground.z }, CONFIG.abilities.leap.range);
-      if (!this.abilities.trigger('leap', this.progression.level)) return;
+      if (!this.abilities.trigger('leap')) return;
       this.trucks().snapAll();
       m.crouch = false;
       m.startLeap(to);

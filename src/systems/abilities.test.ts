@@ -5,58 +5,75 @@ import { CONFIG } from '../config';
 const A = CONFIG.abilities;
 
 describe('Abilities', () => {
-  it('unlocks leap at 1, dash at its level, roar at its level', () => {
+  it('starts with only Leap; Dash and Roar come from level-up picks', () => {
     const a = new Abilities();
-    expect(a.unlocked('leap', 1)).toBe(true);
-    expect(a.unlocked('dash', A.dash.unlockLevel - 1)).toBe(false);
-    expect(a.unlocked('dash', A.dash.unlockLevel)).toBe(true);
-    expect(a.unlocked('roar', A.roar.unlockLevel - 1)).toBe(false);
-    expect(a.unlocked('roar', A.roar.unlockLevel)).toBe(true);
-    expect(a.trigger('roar', 1)).toBe(false);
+    expect(a.unlocked('leap')).toBe(true);
+    expect(a.unlocked('dash')).toBe(false);
+    expect(a.unlocked('roar')).toBe(false);
+    expect(a.trigger('roar')).toBe(false);
+    a.setRank('roar', 1);
+    expect(a.unlocked('roar')).toBe(true);
+    expect(a.trigger('roar')).toBe(true);
   });
 
   it('starts cooldowns on trigger and becomes ready again after them', () => {
     const a = new Abilities();
-    expect(a.trigger('leap', 1)).toBe(true);
-    expect(a.ready('leap', 1)).toBe(false);
-    expect(a.trigger('leap', 1)).toBe(false);
+    expect(a.trigger('leap')).toBe(true);
+    expect(a.ready('leap')).toBe(false);
+    expect(a.trigger('leap')).toBe(false);
     a.tick(A.leap.cooldown / 2);
-    expect(a.view(1).find((v) => v.id === 'leap')!.cdFrac).toBeCloseTo(0.5);
+    expect(a.view().find((v) => v.id === 'leap')!.cdFrac).toBeCloseTo(0.5);
     a.tick(A.leap.cooldown / 2 + 0.01);
-    expect(a.ready('leap', 1)).toBe(true);
+    expect(a.ready('leap')).toBe(true);
+  });
+
+  it('higher ranks shorten the cooldown', () => {
+    const a = new Abilities();
+    a.setRank('dash', 1);
+    a.trigger('dash');
+    a.tick(A.dash.cooldown * A.rankCooldown[3]! + 0.01);
+    expect(a.ready('dash')).toBe(false);
+    a.reset();
+    a.setRank('dash', 3);
+    a.trigger('dash');
+    a.tick(A.dash.cooldown * A.rankCooldown[3]! + 0.01);
+    expect(a.ready('dash')).toBe(true);
   });
 
   it('aims leap or dash, one at a time; pressing the same button again cancels', () => {
     const a = new Abilities();
-    const L = A.dash.unlockLevel;
-    expect(a.toggleAim('leap', L)).toBe('leap');
-    expect(a.toggleAim('dash', L)).toBe('dash');
-    expect(a.aiming).toBe('dash');
-    expect(a.toggleAim('dash', L)).toBeNull();
-    expect(a.toggleAim('dash', 1)).toBeNull();
+    a.setRank('dash', 1);
+    expect(a.toggleAim('leap')).toBe('leap');
+    expect(a.toggleAim('dash')).toBe('dash');
+    expect(a.toggleAim('dash')).toBeNull();
+    a.setRank('dash', 0);
+    expect(a.toggleAim('dash')).toBeNull();
   });
 
   it('triggering the aimed ability ends aiming; aim needs the ability ready', () => {
     const a = new Abilities();
-    a.toggleAim('leap', 1);
-    a.trigger('leap', 1);
+    a.toggleAim('leap');
+    a.trigger('leap');
     expect(a.aiming).toBeNull();
-    expect(a.toggleAim('leap', 1)).toBeNull();
+    expect(a.toggleAim('leap')).toBeNull();
   });
 
-  it('cancelAim and reset clear state', () => {
+  it('reset clears cooldowns, aim, and Dash/Roar ownership', () => {
     const a = new Abilities();
-    a.toggleAim('leap', 1);
-    a.cancelAim();
-    expect(a.aiming).toBeNull();
-    a.trigger('leap', 1);
+    a.setRank('roar', 2);
+    a.trigger('leap');
+    a.toggleAim('leap');
     a.reset();
-    expect(a.ready('leap', 1)).toBe(true);
+    expect(a.ready('leap')).toBe(true);
+    expect(a.aiming).toBeNull();
+    expect(a.unlocked('roar')).toBe(false);
   });
 
-  it('views only list unlocked abilities, in button order', () => {
+  it('views list owned abilities only, in button order', () => {
     const a = new Abilities();
-    expect(a.view(1).map((v) => v.id)).toEqual(['leap']);
-    expect(a.view(A.roar.unlockLevel).map((v) => v.id)).toEqual(['leap', 'dash', 'roar']);
+    expect(a.view().map((v) => v.id)).toEqual(['leap']);
+    a.setRank('roar', 1);
+    a.setRank('dash', 1);
+    expect(a.view().map((v) => v.id)).toEqual(['leap', 'dash', 'roar']);
   });
 });
