@@ -22,6 +22,8 @@ export class Monster {
   hp: number = CONFIG.monster.maxHp;
   maxHp: number = CONFIG.monster.maxHp;
   alive = true;
+  /** Mid-Leap; driven by Task 9. */
+  airborne = false;
   onFootLand: (p: THREE.Vector3) => void = () => {};
 
   private cycle = 0;

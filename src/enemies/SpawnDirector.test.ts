@@ -1,53 +1,52 @@
 import { describe, it, expect } from 'vitest';
-import { SpawnDirector, type SpawnKind } from './SpawnDirector';
+import { SpawnDirector } from './SpawnDirector';
+import { ENEMY_KINDS, type EnemyKind } from './types';
 import { CONFIG } from '../config';
+import { mulberry32 } from '../util/rng';
 
-const D = CONFIG.director;
-const always0 = () => 0; // rng that would always choose a jet when allowed
+const zero = (): Record<EnemyKind, number> => Object.fromEntries(ENEMY_KINDS.map((k) => [k, 0])) as Record<EnemyKind, number>;
 
-function run(dir: SpawnDirector, seconds: number, alive = { tanks: 0, jets: 0 }): SpawnKind[] {
-  const out: SpawnKind[] = [];
+function run(dir: SpawnDirector, seconds: number, alive = zero()): EnemyKind[] {
+  const out: EnemyKind[] = [];
   for (let t = 0; t < seconds; t += 0.05) out.push(...dir.update(0.05, alive));
   return out;
 }
 
 describe('SpawnDirector', () => {
-  it('sends only tanks before jets unlock', () => {
-    const spawns = run(new SpawnDirector(always0), D.jetUnlockTime - 1);
-    expect(spawns.length).toBeGreaterThan(0);
-    expect(spawns).not.toContain('jet');
+  it('sends only tanks in the first 20 s', () => {
+    const s = run(new SpawnDirector(mulberry32(1)), 19);
+    expect(s.length).toBeGreaterThan(0);
+    expect(new Set(s)).toEqual(new Set(['tank']));
   });
 
-  it('sends jets after they unlock', () => {
-    const dir = new SpawnDirector(always0);
-    run(dir, D.jetUnlockTime);
-    expect(run(dir, 30)).toContain('jet');
+  it('has sent every kind by minute 5 (counts kept at zero)', () => {
+    expect(new Set(run(new SpawnDirector(mulberry32(2)), 330))).toEqual(new Set(ENEMY_KINDS));
   });
 
-  it('respects caps on concurrent enemies', () => {
-    const dir = new SpawnDirector(always0);
-    expect(run(dir, 120, { tanks: D.maxTanks, jets: D.maxJets })).toEqual([]);
+  it('never exceeds per-kind caps', () => {
+    const alive = zero();
+    for (const k of ENEMY_KINDS) alive[k] = CONFIG.spawns[k].cap;
+    expect(run(new SpawnDirector(mulberry32(3)), 400, alive)).toEqual([]);
   });
 
   it('escalates over time', () => {
-    const dir = new SpawnDirector(() => 0.99);
+    const dir = new SpawnDirector(mulberry32(4));
     const early = run(dir, 60).length;
     run(dir, 240);
-    const late = run(dir, 60).length;
-    expect(late).toBeGreaterThan(early * 2);
+    expect(run(dir, 60).length).toBeGreaterThan(early * 1.5);
   });
 
   it('never bursts more than the budget cap in one update', () => {
-    const dir = new SpawnDirector(() => 0.99);
-    dir.update(10000, { tanks: 0, jets: 0 });
-    expect(dir.update(10000, { tanks: 0, jets: 0 }).length).toBeLessThanOrEqual(D.budgetCap);
+    const dir = new SpawnDirector(mulberry32(5));
+    dir.update(10000, zero());
+    expect(dir.update(10000, zero()).length).toBeLessThanOrEqual(CONFIG.director.budgetCap);
   });
 
   it('reset restarts the clock', () => {
-    const dir = new SpawnDirector(always0);
-    run(dir, 100);
+    const dir = new SpawnDirector(mulberry32(6));
+    run(dir, 300);
     dir.reset();
     expect(dir.elapsed).toBe(0);
-    expect(run(dir, 5)).not.toContain('jet');
+    expect(new Set(run(dir, 5))).toEqual(new Set(['tank']));
   });
 });

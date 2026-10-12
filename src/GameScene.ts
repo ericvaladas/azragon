@@ -5,7 +5,7 @@ import { Lighting } from './render/Lighting';
 import { PixelRenderer } from './render/PixelRenderer';
 import { createSky } from './render/Sky';
 import { clampDelta, type Vec2 } from './util/math';
-import type { Target } from './combat';
+import { resolveHit, type DamageSource, type Target } from './combat';
 import { City } from './world/City';
 import { ringOnRoads } from './world/roads';
 import { ROAD_ORIGIN } from './world/chunks';
@@ -17,7 +17,9 @@ import { pickEnemy } from './systems/tap';
 import { Particles } from './systems/Particles';
 import { Projectiles, type Hit } from './systems/Projectiles';
 import { spikeTargets } from './systems/projectileMath';
-import { SpawnDirector } from './enemies/SpawnDirector';
+import { EnemyRegistry } from './enemies/EnemyRegistry';
+import { difficulty } from './enemies/spawnTable';
+import type { WorldContext } from './enemies/types';
 import { TankFleet } from './enemies/TankFleet';
 import { JetSquadron } from './enemies/JetSquadron';
 import { mulberry32 } from './util/rng';
@@ -53,9 +55,8 @@ export class GameScene {
   private tmpV = new THREE.Vector3();
   private particles: Particles;
   private projectiles: Projectiles;
-  private director: SpawnDirector;
-  private tanks: TankFleet;
-  private jets: JetSquadron;
+  private enemies: EnemyRegistry;
+  private ctx!: WorldContext;
   private rng = mulberry32(CONFIG.world.seed + 7);
   private progression = new Progression(mulberry32(CONFIG.world.seed + 13));
   private runTime = 0;
@@ -78,20 +79,10 @@ export class GameScene {
     this.projectiles = new Projectiles(this.scene);
     this.projectiles.onTrail = (p) => this.particles.emit('smoke', p, 1, 0.2);
     this.projectiles.onHit = this.onProjectileHit;
-    this.director = new SpawnDirector(this.rng);
-    const fire = (from: THREE.Vector3, to: THREE.Vector3, damage: number, kind: 'shell' | 'rocket') => {
-      if (kind === 'shell') this.projectiles.fireShell(from, to, damage);
-      else this.projectiles.fireRocket(from, to, damage);
-      this.particles.emit('fire', from, 2, 0.3);
-    };
-    this.tanks = new TankFleet(this.scene, this.onTargetDestroyed, (f, t, d) => fire(f, t, d, 'shell'));
-    this.jets = new JetSquadron(this.scene, this.onTargetDestroyed, (f, t, d) => fire(f, t, d, 'rocket'));
-    this.jets.onTrail = (p) => this.particles.emit('smoke', p, 1, 0.3);
-    this.jets.onCrash = (p) => {
-      this.particles.explosion(p, 2);
-      this.particles.ring('dust', p, 120, 12);
-      this.rig.addTrauma(0.3);
-    };
+    this.enemies = new EnemyRegistry(this.rng);
+    this.enemies.add(new TankFleet(this.scene));
+    this.enemies.add(new JetSquadron(this.scene));
+    this.ctx = this.buildContext();
     this.city.onCollapseStart = (pos, size) => {
       this.particles.ring('dust', pos, size, 14);
       this.particles.emit('debris', pos.clone().setY(30), 8);
@@ -148,13 +139,11 @@ export class GameScene {
 
   restart(): void {
     this.city.reset();
-    this.tanks.clear();
-    this.jets.clear();
     this.projectiles.clear();
     this.particles.clear();
     this.monster.reset();
     this.progression.reset();
-    this.director.reset();
+    this.enemies.clear();
     this.rig.reset();
     this.order = null;
     this.markers.setTarget(null);
@@ -227,13 +216,8 @@ export class GameScene {
         if (!this.openingDone && this.runTime >= CONFIG.opening.time) {
           this.openingDone = true;
           const c = { x: this.monster.position.x, z: this.monster.position.z };
-          for (const p of ringOnRoads(c, CONFIG.opening.count, CONFIG.opening.radius, ROAD_ORIGIN, CONFIG.world.blockSize)) this.tanks.spawnAt(p.x, p.z, this.rng);
+          for (const p of ringOnRoads(c, CONFIG.opening.count, CONFIG.opening.radius, ROAD_ORIGIN, CONFIG.world.blockSize)) this.enemies.get<TankFleet>('tank').spawnAt(p.x, p.z, this.ctx);
         }
-        for (const kind of this.director.update(dt, { tanks: this.tanks.count(), jets: this.jets.count() })) {
-          if (kind === 'tank') this.tanks.spawn(this.monster.position, this.rng);
-          else this.jets.spawn(this.monster.position, this.rng);
-        }
-        this.tanks.update(dt, this.monster.position);
         this.updateMonster(dt);
         if (this.monster.hp <= 0 && this.monster.alive) this.startDying();
       }
@@ -250,7 +234,7 @@ export class GameScene {
           });
         }
       }
-      this.jets.update(dt, this.monster.position);
+      this.enemies.update(dt, this.ctx, this.state === 'playing');
       this.projectiles.update(dt);
       this.city.update(dt, this.monster.position);
       this.monster.animate(dt, this.elapsed);
@@ -272,9 +256,73 @@ export class GameScene {
   };
 
 
-  /** Enemies the player can target. Filled in by Task 9. */
+  /** Live targetable enemies (cached per frame by the registry). */
   enemyTargets(): Target[] {
-    return [...this.tanks.targets(), ...this.jets.targets()].filter((t) => t.isAlive());
+    return this.enemies.targets();
+  }
+
+  /** One mutable context object shared by all enemy systems; getters read live game state. */
+  private buildContext(): WorldContext {
+    const self = this;
+    return {
+      get monster() {
+        return { position: self.monster.position, alive: self.monster.alive, airborne: self.monster.airborne };
+      },
+      get difficulty() {
+        return difficulty(self.runTime);
+      },
+      get minutes() {
+        return self.runTime / 60;
+      },
+      rng: this.rng,
+      particles: this.particles,
+      get tetherDurationMult() {
+        return self.passiveTetherMult();
+      },
+      get thrashDamage() {
+        return self.passiveThrashDamage();
+      },
+      damageMonster: (amount, source) => this.damageMonster(amount, source),
+      damageBuildings: (p, r, amount) => this.city.forEachStandingInRadius(p, r, (t) => t.applyDamage(amount)),
+      fireShell: (from, to, damage) => {
+        this.projectiles.fireShell(from, to, damage);
+        this.particles.emit('fire', from, 2, 0.3);
+      },
+      fireRocket: (from, to, damage) => {
+        this.projectiles.fireRocket(from, to, damage);
+        this.particles.emit('fire', from, 2, 0.3);
+      },
+      shake: (a) => this.rig.addTrauma(a),
+      onDestroyed: this.onTargetDestroyed,
+    };
+  }
+
+  /** Thrash hooks; Task 10 returns real values. */
+  private passiveTetherMult(): number {
+    return 1;
+  }
+  private passiveThrashDamage(): number {
+    return 0;
+  }
+  /** Chitin Deflection hook; Task 10 returns the real chance. */
+  private deflectChance(): number {
+    return 0;
+  }
+
+  /** The only way the monster takes damage. */
+  damageMonster(amount: number, source: DamageSource): void {
+    const m = this.monster;
+    if (!m.alive || this.state !== 'playing') return;
+    const r = resolveHit(amount, source, { dmgMult: difficulty(this.runTime).dmgMult, deflectChance: this.deflectChance(), airborne: m.airborne }, Math.random());
+    if (r.deflected) {
+      this.particles.emit('spark', m.position.clone().setY(300 * CONFIG.monster.scale), 8);
+      return;
+    }
+    if (r.damage <= 0) return;
+    m.hp = Math.max(0, m.hp - r.damage);
+    m.flash();
+    this.rig.addTrauma(Math.min(0.4, 0.03 + r.damage * 0.004));
+    if (m.hp <= 0) this.startDying();
   }
 
   private setRay(x: number, y: number): void {
@@ -398,17 +446,11 @@ export class GameScene {
       return;
     }
     this.particles.explosion(h.point, 0.6);
-    if (this.monster.alive && this.state === 'playing') {
-      this.monster.hp = Math.max(0, this.monster.hp - h.damage);
-      this.monster.flash();
-      this.rig.addTrauma(0.05);
-      if (this.monster.hp <= 0) this.startDying();
-    }
+    this.damageMonster(h.damage, h.kind === 'shell' ? 'shell' : 'rocket');
   };
 
   private onTargetDestroyed = (target: Target, exp: number): void => {
-    if (target.kind === 'tank') this.particles.explosion(target.position, 1);
-    if (target.kind === 'jet') this.particles.explosion(target.position, 1.2);
+    if (target.kind !== 'building') this.particles.explosion(target.position, target.airborne ? 1.2 : 1);
     if (target.kind !== 'building') this.kills++;
     if (!this.monster.alive) return;
     this.progression.addExp(exp);
