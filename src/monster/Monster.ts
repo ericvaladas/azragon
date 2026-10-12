@@ -5,6 +5,7 @@ import { InsectTitanModel } from './InsectTitanModel';
 import { didLand, footState } from './gait';
 import { solveTwoBone, placeSegment } from './ik';
 import { leapPosition } from './leap';
+import { STRIKE_TIMES, strikeFootPose } from './strike';
 
 const FEMUR = 300;
 const TIBIA = 400;
@@ -15,14 +16,11 @@ const _foot = new THREE.Vector3();
 const _knee = new THREE.Vector3();
 const _pole = new THREE.Vector3();
 const _world = new THREE.Vector3();
-const _raised = new THREE.Vector3();
+const _gait = new THREE.Vector3();
 const _target = new THREE.Vector3();
 /** Foot offset (model units) for the cocked leg: high and pulled back. */
 const _strikeLift = new THREE.Vector3(0, 420, -80);
-/** Leg-strike phases, in seconds after the windup. */
-const STRIKE = 0.1;
-const HOLD = 0.25;
-const RECOVER = 0.45;
+const { strike: STRIKE, recover: RECOVER } = STRIKE_TIMES;
 
 export class Monster {
   readonly model = new InsectTitanModel();
@@ -214,16 +212,11 @@ export class Monster {
    * target by w + STRIKE, hold until w + HOLD, then ease back to the gait pose by w + RECOVER.
    */
   private strikeFoot(foot: THREE.Vector3): void {
-    const w = CONFIG.monster.meleeWindup;
-    const t = this.meleeT;
-    _raised.copy(foot).add(_strikeLift);
     _target.copy(this.strikePoint);
     this.model.root.worldToLocal(_target);
     _target.y = 0;
-    if (t < w) foot.lerp(_raised, t / w);
-    else if (t < w + STRIKE) foot.copy(_raised).lerp(_target, (t - w) / STRIKE);
-    else if (t < w + HOLD) foot.copy(_target);
-    else foot.copy(_target).lerp(foot, Math.min(1, (t - w - HOLD) / (RECOVER - HOLD)));
+    _gait.copy(foot);
+    strikeFootPose(this.meleeT, CONFIG.monster.meleeWindup, _gait, _strikeLift, _target, foot);
   }
 
   consumeSpike(cooldownMult: number): void {
