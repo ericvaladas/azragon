@@ -34,6 +34,9 @@ import { mulberry32 } from './util/rng';
 import { Progression, expToNext } from './systems/Progression';
 import { regen } from './monster/vitals';
 import { DebugOverlay } from './systems/DebugOverlay';
+import { Abilities, type ActiveId } from './systems/abilities';
+import { Shockwave } from './systems/Shockwave';
+import { leapTarget } from './monster/leap';
 import { decide, nearestInRange, type BrainOrder, type BrainTarget } from './monster/brain';
 
 type Order = { kind: 'move'; to: Vec2 } | { kind: 'attack'; target: Target } | null;
@@ -74,6 +77,8 @@ export class GameScene {
   private stateBeforePause: GameState = 'playing';
   private debug: DebugOverlay | null = null;
   private chevrons: Chevrons;
+  private abilities = new Abilities();
+  private shockwave: Shockwave;
 
   constructor(private container: HTMLDivElement) {
     this.pixel = new PixelRenderer(container);
@@ -86,6 +91,7 @@ export class GameScene {
     this.markers = new Markers(this.scene);
     this.particles = new Particles(this.scene);
     this.chevrons = new Chevrons(this.scene);
+    this.shockwave = new Shockwave(this.scene);
     this.projectiles = new Projectiles(this.scene);
     this.projectiles.onTrail = (p) => this.particles.emit('smoke', p, 1, 0.2);
     this.projectiles.onHit = this.onProjectileHit;
@@ -109,11 +115,13 @@ export class GameScene {
       this.rig.addTrauma(0.06);
     };
     this.monster.onMeleeImpact = (p) => this.meleeImpact(p);
+    this.monster.onLeapLand = (p) => this.leapLand(p);
     this.input = new Input(this.pixel.domElement, {
       tap: this.onTap,
       drag: (dx, dy) => this.rig.drag(dx, dy),
       wheel: (dy) => this.rig.zoom(dy),
       hover: this.onHover,
+      key: (code) => this.pressAbility(code === 'Space' ? 'leap' : 'roar'),
     });
 
     this.lighting.follow(new THREE.Vector3());
@@ -166,6 +174,8 @@ export class GameScene {
     this.kills = 0;
     this.runTime = 0;
     this.openingDone = false;
+    this.abilities.reset();
+    this.markers.setAim(null, 0);
     this.dyingT = 0;
     this.setState('playing');
     this.emitHud();
@@ -228,6 +238,11 @@ export class GameScene {
   private setState(next: GameState): void {
     if (this.state === next) return;
     this.state = next;
+    if (next !== 'playing') {
+      this.abilities.cancelAim();
+      this.monster.crouch = false;
+      this.markers.setAim(null, 0);
+    }
     this.events.emit('stateChange', next);
   }
 
@@ -250,6 +265,7 @@ export class GameScene {
       this.elapsed += dt;
       if (this.state === 'playing') {
         this.runTime += dt;
+        this.abilities.tick(dt);
         if (!this.openingDone && this.runTime >= CONFIG.opening.time) {
           this.openingDone = true;
           const c = { x: this.monster.position.x, z: this.monster.position.z };
@@ -276,6 +292,7 @@ export class GameScene {
       this.city.update(dt, this.monster.position);
       this.monster.animate(dt, this.elapsed);
       this.particles.update(dt);
+      this.shockwave.update(dt);
       this.markers.update(dt);
 
       this.hudT -= dt;
@@ -283,6 +300,7 @@ export class GameScene {
         this.hudT = 1 / CONFIG.hudHz;
         this.emitHud();
         this.emitThreats();
+        this.events.emit('abilities', this.abilities.view(this.progression.level));
       }
     }
 
@@ -294,6 +312,65 @@ export class GameScene {
     this.debug?.update(raw, this.pixel.renderer.info);
   };
 
+
+    pressAbility(id: ActiveId): void {
+      if (this.state !== 'playing' || !this.monster.alive) return;
+      const level = this.progression.level;
+      if (id === 'leap') {
+        this.monster.crouch = this.abilities.toggleAim(level);
+        if (!this.monster.crouch) this.markers.setAim(null, 0);
+        return;
+      }
+      if (!this.abilities.trigger('roar', level)) return;
+      this.roar();
+    }
+
+    private trucks(): GrappleTrucks {
+      return this.enemies.get<GrappleTrucks>('truck');
+    }
+
+    private leapTo(ground: THREE.Vector3): void {
+      const m = this.monster;
+      const to = leapTarget({ x: m.position.x, z: m.position.z }, { x: ground.x, z: ground.z }, CONFIG.abilities.leap.range);
+      if (!this.abilities.trigger('leap', this.progression.level)) return;
+      this.trucks().snapAll();
+      m.crouch = false;
+      m.startLeap(to);
+      this.order = null;
+      this.markers.setTarget(null);
+      this.markers.setAim(null, 0);
+      this.particles.ring('dust', m.position, 200, 12);
+    }
+
+    private leapLand(p: THREE.Vector3): void {
+      const L = CONFIG.abilities.leap;
+      const dmg = L.damage * this.progression.stats.damageMult;
+      this.city.forEachStandingInRadius({ x: p.x, z: p.z }, L.landRadius, (t) => t.applyDamage(dmg * 3));
+      for (const t of this.enemyTargets()) {
+        if (!t.airborne && Math.hypot(t.position.x - p.x, t.position.z - p.z) <= L.landRadius + t.radius) t.applyDamage(dmg);
+      }
+      this.particles.ring('dust', p, L.landRadius, 26);
+      this.particles.emit('debris', p.clone().setY(20), 16, 1.6);
+      this.rig.addTrauma(0.55);
+    }
+
+    private roar(): void {
+      const R = CONFIG.abilities.roar;
+      const m = this.monster;
+      const p = m.position;
+      m.startRoar();
+      this.order = null;
+      this.trucks().snapAll();
+      this.shockwave.start(p, R.radius);
+      const dmg = R.damage * this.progression.stats.damageMult;
+      this.city.forEachStandingInRadius({ x: p.x, z: p.z }, R.radius, (t) => t.applyDamage(R.buildingDamage));
+      for (const t of [...this.enemyTargets()]) {
+        if (Math.hypot(t.position.x - p.x, t.position.z - p.z) > R.radius + t.radius) continue;
+        t.applyDamage(t.airborne ? 1e9 : dmg);
+      }
+      this.particles.ring('dust', p, R.radius * 0.5, 30);
+      this.rig.addTrauma(0.7);
+    }
 
   /** Live targetable enemies (cached per frame by the registry). */
   enemyTargets(): Target[] {
@@ -391,6 +468,12 @@ export class GameScene {
 
   private onTap = (x: number, y: number): void => {
     if (this.state !== 'playing') return;
+    if (this.abilities.aiming) {
+      this.setRay(x, y);
+      const g = this.raycaster.ray.intersectPlane(this.groundPlane, this.tmpV);
+      if (g) this.leapTo(g.clone());
+      return;
+    }
     const target = this.pickTarget(x, y);
     if (target) {
       this.order = { kind: 'attack', target };
@@ -406,6 +489,16 @@ export class GameScene {
   };
 
   private onHover = (x: number, y: number): void => {
+    if (this.abilities.aiming && this.state === 'playing') {
+      this.setRay(x, y);
+      const g = this.raycaster.ray.intersectPlane(this.groundPlane, this.tmpV);
+      if (g) {
+        const m = this.monster.position;
+        const c = leapTarget({ x: m.x, z: m.z }, { x: g.x, z: g.z }, CONFIG.abilities.leap.range);
+        this.markers.setAim(new THREE.Vector3(c.x, 0, c.z), CONFIG.abilities.leap.landRadius);
+      }
+      return;
+    }
     const t = this.state === 'playing' ? this.pickTarget(x, y) : null;
     this.markers.setHover(t);
     this.container.classList.toggle('can-target', t !== null);
@@ -433,30 +526,32 @@ export class GameScene {
     const m = this.monster;
     const s = this.progression.stats;
     const pos = { x: m.position.x, z: m.position.z };
-    const auto = nearestInRange(pos, this.enemyTargets(), CONFIG.monster.spikeRange);
-    const order: BrainOrder =
-      this.order?.kind === 'attack' ? { kind: 'attack', target: this.toBrain(this.order.target) } : this.order;
-    const d = decide({
-      pos,
-      order,
-      auto: auto ? this.toBrain(auto) : null,
-      meleeRange: CONFIG.monster.meleeRange,
-      spikeRange: CONFIG.monster.spikeRange,
-      meleeReady: m.meleeReady(),
-      spikeReady: m.spikeReady(),
-      arriveRadius: CONFIG.monster.arriveRadius,
-    });
-    if (d.orderDone) {
-      this.order = null;
-      this.markers.setTarget(null);
+    if (!m.busy) {
+      const auto = nearestInRange(pos, this.enemyTargets(), CONFIG.monster.spikeRange);
+      const order: BrainOrder =
+        this.order?.kind === 'attack' ? { kind: 'attack', target: this.toBrain(this.order.target) } : this.order;
+      const d = decide({
+        pos,
+        order,
+        auto: auto ? this.toBrain(auto) : null,
+        meleeRange: CONFIG.monster.meleeRange,
+        spikeRange: CONFIG.monster.spikeRange,
+        meleeReady: m.meleeReady(),
+        spikeReady: m.spikeReady(),
+        arriveRadius: CONFIG.monster.arriveRadius,
+      });
+      if (d.orderDone) {
+        this.order = null;
+        this.markers.setTarget(null);
+      }
+      if (d.moveTo) m.moveToward(d.moveTo, dt, s.moveSpeedMult);
+      else if (d.face) m.faceToward(d.face, dt);
+      if (d.attack === 'melee') m.startMelee(s.cooldownMult);
+      if (d.attack === 'ranged') this.fireSpikes(d.attackOn === 'order' && this.order?.kind === 'attack' ? this.order.target : auto);
     }
-    if (d.moveTo) m.moveToward(d.moveTo, dt, s.moveSpeedMult);
-    else if (d.face) m.faceToward(d.face, dt);
-    if (d.attack === 'melee') m.startMelee(s.cooldownMult);
-    if (d.attack === 'ranged') this.fireSpikes(d.attackOn === 'order' && this.order?.kind === 'attack' ? this.order.target : auto);
     m.tick(dt);
 
-    this.city.forEachStandingInRadius(pos, CONFIG.monster.bodyRadius, (t) => t.applyDamage(CONFIG.monster.contactDps * dt));
+    if (!m.airborne) this.city.forEachStandingInRadius(pos, CONFIG.monster.bodyRadius, (t) => t.applyDamage(CONFIG.monster.contactDps * dt));
     m.hp = regen(m.hp, m.maxHp, CONFIG.monster.regenPerSec + s.regenBonus, dt);
   }
 

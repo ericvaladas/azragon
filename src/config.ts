@@ -124,6 +124,10 @@ export const CONFIG = {
     salvoEvery: 6, fillTime: 2, radius: 90, damage: 60, buildingDamage: 200, spread: 260,
     baseSalvo: 3, unlockMin: 2.5, minutesPerExtra: 1.5, maxSalvo: 8,
   },
+  abilities: {
+    leap: { unlockLevel: 1, cooldown: 8, range: 1000, duration: 1.1, peak: 260, landRadius: 260, damage: 150 },
+    roar: { unlockLevel: 5, cooldown: 20, radius: 600, duration: 1.2, damage: 120, buildingDamage: 300 },
+  },
   laser: {
     trackTime: 2.5, lockTime: 0.8, fireTime: 1.5, cooldownMin: 20, cooldownMax: 30,
     trackSpeed: 80, startOffset: 150, radius: 110, dps: 220, buildingDps: 400, beamHeight: 4000, scorchLife: 10,

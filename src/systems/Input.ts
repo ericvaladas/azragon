@@ -5,6 +5,7 @@ export type InputHandlers = {
   drag(dx: number, dy: number): void;
   hover(x: number, y: number): void;
   wheel(deltaY: number): void;
+  key(code: string): void;
 };
 
 /** Single-pointer gesture handling over the canvas. Touch and mouse share one path; hover and wheel are mouse-only. */
@@ -28,6 +29,7 @@ export class Input {
     el.addEventListener('pointercancel', this.onCancel);
     el.addEventListener('wheel', this.onWheel, { passive: false });
     el.addEventListener('contextmenu', this.onContextMenu);
+    window.addEventListener('keydown', this.onKey);
   }
 
   private local(e: PointerEvent): [number, number] {
@@ -85,6 +87,12 @@ export class Input {
 
   private onContextMenu = (e: Event) => e.preventDefault();
 
+  private onKey = (e: KeyboardEvent) => {
+    if (e.repeat || (e.code !== 'Space' && e.code !== 'KeyR')) return;
+    e.preventDefault();
+    this.h.key(e.code);
+  };
+
   dispose(): void {
     this.el.removeEventListener('pointerdown', this.onDown);
     this.el.removeEventListener('pointermove', this.onMove);
@@ -92,5 +100,6 @@ export class Input {
     this.el.removeEventListener('pointercancel', this.onCancel);
     this.el.removeEventListener('wheel', this.onWheel);
     this.el.removeEventListener('contextmenu', this.onContextMenu);
+    window.removeEventListener('keydown', this.onKey);
   }
 }

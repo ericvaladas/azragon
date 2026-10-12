@@ -4,6 +4,7 @@ import { angleDelta, dist2, yawTo, type Vec2 } from '../util/math';
 import { InsectTitanModel } from './InsectTitanModel';
 import { didLand, footState } from './gait';
 import { solveTwoBone, placeSegment } from './ik';
+import { leapPosition } from './leap';
 
 const FEMUR = 300;
 const TIBIA = 400;
@@ -22,8 +23,34 @@ export class Monster {
   hp: number = CONFIG.monster.maxHp;
   maxHp: number = CONFIG.monster.maxHp;
   alive = true;
-  /** Mid-Leap; driven by Task 9. */
-  airborne = false;
+  onLeapLand: (p: THREE.Vector3) => void = () => {};
+  crouch = false;
+  private leapT = -1;
+  private leapFrom = { x: 0, z: 0 };
+  private leapTo = { x: 0, z: 0 };
+  private roarT = -1;
+
+  get airborne(): boolean {
+    return this.leapT >= 0;
+  }
+
+  /** Leaping or roaring: the brain must not move or attack. */
+  get busy(): boolean {
+    return this.leapT >= 0 || this.roarT >= 0;
+  }
+
+  startLeap(to: Vec2): void {
+    this.leapFrom = { x: this.position.x, z: this.position.z };
+    this.leapTo = { x: to.x, z: to.z };
+    this.leapT = 0;
+    this.yaw = yawTo(this.leapFrom, this.leapTo);
+    this.meleeT = -1;
+  }
+
+  startRoar(): void {
+    this.roarT = 0;
+    this.meleeT = -1;
+  }
   /** Clamp applied to each walking step (grapple tethers). */
   constrain: ((from: Vec2, to: Vec2) => Vec2) | null = null;
   onFootLand: (p: THREE.Vector3) => void = () => {};
@@ -50,6 +77,10 @@ export class Monster {
     this.meleeCd = 0;
     this.spikeCd = 0;
     this.meleeT = -1;
+    this.leapT = -1;
+    this.roarT = -1;
+    this.crouch = false;
+    this.position.y = 0;
   }
 
   forward(out: THREE.Vector3): THREE.Vector3 {
@@ -131,7 +162,7 @@ export class Monster {
       }
     }
 
-    const twitch = 0.18 + Math.sin(time * 7) * 0.08;
+    const twitch = this.roarT >= 0 ? 0.55 : 0.18 + Math.sin(time * 7) * 0.08;
     this.model.mandibles[0]!.rotation.y = -twitch;
     this.model.mandibles[1]!.rotation.y = twitch;
     this.model.updateTail(time);
@@ -169,11 +200,30 @@ export class Monster {
 
   /** Cooldowns and the stomp pose: rear up during windup, slam, recover. */
   tick(dt: number): void {
+    const L = CONFIG.abilities.leap;
+    if (this.leapT >= 0) {
+      this.leapT += dt;
+      const p = leapPosition(this.leapFrom, this.leapTo, this.leapT, L.duration, L.peak);
+      this.position.set(p.x, p.y, p.z);
+      this.pose.pitch = 0.25 * Math.sin(Math.PI * Math.min(1, this.leapT / L.duration)) - 0.1;
+      if (this.leapT >= L.duration) {
+        this.leapT = -1;
+        this.position.y = 0;
+        this.pose.dip = 60;
+        this.onLeapLand(this.position.clone());
+      }
+    }
+    if (this.roarT >= 0) {
+      this.roarT += dt;
+      const k = this.roarT / CONFIG.abilities.roar.duration;
+      this.pose.pitch = -0.45 * Math.sin(Math.PI * Math.min(1, k));
+      if (k >= 1) this.roarT = -1;
+    }
     this.meleeCd = Math.max(0, this.meleeCd - dt);
     this.spikeCd = Math.max(0, this.spikeCd - dt);
     if (this.meleeT < 0) {
-      this.pose.pitch *= Math.exp(-10 * dt);
-      this.pose.dip *= Math.exp(-10 * dt);
+      if (this.leapT < 0 && this.roarT < 0) this.pose.pitch *= Math.exp(-10 * dt);
+      this.pose.dip += ((this.crouch ? 35 : 0) - this.pose.dip) * (1 - Math.exp(-10 * dt));
       return;
     }
     this.meleeT += dt;

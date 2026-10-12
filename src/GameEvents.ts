@@ -1,4 +1,5 @@
 import type { TargetKind } from './combat';
+import type { AbilityView } from './systems/abilities';
 
 export type ThreatArrow = { x: number; y: number; angle: number; kind: TargetKind };
 
@@ -25,6 +26,7 @@ export type GameEventMap = {
   levelUpOffer: { seq: number; offers: UpgradeOffer[] };
   gameOver: RunStats;
   threats: ThreatArrow[];
+  abilities: AbilityView[];
 };
 
 type Handler<T> = (data: T) => void;

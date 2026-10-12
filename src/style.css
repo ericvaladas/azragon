@@ -301,3 +301,36 @@ body {
   animation: tethered-blink 600ms steps(2) infinite;
 }
 @keyframes tethered-blink { 50% { opacity: 0.45; } }
+
+.ability-bar {
+  position: absolute;
+  right: calc(var(--safe-right) + 14px);
+  bottom: calc(var(--safe-bottom) + 18px);
+  display: flex;
+  gap: 12px;
+  pointer-events: auto;
+}
+.ability-btn {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.14);
+  background: rgba(0, 0, 0, 0.6);
+  color: var(--color-text);
+  font: inherit;
+  cursor: pointer;
+  overflow: hidden;
+  touch-action: none;
+  transition: transform 100ms ease-out;
+}
+.ability-btn:active { transform: scale(0.92); }
+.ability-btn.ready { border-color: var(--color-primary); box-shadow: 0 0 12px rgba(155, 226, 45, 0.55); animation: ability-pulse 1.2s ease-in-out infinite; }
+.ability-btn.aiming { background: var(--color-primary); color: #0d1110; }
+.ability-btn.locked { opacity: 0.45; filter: grayscale(0.6); }
+.ability-icon { font-size: 26px; line-height: 64px; }
+.ability-lock { position: absolute; left: 0; right: 0; bottom: 6px; font-size: 10px; font-weight: 700; }
+.ability-key { position: absolute; left: 0; right: 0; top: 4px; font-size: 8px; opacity: 0.7; letter-spacing: 0.08em; }
+.ability-cd { position: absolute; inset: 0; border-radius: 50%; }
+@keyframes ability-pulse { 50% { transform: scale(1.06); } }
+@media (pointer: coarse) { .ability-key { display: none; } }
