@@ -1,11 +1,12 @@
-import { canTap, classifyGesture } from './tap';
+import { abilityKey, canTap, classifyGesture } from './tap';
 
 export type InputHandlers = {
   tap(x: number, y: number): void;
   drag(dx: number, dy: number): void;
   hover(x: number, y: number): void;
   wheel(deltaY: number): void;
-  key(code: string): void;
+  /** Ability key pressed; return true when the game used it (then the browser default is suppressed). */
+  key(id: 'leap' | 'roar'): boolean | void;
 };
 
 /** Single-pointer gesture handling over the canvas. Touch and mouse share one path; hover and wheel are mouse-only. */
@@ -88,9 +89,9 @@ export class Input {
   private onContextMenu = (e: Event) => e.preventDefault();
 
   private onKey = (e: KeyboardEvent) => {
-    if (e.repeat || (e.code !== 'Space' && e.code !== 'KeyR')) return;
-    e.preventDefault();
-    this.h.key(e.code);
+    const id = abilityKey(e);
+    if (!id) return;
+    if (this.h.key(id)) e.preventDefault();
   };
 
   dispose(): void {

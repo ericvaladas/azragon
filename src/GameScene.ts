@@ -32,7 +32,7 @@ import { OrbitalLaser } from './enemies/OrbitalLaser';
 import { clampToTethers } from './monster/tether';
 import { mulberry32 } from './util/rng';
 import { Progression, expToNext } from './systems/Progression';
-import { regen } from './monster/vitals';
+import { healOnKill, regen } from './monster/vitals';
 import { DebugOverlay } from './systems/DebugOverlay';
 import { Abilities, type ActiveId } from './systems/abilities';
 import { Shockwave } from './systems/Shockwave';
@@ -132,7 +132,11 @@ export class GameScene {
       drag: (dx, dy) => this.rig.drag(dx, dy),
       wheel: (dy) => this.rig.zoom(dy),
       hover: this.onHover,
-      key: (code) => this.pressAbility(code === 'Space' ? 'leap' : 'roar'),
+      key: (id) => {
+        if (this.state !== 'playing') return false;
+        this.pressAbility(id);
+        return true;
+      },
     });
 
     this.lighting.follow(new THREE.Vector3());
@@ -622,7 +626,7 @@ export class GameScene {
     if (target.kind !== 'building') this.particles.explosion(target.position, target.airborne ? 1.2 : 1);
     if (target.kind !== 'building') {
       this.kills++;
-      this.monster.hp = Math.min(this.monster.maxHp, this.monster.hp + this.passives.frenzyHeal());
+      this.monster.hp = healOnKill(this.monster.hp, this.monster.maxHp, this.passives.frenzyHeal(), this.monster.alive);
     }
     if (!this.monster.alive) return;
     this.progression.addExp(exp);

@@ -151,6 +151,8 @@ export class GrappleTrucks implements EnemySystem {
         continue;
       }
       t.t += dt;
+      // A monster mid-Leap or dead can't be hooked: hold anchoring/cooldown trucks, and drop a harpoon in flight.
+      const hookable = ctx.monster.alive && !ctx.monster.airborne;
       const here = { x: t.position.x, z: t.position.z };
       const d = dist2(here, goal);
       if (t.phase !== 'driving') t.heading = Math.atan2(goal.x - here.x, goal.z - here.z);
@@ -181,14 +183,16 @@ export class GrappleTrucks implements EnemySystem {
           break;
         }
         case 'anchoring':
-          if (t.t >= T.anchorTime) {
+          if (t.t >= T.anchorTime && hookable) {
             t.phase = 'firing';
             t.t = 0;
             ctx.particles.emit('fire', _p.copy(t.position).setY(S), 4, 0.4);
           }
           break;
         case 'firing':
-          if (t.t >= T.harpoonTime) {
+          if (!hookable) {
+            this.release(t);
+          } else if (t.t >= T.harpoonTime) {
             t.phase = 'tethered';
             t.t = 0;
             t.tether = { x: t.position.x, z: t.position.z, length: d + T.slack };
@@ -197,10 +201,15 @@ export class GrappleTrucks implements EnemySystem {
           }
           break;
         case 'tethered':
-          if (t.t >= t.tetherTtl || !ctx.monster.alive) this.release(t);
+          if (!ctx.monster.alive) {
+            this.release(t);
+          } else if (t.t >= t.tetherTtl) {
+            this.release(t);
+            if (ctx.thrashDamage > 0) t.applyDamage(ctx.thrashDamage);
+          }
           break;
         case 'cooldown':
-          if (t.t >= T.cooldown) {
+          if (t.t >= T.cooldown && hookable) {
             t.phase = d <= T.range ? 'firing' : 'driving';
             t.t = 0;
           }
