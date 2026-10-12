@@ -36,6 +36,9 @@ export const CONFIG = {
     dust: 0xcbb592,
     debris: 0x8a8378,
     chevron: 0xff3b2f,
+    blimp: 0xe6e2da,
+    blimpTrim: 0xd8322a,
+    blimpTrimDark: 0x5a1612,
   },
   fog: { near: 1200, far: 4600 },
   camera: {
@@ -105,6 +108,7 @@ export const CONFIG = {
     spikeSpreadRad: 0.12,
     deathTime: 2.2,
   },
+  blimp: { hp: 180, speed: 40, size: 170, spawnDist: 2200, altitude: 520, headHeight: 330, triggerDist: 190, damage: 120, exp: 25 },
   tank: { hp: 30, speed: 45, range: 950, damage: 6, fireCooldown: 3.2, shellFlightTime: 1.6, shellArc: 140, exp: 5, size: 40 },
   jet: { hp: 60, speed: 260, altitude: 430 * MONSTER_SCALE, turnRate: 0.9, damage: 10, rocketsPerSalvo: 3, salvoMin: 700, salvoMax: 1600, rocketSpeed: 650, exp: 15, size: 70, hitRadius: 90, exitDistance: 2600 },
   director: {
