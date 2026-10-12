@@ -2,29 +2,60 @@ import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import { CONFIG } from '../config';
 import { CUT_TIME } from './timeline';
-import { earthDistance, earthSpin, heatAt, heatColor, podAltitude, starDirections } from './spaceMath';
+import { ENTRY_TIME, earthCenter, heatAt, heatColor, podAltitude, spaceCamera, starDirections } from './spaceMath';
 import { mulberry32 } from '../util/rng';
 
 const SP = CONFIG.intro.space;
 const S = CONFIG.intro.starts;
 
-describe('earthDistance', () => {
-  it('closes in from far away, reaches the atmosphere at entry, then dives slowly until the cut', () => {
-    expect(earthDistance(0)).toBeCloseTo(SP.earthStart);
-    expect(earthDistance(SP.entryTime)).toBeCloseTo(SP.earthEntry);
-    expect(earthDistance(CUT_TIME)).toBeCloseTo(SP.earthEnd);
-    expect(earthDistance(CUT_TIME + 3)).toBeCloseTo(SP.earthEnd);
-    for (let t = 0.1; t <= CUT_TIME; t += 0.1) expect(earthDistance(t)).toBeLessThan(earthDistance(t - 0.1));
+describe('approach', () => {
+  it('closes from far out to just above the surface at the cut', () => {
+    expect(podAltitude(0)).toBeCloseTo(SP.gapStart);
+    expect(podAltitude(CUT_TIME)).toBeCloseTo(SP.gapEnd);
+    expect(podAltitude(CUT_TIME + 3)).toBeCloseTo(SP.gapEnd);
+  });
+  it('never slows down: the altitude shrinks by the same fraction every moment, before and after entry', () => {
+    const rate = (t: number) => Math.log(podAltitude(t - 0.05) / podAltitude(t + 0.05)) / 0.1;
+    const r0 = rate(0.5);
+    expect(r0).toBeGreaterThan(0.5);
+    for (let t = 0.5; t < CUT_TIME - 0.1; t += 0.25) expect(rate(t)).toBeCloseTo(r0, 5);
+    expect(rate(ENTRY_TIME)).toBeCloseTo(r0, 5);
+  });
+  it('places Earth so its surface is exactly that far below the pod', () => {
+    const c = new THREE.Vector3();
+    for (const t of [0, 2, ENTRY_TIME, CUT_TIME]) expect(earthCenter(t, c).length() - SP.earthRadius).toBeCloseTo(podAltitude(t), 3);
+  });
+});
+
+describe('spaceCamera', () => {
+  const pos = new THREE.Vector3();
+  const look = new THREE.Vector3();
+  const c = new THREE.Vector3();
+  const gap = (t: number, aspect = 1.6) => {
+    spaceCamera(t, aspect, pos, look);
+    return pos.distanceTo(earthCenter(t, c)) - SP.earthRadius;
+  };
+  it('keeps closing on the surface at a brisk rate right up to the cut (Earth never stops growing)', () => {
+    for (const aspect of [1.6, 0.46]) {
+      for (let t = 0.5; t <= CUT_TIME - 0.3; t += 0.1) expect(gap(t, aspect) / gap(t + 0.3, aspect)).toBeGreaterThan(1.12);
+    }
+  });
+  it('stays above the surface and behind the pod', () => {
+    for (let t = 0; t <= CUT_TIME; t += 0.25) {
+      expect(gap(t)).toBeGreaterThan(0);
+      expect(pos.z).toBeLessThan(0);
+    }
   });
 });
 
 describe('heat', () => {
   const thickness = SP.earthRadius * (SP.atmosphere - 1);
-  it('only starts burning once the pod is inside the atmosphere', () => {
-    expect(podAltitude(SP.entryTime - 0.05)).toBeGreaterThan(thickness);
-    expect(heatAt(SP.entryTime - 0.05)).toBe(0);
-    expect(heatAt(S.reentry + 0.1)).toBe(0);
-    expect(heatAt(SP.entryTime + 0.3)).toBeGreaterThan(0);
+  it('starts burning exactly when the pod enters the atmosphere', () => {
+    expect(podAltitude(ENTRY_TIME)).toBeCloseTo(thickness);
+    expect(ENTRY_TIME).toBeGreaterThan(S.reentry);
+    expect(ENTRY_TIME).toBeLessThan(CUT_TIME - 0.8);
+    expect(heatAt(ENTRY_TIME - 0.01)).toBe(0);
+    expect(heatAt(ENTRY_TIME + 0.2)).toBeGreaterThan(0);
   });
   it('is white-hot by the cut, deep in the atmosphere but still above the ground', () => {
     expect(heatAt(CUT_TIME)).toBe(1);
@@ -45,16 +76,5 @@ describe('starDirections', () => {
     expect(a).toHaveLength(50);
     for (const v of a) expect(v.length()).toBeCloseTo(1);
     expect(starDirections(50, mulberry32(1))).toEqual(a);
-  });
-});
-
-describe('earthSpin', () => {
-  it('is still out in space, then the surface speeds up and keeps sliding under the pod through entry (no pause)', () => {
-    expect(earthSpin(0)).toBe(0);
-    expect(earthSpin(SP.spinStart)).toBe(0);
-    const speed = (t: number) => (earthSpin(t + 0.01) - earthSpin(t - 0.01)) / 0.02;
-    expect(speed(SP.entryTime)).toBeCloseTo(SP.spinRate, 1);
-    expect(speed(SP.entryTime + 0.5)).toBeCloseTo(SP.spinRate, 1);
-    for (let t = SP.spinStart + 0.1; t <= CUT_TIME; t += 0.1) expect(earthSpin(t)).toBeGreaterThan(earthSpin(t - 0.1));
   });
 });

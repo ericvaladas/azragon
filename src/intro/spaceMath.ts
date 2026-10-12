@@ -5,40 +5,47 @@ import { CUT_TIME } from './timeline';
 const SP = CONFIG.intro.space;
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
 
-const easeInOut = (u: number) => (u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2);
+const R = SP.earthRadius;
+/** Exponential closing rate: the altitude shrinks by the same fraction every second. */
+const K = Math.log(SP.gapStart / SP.gapEnd) / CUT_TIME;
 
-/** Earth's distance ahead: eases in to the atmosphere by entryTime, then a slow dive to earthEnd at the cut. */
-export function earthDistance(t: number): number {
-  if (t <= SP.entryTime) return SP.earthStart + (SP.earthEntry - SP.earthStart) * easeInOut(clamp01(t / SP.entryTime));
-  return SP.earthEntry + (SP.earthEnd - SP.earthEntry) * clamp01((t - SP.entryTime) / (CUT_TIME - SP.entryTime));
-}
-
-/** Earth's centre relative to the pod (which sits at the origin, flying +Z): ahead and below. */
-export function earthCenter(t: number, out: THREE.Vector3): THREE.Vector3 {
-  const d = earthDistance(t);
-  return out.set(0, -(SP.earthDrop + d * 0.3), d);
-}
-
-const _c = new THREE.Vector3();
-/** Height of the pod above Earth's surface. */
+/** Height of the pod above Earth's surface: from gapStart down to gapEnd at the cut, never slowing visually. */
 export function podAltitude(t: number): number {
-  return earthCenter(t, _c).length() - SP.earthRadius;
+  return SP.gapStart * Math.exp(-K * Math.min(CUT_TIME, Math.max(0, t)));
+}
+
+/** When the pod crosses into the atmosphere (and starts to burn). */
+export const ENTRY_TIME = Math.log(SP.gapStart / (R * (SP.atmosphere - 1))) / K;
+
+/**
+ * Earth's centre relative to the pod (at the origin, flying +Z): `d` ahead and (earthDrop + 0.3d) below, with
+ * d solved so the centre is exactly R + altitude away.
+ */
+export function earthCenter(t: number, out: THREE.Vector3): THREE.Vector3 {
+  const c = R + podAltitude(t);
+  // |(0, -(h + 0.3d), d)| = c  →  1.09d² + 0.6hd + h² - c² = 0
+  const h = SP.earthDrop;
+  const a = 1.09;
+  const b = 0.6 * h;
+  const d = (-b + Math.sqrt(b * b - 4 * a * (h * h - c * c))) / (2 * a);
+  return out.set(0, -(h + 0.3 * d), d);
 }
 
 /**
- * How far Earth has turned under the pod (rad): still at first, then the turn speeds up linearly to spinRate
- * by entryTime and holds, so the surface keeps rushing past while the approach itself slows into the dive.
+ * Space camera (before shake): behind, above and to the side of the pod, looking ahead and down. Narrow
+ * (portrait) screens get less sideways offset so the pod stays on screen. Below zoomAlt the whole offset
+ * shrinks with the altitude, so the camera's own distance to the ground keeps falling as fast as the pod's.
  */
-export function earthSpin(t: number): number {
-  const ramp = SP.entryTime - SP.spinStart;
-  if (t <= SP.spinStart) return 0;
-  if (t <= SP.entryTime) return (SP.spinRate * (t - SP.spinStart) ** 2) / (2 * ramp);
-  return (SP.spinRate * ramp) / 2 + SP.spinRate * (t - SP.entryTime);
+export function spaceCamera(t: number, aspect: number, pos: THREE.Vector3, look: THREE.Vector3): void {
+  const L = SP.podLength;
+  const z = Math.min(1, Math.max(SP.zoomMin, podAltitude(t) / SP.zoomAlt));
+  pos.set(L * (aspect < 1 ? 0.5 : 1.2) * z, L * 0.9 * z, -L * 3.5 * z);
+  look.set(0, -L * 0.3, L * 6);
 }
 
 /** Re-entry heat 0..1: zero until the pod enters the atmosphere, white-hot at the cut. */
 export function heatAt(t: number): number {
-  return clamp01((t - SP.entryTime) / (CUT_TIME - SP.entryTime));
+  return clamp01((t - ENTRY_TIME) / (CUT_TIME - ENTRY_TIME));
 }
 
 const BLACK = new THREE.Color(0x000000);

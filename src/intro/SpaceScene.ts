@@ -5,7 +5,7 @@ import { fovForAspect } from '../systems/orbit';
 import { mulberry32 } from '../util/rng';
 import { earthTexture } from './earthTexture';
 import { PodModel } from './PodModel';
-import { earthCenter, earthSpin, heatAt, heatColor, starDirections } from './spaceMath';
+import { earthCenter, heatAt, spaceCamera, heatColor, starDirections } from './spaceMath';
 import { shakeAt } from './timeline';
 
 const SP = CONFIG.intro.space;
@@ -83,8 +83,7 @@ export class SpaceScene {
   update(t: number, dt: number): void {
     // Earth sits below the flight path (lower half of the frame) and swells as it closes in.
     earthCenter(t, this.earth.position);
-    // Negative turn about X slides the surface nearest the pod back toward the camera: the pod flies over it.
-    this.earth.rotation.set(-earthSpin(t), t * 0.04, 0);
+    this.earth.rotation.y = t * 0.04;
     this.pod.root.rotation.z = t * 0.5;
 
     const h = heatAt(t);
@@ -109,10 +108,10 @@ export class SpaceScene {
     const s = shakeAt(t);
     const amp = s * s * L * 0.12;
     // Three-quarter view from behind and above, so the seams read along the shell.
-    // Narrow (portrait) screens get less sideways offset so the pod stays on screen.
-    const side = L * (this.camera.aspect < 1 ? 0.5 : 1.2);
-    this.camera.position.set(side + Math.sin(t * 43) * amp, L * 0.9 + Math.sin(t * 61 + 1) * amp, -L * 3.5);
-    this.camera.lookAt(_look.set(0, -L * 0.3, L * 6));
+    spaceCamera(t, this.camera.aspect, this.camera.position, _look);
+    this.camera.position.x += Math.sin(t * 43) * amp;
+    this.camera.position.y += Math.sin(t * 61 + 1) * amp;
+    this.camera.lookAt(_look);
   }
 
   setAspect(aspect: number): void {

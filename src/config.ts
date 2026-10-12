@@ -240,13 +240,13 @@ export const CONFIG = {
       fireRate: 14,
     },
     /**
-     * Space scene (its own units). Earth's centre sits at (0, -(earthDrop + 0.3d), d) from the pod; d closes from
-     * earthStart to earthEntry by entryTime (the pod touches the atmosphere, rim radius × `atmosphere`), then dives
-     * slowly to earthEnd at the cut. Burning starts at entryTime.
+     * Space scene (its own units). The pod's altitude above Earth's surface shrinks exponentially from gapStart
+     * at t=0 to gapEnd at the cut, so Earth swells at a steady rate (no slow-down); it burns once inside the
+     * atmosphere (rim radius × `atmosphere`). Earth's centre sits at (0, -(earthDrop + 0.3d), d) from the pod.
      */
-    space: { earthRadius: 1000, atmosphere: 1.08, earthStart: 9000, earthEntry: 670, earthEnd: 600, entryTime: 4.2, earthDrop: 650,
-      /** The surface starts sliding under the pod at spinStart, reaching spinRate (rad/s of Earth's turn) by entry. */
-      spinStart: 2.6, spinRate: 0.45, stars: 700, podLength: 60 },
+    space: { earthRadius: 1000, atmosphere: 1.08, gapStart: 8000, gapEnd: 25, earthDrop: 650,
+      /** Below zoomAlt the camera tucks in toward the pod (down to zoomMin of its offset), so the ground keeps rushing up. */
+      zoomAlt: 100, zoomMin: 0.6, stars: 700, podLength: 20 },
   },
   readability: {
     threatKinds: ['blimp', 'sam', 'artillery', 'truck'] as readonly string[],
