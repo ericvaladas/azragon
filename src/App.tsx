@@ -10,6 +10,8 @@ import { LevelUpCards } from './ui/LevelUpCards';
 import { GameOver } from './ui/GameOver';
 import './style.css';
 
+/** Touch devices tap; desktops click or press a key. */
+const SKIP_HINT = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches ? 'Tap to skip' : 'Click or press any key to skip';
 const EMPTY_HUD: HudSnapshot = { hp: 1, maxHp: 1, exp: 0, expToNext: 1, level: 1, timeSec: 0, levelingUp: false };
 
 function applySafeArea(el: HTMLElement): void {
@@ -47,7 +49,7 @@ function App() {
     game.events.on('threats', setThreats);
     game.events.on('abilities', setAbilities);
     game.events.on('expGain', (amount) => setExpPop((p) => ({ amount, key: (p?.key ?? 0) + 1 })));
-    // The constructor already entered 'playing' before these subscriptions existed.
+    // The constructor already entered 'intro' before these subscriptions existed.
     setState(game.getState());
     try {
       RundotGameAPI.lifecycles.onPause(() => game.pause());
@@ -73,7 +75,8 @@ function App() {
       <div ref={sceneRef} className="scene-container" />
       <div ref={hudRef} className="hud">
         {state === 'playing' && <EdgeArrows arrows={threats} />}
-        {state !== 'loading' && <Hud hud={hud} expPop={expPop} />}
+        {state !== 'loading' && state !== 'intro' && <Hud hud={hud} expPop={expPop} />}
+        {state === 'intro' && <div className="skip-hint">{SKIP_HINT}</div>}
         {hud.levelingUp && <div className="level-up-banner">Level Up!</div>}
         {state === 'playing' && <AbilityButtons views={abilities} onPress={press} />}
         {state === 'levelup' && offer && (

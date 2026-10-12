@@ -3,7 +3,7 @@ import type { AbilityView } from './systems/abilities';
 
 export type ThreatArrow = { x: number; y: number; angle: number; kind: TargetKind };
 
-export type GameState = 'loading' | 'playing' | 'paused' | 'levelup' | 'dying' | 'gameover';
+export type GameState = 'loading' | 'intro' | 'playing' | 'paused' | 'levelup' | 'dying' | 'gameover';
 
 export type HudSnapshot = {
   hp: number;

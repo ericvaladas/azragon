@@ -3,14 +3,18 @@ import { CONFIG } from '../config';
 
 const LIFE = 0.6;
 
-/** Expanding ground ring for Roar. */
+/** Expanding ground ring (Roar, Venom Nova, the pod's impact). */
 export class Shockwave {
   private mesh: THREE.Mesh;
   private mat: THREE.MeshBasicMaterial;
   private t = -1;
   private radius = 1;
 
-  constructor(scene: THREE.Scene, color: number = CONFIG.palette.stinger) {
+  constructor(
+    scene: THREE.Scene,
+    color: number = CONFIG.palette.stinger,
+    private life = LIFE,
+  ) {
     this.mat = new THREE.MeshBasicMaterial({ color, transparent: true, depthWrite: false, fog: false });
     this.mesh = new THREE.Mesh(new THREE.RingGeometry(0.88, 1, 48).rotateX(-Math.PI / 2), this.mat);
     this.mesh.visible = false;
@@ -25,10 +29,15 @@ export class Shockwave {
     this.mesh.visible = true;
   }
 
+  clear(): void {
+    this.t = -1;
+    this.mesh.visible = false;
+  }
+
   update(dt: number): void {
     if (this.t < 0) return;
     this.t += dt;
-    const k = Math.min(1, this.t / LIFE);
+    const k = Math.min(1, this.t / this.life);
     this.mesh.scale.setScalar(this.radius * (0.1 + 0.9 * (1 - (1 - k) * (1 - k))));
     this.mat.opacity = 1 - k;
     if (k >= 1) {

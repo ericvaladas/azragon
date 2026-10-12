@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { abilityKey, classifyGesture, pickEnemy, canTap, pinchToWheel } from './tap';
+import { abilityKey, classifyGesture, pickEnemy, canTap, pinchToWheel, isSkipKey } from './tap';
 import { CONFIG } from '../config';
 
 describe('classifyGesture', () => {
@@ -76,5 +76,32 @@ describe('pinchToWheel', () => {
   it('is proportional to the change in finger distance', () => {
     expect(pinchToWheel(100, 160)).toBeCloseTo(-60 * CONFIG.input.pinchSensitivity);
     expect(pinchToWheel(100, 220)).toBeCloseTo(2 * pinchToWheel(100, 160));
+  });
+});
+
+describe('isSkipKey', () => {
+  const k = (key: string, mods: Partial<{ repeat: boolean; metaKey: boolean; ctrlKey: boolean; altKey: boolean }> = {}) => ({
+    key,
+    repeat: false,
+    metaKey: false,
+    ctrlKey: false,
+    altKey: false,
+    ...mods,
+  });
+  it('skips on any plain key press', () => {
+    expect(isSkipKey(k(' '))).toBe(true);
+    expect(isSkipKey(k('a'))).toBe(true);
+    expect(isSkipKey(k('Enter'))).toBe(true);
+    expect(isSkipKey(k('Escape'))).toBe(true);
+  });
+  it('ignores browser shortcuts, held-key repeats, and lone modifier keys', () => {
+    expect(isSkipKey(k('r', { metaKey: true }))).toBe(false);
+    expect(isSkipKey(k('r', { ctrlKey: true }))).toBe(false);
+    expect(isSkipKey(k('a', { altKey: true }))).toBe(false);
+    expect(isSkipKey(k('a', { repeat: true }))).toBe(false);
+    for (const m of ['Shift', 'Control', 'Alt', 'Meta', 'Tab', 'CapsLock']) expect(isSkipKey(k(m))).toBe(false);
+  });
+  it('leaves browser function keys alone (F5 reload, F11 fullscreen, F12 devtools)', () => {
+    for (const f of ['F1', 'F5', 'F11', 'F12', 'ContextMenu']) expect(isSkipKey(k(f))).toBe(false);
   });
 });

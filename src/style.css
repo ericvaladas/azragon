@@ -51,6 +51,7 @@ body {
 
 /* 3D scene — fills the app container */
 .scene-container {
+  position: relative;
   width: 100%;
   height: 100%;
   touch-action: none;
@@ -345,3 +346,27 @@ body {
   85% { opacity: 1; }
   100% { transform: translate(-50%, -12px) scale(1); opacity: 0; }
 }
+
+/* Intro: full-screen re-entry/impact wash (opacity driven per frame by IntroCinematic) and the skip hint. */
+.intro-flash {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: #fff1d6;
+  opacity: 0;
+}
+.skip-hint {
+  position: absolute;
+  left: 50%;
+  bottom: calc(28px + var(--safe-bottom, 0px));
+  transform: translateX(-50%);
+  pointer-events: none;
+  font-size: 14px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.85);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+  white-space: nowrap;
+  animation: skip-hint-blink 1.6s steps(2) infinite;
+}
+@keyframes skip-hint-blink { 50% { opacity: 0.45; } }

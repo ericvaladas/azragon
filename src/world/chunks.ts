@@ -50,9 +50,10 @@ export function generateChunk(seed: number, cx: number, cz: number): ChunkConten
     for (let j = 0; j < w.chunkBlocks; j++) {
       const bx = (cx * w.chunkBlocks + i + 0.5) * pitch + ROAD_ORIGIN;
       const bz = (cz * w.chunkBlocks + j + 0.5) * pitch + ROAD_ORIGIN;
-      if (Math.hypot(bx, bz) < w.clearRadius + pitch * 0.5) continue;
+      // The crater site is built up like anywhere else (the pod's impact flattens it), but never a park.
+      const craterSite = Math.hypot(bx, bz) < w.clearRadius + pitch * 0.5;
 
-      if (rng() < w.parkChance) {
+      if (!craterSite && rng() < w.parkChance) {
         const count = 6 + Math.floor(rng() * 5);
         for (let t = 0; t < count; t++) {
           trees.push({ x: bx + range(rng, -inner / 2, inner / 2), z: bz + range(rng, -inner / 2, inner / 2), s: range(rng, 14, 26) });
@@ -111,7 +112,8 @@ export class DestroyedLog {
   private byChunk = new Map<string, Set<number>>();
   count = 0;
 
-  mark(key: string, index: number): void {
+  /** `counted` false records rubble that doesn't count as a player kill (the crater blast). */
+  mark(key: string, index: number, counted = true): void {
     let set = this.byChunk.get(key);
     if (!set) {
       set = new Set();
@@ -119,7 +121,7 @@ export class DestroyedLog {
     }
     if (set.has(index)) return;
     set.add(index);
-    this.count++;
+    if (counted) this.count++;
   }
 
   has(key: string, index: number): boolean {
@@ -130,4 +132,16 @@ export class DestroyedLog {
     this.byChunk.clear();
     this.count = 0;
   }
+}
+
+/**
+ * Whether the pod's impact topples the building on lot (x, z), `d` metres from the impact: always inside the
+ * crater radius `r`, never past `outer`, and in between with odds falling off linearly (a fixed hash per lot,
+ * so a skipped and a played intro agree).
+ */
+export function blastTopples(x: number, z: number, d: number, r: number, outer: number): boolean {
+  if (d <= r) return true;
+  if (d >= outer) return false;
+  const h = Math.sin(x * 12.9898 + z * 78.233) * 43758.5453;
+  return h - Math.floor(h) < 1 - (d - r) / (outer - r);
 }

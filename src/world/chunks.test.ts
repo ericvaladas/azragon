@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { CHUNK_SIZE, DestroyedLog, chunkKey, chunksInRadius, generateChunk, planStreaming } from './chunks';
+import { CHUNK_SIZE, DestroyedLog, blastTopples, chunkKey, chunksInRadius, generateChunk, planStreaming } from './chunks';
 import { CONFIG } from '../config';
 
 const W = CONFIG.world;
@@ -23,12 +23,15 @@ describe('generateChunk', () => {
     }
   });
 
-  it('keeps the crater clearing at the origin empty', () => {
+  it('builds on the crater site (the impact flattens it) but plants no parks there', () => {
+    let inside = 0;
     for (const r of chunksInRadius(0, 0, W.clearRadius + CHUNK_SIZE)) {
-      for (const b of generateChunk(1337, r.cx, r.cz).buildings) {
-        expect(Math.hypot(b.x, b.z)).toBeGreaterThan(W.clearRadius);
-      }
+      const c = generateChunk(1337, r.cx, r.cz);
+      inside += c.buildings.filter((b) => Math.hypot(b.x, b.z) < W.clearRadius).length;
+      // Park blocks start one half-block outside the crater; trees scatter at most ~0.6 blocks from their block centre.
+      for (const t of c.trees) expect(Math.hypot(t.x, t.z)).toBeGreaterThan(W.clearRadius - W.blockSize * 0.25);
     }
+    expect(inside).toBeGreaterThan(4);
   });
 
   it('fills chunks far from the origin densely', () => {
@@ -72,6 +75,17 @@ describe('planStreaming', () => {
 });
 
 describe('DestroyedLog', () => {
+  it('remembers uncounted marks (the crater blast) without adding to the count', () => {
+    const log = new DestroyedLog();
+    log.mark('0,0', 3, false);
+    expect(log.has('0,0', 3)).toBe(true);
+    expect(log.count).toBe(0);
+    log.mark('0,0', 3);
+    expect(log.count).toBe(0);
+    log.mark('0,0', 4);
+    expect(log.count).toBe(1);
+  });
+
   it('remembers destroyed buildings per chunk across unload/reload, and clears on reset', () => {
     const log = new DestroyedLog();
     log.mark('3,4', 7);
@@ -84,5 +98,20 @@ describe('DestroyedLog', () => {
     log.clear();
     expect(log.has('3,4', 7)).toBe(false);
     expect(log.count).toBe(0);
+  });
+});
+
+describe('blastTopples', () => {
+  const lots = Array.from({ length: 400 }, (_, i) => ({ x: (i % 20) * 37.3 - 300, z: Math.floor(i / 20) * 41.7 - 400 }));
+  const share = (d: number) => lots.filter((l) => blastTopples(l.x, l.z, d, 500, 1000)).length / lots.length;
+  it('flattens everything inside the crater and nothing past the outer blast radius', () => {
+    expect(share(400)).toBe(1);
+    expect(share(1001)).toBe(0);
+  });
+  it('topples fewer buildings the farther they are from the crater, deterministically per lot', () => {
+    expect(share(600)).toBeGreaterThan(share(900));
+    expect(share(750)).toBeGreaterThan(0.3);
+    expect(share(750)).toBeLessThan(0.7);
+    for (const l of lots) expect(blastTopples(l.x, l.z, 750, 500, 1000)).toBe(blastTopples(l.x, l.z, 750, 500, 1000));
   });
 });
