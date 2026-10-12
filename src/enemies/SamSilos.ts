@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { CONFIG } from '../config';
 import type { Target } from '../combat';
-import { faceted, toonMat } from '../render/toon';
+import { faceted, painted, toonMat } from '../render/toon';
 import { ROAD_ORIGIN } from '../world/chunks';
 import { snapToRoad } from '../world/roads';
 import { steerToward } from './steer';
@@ -84,10 +84,30 @@ export class SamSilos implements EnemySystem {
 
   constructor(scene: THREE.Scene) {
     const P = CONFIG.palette;
-    this.hatch = new THREE.InstancedMesh(faceted(new THREE.CylinderGeometry(0.6, 0.6, 0.04, 8)), toonMat(P.samHatch), MAX);
-    const tubes = [-0.18, 0.18].flatMap((x) => [-0.18, 0.18].map((z) => faceted(new THREE.CylinderGeometry(0.11, 0.11, 0.7, 6)).translate(x, 0.75, z)));
-    this.launcher = new THREE.InstancedMesh(mergeGeometries([faceted(new THREE.BoxGeometry(0.8, 0.5, 0.8)).translate(0, 0.25, 0), ...tubes])!, toonMat(P.samLauncher), MAX);
-    this.missileMesh = new THREE.InstancedMesh(faceted(new THREE.ConeGeometry(0.5, 1, 5)), new THREE.MeshBasicMaterial({ color: P.missile }), MAX_MISSILES);
+    // Dark hatch inside a yellow hazard ring.
+    const hatchGeo = mergeGeometries([
+      painted(faceted(new THREE.CylinderGeometry(0.6, 0.6, 0.04, 8)), P.samHatch),
+      painted(faceted(new THREE.CylinderGeometry(0.72, 0.72, 0.03, 8)), P.samHazard),
+    ])!;
+    this.hatch = new THREE.InstancedMesh(hatchGeo, toonMat(0xffffff, { vertexColors: true }), MAX);
+    // White launcher body with a hazard-striped band, red missile tubes with white caps.
+    const stripes = [0, 1, 2, 3].map((k) =>
+      painted(faceted(new THREE.BoxGeometry(0.21, 0.1, 0.84)).translate(-0.3 + k * 0.2, 0.42, 0), k % 2 ? P.samHazardDark : P.samHazard),
+    );
+    const tubes = [-0.18, 0.18].flatMap((x) =>
+      [-0.18, 0.18].flatMap((z) => [
+        painted(faceted(new THREE.CylinderGeometry(0.11, 0.11, 0.6, 6)).translate(x, 0.7, z), P.samTube),
+        painted(faceted(new THREE.CylinderGeometry(0.12, 0.12, 0.08, 6)).translate(x, 1.04, z), P.samLauncher),
+      ]),
+    );
+    const launcherGeo = mergeGeometries([painted(faceted(new THREE.BoxGeometry(0.8, 0.5, 0.8)).translate(0, 0.25, 0), P.samLauncher), ...stripes, ...tubes])!;
+    this.launcher = new THREE.InstancedMesh(launcherGeo, toonMat(0xffffff, { vertexColors: true }), MAX);
+    // White missile body with a red nose (the cone's tip is +Y, the flight direction).
+    const missileGeo = mergeGeometries([
+      painted(faceted(new THREE.CylinderGeometry(0.3, 0.3, 0.7, 5)).translate(0, -0.15, 0), P.missile),
+      painted(faceted(new THREE.ConeGeometry(0.3, 0.3, 5)).translate(0, 0.35, 0), P.samTube),
+    ])!;
+    this.missileMesh = new THREE.InstancedMesh(missileGeo, new THREE.MeshBasicMaterial({ color: 0xffffff, vertexColors: true }), MAX_MISSILES);
     for (const m of [this.hatch, this.launcher, this.missileMesh]) {
       m.frustumCulled = false;
       m.count = 0;
