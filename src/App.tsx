@@ -10,7 +10,7 @@ import { LevelUpCards } from './ui/LevelUpCards';
 import { GameOver } from './ui/GameOver';
 import './style.css';
 
-const EMPTY_HUD: HudSnapshot = { hp: 1, maxHp: 1, exp: 0, expToNext: 1, level: 1, timeSec: 0, tethered: false };
+const EMPTY_HUD: HudSnapshot = { hp: 1, maxHp: 1, exp: 0, expToNext: 1, level: 1, timeSec: 0, tethered: false, levelingUp: false };
 
 function applySafeArea(el: HTMLElement): void {
   try {
@@ -74,6 +74,7 @@ function App() {
       <div ref={hudRef} className="hud">
         {state === 'playing' && <EdgeArrows arrows={threats} />}
         {state !== 'loading' && <Hud hud={hud} expPop={expPop} />}
+        {hud.levelingUp && <div className="level-up-banner">Level Up!</div>}
         {state === 'playing' && <AbilityButtons views={abilities} onPress={press} />}
         {state === 'levelup' && offer && (
           <LevelUpCards key={offer.seq} offers={offer.offers} onPick={(id) => pick(id, offer.seq)} />

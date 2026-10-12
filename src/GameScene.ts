@@ -36,6 +36,8 @@ import { healOnKill, regen } from './monster/vitals';
 import { DebugOverlay } from './systems/DebugOverlay';
 import { Abilities, type ActiveId } from './systems/abilities';
 import { Shockwave } from './systems/Shockwave';
+import { LevelUpMoment } from './systems/levelUpMoment';
+import { LevelUpAura } from './systems/LevelUpAura';
 import { leapTarget } from './monster/leap';
 import { footTargets, strikePlan } from './monster/strike';
 import { Passives } from './systems/Passives';
@@ -83,6 +85,8 @@ export class GameScene {
   private chevrons: Chevrons;
   private abilities = new Abilities();
   private shockwave: Shockwave;
+  private moment = new LevelUpMoment();
+  private aura: LevelUpAura;
   private passives: Passives;
   private acid: AcidPools;
   private brood: BroodDrones;
@@ -99,6 +103,7 @@ export class GameScene {
     this.particles = new Particles(this.scene);
     this.chevrons = new Chevrons(this.scene);
     this.shockwave = new Shockwave(this.scene);
+    this.aura = new LevelUpAura(this.scene);
     this.passives = new Passives(() => this.progression.ranks);
     this.acid = new AcidPools(this.scene);
     this.brood = new BroodDrones(this.scene);
@@ -192,12 +197,25 @@ export class GameScene {
     this.runTime = 0;
     this.openingDone = false;
     this.abilities.reset();
+    this.moment.reset();
+    this.aura.clear();
+    this.monster.glow = 0;
     this.passives.reset();
     this.acid.clear();
     this.brood.clear();
     this.markers.setAim(null, 0);
     this.dyingT = 0;
     this.setState('playing');
+    this.emitHud();
+  }
+
+  /** EXP bar fills, full heal, gold aura, slow motion; the cards follow when the moment ends. */
+  private startLevelUpMoment(): void {
+    if (this.moment.active) return;
+    this.moment.start();
+    this.aura.start();
+    this.monster.hp = this.monster.maxHp;
+    this.rig.addTrauma(0.35);
     this.emitHud();
   }
 
@@ -237,8 +255,9 @@ export class GameScene {
     this.events.emit('hud', {
       hp: Math.ceil(m.hp),
       maxHp: m.maxHp,
-      exp: this.progression.exp,
-      expToNext: expToNext(this.progression.level),
+      exp: this.moment.active ? 1 : this.progression.exp,
+      expToNext: this.moment.active ? 1 : expToNext(this.progression.level),
+      levelingUp: this.moment.active,
       level: this.progression.level,
       timeSec: Math.floor(this.runTime),
       tethered: this.enemies.get<GrappleTrucks>('truck').tethered(),
@@ -278,7 +297,9 @@ export class GameScene {
   private update = () => {
     this.animationFrameId = requestAnimationFrame(this.update);
     const raw = this.clock.getDelta();
-    const dt = clampDelta(raw);
+    const realDt = clampDelta(raw);
+    // World time runs in slow motion during the level-up moment; the aura and moment use real time.
+    const dt = realDt * this.moment.timeScale();
     const frozen = this.state === 'levelup' || this.state === 'paused' || this.state === 'loading';
 
     if (!frozen) {
@@ -316,6 +337,7 @@ export class GameScene {
       this.monster.animate(dt, this.elapsed);
       this.particles.update(dt);
       this.shockwave.update(dt);
+      if (this.moment.update(realDt) && this.state === 'playing' && this.progression.pendingLevels > 0) this.enterLevelUp();
       const dm = this.progression.stats.damageMult;
       this.acid.update(dt, this.enemyTargets(), dm);
       this.brood.update(dt, this.enemyTargets(), dm);
@@ -330,6 +352,12 @@ export class GameScene {
       }
     }
 
+    // Purely visual: the aura keeps playing behind the level-up cards.
+    if (this.state === 'playing' || this.state === 'levelup') {
+      this.aura.update(realDt, this.monster.position, this.particles);
+      this.monster.glow = this.aura.glow();
+      if (frozen) this.monster.animate(0, this.elapsed);
+    }
     this.rig.update(frozen ? 0 : dt, this.monster.position);
     this.chevrons.update(this.enemyTargets(), this.camera, this.elapsed);
     this.lighting.follow(this.monster.position);
@@ -645,7 +673,7 @@ export class GameScene {
     if (!this.monster.alive) return;
     this.progression.addExp(exp);
     this.events.emit('expGain', exp);
-    if (this.progression.pendingLevels > 0 && this.state === 'playing') this.enterLevelUp();
+    if (this.progression.pendingLevels > 0 && this.state === 'playing') this.startLevelUpMoment();
   };
 
   dispose(): void {

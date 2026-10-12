@@ -13,6 +13,8 @@ export type HudSnapshot = {
   level: number;
   timeSec: number;
   tethered: boolean;
+  /** True during the level-up moment (EXP bar shown full, banner visible). */
+  levelingUp: boolean;
 };
 
 export type UpgradeOffer = { id: string; title: string; desc: string; icon: string };

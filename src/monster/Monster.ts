@@ -31,6 +31,8 @@ export class Monster {
   alive = true;
   onLeapLand: (p: THREE.Vector3) => void = () => {};
   crouch = false;
+  /** Gold level-up glow, 0..1; the hit flash takes priority. */
+  glow = 0;
   private leapT = -1;
   private leapFrom = { x: 0, z: 0 };
   private leapTo = { x: 0, z: 0 };
@@ -176,8 +178,10 @@ export class Monster {
     this.model.updateTail(time);
 
     if (this.flashT > 0) this.flashT -= dt;
-    const e = this.flashT > 0 ? 0xffffff : 0x000000;
-    for (const m of this.model.materials) m.emissive.setHex(e);
+    for (const m of this.model.materials) {
+      if (this.flashT > 0) m.emissive.setHex(0xffffff);
+      else m.emissive.setHex(CONFIG.levelUp.color).multiplyScalar(this.glow);
+    }
   }
 
   private lastCycle = 0;

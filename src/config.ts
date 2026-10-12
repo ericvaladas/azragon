@@ -182,5 +182,7 @@ export const CONFIG = {
     arrowMarginPx: 28,
     chevronMax: 80,
   },
+  /** Level-up moment: slow-motion beat with the gold aura before the upgrade cards appear. */
+  levelUp: { momentTime: 1.2, timeScale: 0.35, auraTime: 1.6, auraRadius: 230, auraHeight: 760, color: 0xffd23f },
   hudHz: 10,
 } as const;

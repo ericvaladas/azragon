@@ -16,7 +16,7 @@ export function Hud({ hud, expPop }: { hud: HudSnapshot; expPop: { amount: numbe
             <div className="bar-fill" style={{ transform: `scaleX(${hpPct})` }} />
             <span className="bar-label">{hud.hp} / {hud.maxHp}</span>
           </div>
-          <div className="bar bar-exp">
+          <div className={`bar bar-exp${hud.levelingUp ? ' full' : ''}`}>
             <div className="bar-fill" style={{ transform: `scaleX(${expPct})` }} />
           </div>
         </div>
