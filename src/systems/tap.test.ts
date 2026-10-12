@@ -101,4 +101,7 @@ describe('isSkipKey', () => {
     expect(isSkipKey(k('a', { repeat: true }))).toBe(false);
     for (const m of ['Shift', 'Control', 'Alt', 'Meta', 'Tab', 'CapsLock']) expect(isSkipKey(k(m))).toBe(false);
   });
+  it('leaves browser function keys alone (F5 reload, F11 fullscreen, F12 devtools)', () => {
+    for (const f of ['F1', 'F5', 'F11', 'F12', 'ContextMenu']) expect(isSkipKey(k(f))).toBe(false);
+  });
 });

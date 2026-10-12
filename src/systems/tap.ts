@@ -44,9 +44,11 @@ export function pinchToWheel(prevDist: number, curDist: number): number {
   return (prevDist - curDist) * CONFIG.input.pinchSensitivity;
 }
 
-const NOT_SKIP = new Set(['Shift', 'Control', 'Alt', 'Meta', 'Tab', 'CapsLock']);
+const NOT_SKIP = new Set(['Shift', 'Control', 'Alt', 'Meta', 'Tab', 'CapsLock', 'ContextMenu']);
+/** Function keys belong to the browser (F5 reload, F11 fullscreen, F12 devtools). */
+const FUNCTION_KEY = /^F\d{1,2}$/;
 
-/** Any plain key press skips the intro; browser shortcuts (Cmd+R…), repeats, and lone modifiers don't. */
+/** Any plain key press skips the intro; browser shortcuts (Cmd+R…), repeats, lone modifiers, and function keys don't. */
 export function isSkipKey(e: { key: string; repeat: boolean; metaKey: boolean; ctrlKey: boolean; altKey: boolean }): boolean {
-  return !e.repeat && !e.metaKey && !e.ctrlKey && !e.altKey && !NOT_SKIP.has(e.key);
+  return !e.repeat && !e.metaKey && !e.ctrlKey && !e.altKey && !NOT_SKIP.has(e.key) && !FUNCTION_KEY.test(e.key);
 }
