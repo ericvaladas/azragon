@@ -37,6 +37,9 @@ import { DebugOverlay } from './systems/DebugOverlay';
 import { Abilities, type ActiveId } from './systems/abilities';
 import { Shockwave } from './systems/Shockwave';
 import { leapTarget } from './monster/leap';
+import { Passives } from './systems/Passives';
+import { AcidPools } from './systems/AcidPools';
+import { BroodDrones } from './systems/BroodDrones';
 import { decide, nearestInRange, type BrainOrder, type BrainTarget } from './monster/brain';
 
 type Order = { kind: 'move'; to: Vec2 } | { kind: 'attack'; target: Target } | null;
@@ -79,6 +82,9 @@ export class GameScene {
   private chevrons: Chevrons;
   private abilities = new Abilities();
   private shockwave: Shockwave;
+  private passives: Passives;
+  private acid: AcidPools;
+  private brood: BroodDrones;
 
   constructor(private container: HTMLDivElement) {
     this.pixel = new PixelRenderer(container);
@@ -92,6 +98,9 @@ export class GameScene {
     this.particles = new Particles(this.scene);
     this.chevrons = new Chevrons(this.scene);
     this.shockwave = new Shockwave(this.scene);
+    this.passives = new Passives(() => this.progression.ranks);
+    this.acid = new AcidPools(this.scene);
+    this.brood = new BroodDrones(this.scene);
     this.projectiles = new Projectiles(this.scene);
     this.projectiles.onTrail = (p) => this.particles.emit('smoke', p, 1, 0.2);
     this.projectiles.onHit = this.onProjectileHit;
@@ -113,6 +122,8 @@ export class GameScene {
     this.monster.onFootLand = (p) => {
       this.particles.ring('dust', p, 60, 7);
       this.rig.addTrauma(0.06);
+      const pool = this.passives.acidPool();
+      if (pool && this.state === 'playing') this.acid.add(p, pool.radius, pool.life);
     };
     this.monster.onMeleeImpact = (p) => this.meleeImpact(p);
     this.monster.onLeapLand = (p) => this.leapLand(p);
@@ -175,6 +186,9 @@ export class GameScene {
     this.runTime = 0;
     this.openingDone = false;
     this.abilities.reset();
+    this.passives.reset();
+    this.acid.clear();
+    this.brood.clear();
     this.markers.setAim(null, 0);
     this.dyingT = 0;
     this.setState('playing');
@@ -266,6 +280,9 @@ export class GameScene {
       if (this.state === 'playing') {
         this.runTime += dt;
         this.abilities.tick(dt);
+        const fire = this.passives.update(dt);
+        if (fire.storm > 0) this.spikeStorm(fire.storm);
+        if (fire.brood > 0) this.brood.spawn(fire.brood, this.monster.model.stingerTip.getWorldPosition(new THREE.Vector3()));
         if (!this.openingDone && this.runTime >= CONFIG.opening.time) {
           this.openingDone = true;
           const c = { x: this.monster.position.x, z: this.monster.position.z };
@@ -293,6 +310,9 @@ export class GameScene {
       this.monster.animate(dt, this.elapsed);
       this.particles.update(dt);
       this.shockwave.update(dt);
+      const dm = this.progression.stats.damageMult;
+      this.acid.update(dt, this.enemyTargets(), dm);
+      this.brood.update(dt, this.enemyTargets(), dm);
       this.markers.update(dt);
 
       this.hudT -= dt;
@@ -372,6 +392,21 @@ export class GameScene {
       this.rig.addTrauma(0.7);
     }
 
+    /** Spike Storm: one homing spike at each of the n nearest enemies in range (repeating if fewer). */
+    private spikeStorm(n: number): void {
+      const m = this.monster;
+      const inRange = this.enemyTargets()
+        .filter((t) => t.position.distanceTo(m.position) <= CONFIG.monster.spikeRange)
+        .sort((a, b) => a.position.distanceToSquared(m.position) - b.position.distanceToSquared(m.position));
+      if (inRange.length === 0) return;
+      const from = m.model.stingerTip.getWorldPosition(new THREE.Vector3());
+      const dmg = CONFIG.monster.spikeDamage * this.progression.stats.damageMult;
+      for (let i = 0; i < n; i++) {
+        this.projectiles.fireSpike(from, inRange[i % inRange.length]!, dmg, (i - (n - 1) / 2) * 0.25);
+      }
+      this.particles.emit('spark', from, 10, 1.5);
+    }
+
   /** Live targetable enemies (cached per frame by the registry). */
   enemyTargets(): Target[] {
     return this.enemies.targets();
@@ -413,16 +448,16 @@ export class GameScene {
     };
   }
 
-  /** Thrash hooks; Task 10 returns real values. */
+  /** Thrash: tether duration multiplier and snap damage. */
   private passiveTetherMult(): number {
-    return 1;
+    return this.passives.tetherMult();
   }
   private passiveThrashDamage(): number {
-    return 0;
+    return this.passives.thrashDamage();
   }
-  /** Chitin Deflection hook; Task 10 returns the real chance. */
+  /** Chitin Deflection chance. */
   private deflectChance(): number {
-    return 0;
+    return this.passives.deflectChance();
   }
 
   /** The only way the monster takes damage. */
@@ -585,7 +620,10 @@ export class GameScene {
 
   private onTargetDestroyed = (target: Target, exp: number): void => {
     if (target.kind !== 'building') this.particles.explosion(target.position, target.airborne ? 1.2 : 1);
-    if (target.kind !== 'building') this.kills++;
+    if (target.kind !== 'building') {
+      this.kills++;
+      this.monster.hp = Math.min(this.monster.maxHp, this.monster.hp + this.passives.frenzyHeal());
+    }
     if (!this.monster.alive) return;
     this.progression.addExp(exp);
     this.events.emit('expGain', exp);

@@ -1,0 +1,48 @@
+import { describe, it, expect } from 'vitest';
+import { Passives } from './Passives';
+import type { AbilityId } from './Progression';
+import { CONFIG } from '../config';
+
+const P = CONFIG.passives;
+const ranks = (r: Partial<Record<AbilityId, number>>) => () => ({ acid: 0, storm: 0, chitin: 0, frenzy: 0, brood: 0, thrash: 0, ...r });
+
+describe('Passives', () => {
+  it('has no effect at rank 0', () => {
+    const p = new Passives(ranks({}));
+    expect(p.tetherMult()).toBe(1);
+    expect(p.thrashDamage()).toBe(0);
+    expect(p.deflectChance()).toBe(0);
+    expect(p.frenzyHeal()).toBe(0);
+    expect(p.acidPool()).toBeNull();
+    expect(p.update(100)).toEqual({ storm: 0, brood: 0 });
+  });
+
+  it('scales simple passives by rank', () => {
+    const p = new Passives(ranks({ chitin: 3, frenzy: 2, thrash: 2, acid: 3 }));
+    expect(p.deflectChance()).toBeCloseTo(0.45);
+    expect(p.frenzyHeal()).toBe(12);
+    expect(p.tetherMult()).toBe(P.thrash.tetherMult[2]);
+    expect(p.thrashDamage()).toBe(P.thrash.damage);
+    expect(p.acidPool()).toEqual({ radius: P.acid.radius * (1 + 2 * P.acid.radiusPerRank), life: P.acid.life + 2 * P.acid.lifePerRank });
+  });
+
+  it('fires Spike Storm on its interval with rank-scaled spike counts', () => {
+    const p = new Passives(ranks({ storm: 2 }));
+    const interval = P.storm.interval - P.storm.intervalStep;
+    expect(p.update(interval - 0.1).storm).toBe(0);
+    expect(p.update(0.2).storm).toBe(P.storm.spikes + P.storm.extraSpikes);
+    expect(p.update(interval - 0.3).storm).toBe(0);
+  });
+
+  it('releases Brood Swarm drones on its interval', () => {
+    const p = new Passives(ranks({ brood: 1 }));
+    expect(p.update(P.brood.interval + 0.01).brood).toBe(P.brood.drones);
+  });
+
+  it('reset restarts timers', () => {
+    const p = new Passives(ranks({ storm: 1 }));
+    p.update(P.storm.interval - 0.5);
+    p.reset();
+    expect(p.update(1).storm).toBe(0);
+  });
+});
