@@ -35,6 +35,7 @@ export const CONFIG = {
     smoke: 0x4d4a48,
     dust: 0xcbb592,
     debris: 0x8a8378,
+    chevron: 0xff3b2f,
   },
   fog: { near: 1200, far: 4600 },
   camera: {
@@ -126,5 +127,11 @@ export const CONFIG = {
   progression: { expBase: 20, expExponent: 1.55, offerCount: 3 },
   /** One-off wave at the start of every run, outside the spawn budget. */
   opening: { time: 5, count: 8, radius: 1200 },
+  readability: {
+    threatKinds: ['blimp', 'sam', 'artillery', 'truck'] as readonly string[],
+    maxArrows: 8,
+    arrowMarginPx: 28,
+    chevronMax: 80,
+  },
   hudHz: 10,
 } as const;

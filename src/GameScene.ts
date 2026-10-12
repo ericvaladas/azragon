@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { CONFIG } from './config';
-import { GameEventEmitter, type GameState } from './GameEvents';
+import { GameEventEmitter, type GameState, type ThreatArrow } from './GameEvents';
+import { Chevrons } from './systems/Chevrons';
+import { edgeArrow } from './systems/edgeArrows';
 import { Lighting } from './render/Lighting';
 import { PixelRenderer } from './render/PixelRenderer';
 import { createSky } from './render/Sky';
@@ -65,6 +67,7 @@ export class GameScene {
   private hudT = 0;
   private stateBeforePause: GameState = 'playing';
   private debug: DebugOverlay | null = null;
+  private chevrons: Chevrons;
 
   constructor(private container: HTMLDivElement) {
     this.pixel = new PixelRenderer(container);
@@ -76,6 +79,7 @@ export class GameScene {
     this.rig = new CameraRig(this.camera);
     this.markers = new Markers(this.scene);
     this.particles = new Particles(this.scene);
+    this.chevrons = new Chevrons(this.scene);
     this.projectiles = new Projectiles(this.scene);
     this.projectiles.onTrail = (p) => this.particles.emit('smoke', p, 1, 0.2);
     this.projectiles.onHit = this.onProjectileHit;
@@ -166,6 +170,26 @@ export class GameScene {
     this.events.emit('levelUpOffer', { seq: this.progression.offerSeq, offers });
   }
 
+    private emitThreats(): void {
+      const el = this.pixel.domElement;
+      const w = el.clientWidth;
+      const h = el.clientHeight;
+      const kinds = CONFIG.readability.threatKinds;
+      const m = this.monster.position;
+      const list = this.enemyTargets()
+        .filter((t) => kinds.includes(t.kind))
+        .sort((a, b) => a.position.distanceToSquared(m) - b.position.distanceToSquared(m))
+        .slice(0, CONFIG.readability.maxArrows);
+      const out: ThreatArrow[] = [];
+      for (const t of list) {
+        this.tmpV.copy(t.position).project(this.camera);
+        const behind = this.tmpV.z > 1;
+        const a = edgeArrow(this.tmpV.x, this.tmpV.y, behind, w, h, CONFIG.readability.arrowMarginPx);
+        if (a) out.push({ ...a, kind: t.kind });
+      }
+      this.events.emit('threats', out);
+    }
+
   private emitHud(): void {
     const m = this.monster;
     this.events.emit('hud', {
@@ -245,10 +269,12 @@ export class GameScene {
       if (this.hudT <= 0) {
         this.hudT = 1 / CONFIG.hudHz;
         this.emitHud();
+        this.emitThreats();
       }
     }
 
     this.rig.update(frozen ? 0 : dt, this.monster.position);
+    this.chevrons.update(this.enemyTargets(), this.camera, this.elapsed);
     this.lighting.follow(this.monster.position);
     this.lighting.followCamera(this.camera);
     this.pixel.render(this.scene, this.camera);

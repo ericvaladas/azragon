@@ -280,3 +280,13 @@ body {
   cursor: pointer;
 }
 .btn-primary:active { transform: scale(0.95); }
+
+.edge-arrows { position: absolute; inset: 0; pointer-events: none; }
+.edge-arrow { position: absolute; left: 0; top: 0; width: 0; height: 0; transition: transform 100ms linear; }
+.edge-arrow-head {
+  position: absolute; left: -9px; top: -9px; width: 18px; height: 18px;
+  clip-path: polygon(100% 50%, 0 0, 25% 50%, 0 100%);
+  background: var(--color-danger, #ff3b2f);
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.8));
+}
+.edge-arrow-icon { position: absolute; left: -10px; top: 10px; font-size: 14px; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9); }

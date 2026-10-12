@@ -1,7 +1,8 @@
 import { useRef, useState, useCallback } from 'react';
 import RundotGameAPI from '@series-inc/rundot-game-sdk/api';
 import { GameScene } from './GameScene';
-import type { GameState, HudSnapshot, RunStats, UpgradeOffer } from './GameEvents';
+import type { GameState, HudSnapshot, RunStats, ThreatArrow, UpgradeOffer } from './GameEvents';
+import { EdgeArrows } from './ui/EdgeArrows';
 import { Hud } from './ui/Hud';
 import { LevelUpCards } from './ui/LevelUpCards';
 import { GameOver } from './ui/GameOver';
@@ -27,6 +28,7 @@ function App() {
   const [hud, setHud] = useState<HudSnapshot>(EMPTY_HUD);
   const [offer, setOffer] = useState<{ seq: number; offers: UpgradeOffer[] } | null>(null);
   const [stats, setStats] = useState<RunStats | null>(null);
+  const [threats, setThreats] = useState<ThreatArrow[]>([]);
   const [expPop, setExpPop] = useState<{ amount: number; key: number } | null>(null);
 
   const sceneRef = useCallback((container: HTMLDivElement | null) => {
@@ -39,6 +41,7 @@ function App() {
     game.events.on('hud', setHud);
     game.events.on('levelUpOffer', setOffer);
     game.events.on('gameOver', setStats);
+    game.events.on('threats', setThreats);
     game.events.on('expGain', (amount) => setExpPop((p) => ({ amount, key: (p?.key ?? 0) + 1 })));
     // The constructor already entered 'playing' before these subscriptions existed.
     setState(game.getState());
@@ -64,6 +67,7 @@ function App() {
     <div className="app-container">
       <div ref={sceneRef} className="scene-container" />
       <div ref={hudRef} className="hud">
+        {state === 'playing' && <EdgeArrows arrows={threats} />}
         {state !== 'loading' && <Hud hud={hud} expPop={expPop} />}
         {state === 'levelup' && offer && (
           <LevelUpCards key={offer.seq} offers={offer.offers} onPick={(id) => pick(id, offer.seq)} />

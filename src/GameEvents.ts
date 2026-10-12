@@ -1,3 +1,7 @@
+import type { TargetKind } from './combat';
+
+export type ThreatArrow = { x: number; y: number; angle: number; kind: TargetKind };
+
 export type GameState = 'loading' | 'playing' | 'paused' | 'levelup' | 'dying' | 'gameover';
 
 export type HudSnapshot = {
@@ -19,6 +23,7 @@ export type GameEventMap = {
   expGain: number;
   levelUpOffer: { seq: number; offers: UpgradeOffer[] };
   gameOver: RunStats;
+  threats: ThreatArrow[];
 };
 
 type Handler<T> = (data: T) => void;
