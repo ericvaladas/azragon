@@ -23,7 +23,6 @@ import { Progression, expToNext } from './systems/Progression';
 import { regen } from './monster/vitals';
 import { DebugOverlay } from './systems/DebugOverlay';
 import { decide, nearestInRange, type BrainOrder, type BrainTarget } from './monster/brain';
-import { generateCityLayout } from './world/cityLayout';
 
 type Order = { kind: 'move'; to: Vec2 } | { kind: 'attack'; target: Target } | null;
 
@@ -68,7 +67,7 @@ export class GameScene {
     this.lighting = new Lighting(this.scene);
     this.lighting.attachSky(createSky(this.scene));
 
-    this.city = new City(this.scene, generateCityLayout(CONFIG.world.seed), this.onTargetDestroyed);
+    this.city = new City(this.scene, CONFIG.world.seed, this.onTargetDestroyed);
     this.monster = new Monster(this.scene);
     this.rig = new CameraRig(this.camera);
     this.markers = new Markers(this.scene);
@@ -82,7 +81,7 @@ export class GameScene {
       else this.projectiles.fireRocket(from, to, damage);
       this.particles.emit('fire', from, 2, 0.3);
     };
-    this.tanks = new TankFleet(this.scene, this.city.layout, this.onTargetDestroyed, (f, t, d) => fire(f, t, d, 'shell'));
+    this.tanks = new TankFleet(this.scene, this.onTargetDestroyed, (f, t, d) => fire(f, t, d, 'shell'));
     this.jets = new JetSquadron(this.scene, this.onTargetDestroyed, (f, t, d) => fire(f, t, d, 'rocket'));
     this.jets.onTrail = (p) => this.particles.emit('smoke', p, 1, 0.3);
     this.jets.onCrash = (p) => {
@@ -244,7 +243,7 @@ export class GameScene {
       }
       this.jets.update(dt, this.monster.position);
       this.projectiles.update(dt);
-      this.city.update(dt);
+      this.city.update(dt, this.monster.position);
       this.monster.animate(dt, this.elapsed);
       this.particles.update(dt);
       this.markers.update(dt);
@@ -291,8 +290,7 @@ export class GameScene {
     const hit = pickEnemy(pts, x, y, CONFIG.input.pickRadiusPx);
     if (hit !== null) return enemies[hit]!;
     this.setRay(x, y);
-    const b = this.raycaster.intersectObject(this.city.buildingMesh)[0];
-    return b?.instanceId !== undefined ? this.city.targetForInstance(b.instanceId) : null;
+    return this.city.pickBuilding(this.raycaster.ray);
   }
 
   private onTap = (x: number, y: number): void => {
@@ -306,9 +304,6 @@ export class GameScene {
     this.setRay(x, y);
     const p = this.raycaster.ray.intersectPlane(this.groundPlane, this.tmpV);
     if (!p) return;
-    const lim = CONFIG.world.citySize / 2;
-    p.x = Math.min(lim, Math.max(-lim, p.x));
-    p.z = Math.min(lim, Math.max(-lim, p.z));
     this.order = { kind: 'move', to: { x: p.x, z: p.z } };
     this.markers.setTarget(null);
     this.markers.tapAt(p);

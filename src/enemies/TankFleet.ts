@@ -3,7 +3,7 @@ import { CONFIG } from '../config';
 import type { OnDestroyed, Target } from '../combat';
 import { toonMat } from '../render/toon';
 import { dist2, type Vec2 } from '../util/math';
-import type { CityLayout } from '../world/cityLayout';
+import { ROAD_ORIGIN } from '../world/chunks';
 import { planRoadPath, snapToRoad } from '../world/roads';
 
 const REPLAN_EVERY = 4;
@@ -50,7 +50,6 @@ export class TankFleet {
 
   constructor(
     scene: THREE.Scene,
-    private layout: CityLayout,
     private onDestroyed: OnDestroyed,
     private fire: (from: THREE.Vector3, to: THREE.Vector3, damage: number) => void,
   ) {
@@ -82,14 +81,13 @@ export class TankFleet {
     this.draw();
   }
 
-  /** Spawn on a north-south road at roughly spawnRing distance from `around`, inside the city. */
+  /** Spawn on a north-south road at roughly spawnRing distance from `around`. */
   spawn(around: THREE.Vector3, rng: () => number): void {
     if (this.tanks.length >= MAX_TANKS) return;
     const a = rng() * Math.PI * 2;
     const r = CONFIG.director.spawnRing * (0.8 + rng() * 0.3);
-    const lim = this.layout.half;
-    const x = snapToRoad(Math.max(-lim, Math.min(lim, around.x + Math.cos(a) * r)), this.layout.roadOrigin, this.layout.pitch);
-    const z = Math.max(-lim, Math.min(lim, around.z + Math.sin(a) * r));
+    const x = snapToRoad(around.x + Math.cos(a) * r, ROAD_ORIGIN, CONFIG.world.blockSize);
+    const z = around.z + Math.sin(a) * r;
     const t = new Tank(this.damage);
     t.position.set(x, S * 0.3, z);
     t.fireCd = 1 + rng() * CONFIG.tank.fireCooldown;
@@ -133,7 +131,7 @@ export class TankFleet {
 
       t.replanT -= dt;
       if (t.path.length === 0 || t.replanT <= 0) {
-        t.path = planRoadPath(here, goal, this.layout.roadOrigin, this.layout.pitch);
+        t.path = planRoadPath(here, goal, ROAD_ORIGIN, CONFIG.world.blockSize);
         t.replanT = REPLAN_EVERY;
       }
       const wp = t.path[0];

@@ -60,7 +60,15 @@ export const CONFIG = {
   input: { tapMaxMovePx: 10, tapMaxMs: 300, pickRadiusPx: 28 },
   world: {
     seed: 1337,
-    citySize: 4000,
+    /** City blocks per chunk side; chunks stream in around the monster. */
+    chunkBlocks: 4,
+    /** Chunks whose nearest point is within loadRadius are loaded; beyond unloadRadius they are dropped. loadRadius must exceed fog.far. */
+    loadRadius: 4800,
+    unloadRadius: 5600,
+    chunksPerFrame: 3,
+    maxBuildings: 7000,
+    maxTrees: 3000,
+    maxRubble: 2500,
     blockSize: 200,
     roadWidth: 36,
     clearRadius: 380,
