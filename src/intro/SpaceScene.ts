@@ -108,7 +108,9 @@ export class SpaceScene {
     const s = shakeAt(t);
     const amp = s * s * L * 0.12;
     // Three-quarter view from behind and above, so the seams read along the shell.
-    this.camera.position.set(L * 1.2 + Math.sin(t * 43) * amp, L * 0.9 + Math.sin(t * 61 + 1) * amp, -L * 3.5);
+    // Narrow (portrait) screens get less sideways offset so the pod stays on screen.
+    const side = L * (this.camera.aspect < 1 ? 0.5 : 1.2);
+    this.camera.position.set(side + Math.sin(t * 43) * amp, L * 0.9 + Math.sin(t * 61 + 1) * amp, -L * 3.5);
     this.camera.lookAt(_look.set(0, -L * 0.3, L * 6));
   }
 
