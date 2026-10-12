@@ -26,6 +26,7 @@ import { TankFleet } from './enemies/TankFleet';
 import { JetSquadron } from './enemies/JetSquadron';
 import { Blimps } from './enemies/Blimps';
 import { SamSilos } from './enemies/SamSilos';
+import { Artillery } from './enemies/Artillery';
 import { mulberry32 } from './util/rng';
 import { Progression, expToNext } from './systems/Progression';
 import { regen } from './monster/vitals';
@@ -90,6 +91,7 @@ export class GameScene {
     this.enemies.add(new JetSquadron(this.scene));
     this.enemies.add(new Blimps(this.scene));
     this.enemies.add(new SamSilos(this.scene));
+    this.enemies.add(new Artillery(this.scene));
     this.ctx = this.buildContext();
     this.city.onCollapseStart = (pos, size) => {
       this.particles.ring('dust', pos, size, 14);

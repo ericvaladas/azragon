@@ -38,6 +38,8 @@ export const CONFIG = {
     chevron: 0xff3b2f,
     blimp: 0xe6e2da,
     samHatch: 0x2e3236,
+    strike: 0xff3b2f,
+    artillery: 0x5f6b45,
     samLauncher: 0x7d8a6a,
     missile: 0xf2f2ee,
     blimpTrim: 0xd8322a,
@@ -110,6 +112,11 @@ export const CONFIG = {
     spikeSpeed: 1100,
     spikeSpreadRad: 0.12,
     deathTime: 2.2,
+  },
+  artillery: {
+    hp: 120, exp: 20, size: 40, guns: 3, gunSpacing: 70, distMin: 2500, distMax: 3500,
+    salvoEvery: 6, fillTime: 2, radius: 90, damage: 60, buildingDamage: 200, spread: 260,
+    baseSalvo: 3, unlockMin: 2.5, minutesPerExtra: 1.5, maxSalvo: 8,
   },
   sam: {
     hp: 260, exp: 30, size: 70, spawnMin: 600, spawnMax: 1400,
