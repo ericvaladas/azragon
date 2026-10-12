@@ -27,6 +27,8 @@ import { JetSquadron } from './enemies/JetSquadron';
 import { Blimps } from './enemies/Blimps';
 import { SamSilos } from './enemies/SamSilos';
 import { Artillery } from './enemies/Artillery';
+import { GrappleTrucks } from './enemies/GrappleTrucks';
+import { clampToTethers } from './monster/tether';
 import { mulberry32 } from './util/rng';
 import { Progression, expToNext } from './systems/Progression';
 import { regen } from './monster/vitals';
@@ -92,6 +94,8 @@ export class GameScene {
     this.enemies.add(new Blimps(this.scene));
     this.enemies.add(new SamSilos(this.scene));
     this.enemies.add(new Artillery(this.scene));
+    this.enemies.add(new GrappleTrucks(this.scene));
+    this.monster.constrain = (from, to) => clampToTethers(from, to, this.enemies.get<GrappleTrucks>('truck').activeTethers());
     this.ctx = this.buildContext();
     this.city.onCollapseStart = (pos, size) => {
       this.particles.ring('dust', pos, size, 14);
@@ -205,6 +209,7 @@ export class GameScene {
       expToNext: expToNext(this.progression.level),
       level: this.progression.level,
       timeSec: Math.floor(this.runTime),
+      tethered: this.enemies.get<GrappleTrucks>('truck').tethered(),
     });
   }
 

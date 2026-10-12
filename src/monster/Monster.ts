@@ -24,6 +24,8 @@ export class Monster {
   alive = true;
   /** Mid-Leap; driven by Task 9. */
   airborne = false;
+  /** Clamp applied to each walking step (grapple tethers). */
+  constrain: ((from: Vec2, to: Vec2) => Vec2) | null = null;
   onFootLand: (p: THREE.Vector3) => void = () => {};
 
   private cycle = 0;
@@ -73,9 +75,17 @@ export class Monster {
     const err = this.faceToward(goal, dt);
     if (err < FACE_BEFORE_WALK) {
       const step = Math.min(d, CONFIG.monster.moveSpeed * speedMult * dt * (1 - err / FACE_BEFORE_WALK));
-      this.position.x += Math.sin(this.yaw) * step;
-      this.position.z += Math.cos(this.yaw) * step;
-      this.cycle += step / (CONFIG.monster.strideLength * CONFIG.monster.scale);
+      let nx = this.position.x + Math.sin(this.yaw) * step;
+      let nz = this.position.z + Math.cos(this.yaw) * step;
+      if (this.constrain) {
+        const c = this.constrain({ x: this.position.x, z: this.position.z }, { x: nx, z: nz });
+        nx = c.x;
+        nz = c.z;
+      }
+      const moved = Math.hypot(nx - this.position.x, nz - this.position.z);
+      this.position.x = nx;
+      this.position.z = nz;
+      this.cycle += moved / (CONFIG.monster.strideLength * CONFIG.monster.scale);
       this.motion = 1;
     }
     return false;

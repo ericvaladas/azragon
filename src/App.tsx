@@ -8,7 +8,7 @@ import { LevelUpCards } from './ui/LevelUpCards';
 import { GameOver } from './ui/GameOver';
 import './style.css';
 
-const EMPTY_HUD: HudSnapshot = { hp: 1, maxHp: 1, exp: 0, expToNext: 1, level: 1, timeSec: 0 };
+const EMPTY_HUD: HudSnapshot = { hp: 1, maxHp: 1, exp: 0, expToNext: 1, level: 1, timeSec: 0, tethered: false };
 
 function applySafeArea(el: HTMLElement): void {
   try {

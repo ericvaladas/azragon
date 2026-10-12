@@ -38,6 +38,9 @@ export const CONFIG = {
     chevron: 0xff3b2f,
     blimp: 0xe6e2da,
     samHatch: 0x2e3236,
+    truck: 0x8a6d3b,
+    truckDark: 0x3d3328,
+    cable: 0x1d1f22,
     strike: 0xff3b2f,
     artillery: 0x5f6b45,
     samLauncher: 0x7d8a6a,
@@ -118,6 +121,7 @@ export const CONFIG = {
     salvoEvery: 6, fillTime: 2, radius: 90, damage: 60, buildingDamage: 200, spread: 260,
     baseSalvo: 3, unlockMin: 2.5, minutesPerExtra: 1.5, maxSalvo: 8,
   },
+  truck: { hp: 70, exp: 22, size: 60, speed: 40, range: 900, anchorTime: 1, harpoonTime: 0.5, tetherTime: 6, slack: 50, cooldown: 4 },
   sam: {
     hp: 260, exp: 30, size: 70, spawnMin: 600, spawnMax: 1400,
     riseTime: 1, upTime: 6, sinkTime: 1, downMin: 4, downMax: 6, fireDelay: 1.2,

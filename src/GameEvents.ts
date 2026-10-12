@@ -11,6 +11,7 @@ export type HudSnapshot = {
   expToNext: number;
   level: number;
   timeSec: number;
+  tethered: boolean;
 };
 
 export type UpgradeOffer = { id: string; title: string; desc: string; icon: string };

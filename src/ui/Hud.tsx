@@ -22,6 +22,7 @@ export function Hud({ hud, expPop }: { hud: HudSnapshot; expPop: { amount: numbe
         </div>
         <div className="hud-time">{fmtTime(hud.timeSec)}</div>
       </div>
+      {hud.tethered && <div className="hud-tethered">Tethered</div>}
       {expPop && (
         <div key={expPop.key} className="exp-pop">
           +{expPop.amount} EXP
