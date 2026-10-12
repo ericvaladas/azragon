@@ -1,8 +1,24 @@
-export type GameState = 'loading' | 'playing' | 'paused' | 'gameover';
+export type GameState = 'loading' | 'playing' | 'paused' | 'levelup' | 'dying' | 'gameover';
+
+export type HudSnapshot = {
+  hp: number;
+  maxHp: number;
+  exp: number;
+  expToNext: number;
+  level: number;
+  timeSec: number;
+};
+
+export type UpgradeOffer = { id: string; title: string; desc: string; icon: string };
+
+export type RunStats = { timeSec: number; kills: number; buildings: number; level: number };
 
 export type GameEventMap = {
   stateChange: GameState;
-  scoreChange: number;
+  hud: HudSnapshot;
+  expGain: number;
+  levelUpOffer: { seq: number; offers: UpgradeOffer[] };
+  gameOver: RunStats;
 };
 
 type Handler<T> = (data: T) => void;

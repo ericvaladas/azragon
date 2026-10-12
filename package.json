@@ -11,7 +11,10 @@
     "preview": "vite preview",
     "deploy": "npm run build && rundot deploy",
     "format": "prettier \"{src,public}/**/*.{ts,tsx,js,jsx,json,css,html}\" --write",
-    "format:check": "prettier \"{src,public}/**/*.{ts,tsx,js,jsx,json,css,html}\" --check"
+    "format:check": "prettier \"{src,public}/**/*.{ts,tsx,js,jsx,json,css,html}\" --check",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "shot": "node scripts/screenshot.mjs"
   },
   "keywords": [
     "react",
@@ -29,9 +32,11 @@
     "@vitejs/plugin-react": "^4.3.4",
     "cross-env": "^7.0.3",
     "firebase": "^12.12.1",
+    "playwright": "^1.48.2",
     "prettier": "^3.4.2",
     "typescript": "^5.7.3",
-    "vite": "^6.3.5"
+    "vite": "^6.3.5",
+    "vitest": "^2.1.9"
   },
   "dependencies": {
     "@series-inc/rundot-game-sdk": "5.28.1",
