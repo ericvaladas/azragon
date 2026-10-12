@@ -25,6 +25,17 @@ export function podAltitude(t: number): number {
   return earthCenter(t, _c).length() - SP.earthRadius;
 }
 
+/**
+ * How far Earth has turned under the pod (rad): still at first, then the turn speeds up linearly to spinRate
+ * by entryTime and holds, so the surface keeps rushing past while the approach itself slows into the dive.
+ */
+export function earthSpin(t: number): number {
+  const ramp = SP.entryTime - SP.spinStart;
+  if (t <= SP.spinStart) return 0;
+  if (t <= SP.entryTime) return (SP.spinRate * (t - SP.spinStart) ** 2) / (2 * ramp);
+  return (SP.spinRate * ramp) / 2 + SP.spinRate * (t - SP.entryTime);
+}
+
 /** Re-entry heat 0..1: zero until the pod enters the atmosphere, white-hot at the cut. */
 export function heatAt(t: number): number {
   return clamp01((t - SP.entryTime) / (CUT_TIME - SP.entryTime));

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import { CONFIG } from '../config';
 import { CUT_TIME } from './timeline';
-import { earthDistance, heatAt, heatColor, podAltitude, starDirections } from './spaceMath';
+import { earthDistance, earthSpin, heatAt, heatColor, podAltitude, starDirections } from './spaceMath';
 import { mulberry32 } from '../util/rng';
 
 const SP = CONFIG.intro.space;
@@ -45,5 +45,16 @@ describe('starDirections', () => {
     expect(a).toHaveLength(50);
     for (const v of a) expect(v.length()).toBeCloseTo(1);
     expect(starDirections(50, mulberry32(1))).toEqual(a);
+  });
+});
+
+describe('earthSpin', () => {
+  it('is still out in space, then the surface speeds up and keeps sliding under the pod through entry (no pause)', () => {
+    expect(earthSpin(0)).toBe(0);
+    expect(earthSpin(SP.spinStart)).toBe(0);
+    const speed = (t: number) => (earthSpin(t + 0.01) - earthSpin(t - 0.01)) / 0.02;
+    expect(speed(SP.entryTime)).toBeCloseTo(SP.spinRate, 1);
+    expect(speed(SP.entryTime + 0.5)).toBeCloseTo(SP.spinRate, 1);
+    for (let t = SP.spinStart + 0.1; t <= CUT_TIME; t += 0.1) expect(earthSpin(t)).toBeGreaterThan(earthSpin(t - 0.1));
   });
 });

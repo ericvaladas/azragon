@@ -244,7 +244,9 @@ export const CONFIG = {
      * earthStart to earthEntry by entryTime (the pod touches the atmosphere, rim radius × `atmosphere`), then dives
      * slowly to earthEnd at the cut. Burning starts at entryTime.
      */
-    space: { earthRadius: 1000, atmosphere: 1.08, earthStart: 9000, earthEntry: 670, earthEnd: 600, entryTime: 4.2, earthDrop: 650, stars: 700, podLength: 60 },
+    space: { earthRadius: 1000, atmosphere: 1.08, earthStart: 9000, earthEntry: 670, earthEnd: 600, entryTime: 4.2, earthDrop: 650,
+      /** The surface starts sliding under the pod at spinStart, reaching spinRate (rad/s of Earth's turn) by entry. */
+      spinStart: 2.6, spinRate: 0.45, stars: 700, podLength: 60 },
   },
   readability: {
     threatKinds: ['blimp', 'sam', 'artillery', 'truck'] as readonly string[],

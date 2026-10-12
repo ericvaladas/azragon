@@ -5,7 +5,7 @@ import { fovForAspect } from '../systems/orbit';
 import { mulberry32 } from '../util/rng';
 import { earthTexture } from './earthTexture';
 import { PodModel } from './PodModel';
-import { earthCenter, heatAt, heatColor, starDirections } from './spaceMath';
+import { earthCenter, earthSpin, heatAt, heatColor, starDirections } from './spaceMath';
 import { shakeAt } from './timeline';
 
 const SP = CONFIG.intro.space;
@@ -83,14 +83,16 @@ export class SpaceScene {
   update(t: number, dt: number): void {
     // Earth sits below the flight path (lower half of the frame) and swells as it closes in.
     earthCenter(t, this.earth.position);
-    this.earth.rotation.y = t * 0.04;
+    // Negative turn about X slides the surface nearest the pod back toward the camera: the pod flies over it.
+    this.earth.rotation.set(-earthSpin(t), t * 0.04, 0);
     this.pod.root.rotation.z = t * 0.5;
 
     const h = heatAt(t);
     this.pod.setHeat(heatColor(h, _heat));
     this.sheath.visible = h > 0;
-    this.sheathMats[0]!.opacity = 0.85 * Math.min(1, h * 2);
-    this.sheathMats[1]!.opacity = 0.8 * h;
+    // The bow shock lights up the moment the pod enters the atmosphere, then the core builds to white-hot.
+    this.sheathMats[0]!.opacity = h > 0 ? 0.5 + 0.35 * Math.min(1, h * 2) : 0;
+    this.sheathMats[1]!.opacity = 0.8 * Math.sqrt(h);
     const flicker = 1 + 0.12 * Math.sin(t * 47) + 0.08 * Math.sin(t * 83);
     this.sheath.scale.set(flicker, flicker, 0.6 + 0.6 * h);
 
