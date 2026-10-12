@@ -1,6 +1,6 @@
 # AZRAGON — Milestone 2 Design: Threats, Abilities & Pacing
 
-Date: 2026-10-13
+Date: 2026-10-12
 Status: Approved in conversation; pending written-spec review
 Builds on: `2026-10-12-azragon-milestone1-design.md` (merged to `main`)
 
