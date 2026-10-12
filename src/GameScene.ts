@@ -28,6 +28,7 @@ import { Blimps } from './enemies/Blimps';
 import { SamSilos } from './enemies/SamSilos';
 import { Artillery } from './enemies/Artillery';
 import { GrappleTrucks } from './enemies/GrappleTrucks';
+import { OrbitalLaser } from './enemies/OrbitalLaser';
 import { clampToTethers } from './monster/tether';
 import { mulberry32 } from './util/rng';
 import { Progression, expToNext } from './systems/Progression';
@@ -95,6 +96,7 @@ export class GameScene {
     this.enemies.add(new SamSilos(this.scene));
     this.enemies.add(new Artillery(this.scene));
     this.enemies.add(new GrappleTrucks(this.scene));
+    this.enemies.add(new OrbitalLaser(this.scene));
     this.monster.constrain = (from, to) => clampToTethers(from, to, this.enemies.get<GrappleTrucks>('truck').activeTethers());
     this.ctx = this.buildContext();
     this.city.onCollapseStart = (pos, size) => {

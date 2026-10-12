@@ -39,6 +39,9 @@ export const CONFIG = {
     blimp: 0xe6e2da,
     samHatch: 0x2e3236,
     truck: 0x8a6d3b,
+    laserFaint: 0xcfe8ff,
+    laserCore: 0xf0ffff,
+    scorch: 0x2a2620,
     truckDark: 0x3d3328,
     cable: 0x1d1f22,
     strike: 0xff3b2f,
@@ -120,6 +123,10 @@ export const CONFIG = {
     hp: 120, exp: 20, size: 40, guns: 3, gunSpacing: 70, distMin: 2500, distMax: 3500,
     salvoEvery: 6, fillTime: 2, radius: 90, damage: 60, buildingDamage: 200, spread: 260,
     baseSalvo: 3, unlockMin: 2.5, minutesPerExtra: 1.5, maxSalvo: 8,
+  },
+  laser: {
+    trackTime: 2.5, lockTime: 0.8, fireTime: 1.5, cooldownMin: 20, cooldownMax: 30,
+    trackSpeed: 80, startOffset: 150, radius: 110, dps: 220, buildingDps: 400, beamHeight: 4000, scorchLife: 10,
   },
   truck: { hp: 70, exp: 22, size: 60, speed: 40, range: 900, anchorTime: 1, harpoonTime: 0.5, tetherTime: 6, slack: 50, cooldown: 4 },
   sam: {
