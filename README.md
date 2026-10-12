@@ -10,6 +10,22 @@ You are a skyscraper-sized alien that has crash-landed on Earth. Flatten the cit
 | Attack | Tap tank, jet, or building | Click it |
 | Orbit camera | Drag | Drag (left or right button) |
 | Zoom | — | Mouse wheel |
+| Leap | Tap Leap button, then tap a spot | Space, then click |
+| Roar (level 5) | Tap Roar button | R |
+
+## Threats
+
+| Enemy | Arrives | How to counter it |
+|---|---|---|
+| Tanks | 0:00 | Stomp them, or spike them from range |
+| Jets | 0:20 | Spikes only; they loop back for more passes |
+| Kamikaze blimp | 0:45 | Shoot it down before it drifts into your head; Roar knocks it out of the sky |
+| SAM silo | 1:30 | Reach it while it's raised; spikes shoot its missiles down |
+| Artillery | 2:30 | Step or Leap out of the red circles, or hunt the guns down in the fog |
+| Grappling truck | 3:30 | Kill it, Leap, or Roar to snap the cable |
+| Orbital laser | 4:30 | Walk out of the faint beam before it locks, or Leap |
+
+Level-ups offer stat boosts and six rankable abilities (Acid Footprints, Spike Storm, Chitin Deflection, Feeding Frenzy, Brood Swarm, Thrash).
 
 ## Develop
 
