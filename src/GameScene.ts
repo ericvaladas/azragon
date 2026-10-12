@@ -21,6 +21,7 @@ import { JetSquadron } from './enemies/JetSquadron';
 import { mulberry32 } from './util/rng';
 import { Progression, expToNext } from './systems/Progression';
 import { regen } from './monster/vitals';
+import { DebugOverlay } from './systems/DebugOverlay';
 import { decide, nearestInRange, type BrainOrder, type BrainTarget } from './monster/brain';
 import { generateCityLayout } from './world/cityLayout';
 
@@ -60,6 +61,7 @@ export class GameScene {
   private dyingT = 0;
   private hudT = 0;
   private stateBeforePause: GameState = 'playing';
+  private debug: DebugOverlay | null = null;
 
   constructor(private container: HTMLDivElement) {
     this.pixel = new PixelRenderer(container);
@@ -106,6 +108,7 @@ export class GameScene {
     });
 
     this.lighting.follow(new THREE.Vector3());
+    if (new URLSearchParams(location.search).has('debug')) this.debug = new DebugOverlay(this.container);
 
     this.resizeObserver = new ResizeObserver(this.onResize);
     this.resizeObserver.observe(container);
@@ -205,7 +208,8 @@ export class GameScene {
 
   private update = () => {
     this.animationFrameId = requestAnimationFrame(this.update);
-    const dt = clampDelta(this.clock.getDelta());
+    const raw = this.clock.getDelta();
+    const dt = clampDelta(raw);
     const frozen = this.state === 'levelup' || this.state === 'paused' || this.state === 'loading';
 
     if (!frozen) {
@@ -251,6 +255,7 @@ export class GameScene {
     this.lighting.follow(this.monster.position);
     this.lighting.followCamera(this.camera);
     this.pixel.render(this.scene, this.camera);
+    this.debug?.update(raw, this.pixel.renderer.info);
   };
 
 
@@ -404,6 +409,7 @@ export class GameScene {
 
   dispose(): void {
     this.input.dispose();
+    this.debug?.dispose();
     cancelAnimationFrame(this.animationFrameId);
     this.resizeObserver.disconnect();
     this.pixel.dispose();

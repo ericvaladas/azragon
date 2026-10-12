@@ -3,6 +3,7 @@ import { CONFIG } from '../config';
 import type { OnDestroyed, Target } from '../combat';
 import { faceted, toonMat } from '../render/toon';
 import { steerToward } from './steer';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 type Mode = 'attack' | 'exit' | 'crashing';
 const S = CONFIG.jet.size;
@@ -46,9 +47,12 @@ export class JetSquadron {
   onTrail: (p: THREE.Vector3) => void = () => {};
   onCrash: (p: THREE.Vector3) => void = () => {};
   private jets: Jet[] = [];
-  private fuselage = faceted(new THREE.BoxGeometry(S * 0.22, S * 0.18, S));
-  private wing = faceted(new THREE.BoxGeometry(S * 0.95, S * 0.04, S * 0.32));
-  private fin = faceted(new THREE.BoxGeometry(S * 0.04, S * 0.26, S * 0.2));
+  /** Fuselage, wings and tail fin merged so each jet is one draw call. */
+  private body = mergeGeometries([
+    faceted(new THREE.BoxGeometry(S * 0.22, S * 0.18, S)),
+    faceted(new THREE.BoxGeometry(S * 0.95, S * 0.04, S * 0.32)).translate(0, 0, -S * 0.05),
+    faceted(new THREE.BoxGeometry(S * 0.04, S * 0.26, S * 0.2)).translate(0, S * 0.15, -S * 0.4),
+  ])!;
 
   constructor(
     private scene: THREE.Scene,
@@ -72,15 +76,9 @@ export class JetSquadron {
   spawn(around: THREE.Vector3, rng: () => number): void {
     const mat = toonMat(CONFIG.palette.jet);
     const j = new Jet(mat, this.damage);
-    const add = (geo: THREE.BufferGeometry, x: number, y: number, z: number) => {
-      const m = new THREE.Mesh(geo, mat);
-      m.position.set(x, y, z);
-      m.castShadow = true;
-      j.group.add(m);
-    };
-    add(this.fuselage, 0, 0, 0);
-    add(this.wing, 0, 0, -S * 0.05);
-    add(this.fin, 0, S * 0.15, -S * 0.4);
+    const mesh = new THREE.Mesh(this.body, mat);
+    mesh.castShadow = true;
+    j.group.add(mesh);
     const a = rng() * Math.PI * 2;
     const r = CONFIG.director.spawnRing * 1.2;
     j.position.set(around.x + Math.cos(a) * r, CONFIG.jet.altitude, around.z + Math.sin(a) * r);

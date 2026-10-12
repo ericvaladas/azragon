@@ -18,6 +18,7 @@ export class PixelRenderer {
     });
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
+    this.renderer.info.autoReset = false;
     this.domElement = this.renderer.domElement;
     this.domElement.style.width = '100%';
     this.domElement.style.height = '100%';
@@ -47,6 +48,7 @@ export class PixelRenderer {
   }
 
   render(scene: THREE.Scene, camera: THREE.Camera): void {
+    this.renderer.info.reset();
     this.renderer.setRenderTarget(this.target);
     this.renderer.render(scene, camera);
     this.renderer.setRenderTarget(null);

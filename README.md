@@ -1,43 +1,33 @@
-# 3D React Template
+# AZRAGON
 
-A React + Three.js + Vite + TypeScript template for RUN.game apps. React handles HUD overlays while Three.js owns the 3D scene directly.
+You are a skyscraper-sized alien that has crash-landed on Earth. Flatten the city while the military throws everything it has at you.
 
-## What's Included
+## Controls
 
-- **Game state machine** — `loading` / `playing` / `paused` / `gameover` states with transitions
-- **Event bridge** — Typed event emitter connecting game logic to React UI (score, state changes)
-- **HUD overlay** — Score display + game-over panel, wired to game events
-- **Three.js scene** — Fullscreen 3D renderer with sky, shadows, OrbitControls, and StowKit asset loading
-- **StowKit pipeline** — Dice mesh loaded from `.stow` pack via CDN as a working demo
-- **Theme system** — Color tokens applied as CSS variables
-- **Error boundary** — Catches and displays errors gracefully
+| Action | Phone | Desktop |
+|---|---|---|
+| Walk | Tap ground | Click ground |
+| Attack | Tap tank, jet, or building | Click it |
+| Orbit camera | Drag | Drag (left or right button) |
+| Zoom | — | Mouse wheel |
 
-## Getting Started
+## Develop
 
 ```bash
 npm install
-npm run dev
+npm run dev       # http://localhost:5173 (?debug=1 for fps/draw calls)
+npm test          # unit tests
+npm run shot      # phone + desktop screenshots into ./screenshots (dev server must be running)
+npm run build
 ```
 
-## Project Structure
+All tunable values (look, camera, balance) live in `src/config.ts`.
 
-```
-src/
-├── components/         # ErrorBoundary
-├── App.tsx             # Shell: mounts GameScene, renders HUD overlay
-├── GameScene.ts        # Three.js game class with state machine
-├── GameEvents.ts       # Typed event emitter (game → React bridge)
-├── loadStowKitPack.ts  # StowKit pack loader
-├── theme.ts            # Color tokens + applyTheme
-├── main.tsx            # Entry point
-└── style.css           # Global + HUD styles
+## Deploy
+
+```bash
+rundot login
+npm run build && rundot deploy
 ```
 
-## Customizing
-
-1. **Game logic** — Put gameplay in `updatePlaying()` inside `GameScene.ts`
-2. **Score** — Call `this.addScore(n)` from game logic; HUD updates automatically
-3. **New events** — Add to `GameEventMap` in `GameEvents.ts`, emit from `GameScene`, subscribe in `App.tsx`
-4. **HUD** — Add React elements in the `.hud` div in `App.tsx`
-5. **Theme colors** — Edit `src/theme.ts`
-6. **Assets** — Place files in `assets/`, run `stowkit build`, load with `pack.loadMesh('id')`
+Design spec: `docs/superpowers/specs/`. Implementation plan: `docs/superpowers/plans/`.
