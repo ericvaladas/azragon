@@ -7,6 +7,7 @@ import { createSky } from './render/Sky';
 import { clampDelta } from './util/math';
 import type { Target } from './combat';
 import { City } from './world/City';
+import { Monster } from './monster/Monster';
 import { generateCityLayout } from './world/cityLayout';
 
 export class GameScene {
@@ -22,6 +23,8 @@ export class GameScene {
   private resizeObserver: ResizeObserver;
   private city: City;
   private kills = 0;
+  private monster: Monster;
+  private elapsed = 0;
 
   constructor(private container: HTMLDivElement) {
     this.pixel = new PixelRenderer(container);
@@ -31,10 +34,11 @@ export class GameScene {
     this.lighting.attachSky(createSky(this.scene));
 
     this.city = new City(this.scene, generateCityLayout(CONFIG.world.seed), this.onTargetDestroyed);
+    this.monster = new Monster(this.scene);
     this.pixel.domElement.addEventListener('pointerdown', this.debugSmash);
 
-    this.camera.position.set(-120, 430 + 380, -820);
-    this.camera.lookAt(0, 300, 400);
+    this.camera.position.set(-150, 820, -950);
+    this.camera.lookAt(0, 300, 300);
     this.lighting.follow(new THREE.Vector3());
 
     this.resizeObserver = new ResizeObserver(this.onResize);
@@ -71,6 +75,12 @@ export class GameScene {
   private update = () => {
     this.animationFrameId = requestAnimationFrame(this.update);
     const dt = clampDelta(this.clock.getDelta());
+    this.elapsed += dt;
+    // TEMP (removed in Task 6): wander in a circle to check the gait
+    const t = this.elapsed * 0.15;
+    this.monster.moveToward({ x: Math.sin(t) * 260, z: Math.cos(t) * 260 }, dt, 1);
+    this.monster.animate(dt, this.elapsed);
+    this.lighting.follow(this.monster.position);
     this.city.update(dt);
     this.lighting.followCamera(this.camera);
     this.pixel.render(this.scene, this.camera);
