@@ -53,6 +53,7 @@ describe('abilityKey', () => {
   it('maps Space to leap and R to roar', () => {
     expect(k('Space')).toBe('leap');
     expect(k('KeyR')).toBe('roar');
+    expect(k('KeyE')).toBe('dash');
   });
   it('leaves browser shortcuts alone (Cmd/Ctrl/Alt+R reload, etc.)', () => {
     expect(k('KeyR', { metaKey: true })).toBeNull();

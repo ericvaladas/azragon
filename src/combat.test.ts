@@ -20,4 +20,9 @@ describe('resolveHit', () => {
     expect(resolveHit(10, 'laser', base, 0).deflected).toBe(false);
     expect(resolveHit(10, 'artillery', base, 0).deflected).toBe(false);
   });
+  it('deals nothing while invulnerable (Shield Bubble), from any source', () => {
+    for (const src of ['shell', 'rocket', 'missile', 'blimp', 'artillery', 'laser'] as const) {
+      expect(resolveHit(10, src, { ...base, invulnerable: true }, 0.99)).toEqual({ damage: 0, deflected: false });
+    }
+  });
 });

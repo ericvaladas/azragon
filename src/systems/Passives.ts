@@ -10,6 +10,10 @@ export class Passives {
   private novaT = 0;
   private mortarT = 0;
   private interceptBank = 0;
+  private bubbleT = 0;
+  private bubbleCd = 0;
+  private reflectT = 0;
+  private reflectCd = 0;
 
   constructor(private ranks: () => Record<AbilityId, number>) {}
 
@@ -54,6 +58,32 @@ export class Passives {
     return P.spines.radius[this.ranks().spines]!;
   }
 
+  bubbleActive(): boolean {
+    return this.bubbleT > 0;
+  }
+
+  reflectActive(): boolean {
+    return this.reflectT > 0;
+  }
+
+  /** Auto-shields: each fires if taken, off cooldown, and `threat` (something about to hit). Returns which fired. */
+  tryShields(threat: boolean): { bubble: boolean; reflect: boolean } {
+    const r = this.ranks();
+    const out = { bubble: false, reflect: false };
+    if (!threat) return out;
+    if (r.bubble > 0 && this.bubbleCd <= 0 && this.bubbleT <= 0) {
+      this.bubbleT = P.bubble.duration[r.bubble]!;
+      this.bubbleCd = this.bubbleT + P.bubble.cooldown[r.bubble]!;
+      out.bubble = true;
+    }
+    if (r.reflect > 0 && this.reflectCd <= 0 && this.reflectT <= 0) {
+      this.reflectT = P.reflect.duration[r.reflect]!;
+      this.reflectCd = this.reflectT + P.reflect.cooldown[r.reflect]!;
+      out.reflect = true;
+    }
+    return out;
+  }
+
   /** Spine Shield shots that were actually used this frame. */
   spendIntercepts(n: number): void {
     this.interceptBank = Math.max(0, this.interceptBank - n);
@@ -85,6 +115,10 @@ export class Passives {
         mortar = P.mortar.globs[r.mortar]!;
       }
     }
+    this.bubbleT = Math.max(0, this.bubbleT - dt);
+    this.bubbleCd = Math.max(0, this.bubbleCd - dt);
+    this.reflectT = Math.max(0, this.reflectT - dt);
+    this.reflectCd = Math.max(0, this.reflectCd - dt);
     const rate = P.spines.rate[r.spines]!;
     this.interceptBank = Math.min(rate, this.interceptBank + rate * dt);
     const intercepts = Math.floor(this.interceptBank + 1e-9);
@@ -112,5 +146,6 @@ export class Passives {
     this.novaT = 0;
     this.mortarT = 0;
     this.interceptBank = 0;
+    this.bubbleT = this.bubbleCd = this.reflectT = this.reflectCd = 0;
   }
 }

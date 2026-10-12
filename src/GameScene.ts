@@ -38,6 +38,7 @@ import { Abilities, type ActiveId } from './systems/abilities';
 import { Shockwave } from './systems/Shockwave';
 import { LevelUpMoment } from './systems/levelUpMoment';
 import { LevelUpAura } from './systems/LevelUpAura';
+import { ShieldFx } from './systems/ShieldFx';
 import { leapTarget } from './monster/leap';
 import { footTargets, strikePlan } from './monster/strike';
 import { mortarTargets, nearestWithin } from './systems/targeting';
@@ -90,6 +91,7 @@ export class GameScene {
   private aura: LevelUpAura;
   private novaWave: Shockwave;
   private swatCd = 0;
+  private shieldFx: ShieldFx;
   private passives: Passives;
   private acid: AcidPools;
   private brood: BroodDrones;
@@ -108,6 +110,7 @@ export class GameScene {
     this.shockwave = new Shockwave(this.scene);
     this.aura = new LevelUpAura(this.scene);
     this.novaWave = new Shockwave(this.scene, CONFIG.palette.acid);
+    this.shieldFx = new ShieldFx(this.scene);
     this.passives = new Passives(() => this.progression.ranks);
     this.acid = new AcidPools(this.scene);
     this.brood = new BroodDrones(this.scene);
@@ -202,6 +205,7 @@ export class GameScene {
     this.openingDone = false;
     this.abilities.reset();
     this.swatCd = 0;
+    this.shieldFx.clear();
     this.moment.reset();
     this.aura.clear();
     this.monster.glow = 0;
@@ -319,6 +323,10 @@ export class GameScene {
         if (fire.mortar > 0) this.acidMortar(fire.mortar);
         if (fire.intercepts > 0) this.passives.spendIntercepts(this.spineShield(fire.intercepts));
         this.tailSwat(dt);
+        const shields = this.passives.tryShields(this.threatImminent());
+        if (shields.bubble || shields.reflect) this.rig.addTrauma(0.1);
+        if (this.passives.reflectActive()) this.reflectProjectiles();
+        if (this.monster.dashing) this.dashCrush();
         if (!this.openingDone && this.runTime >= CONFIG.opening.time) {
           this.openingDone = true;
           const c = { x: this.monster.position.x, z: this.monster.position.z };
@@ -347,6 +355,7 @@ export class GameScene {
       this.particles.update(dt);
       this.shockwave.update(dt);
       this.novaWave.update(dt);
+      this.shieldFx.update(dt, this.monster.position, this.passives.bubbleActive(), this.passives.reflectActive());
       if (this.moment.update(realDt) && this.state === 'playing' && this.progression.pendingLevels > 0) this.enterLevelUp();
       const dm = this.progression.stats.damageMult;
       this.acid.update(dt, this.enemyTargets(), dm);
@@ -377,17 +386,47 @@ export class GameScene {
   };
 
 
-    pressAbility(id: ActiveId): void {
-      if (this.state !== 'playing' || !this.monster.alive) return;
-      const level = this.progression.level;
-      if (id === 'leap') {
-        this.monster.crouch = this.abilities.toggleAim(level);
-        if (!this.monster.crouch) this.markers.setAim(null, 0);
-        return;
-      }
-      if (!this.abilities.trigger('roar', level)) return;
-      this.roar();
+  pressAbility(id: ActiveId): void {
+    if (this.state !== 'playing' || !this.monster.alive) return;
+    const level = this.progression.level;
+    if (id === 'roar') {
+      if (this.abilities.trigger('roar', level)) this.roar();
+      return;
     }
+    const aiming = this.abilities.toggleAim(id, level);
+    this.monster.crouch = aiming === 'leap';
+    if (!aiming) this.markers.setAim(null, 0);
+  }
+
+  /** Aim-ring placement and radius for the ability being aimed. */
+  private aimPoint(ground: THREE.Vector3): { to: Vec2; radius: number } {
+    const m = this.monster.position;
+    const aim = this.abilities.aiming === 'dash' ? CONFIG.abilities.dash : CONFIG.abilities.leap;
+    const to = leapTarget({ x: m.x, z: m.z }, { x: ground.x, z: ground.z }, aim.range);
+    return { to, radius: this.abilities.aiming === 'dash' ? CONFIG.abilities.dash.crushRadius : CONFIG.abilities.leap.landRadius };
+  }
+
+  private dashTo(ground: THREE.Vector3): void {
+    const m = this.monster;
+    const { to } = this.aimPoint(ground);
+    if (!this.abilities.trigger('dash', this.progression.level)) return;
+    this.trucks().snapAll();
+    m.crouch = false;
+    m.startDash(to);
+    this.order = null;
+    this.markers.setTarget(null);
+    this.markers.setAim(null, 0);
+    this.rig.addTrauma(0.3);
+  }
+
+  /** Dash flattens everything on the ground around the monster as it charges. */
+  private dashCrush(): void {
+    const p = this.monster.position;
+    const r = CONFIG.abilities.dash.crushRadius;
+    this.city.forEachStandingInRadius({ x: p.x, z: p.z }, r, (t) => t.applyDamage(1e9));
+    for (const t of footTargets({ x: p.x, z: p.z }, r, this.enemyTargets())) t.applyDamage(1e9);
+    this.particles.emit('dust', p.clone().setY(10), 2, 0.8);
+  }
 
     private trucks(): GrappleTrucks {
       return this.enemies.get<GrappleTrucks>('truck');
@@ -477,6 +516,42 @@ export class GameScene {
       this.particles.emit('spark', t.position, 10, 1.2);
     }
     this.rig.addTrauma(0.15);
+  }
+
+  /** Something is about to hit: shells/rockets/missiles or blimps nearby, a laser locking on, or a strike circle underfoot. */
+  private threatImminent(): boolean {
+    const center = this.bodyPoint(300);
+    const range = CONFIG.passives.threatRange;
+    const near = (p: THREE.Vector3) => p.distanceTo(center) <= range;
+    if (this.projectiles.incoming().some((s) => near(s.pos))) return true;
+    if (this.enemyTargets().some((t) => (t.kind === 'missile' || t.kind === 'blimp') && near(t.position))) return true;
+    const laser = this.enemies.get<OrbitalLaser>('laser').current();
+    const m = this.monster.position;
+    if ((laser.phase === 'locked' || laser.phase === 'firing') && Math.hypot(laser.x - m.x, laser.z - m.z) <= CONFIG.laser.radius * 1.5) return true;
+    return this.enemies.get<Artillery>('artillery').strikeNear({ x: m.x, z: m.z });
+  }
+
+  /** Reflect Shield: projectiles reaching the dome bounce back as spikes at the nearest enemy. */
+  private reflectProjectiles(): void {
+    const R = CONFIG.passives.reflect;
+    const center = this.bodyPoint(300);
+    const dmg = R.damage * this.progression.stats.damageMult;
+    const bounce = (from: THREE.Vector3) => {
+      const target = nearestInRange({ x: from.x, z: from.z }, this.enemyTargets(), CONFIG.monster.spikeRange * 1.5);
+      if (target) this.projectiles.fireSpike(from.clone(), target, dmg, 0);
+      this.particles.emit('spark', from, 8, 0.6);
+    };
+    for (const s of [...this.projectiles.incoming()]) {
+      if (s.pos.distanceTo(center) > R.radius) continue;
+      const at = s.pos.clone();
+      if (this.projectiles.intercept(s)) bounce(at);
+    }
+    for (const t of this.enemyTargets()) {
+      if (t.kind !== 'missile' || !t.isAlive() || t.position.distanceTo(center) > R.radius) continue;
+      const at = t.position.clone();
+      t.applyDamage(1e9);
+      bounce(at);
+    }
   }
 
   /** Spine Shield: shoot down up to `budget` incoming shells, rockets, and SAM missiles. Returns shots used. */
@@ -580,7 +655,7 @@ export class GameScene {
   damageMonster(amount: number, source: DamageSource): void {
     const m = this.monster;
     if (!m.alive || this.state !== 'playing') return;
-    const r = resolveHit(amount, source, { dmgMult: difficulty(this.runTime).dmgMult, deflectChance: this.deflectChance(), airborne: m.airborne }, Math.random());
+    const r = resolveHit(amount, source, { dmgMult: difficulty(this.runTime).dmgMult, deflectChance: this.deflectChance(), airborne: m.airborne, invulnerable: this.passives.bubbleActive() }, Math.random());
     if (r.deflected) {
       this.particles.emit('spark', m.position.clone().setY(300 * CONFIG.monster.scale), 8);
       return;
@@ -622,7 +697,10 @@ export class GameScene {
     if (this.abilities.aiming) {
       this.setRay(x, y);
       const g = this.raycaster.ray.intersectPlane(this.groundPlane, this.tmpV);
-      if (g) this.leapTo(g.clone());
+      if (g) {
+        if (this.abilities.aiming === 'dash') this.dashTo(g.clone());
+        else this.leapTo(g.clone());
+      }
       return;
     }
     const target = this.pickTarget(x, y);
@@ -644,9 +722,8 @@ export class GameScene {
       this.setRay(x, y);
       const g = this.raycaster.ray.intersectPlane(this.groundPlane, this.tmpV);
       if (g) {
-        const m = this.monster.position;
-        const c = leapTarget({ x: m.x, z: m.z }, { x: g.x, z: g.z }, CONFIG.abilities.leap.range);
-        this.markers.setAim(new THREE.Vector3(c.x, 0, c.z), CONFIG.abilities.leap.landRadius);
+        const { to, radius } = this.aimPoint(g);
+        this.markers.setAim(new THREE.Vector3(to.x, 0, to.z), radius);
       }
       return;
     }

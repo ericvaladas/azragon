@@ -45,6 +45,11 @@ export class OrbitalLaser implements EnemySystem {
     scene.add(this.beam, this.core, this.glow, this.scorch);
   }
 
+  /** Current phase and strike point (read-only snapshot). */
+  current(): Readonly<LaserState> {
+    return this.state;
+  }
+
   targets(): readonly Target[] {
     return [];
   }

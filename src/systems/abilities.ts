@@ -1,14 +1,17 @@
 import { CONFIG } from '../config';
 
-export type ActiveId = 'leap' | 'roar';
-export type AbilityView = { id: ActiveId; unlocked: boolean; ready: boolean; cdFrac: number; aiming: boolean; unlockLevel: number };
+export type ActiveId = 'leap' | 'dash' | 'roar';
+/** Abilities that need a ground point picked before they fire. */
+export type AimId = 'leap' | 'dash';
+export type AbilityView = { id: ActiveId; ready: boolean; cdFrac: number; aiming: boolean };
 
-const IDS: readonly ActiveId[] = ['leap', 'roar'];
+/** Button order, left to right. */
+const IDS: readonly ActiveId[] = ['leap', 'dash', 'roar'];
 
-/** Cooldowns, level unlocks, and Leap's aim mode for the two active abilities. */
+/** Cooldowns, level unlocks, and the aim mode for Leap/Dash. */
 export class Abilities {
-  aiming = false;
-  private cd: Record<ActiveId, number> = { leap: 0, roar: 0 };
+  aiming: AimId | null = null;
+  private cd: Record<ActiveId, number> = { leap: 0, dash: 0, roar: 0 };
 
   unlocked(id: ActiveId, level: number): boolean {
     return level >= CONFIG.abilities[id].unlockLevel;
@@ -22,37 +25,36 @@ export class Abilities {
     for (const id of IDS) this.cd[id] = Math.max(0, this.cd[id] - dt);
   }
 
-  /** Leap button / Space: enter aim when ready, or leave it. Returns the new aiming state. */
-  toggleAim(level: number): boolean {
-    this.aiming = this.aiming ? false : this.ready('leap', level);
+  /** Button/key for an aimed ability: aim it when ready (replacing any other aim), or cancel if already aiming it. */
+  toggleAim(id: AimId, level: number): AimId | null {
+    this.aiming = this.aiming === id ? null : this.ready(id, level) ? id : null;
     return this.aiming;
   }
 
   cancelAim(): void {
-    this.aiming = false;
+    this.aiming = null;
   }
 
-  /** Start the ability's cooldown; false (no-op) if not ready. */
+  /** Start the ability's cooldown; false (no-op) if not ready. Firing the aimed ability ends aiming. */
   trigger(id: ActiveId, level: number): boolean {
     if (!this.ready(id, level)) return false;
     this.cd[id] = CONFIG.abilities[id].cooldown;
-    if (id === 'leap') this.aiming = false;
+    if (this.aiming === id) this.aiming = null;
     return true;
   }
 
+  /** Unlocked abilities only, in button order. */
   view(level: number): AbilityView[] {
-    return IDS.map((id) => ({
+    return IDS.filter((id) => this.unlocked(id, level)).map((id) => ({
       id,
-      unlocked: this.unlocked(id, level),
       ready: this.ready(id, level),
       cdFrac: this.cd[id] / CONFIG.abilities[id].cooldown,
-      aiming: id === 'leap' && this.aiming,
-      unlockLevel: CONFIG.abilities[id].unlockLevel,
+      aiming: this.aiming === id,
     }));
   }
 
   reset(): void {
-    this.cd = { leap: 0, roar: 0 };
-    this.aiming = false;
+    this.cd = { leap: 0, dash: 0, roar: 0 };
+    this.aiming = null;
   }
 }

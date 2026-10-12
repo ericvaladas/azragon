@@ -4,7 +4,7 @@ import type { AbilityId } from './Progression';
 import { CONFIG } from '../config';
 
 const P = CONFIG.passives;
-const ranks = (r: Partial<Record<AbilityId, number>>) => () => ({ acid: 0, storm: 0, chitin: 0, frenzy: 0, brood: 0, thrash: 0, spines: 0, swat: 0, nova: 0, mortar: 0, ...r });
+const ranks = (r: Partial<Record<AbilityId, number>>) => () => ({ acid: 0, storm: 0, chitin: 0, frenzy: 0, brood: 0, thrash: 0, spines: 0, swat: 0, nova: 0, mortar: 0, bubble: 0, reflect: 0, ...r });
 
 describe('Passives', () => {
   it('has no effect at rank 0', () => {
@@ -81,5 +81,25 @@ describe('Passives', () => {
   it('banks at most one second of intercepts while nothing needs shooting down', () => {
     const p = new Passives(ranks({ spines: 3 }));
     expect(p.update(10).intercepts).toBe(Math.floor(P.spines.rate[3]!));
+  });
+
+  it('auto-shields only trigger when taken, ready, and something is about to hit', () => {
+    expect(new Passives(ranks({})).tryShields(true)).toEqual({ bubble: false, reflect: false });
+    const p = new Passives(ranks({ bubble: 1, reflect: 1 }));
+    expect(p.tryShields(false)).toEqual({ bubble: false, reflect: false });
+    expect(p.tryShields(true)).toEqual({ bubble: true, reflect: true });
+    expect(p.bubbleActive()).toBe(true);
+    expect(p.reflectActive()).toBe(true);
+    expect(p.tryShields(true)).toEqual({ bubble: false, reflect: false });
+  });
+
+  it('shields last their rank duration, then wait out their cooldown', () => {
+    const p = new Passives(ranks({ bubble: 1 }));
+    p.tryShields(true);
+    p.update(P.bubble.duration[1]! + 0.01);
+    expect(p.bubbleActive()).toBe(false);
+    expect(p.tryShields(true).bubble).toBe(false);
+    p.update(P.bubble.cooldown[1]!);
+    expect(p.tryShields(true).bubble).toBe(true);
   });
 });

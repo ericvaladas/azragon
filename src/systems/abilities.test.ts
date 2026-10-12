@@ -5,9 +5,11 @@ import { CONFIG } from '../config';
 const A = CONFIG.abilities;
 
 describe('Abilities', () => {
-  it('unlocks leap from level 1 and roar at its unlock level', () => {
+  it('unlocks leap at 1, dash at its level, roar at its level', () => {
     const a = new Abilities();
     expect(a.unlocked('leap', 1)).toBe(true);
+    expect(a.unlocked('dash', A.dash.unlockLevel - 1)).toBe(false);
+    expect(a.unlocked('dash', A.dash.unlockLevel)).toBe(true);
     expect(a.unlocked('roar', A.roar.unlockLevel - 1)).toBe(false);
     expect(a.unlocked('roar', A.roar.unlockLevel)).toBe(true);
     expect(a.trigger('roar', 1)).toBe(false);
@@ -24,24 +26,37 @@ describe('Abilities', () => {
     expect(a.ready('leap', 1)).toBe(true);
   });
 
-  it('toggles leap aim only when leap is ready; triggering leap ends aiming', () => {
+  it('aims leap or dash, one at a time; pressing the same button again cancels', () => {
     const a = new Abilities();
-    expect(a.toggleAim(1)).toBe(true);
-    expect(a.aiming).toBe(true);
-    expect(a.toggleAim(1)).toBe(false);
-    a.toggleAim(1);
+    const L = A.dash.unlockLevel;
+    expect(a.toggleAim('leap', L)).toBe('leap');
+    expect(a.toggleAim('dash', L)).toBe('dash');
+    expect(a.aiming).toBe('dash');
+    expect(a.toggleAim('dash', L)).toBeNull();
+    expect(a.toggleAim('dash', 1)).toBeNull();
+  });
+
+  it('triggering the aimed ability ends aiming; aim needs the ability ready', () => {
+    const a = new Abilities();
+    a.toggleAim('leap', 1);
     a.trigger('leap', 1);
-    expect(a.aiming).toBe(false);
-    expect(a.toggleAim(1)).toBe(false);
+    expect(a.aiming).toBeNull();
+    expect(a.toggleAim('leap', 1)).toBeNull();
   });
 
   it('cancelAim and reset clear state', () => {
     const a = new Abilities();
-    a.toggleAim(1);
+    a.toggleAim('leap', 1);
     a.cancelAim();
-    expect(a.aiming).toBe(false);
+    expect(a.aiming).toBeNull();
     a.trigger('leap', 1);
     a.reset();
     expect(a.ready('leap', 1)).toBe(true);
+  });
+
+  it('views only list unlocked abilities, in button order', () => {
+    const a = new Abilities();
+    expect(a.view(1).map((v) => v.id)).toEqual(['leap']);
+    expect(a.view(A.roar.unlockLevel).map((v) => v.id)).toEqual(['leap', 'dash', 'roar']);
   });
 });

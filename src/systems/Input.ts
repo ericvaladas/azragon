@@ -6,7 +6,7 @@ export type InputHandlers = {
   hover(x: number, y: number): void;
   wheel(deltaY: number): void;
   /** Ability key pressed; return true when the game used it (then the browser default is suppressed). */
-  key(id: 'leap' | 'roar'): boolean | void;
+  key(id: 'leap' | 'dash' | 'roar'): boolean | void;
 };
 
 /** Single-pointer gesture handling over the canvas. Touch and mouse share one path; hover and wheel are mouse-only. */

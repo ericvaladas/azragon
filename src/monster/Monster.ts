@@ -36,6 +36,9 @@ export class Monster {
   /** Gold level-up glow, 0..1; the hit flash takes priority. */
   glow = 0;
   private leapT = -1;
+  private dashT = -1;
+  private dashFrom = { x: 0, z: 0 };
+  private dashTo = { x: 0, z: 0 };
   private leapFrom = { x: 0, z: 0 };
   private leapTo = { x: 0, z: 0 };
   private roarT = -1;
@@ -48,7 +51,20 @@ export class Monster {
 
   /** Leaping or roaring: the brain must not move or attack. */
   get busy(): boolean {
-    return this.leapT >= 0 || this.roarT >= 0;
+    return this.leapT >= 0 || this.roarT >= 0 || this.dashT >= 0;
+  }
+
+  get dashing(): boolean {
+    return this.dashT >= 0;
+  }
+
+  /** Dash: charge in a straight line along the ground to `to`. */
+  startDash(to: Vec2): void {
+    this.dashFrom = { x: this.position.x, z: this.position.z };
+    this.dashTo = { x: to.x, z: to.z };
+    this.dashT = 0;
+    this.yaw = yawTo(this.dashFrom, this.dashTo);
+    this.meleeT = -1;
   }
 
   startLeap(to: Vec2): void {
@@ -99,6 +115,7 @@ export class Monster {
     this.leapT = -1;
     this.roarT = -1;
     this.swatT = -1;
+    this.dashT = -1;
     this.crouch = false;
     this.position.y = 0;
   }
@@ -253,6 +270,17 @@ export class Monster {
         this.pose.dip = 60;
         this.onLeapLand(this.position.clone());
       }
+    }
+    if (this.dashT >= 0) {
+      const D = CONFIG.abilities.dash;
+      this.dashT += dt;
+      const p = leapPosition(this.dashFrom, this.dashTo, this.dashT, D.duration, 0);
+      const step = Math.hypot(p.x - this.position.x, p.z - this.position.z);
+      this.position.set(p.x, 0, p.z);
+      this.cycle += step / (CONFIG.monster.strideLength * CONFIG.monster.scale);
+      this.motion = 1;
+      this.pose.pitch = 0.18;
+      if (this.dashT >= D.duration) this.dashT = -1;
     }
     if (this.swatT >= 0) {
       this.swatT += dt;

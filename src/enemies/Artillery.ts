@@ -88,6 +88,11 @@ export class Artillery implements EnemySystem {
     this.draw();
   }
 
+  /** A strike circle that has filled past half is on top of `p` (an imminent hit). */
+  strikeNear(p: Vec2): boolean {
+    return this.strikes.some((s) => s.t >= A.fillTime * 0.5 && strikeHits(p, s.at, A.radius));
+  }
+
   spawn(ctx: WorldContext): void {
     this.ctx = ctx;
     if (this.batteries.length >= MAX_BATTERIES) return;

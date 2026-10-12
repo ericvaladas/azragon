@@ -120,14 +120,14 @@ export const CONFIG = {
     meleeWindup: 0.3,
     spikeRange: 1700,
     spikeDamage: 45,
-    spikeCooldown: 0.5,
+    spikeCooldown: 1.0,
     spikeSpeed: 1100,
     spikeSpreadRad: 0.12,
     deathTime: 2.2,
   },
   artillery: {
     hp: 120, exp: 20, size: 40, guns: 3, gunSpacing: 70, distMin: 2500, distMax: 3500,
-    salvoEvery: 6, fillTime: 2, radius: 90, damage: 60, buildingDamage: 200, spread: 260,
+    salvoEvery: 6, fillTime: 3.2, radius: 90, damage: 60, buildingDamage: 200, spread: 260,
     baseSalvo: 3, unlockMin: 2.5, minutesPerExtra: 1.5, maxSalvo: 8,
   },
   passives: {
@@ -142,9 +142,14 @@ export const CONFIG = {
     swat: { cooldown: [2.5, 2, 1.6, 1.3], range: [450, 500, 550, 600], damage: [120, 180, 240, 320], targets: [1, 2, 3, 4], headHeight: 380 },
     nova: { interval: [0, 7, 6, 5], radius: [0, 600, 700, 800], damage: [0, 80, 120, 170] },
     mortar: { interval: [0, 4, 3.5, 3], globs: [0, 2, 3, 4], splash: [0, 90, 110, 130], damage: 90, range: 1800, flightTime: 1.2, arc: 300 },
+    bubble: { duration: [0, 3, 3.5, 4], cooldown: [0, 25, 21, 17] },
+    reflect: { duration: [0, 4, 5, 6], cooldown: [0, 20, 17, 14], radius: 380, damage: 60 },
+    /** Auto-shields trigger only when something is about to hit: projectiles or blimps within this range. */
+    threatRange: 700,
     earlyAbilityPicks: 3,
   },
   abilities: {
+    dash: { unlockLevel: 3, cooldown: 10, range: 900, duration: 0.6, crushRadius: 95 },
     leap: { unlockLevel: 1, cooldown: 8, range: 1600, duration: 1.4, peak: 340, landRadius: 260, damage: 150 },
     roar: { unlockLevel: 5, cooldown: 20, radius: 600, duration: 1.2, damage: 120, buildingDamage: 300 },
   },

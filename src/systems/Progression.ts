@@ -34,7 +34,7 @@ export const UPGRADES: Record<UpgradeId, { title: string; desc: string; icon: st
   moveSpeed: { title: 'Long Strides', desc: '+15% move speed', icon: '🦿', apply: (s) => ({ ...s, moveSpeedMult: s.moveSpeedMult * 1.15 }) },
 };
 
-export type AbilityId = 'acid' | 'storm' | 'chitin' | 'frenzy' | 'brood' | 'thrash' | 'spines' | 'swat' | 'nova' | 'mortar';
+export type AbilityId = 'acid' | 'storm' | 'chitin' | 'frenzy' | 'brood' | 'thrash' | 'spines' | 'swat' | 'nova' | 'mortar' | 'bubble' | 'reflect';
 export const MAX_RANK = 3;
 const ROMAN = ['', 'I', 'II', 'III'];
 
@@ -48,10 +48,12 @@ export const ABILITIES: Record<AbilityId, { title: string; icon: string; desc(ra
   swat: { title: 'Tail Swat+', icon: '🦂', desc: () => 'Tail swats flyers faster, harder, more at once' },
   nova: { title: 'Venom Nova', icon: '☢️', desc: (r) => (r === 1 ? 'Acid shockwave pulse every 7s' : 'Bigger, stronger, more frequent pulses') },
   mortar: { title: 'Acid Mortar', icon: '☄️', desc: (r) => (r === 1 ? 'Lobs acid at artillery, SAMs, trucks' : 'More globs, bigger splash') },
+  bubble: { title: 'Shield Bubble', icon: '🫧', desc: (r) => (r === 1 ? 'Auto: 3s invincibility when hit is coming' : 'Longer bubble, shorter cooldown') },
+  reflect: { title: 'Reflect Shield', icon: '🔮', desc: (r) => (r === 1 ? 'Auto: bounce projectiles back at enemies' : 'Longer reflect, shorter cooldown') },
   thrash: { title: 'Thrash', icon: '🌀', desc: (r) => (r === 1 ? 'Tethers break 2x faster' : 'Tethers break even faster') },
 };
 
-const emptyRanks = (): Record<AbilityId, number> => ({ acid: 0, storm: 0, chitin: 0, frenzy: 0, brood: 0, thrash: 0, spines: 0, swat: 0, nova: 0, mortar: 0 });
+const emptyRanks = (): Record<AbilityId, number> => ({ acid: 0, storm: 0, chitin: 0, frenzy: 0, brood: 0, thrash: 0, spines: 0, swat: 0, nova: 0, mortar: 0, bubble: 0, reflect: 0 });
 
 export function expToNext(level: number): number {
   return Math.round(CONFIG.progression.expBase * Math.pow(level, CONFIG.progression.expExponent));

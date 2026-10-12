@@ -23,14 +23,15 @@ const DEFLECTABLE: ReadonlySet<DamageSource> = new Set(['shell', 'rocket', 'miss
 
 /**
  * Damage the monster actually takes from one hit. Area attacks miss while airborne (mid-Leap);
- * projectiles and blimp blasts can be deflected (Chitin Deflection) when `roll` < deflectChance.
+ * nothing lands while invulnerable (Shield Bubble); projectiles and blimp blasts can be deflected (Chitin Deflection) when `roll` < deflectChance.
  */
 export function resolveHit(
   amount: number,
   source: DamageSource,
-  c: { dmgMult: number; deflectChance: number; airborne: boolean },
+  c: { dmgMult: number; deflectChance: number; airborne: boolean; invulnerable?: boolean },
   roll: number,
 ): { damage: number; deflected: boolean } {
+  if (c.invulnerable) return { damage: 0, deflected: false };
   if (c.airborne && AREA.has(source)) return { damage: 0, deflected: false };
   if (DEFLECTABLE.has(source) && roll < c.deflectChance) return { damage: 0, deflected: true };
   return { damage: amount * c.dmgMult, deflected: false };
