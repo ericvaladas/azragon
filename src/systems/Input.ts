@@ -1,4 +1,4 @@
-import { abilityKey, canTap, classifyGesture, pinchToWheel } from './tap';
+import { abilityKey, canTap, classifyGesture, isSkipKey, pinchToWheel } from './tap';
 
 export type InputHandlers = {
   tap(x: number, y: number): void;
@@ -7,7 +7,9 @@ export type InputHandlers = {
   wheel(deltaY: number): void;
   /** Ability key pressed; return true when the game used it (then the browser default is suppressed). */
   key(id: 'leap' | 'dash' | 'roar'): boolean | void;
-};
+  /** A plain key press; return true when it skipped the intro (then it isn't also an ability key). */
+  skipKey(): boolean;
+  };
 
 /**
  * Gesture handling over the canvas. One pointer taps or drags (touch and mouse share this path);
@@ -124,6 +126,10 @@ export class Input {
   private onContextMenu = (e: Event) => e.preventDefault();
 
   private onKey = (e: KeyboardEvent) => {
+    if (isSkipKey(e) && this.h.skipKey()) {
+      e.preventDefault();
+      return;
+    }
     const id = abilityKey(e);
     if (!id) return;
     if (this.h.key(id)) e.preventDefault();

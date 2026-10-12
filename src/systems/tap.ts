@@ -43,3 +43,10 @@ export function abilityKey(e: { code: string; repeat: boolean; metaKey: boolean;
 export function pinchToWheel(prevDist: number, curDist: number): number {
   return (prevDist - curDist) * CONFIG.input.pinchSensitivity;
 }
+
+const NOT_SKIP = new Set(['Shift', 'Control', 'Alt', 'Meta', 'Tab', 'CapsLock']);
+
+/** Any plain key press skips the intro; browser shortcuts (Cmd+R…), repeats, and lone modifiers don't. */
+export function isSkipKey(e: { key: string; repeat: boolean; metaKey: boolean; ctrlKey: boolean; altKey: boolean }): boolean {
+  return !e.repeat && !e.metaKey && !e.ctrlKey && !e.altKey && !NOT_SKIP.has(e.key);
+}

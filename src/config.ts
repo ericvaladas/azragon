@@ -203,12 +203,12 @@ export const CONFIG = {
     dropHeight: 4200,
     dropBack: 1400,
     /** Pod rests half-buried after impact (world y). */
-    podRestY: -40,
+    podRestY: 0,
     /** Camera offsets from the pod while falling (start of clouds) and the wide shot at impact (absolute). */
     camFollow: [0, 260, -700] as const,
-    camWide: [-900, 650, -1700] as const,
+    camWide: [-560, 400, -1050] as const,
     lookFollow: [0, -300, 600] as const,
-    lookImpact: [0, 100, 0] as const,
+    lookImpact: [0, 60, 0] as const,
     /** Monster rises from this depth (× monster scale) over the first riseTime s of emerge. */
     riseDepth: 300,
     riseTime: 1.4,
@@ -216,7 +216,7 @@ export const CONFIG = {
     /** Fog while inside the cloud band (eases back to CONFIG.fog through the descent). */
     cloudFog: { near: 250, far: 2000 },
     /** Cocoon length (m): about 60% of the standing monster. Tune by eye against the monster. */
-    podLength: 190,
+    podLength: 230,
     /** Screen wash: builds over `rise` s before the cut, holds, fades; a smaller flash at impact. */
     flash: { rise: 1.0, hold: 0.15, fade: 0.7, impactPeak: 0.8, impactFade: 0.45 },
     /** Camera shake offset (m) at full trauma. */

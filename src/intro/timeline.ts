@@ -66,7 +66,8 @@ export function cameraPath(t: number, out: { pos: THREE.Vector3; look: THREE.Vec
     const d = easeInOut(clamp01((t - S.descent) / (IMPACT_TIME - S.descent)));
     // Offset blends from "follow the pod" to the absolute wide shot (pod is at the origin at impact).
     out.pos.copy(_pod).add(_a.copy(V(I.camFollow)).lerp(_b.copy(wide).sub(_pod), d));
-    out.look.copy(_pod).add(_a.copy(V(I.lookFollow)).lerp(_b.copy(lookImpact).sub(_pod), d));
+    // The look target rides with the pod (which reaches the origin at impact), so it stays in frame.
+    out.look.copy(_pod).add(_a.copy(V(I.lookFollow)).lerp(lookImpact, d));
     return out;
   }
   if (t < EMERGE_TIME) {

@@ -21,8 +21,8 @@ export class SpaceScene {
   readonly camera = new THREE.PerspectiveCamera(60, 1, 5, 30000);
   private earth = new THREE.Group();
   private pod = new PodModel(L);
-  private sheath: THREE.Mesh;
-  private sheathMat: THREE.MeshBasicMaterial;
+  private sheath = new THREE.Group();
+  private sheathMats: THREE.MeshBasicMaterial[] = [];
   private embers: THREE.Points;
   private emberPos: Float32Array;
   private rng = mulberry32(CONFIG.world.seed + 41);
@@ -54,10 +54,14 @@ export class SpaceScene {
     this.earth.add(globe, rim);
     this.scene.add(this.earth, this.pod.root);
 
-    // Open cone trailing back from the nose (+Z) past the camera (-Z).
-    const h = L * 3;
-    this.sheathMat = new THREE.MeshBasicMaterial({ color: CONFIG.palette.fire, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
-    this.sheath = new THREE.Mesh(new THREE.ConeGeometry(L * 0.5, h, 10, 1, true).rotateX(-Math.PI / 2).translate(0, 0, L * 0.45 - h / 2), this.sheathMat);
+    const h = L * 1.7;
+    // Apex just ahead of the nose, flaring back around the shell like a bow shock.
+    // Two additive layers: a saturated orange outer shock and a tighter yellow-white core.
+    for (const [r, color] of [[0.62, 0xff5a14], [0.46, 0xffe08a]] as const) {
+      const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+      this.sheathMats.push(mat);
+      this.sheath.add(new THREE.Mesh(new THREE.ConeGeometry(L * r, h, 10, 1, true).rotateX(Math.PI / 2).translate(0, 0, L * 0.6 - h / 2), mat));
+    }
     this.scene.add(this.sheath);
 
     this.emberPos = new Float32Array(EMBERS * 3);
@@ -77,17 +81,19 @@ export class SpaceScene {
   }
 
   update(t: number, dt: number): void {
-    this.earth.position.set(0, -SP.earthDrop, earthDistance(t));
+    // Earth sits below the flight path (lower half of the frame) and swells as it closes in.
+    const d = earthDistance(t);
+    this.earth.position.set(0, -(SP.earthDrop + d * 0.3), d);
     this.earth.rotation.y = t * 0.04;
     this.pod.root.rotation.z = t * 0.5;
 
     const h = heatAt(t);
     this.pod.setHeat(heatColor(h, _heat));
     this.sheath.visible = h > 0;
-    this.sheathMat.opacity = 0.85 * h;
-    this.sheathMat.color.copy(heatColor(0.5 + 0.5 * h, _heat));
+    this.sheathMats[0]!.opacity = 0.75 * h;
+    this.sheathMats[1]!.opacity = 0.6 * h * h;
     const flicker = 1 + 0.12 * Math.sin(t * 47) + 0.08 * Math.sin(t * 83);
-    this.sheath.scale.set(flicker, flicker, 0.6 + 0.6 * h);
+    this.sheath.scale.set(flicker, flicker, 0.7 + 0.3 * h);
 
     // Embers stream backward, past the camera, and respawn at the nose.
     this.embers.visible = h > 0;
@@ -101,8 +107,9 @@ export class SpaceScene {
 
     const s = shakeAt(t);
     const amp = s * s * L * 0.12;
-    this.camera.position.set(Math.sin(t * 43) * amp, L * 0.75 + Math.sin(t * 61 + 1) * amp, -L * 4);
-    this.camera.lookAt(_look.set(0, -L * 1.4, L * 8));
+    // Three-quarter view from behind and above, so the seams read along the shell.
+    this.camera.position.set(L * 1.2 + Math.sin(t * 43) * amp, L * 0.9 + Math.sin(t * 61 + 1) * amp, -L * 3.5);
+    this.camera.lookAt(_look.set(0, -L * 0.3, L * 6));
   }
 
   setAspect(aspect: number): void {

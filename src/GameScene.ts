@@ -8,7 +8,8 @@ import { PixelRenderer } from './render/PixelRenderer';
 import { createSky } from './render/Sky';
 import { clampDelta, type Vec2 } from './util/math';
 import { resolveHit, type DamageSource, type Target } from './combat';
-import { City, CRATER_RADIUS } from './world/City';
+import { City } from './world/City';
+import { IntroCinematic } from './intro/IntroCinematic';
 import { ringOnRoads } from './world/roads';
 import { ROAD_ORIGIN } from './world/chunks';
 import { Monster } from './monster/Monster';
@@ -95,6 +96,7 @@ export class GameScene {
   private passives: Passives;
   private acid: AcidPools;
   private brood: BroodDrones;
+  private intro: IntroCinematic;
 
   constructor(private container: HTMLDivElement) {
     this.pixel = new PixelRenderer(container);
@@ -126,6 +128,7 @@ export class GameScene {
     this.enemies.add(new LaserTrucks(this.scene));
     this.enemies.add(new OrbitalLaser(this.scene));
     this.ctx = this.buildContext();
+    this.intro = new IntroCinematic({ scene: this.scene, camera: this.camera, overlay: container, monster: this.monster, city: this.city, particles: this.particles, shockwave: this.shockwave });
     this.city.onCollapseStart = (pos, size) => {
       this.particles.ring('dust', pos, size, 14);
       this.particles.emit('debris', pos.clone().setY(30), 8);
@@ -145,6 +148,11 @@ export class GameScene {
       drag: (dx, dy) => this.rig.drag(dx, dy),
       wheel: (dy) => this.rig.zoom(dy),
       hover: this.onHover,
+      skipKey: () => {
+        if (this.state !== 'intro') return false;
+        this.skipIntro();
+        return true;
+      },
       key: (id) => {
         if (this.state !== 'playing') return false;
         this.pressAbility(id);
@@ -158,9 +166,8 @@ export class GameScene {
     this.resizeObserver = new ResizeObserver(this.onResize);
     this.resizeObserver.observe(container);
     this.clock.start();
-    this.city.blast({ x: 0, z: 0 }, CRATER_RADIUS, true);
     this.update();
-    this.setState('playing');
+    this.startIntro();
   }
 
   getState(): GameState {
@@ -193,7 +200,6 @@ export class GameScene {
 
   restart(): void {
     this.city.reset();
-    this.city.blast({ x: 0, z: 0 }, CRATER_RADIUS, true);
     this.projectiles.clear();
     this.particles.clear();
     this.monster.reset();
@@ -216,8 +222,26 @@ export class GameScene {
     this.brood.clear();
     this.markers.setAim(null, 0);
     this.dyingT = 0;
-    this.setState('playing');
+    this.startIntro();
     this.emitHud();
+  }
+
+  private startIntro(): void {
+    this.intro.start();
+    this.setState('intro');
+  }
+
+  /** Skip the rest of the intro (tap, click, or key). Public for scripted checks and the M4 menus. */
+  skipIntro(): void {
+    if (this.state !== 'intro') return;
+    this.intro.skip();
+    this.endIntro();
+  }
+
+  /** The intro drove the camera; hand it back exactly on the default gameplay pose (no leftover trauma or drag). */
+  private endIntro(): void {
+    this.rig.reset();
+    this.setState('playing');
   }
 
   /** EXP bar fills, full heal, gold aura, slow motion; the cards follow when the moment ends. */
@@ -302,6 +326,7 @@ export class GameScene {
     if (w === 0 || h === 0) return;
     this.pixel.resize(w, h);
     this.rig.setAspect(w / h);
+    this.intro.space.setAspect(w / h);
   };
 
   private update = () => {
@@ -313,6 +338,7 @@ export class GameScene {
     const frozen = this.state === 'levelup' || this.state === 'paused' || this.state === 'loading';
 
     if (!frozen) {
+      if (this.state === 'intro' && this.intro.update(realDt)) this.endIntro();
       this.elapsed += dt;
       if (this.state === 'playing') {
         this.runTime += dt;
@@ -378,11 +404,13 @@ export class GameScene {
       this.monster.glow = this.aura.glow();
       if (frozen) this.monster.animate(0, this.elapsed);
     }
-    this.rig.update(frozen ? 0 : dt, this.monster.position);
+    // While the intro runs (even paused) it owns the camera.
+    if (!this.intro.active) this.rig.update(frozen ? 0 : dt, this.monster.position);
     this.chevrons.update(this.enemyTargets(), this.camera, this.elapsed);
     this.lighting.follow(this.monster.position);
     this.lighting.followCamera(this.camera);
-    this.pixel.render(this.scene, this.camera);
+    if (this.intro.inSpace) this.pixel.render(this.intro.space.scene, this.intro.space.camera);
+    else this.pixel.render(this.scene, this.camera);
     this.debug?.update(raw, this.pixel.renderer.info);
   };
 
@@ -710,6 +738,10 @@ export class GameScene {
   }
 
   private onTap = (x: number, y: number): void => {
+    if (this.state === 'intro') {
+      this.skipIntro();
+      return;
+    }
     if (this.state !== 'playing') return;
     if (this.abilities.aiming) {
       this.setRay(x, y);
@@ -862,6 +894,7 @@ export class GameScene {
   dispose(): void {
     this.input.dispose();
     this.debug?.dispose();
+    this.intro.dispose();
     cancelAnimationFrame(this.animationFrameId);
     this.resizeObserver.disconnect();
     this.pixel.dispose();
