@@ -13,6 +13,8 @@ import { Input } from './systems/Input';
 import { Markers } from './systems/Markers';
 import { pickEnemy } from './systems/tap';
 import { Particles } from './systems/Particles';
+import { Projectiles, type Hit } from './systems/Projectiles';
+import { spikeTargets } from './systems/projectileMath';
 import { decide, nearestInRange, type BrainOrder, type BrainTarget } from './monster/brain';
 import { generateCityLayout } from './world/cityLayout';
 
@@ -42,6 +44,7 @@ export class GameScene {
   private groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
   private tmpV = new THREE.Vector3();
   private particles: Particles;
+  private projectiles: Projectiles;
 
   constructor(private container: HTMLDivElement) {
     this.pixel = new PixelRenderer(container);
@@ -53,6 +56,9 @@ export class GameScene {
     this.rig = new CameraRig(this.camera);
     this.markers = new Markers(this.scene);
     this.particles = new Particles(this.scene);
+    this.projectiles = new Projectiles(this.scene);
+    this.projectiles.onTrail = (p) => this.particles.emit('smoke', p, 1, 0.2);
+    this.projectiles.onHit = this.onProjectileHit;
     this.city.onCollapseStart = (pos, size) => {
       this.particles.ring('dust', pos, size, 14);
       this.particles.emit('debris', pos.clone().setY(30), 8);
@@ -109,6 +115,7 @@ export class GameScene {
     if (this.state === 'playing') this.updateMonster(dt);
     this.monster.animate(dt, this.elapsed);
     this.markers.update(dt);
+    this.projectiles.update(dt);
     this.particles.update(dt);
     this.rig.update(dt, this.monster.position);
     this.lighting.follow(this.monster.position);
@@ -219,10 +226,32 @@ export class GameScene {
     this.city.forEachStandingInRadius(pos, CONFIG.monster.bodyRadius, (t) => t.applyDamage(CONFIG.monster.contactDps * dt));
   }
 
-  /** Implemented in Task 8. */
   private fireSpikes(target: Target | null): void {
-    void target;
+    if (!target) return;
+    const m = this.monster;
+    const count = 1; // Task 10: + progression.stats.extraSpikes
+    const pos = { x: m.position.x, z: m.position.z };
+    const others = this.enemyTargets()
+      .filter((t) => t.isAlive() && Math.hypot(t.position.x - pos.x, t.position.z - pos.z) <= CONFIG.monster.spikeRange)
+      .sort((a, b) => a.position.distanceToSquared(target.position) - b.position.distanceToSquared(target.position));
+    const from = m.model.stingerTip.getWorldPosition(new THREE.Vector3());
+    spikeTargets(target, others, count).forEach((t, i) => {
+      this.projectiles.fireSpike(from, t, CONFIG.monster.spikeDamage, (i - (count - 1) / 2) * CONFIG.monster.spikeSpreadRad);
+    });
+    this.particles.emit('spark', from, 4);
+    m.consumeSpike(1);
   }
+
+  private onProjectileHit = (h: Hit): void => {
+    if (h.kind === 'spike') {
+      h.target?.applyDamage(h.damage);
+      this.particles.emit('spark', h.point, 6);
+      this.particles.emit('fire', h.point, 3, 0.5);
+      return;
+    }
+    // shells and rockets: Task 9 applies damage to the monster
+    this.particles.explosion(h.point, 0.6);
+  };
 
   // Task 10 adds EXP; until then only kills are counted.
   private onTargetDestroyed = (target: Target, exp: number): void => {
