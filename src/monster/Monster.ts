@@ -32,6 +32,7 @@ export class Monster {
 
   constructor(scene: THREE.Scene) {
     this.position = this.model.root.position;
+    this.model.root.scale.setScalar(CONFIG.monster.scale);
     scene.add(this.model.root);
   }
 
@@ -72,7 +73,7 @@ export class Monster {
       const step = Math.min(d, CONFIG.monster.moveSpeed * speedMult * dt * (1 - err / FACE_BEFORE_WALK));
       this.position.x += Math.sin(this.yaw) * step;
       this.position.z += Math.cos(this.yaw) * step;
-      this.cycle += step / CONFIG.monster.strideLength;
+      this.cycle += step / (CONFIG.monster.strideLength * CONFIG.monster.scale);
       this.motion = 1;
     }
     return false;

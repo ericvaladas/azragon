@@ -125,7 +125,7 @@ export class TankFleet {
         if (t.fireCd <= 0) {
           t.fireCd = T.fireCooldown;
           const muzzle = new THREE.Vector3(Math.sin(t.turretYaw), 0, Math.cos(t.turretYaw)).multiplyScalar(S * 0.8).add(t.position).setY(S * 0.5);
-          const aim = monster.clone().add(new THREE.Vector3((Math.random() - 0.5) * 160, 220 + Math.random() * 200, (Math.random() - 0.5) * 160));
+          const aim = monster.clone().add(new THREE.Vector3((Math.random() - 0.5) * 160, (220 + Math.random() * 200) * CONFIG.monster.scale, (Math.random() - 0.5) * 160));
           this.fire(muzzle, aim, T.damage);
         }
         continue;

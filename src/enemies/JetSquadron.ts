@@ -129,7 +129,7 @@ export class JetSquadron {
           if (!j.salvoFired && dm >= J.salvoMin && dm <= J.salvoMax) {
             j.salvoFired = true;
             for (let k = 0; k < J.rocketsPerSalvo; k++) {
-              const aim = monster.clone().add(new THREE.Vector3((Math.random() - 0.5) * 200, 250 + Math.random() * 250, (Math.random() - 0.5) * 200));
+              const aim = monster.clone().add(new THREE.Vector3((Math.random() - 0.5) * 200, (250 + Math.random() * 250) * CONFIG.monster.scale, (Math.random() - 0.5) * 200));
               this.fire(j.position.clone(), aim, J.damage);
             }
           }

@@ -1,3 +1,6 @@
+/** Uniform scale of the monster model; world-space monster and camera distances below are multiplied by it. */
+const MONSTER_SCALE = 0.8;
+
 /** All tunable constants. World units are metres; times are seconds. */
 export const CONFIG = {
   render: {
@@ -43,12 +46,12 @@ export const CONFIG = {
     defaultPitch: 0.72,
     minPitch: 0.12,
     maxPitch: 1.15,
-    defaultDistance: 1500,
-    minDistance: 900,
-    maxDistance: 2400,
-    shoulderHeight: 350,
-    shoulderOffset: 260,
-    lookAhead: 800,
+    defaultDistance: 1500 * MONSTER_SCALE,
+    minDistance: 900 * MONSTER_SCALE,
+    maxDistance: 2400 * MONSTER_SCALE,
+    shoulderHeight: 350 * MONSTER_SCALE,
+    shoulderOffset: 260 * MONSTER_SCALE,
+    lookAhead: 800 * MONSTER_SCALE,
     dragSensitivity: 0.006,
     wheelSensitivity: 0.8,
     shakeMaxOffset: 22,
@@ -70,17 +73,19 @@ export const CONFIG = {
     collapseTime: 1.4,
   },
   monster: {
-    height: 550,
+    scale: MONSTER_SCALE,
+    height: 550 * MONSTER_SCALE,
     maxHp: 1000,
     regenPerSec: 4,
-    moveSpeed: 70,
+    moveSpeed: 70 * MONSTER_SCALE,
     turnRate: 1.4,
-    arriveRadius: 25,
-    bodyRadius: 170,
+    arriveRadius: 25 * MONSTER_SCALE,
+    bodyRadius: 170 * MONSTER_SCALE,
     contactDps: 220,
+    /** In model units (before MONSTER_SCALE). */
     strideLength: 260,
-    meleeRange: 300,
-    meleeRadius: 170,
+    meleeRange: 300 * MONSTER_SCALE,
+    meleeRadius: 170 * MONSTER_SCALE,
     meleeDamage: 60,
     meleeCooldown: 1.2,
     meleeWindup: 0.3,
@@ -92,7 +97,7 @@ export const CONFIG = {
     deathTime: 2.2,
   },
   tank: { hp: 30, speed: 45, range: 950, damage: 6, fireCooldown: 3.2, shellFlightTime: 1.6, shellArc: 140, exp: 5, size: 40 },
-  jet: { hp: 60, speed: 260, altitude: 430, turnRate: 0.9, damage: 10, rocketsPerSalvo: 3, salvoMin: 700, salvoMax: 1600, rocketSpeed: 650, exp: 15, size: 70, hitRadius: 90, exitDistance: 2600 },
+  jet: { hp: 60, speed: 260, altitude: 430 * MONSTER_SCALE, turnRate: 0.9, damage: 10, rocketsPerSalvo: 3, salvoMin: 700, salvoMax: 1600, rocketSpeed: 650, exp: 15, size: 70, hitRadius: 90, exitDistance: 2600 },
   director: {
     baseRate: 0.35,
     rateGrowthPerMin: 0.45,
