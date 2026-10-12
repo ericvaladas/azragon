@@ -94,7 +94,8 @@ export const CONFIG = {
     maxBuildingH: 120,
     groundExtent: 30000,
     buildingHpPerMetre: 1.5,
-    buildingExpPerHp: 0.05,
+    /** EXP per building HP, rounded per building (min 1); 0.0365 is ~30% below the original 0.05 on average. */
+    buildingExpPerHp: 0.0365,
     collapseTime: 1.4,
   },
   monster: {
