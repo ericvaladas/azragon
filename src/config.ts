@@ -1,5 +1,5 @@
 /** Uniform scale of the monster model; world-space monster and camera distances below are multiplied by it. */
-const MONSTER_SCALE = 0.7;
+const MONSTER_SCALE = 0.6;
 
 /** All tunable constants. World units are metres; times are seconds. */
 export const CONFIG = {
