@@ -7,6 +7,8 @@ import { createSky } from './render/Sky';
 import { clampDelta, type Vec2 } from './util/math';
 import type { Target } from './combat';
 import { City } from './world/City';
+import { ringOnRoads } from './world/roads';
+import { ROAD_ORIGIN } from './world/chunks';
 import { Monster } from './monster/Monster';
 import { CameraRig } from './systems/CameraRig';
 import { Input } from './systems/Input';
@@ -57,6 +59,7 @@ export class GameScene {
   private rng = mulberry32(CONFIG.world.seed + 7);
   private progression = new Progression(mulberry32(CONFIG.world.seed + 13));
   private runTime = 0;
+  private openingDone = false;
   private dyingT = 0;
   private hudT = 0;
   private stateBeforePause: GameState = 'playing';
@@ -157,6 +160,7 @@ export class GameScene {
     this.markers.setTarget(null);
     this.kills = 0;
     this.runTime = 0;
+    this.openingDone = false;
     this.dyingT = 0;
     this.setState('playing');
     this.emitHud();
@@ -220,6 +224,11 @@ export class GameScene {
       this.elapsed += dt;
       if (this.state === 'playing') {
         this.runTime += dt;
+        if (!this.openingDone && this.runTime >= CONFIG.opening.time) {
+          this.openingDone = true;
+          const c = { x: this.monster.position.x, z: this.monster.position.z };
+          for (const p of ringOnRoads(c, CONFIG.opening.count, CONFIG.opening.radius, ROAD_ORIGIN, CONFIG.world.blockSize)) this.tanks.spawnAt(p.x, p.z, this.rng);
+        }
         for (const kind of this.director.update(dt, { tanks: this.tanks.count(), jets: this.jets.count() })) {
           if (kind === 'tank') this.tanks.spawn(this.monster.position, this.rng);
           else this.jets.spawn(this.monster.position, this.rng);

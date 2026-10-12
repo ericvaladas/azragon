@@ -83,11 +83,14 @@ export class TankFleet {
 
   /** Spawn on a north-south road at roughly spawnRing distance from `around`. */
   spawn(around: THREE.Vector3, rng: () => number): void {
-    if (this.tanks.length >= MAX_TANKS) return;
     const a = rng() * Math.PI * 2;
     const r = CONFIG.director.spawnRing * (0.8 + rng() * 0.3);
-    const x = snapToRoad(around.x + Math.cos(a) * r, ROAD_ORIGIN, CONFIG.world.blockSize);
-    const z = around.z + Math.sin(a) * r;
+    this.spawnAt(snapToRoad(around.x + Math.cos(a) * r, ROAD_ORIGIN, CONFIG.world.blockSize), around.z + Math.sin(a) * r, rng);
+  }
+
+  /** Spawn a tank at an exact point (assumed on a road). */
+  spawnAt(x: number, z: number, rng: () => number = Math.random): void {
+    if (this.tanks.length >= MAX_TANKS) return;
     const t = new Tank(this.damage);
     t.position.set(x, S * 0.3, z);
     t.fireCd = 1 + rng() * CONFIG.tank.fireCooldown;
