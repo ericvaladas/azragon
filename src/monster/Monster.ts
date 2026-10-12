@@ -15,6 +15,14 @@ const _foot = new THREE.Vector3();
 const _knee = new THREE.Vector3();
 const _pole = new THREE.Vector3();
 const _world = new THREE.Vector3();
+const _raised = new THREE.Vector3();
+const _target = new THREE.Vector3();
+/** Foot offset (model units) for the cocked leg: high and pulled back. */
+const _strikeLift = new THREE.Vector3(0, 420, -80);
+/** Leg-strike phases, in seconds after the windup. */
+const STRIKE = 0.1;
+const HOLD = 0.25;
+const RECOVER = 0.45;
 
 export class Monster {
   readonly model = new InsectTitanModel();
@@ -77,6 +85,7 @@ export class Monster {
     this.meleeCd = 0;
     this.spikeCd = 0;
     this.meleeT = -1;
+    this.strikeLeg = -1;
     this.leapT = -1;
     this.roarT = -1;
     this.crouch = false;
@@ -152,12 +161,13 @@ export class Monster {
         fs.lift * LIFT * this.motion,
         leg.restFoot.z + fs.stride * (CONFIG.monster.strideLength / 2) * this.motion,
       );
+      if (i === this.strikeLeg && this.meleeT >= 0) this.strikeFoot(_foot);
       _pole.copy(_hip).add(_knee.set(leg.side * 120, 700, 0));
       solveTwoBone(_hip, _foot, FEMUR, TIBIA, _pole, _knee);
       placeSegment(leg.femur, _hip, _knee);
       placeSegment(leg.tibia, _knee, _foot);
       leg.knee.position.copy(_knee);
-      if (this.motion > 0.3 && didLand(prevCycle, this.cycle, i)) {
+      if (this.motion > 0.3 && i !== this.strikeLeg && didLand(prevCycle, this.cycle, i)) {
         this.onFootLand(_world.copy(_foot).applyMatrix4(root.matrixWorld));
       }
     }
@@ -179,6 +189,8 @@ export class Monster {
   private spikeCd = 0;
   private meleeT = -1; // -1 = not attacking; else time since start
   private impactDone = false;
+  private strikeLeg = -1;
+  private strikePoint = new THREE.Vector3();
 
   meleeReady(): boolean {
     return this.alive && this.meleeCd <= 0 && this.meleeT < 0;
@@ -188,17 +200,37 @@ export class Monster {
     return this.alive && this.spikeCd <= 0;
   }
 
-  startMelee(cooldownMult: number): void {
+  /** Leg strike: `leg` (a front leg index) spears down onto `point` (world XZ, already clamped to reach). */
+  startMelee(cooldownMult: number, leg: number, point: Vec2): void {
     this.meleeCd = CONFIG.monster.meleeCooldown * cooldownMult;
     this.meleeT = 0;
     this.impactDone = false;
+    this.strikeLeg = leg;
+    this.strikePoint.set(point.x, 0, point.z);
+  }
+
+  /**
+   * Strike timeline (s after start, w = windup): raise the foot high and back until w, spear onto the
+   * target by w + STRIKE, hold until w + HOLD, then ease back to the gait pose by w + RECOVER.
+   */
+  private strikeFoot(foot: THREE.Vector3): void {
+    const w = CONFIG.monster.meleeWindup;
+    const t = this.meleeT;
+    _raised.copy(foot).add(_strikeLift);
+    _target.copy(this.strikePoint);
+    this.model.root.worldToLocal(_target);
+    _target.y = 0;
+    if (t < w) foot.lerp(_raised, t / w);
+    else if (t < w + STRIKE) foot.copy(_raised).lerp(_target, (t - w) / STRIKE);
+    else if (t < w + HOLD) foot.copy(_target);
+    else foot.copy(_target).lerp(foot, Math.min(1, (t - w - HOLD) / (RECOVER - HOLD)));
   }
 
   consumeSpike(cooldownMult: number): void {
     this.spikeCd = CONFIG.monster.spikeCooldown * cooldownMult;
   }
 
-  /** Cooldowns and the stomp pose: rear up during windup, slam, recover. */
+  /** Cooldowns, the leg-strike timing, and leap/roar poses. */
   tick(dt: number): void {
     const L = CONFIG.abilities.leap;
     if (this.leapT >= 0) {
@@ -229,18 +261,18 @@ export class Monster {
     this.meleeT += dt;
     const w = CONFIG.monster.meleeWindup;
     if (this.meleeT < w) {
+      // Rear back slightly while the leg cocks.
       const k = this.meleeT / w;
-      this.pose.pitch = -0.3 * k;
-      this.pose.dip = -20 * k;
-    } else {
-      if (!this.impactDone) {
-        this.impactDone = true;
-        this.pose.pitch = 0.18;
-        this.pose.dip = 45;
-        const f = this.forward(new THREE.Vector3());
-        this.onMeleeImpact(f.multiplyScalar(CONFIG.monster.meleeRange * 0.6).add(this.position).setY(0));
-      }
-      if (this.meleeT > w + 0.35) this.meleeT = -1;
+      this.pose.pitch = -0.12 * k;
+    } else if (this.meleeT >= w + STRIKE && !this.impactDone) {
+      this.impactDone = true;
+      this.pose.pitch = 0.1;
+      this.pose.dip = 25;
+      this.onMeleeImpact(this.strikePoint.clone());
+    }
+    if (this.meleeT > w + RECOVER) {
+      this.meleeT = -1;
+      this.strikeLeg = -1;
     }
   }
 }

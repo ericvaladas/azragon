@@ -102,14 +102,18 @@ export const CONFIG = {
     height: 550 * MONSTER_SCALE,
     maxHp: 1000,
     regenPerSec: 4,
-    moveSpeed: 90,
+    moveSpeed: 130,
     turnRate: 2.4,
     arriveRadius: 25 * MONSTER_SCALE,
     bodyRadius: 170 * MONSTER_SCALE,
-    contactDps: 220,
+    contactDps: 60,
+    /** Each landed foot damages ground targets and buildings within footRadius. */
+    footRadius: 45,
+    footDamage: 120,
     /** In model units (before MONSTER_SCALE). */
     strideLength: 260,
-    meleeRange: 300 * MONSTER_SCALE,
+    /** Leg-strike reach from the monster's root. */
+    meleeRange: 480,
     meleeRadius: 170 * MONSTER_SCALE,
     meleeDamage: 60,
     meleeCooldown: 0.7,
@@ -136,7 +140,7 @@ export const CONFIG = {
     earlyAbilityPicks: 3,
   },
   abilities: {
-    leap: { unlockLevel: 1, cooldown: 8, range: 1000, duration: 1.1, peak: 260, landRadius: 260, damage: 150 },
+    leap: { unlockLevel: 1, cooldown: 8, range: 1600, duration: 1.4, peak: 340, landRadius: 260, damage: 150 },
     roar: { unlockLevel: 5, cooldown: 20, radius: 600, duration: 1.2, damage: 120, buildingDamage: 300 },
   },
   laser: {

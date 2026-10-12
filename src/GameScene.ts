@@ -37,6 +37,7 @@ import { DebugOverlay } from './systems/DebugOverlay';
 import { Abilities, type ActiveId } from './systems/abilities';
 import { Shockwave } from './systems/Shockwave';
 import { leapTarget } from './monster/leap';
+import { footTargets, strikePlan } from './monster/strike';
 import { Passives } from './systems/Passives';
 import { AcidPools } from './systems/AcidPools';
 import { BroodDrones } from './systems/BroodDrones';
@@ -122,6 +123,7 @@ export class GameScene {
     this.monster.onFootLand = (p) => {
       this.particles.ring('dust', p, 60, 7);
       this.rig.addTrauma(0.06);
+      this.footCrush(p);
       const pool = this.passives.acidPool();
       if (pool && this.state === 'playing') this.acid.add(p, pool.radius, pool.life);
     };
@@ -547,6 +549,15 @@ export class GameScene {
     return { x: t.position.x, z: t.position.z, radius: t.radius, airborne: t.airborne, alive: t.isAlive() };
   }
 
+  /** A landed foot damages buildings and ground enemies under it. */
+  private footCrush(p: THREE.Vector3): void {
+    if (this.state !== 'playing' || !this.monster.alive) return;
+    const r = CONFIG.monster.footRadius;
+    const dmg = CONFIG.monster.footDamage * this.progression.stats.damageMult;
+    this.city.forEachStandingInRadius({ x: p.x, z: p.z }, r, (t) => t.applyDamage(dmg));
+    for (const t of footTargets({ x: p.x, z: p.z }, r, this.enemyTargets())) t.applyDamage(dmg);
+  }
+
   private meleeImpact(p: THREE.Vector3): void {
     const s = this.progression.stats;
     const r = CONFIG.monster.meleeRadius * s.stompRadiusMult;
@@ -585,7 +596,10 @@ export class GameScene {
       }
       if (d.moveTo) m.moveToward(d.moveTo, dt, s.moveSpeedMult);
       else if (d.face) m.faceToward(d.face, dt);
-      if (d.attack === 'melee') m.startMelee(s.cooldownMult);
+      if (d.attack === 'melee' && d.face) {
+        const plan = strikePlan(pos, m.yaw, d.face, CONFIG.monster.meleeRange);
+        m.startMelee(s.cooldownMult, plan.leg, plan.point);
+      }
       if (d.attack === 'ranged') this.fireSpikes(d.attackOn === 'order' && this.order?.kind === 'attack' ? this.order.target : auto);
     }
     m.tick(dt);
