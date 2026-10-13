@@ -14,6 +14,9 @@ const THIGH = 170;
 const SHIN = 190;
 const LIFT = 80;
 const FOOT_X = 115;
+/** Walking tail wag: sideways swing at the tip (model units) and the phase lag per segment (rad). */
+const TAIL_WAG = 230;
+const TAIL_LAG = 0.45;
 const NECK_BASE = new THREE.Vector3(0, 470, 110);
 const TAIL_BASE: readonly THREE.Vector3[] = [
   new THREE.Vector3(0, 300, -90),
@@ -253,10 +256,14 @@ export class KaijuBody implements MonsterBody {
     for (let i = 1; i < n; i++) {
       const base = TAIL_BASE[i]!;
       const k = i / (n - 1);
+      // Walking counter-balance: the tail swings opposite the body's weight shift, each segment a little
+      // behind the one before so the wag ripples out to the tip like a whip.
+      const lagged = -Math.sin(f.cycle * Math.PI * 2 - i * TAIL_LAG);
+      const wag = -lagged * TAIL_WAG * Math.pow(k, 1.2) * m;
       this.tailPts[i]!.set(
-        base.x + (Math.sin(f.time * 1.1 - i * 0.6) * 30 - shift * 70 * m) * k,
-        base.y + Math.sin(f.time * 1.7 + i) * 8 * k + (f.roaring ? 40 * k : 0),
-        base.z,
+        base.x + Math.sin(f.time * 1.1 - i * 0.6) * 30 * k + wag,
+        base.y + Math.sin(f.time * 1.7 + i) * 8 * k + Math.abs(lagged) * 18 * k * m + (f.roaring ? 40 * k : 0),
+        base.z + Math.abs(wag) * 0.25,
       );
     }
     if (f.tailSweep) {
