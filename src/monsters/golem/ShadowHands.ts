@@ -13,9 +13,9 @@ const SEGS = 7;
 const CORE_PER = SEGS + (SEGS - 1) + 1 + 4 * 6 + 5;
 /** Smoke shell around the arm bones and the palm. */
 const HALO_PER = SEGS + 1;
-/** How opaque the arm's bones and their smoky shell are: a ghostly, half see-through limb. */
-const CORE_OPACITY = 0.62;
-const HALO_OPACITY = 0.3;
+/** How opaque the arm's bones and their smoky shell are: nearly solid, with a hint of the city through the limb. */
+const CORE_OPACITY = 0.93;
+const HALO_OPACITY = 0.45;
 /** Hand scale; dimensions below are in metres before it. */
 const HS = 2;
 const PALM = { len: HAND_DIM.palmLen, width: HAND_DIM.palmWidth, thick: HAND_DIM.thick };
