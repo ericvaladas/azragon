@@ -453,6 +453,14 @@ export class KrakenBody implements MonsterBody {
     return this.mantle.localToWorld(out.set(0, 160, -40));
   }
 
+  /** Ink Cloud's siphon: a point low on the brow, on the side facing `toward`. */
+  siphon(toward: THREE.Vector3, out: THREE.Vector3): THREE.Vector3 {
+    this.mantle.updateWorldMatrix(true, false);
+    this.mantle.worldToLocal(_tmp.copy(toward));
+    const a = Math.atan2(_tmp.x, _tmp.z - 40);
+    return this.mantle.localToWorld(out.set(Math.sin(a) * 150, -40, 40 + Math.cos(a) * 132));
+  }
+
   aimError(): number {
     return 0;
   }

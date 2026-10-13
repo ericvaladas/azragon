@@ -40,6 +40,6 @@ export const KRAKEN: MonsterKind = {
     multiShot: { title: 'More Arms', desc: '+1 hurled chunk per throw' },
     moveSpeed: { title: 'Undertow' },
   },
-  fx: { spike: K.colors.chunk, glob: K.colors.ink, pool: K.colors.ink, nova: 0x6a3a8a, particle: 'ink', intercept: 'ink' },
+  fx: { spike: K.colors.chunk, glob: K.colors.ink, pool: K.colors.ink, nova: 0x6a3a8a, particle: 'ink', intercept: 'ink', inkJet: true },
   createBody: () => new KrakenBody(),
 };

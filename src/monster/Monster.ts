@@ -123,6 +123,11 @@ export class Monster {
     return this.body.launchOrigin(out);
   }
 
+  /** World point ink squirts from toward `toward` (the Kraken's siphon); the launch origin for other bodies. */
+  siphonOrigin(toward: THREE.Vector3, out: THREE.Vector3): THREE.Vector3 {
+    return this.body.siphon ? this.body.siphon(toward, out) : this.body.launchOrigin(out);
+  }
+
   /** World point ranged attacks leave from (stinger tip, jaws). */
   rangedOrigin(out: THREE.Vector3): THREE.Vector3 {
     return this.body.rangedOrigin(out);

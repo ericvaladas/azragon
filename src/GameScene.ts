@@ -43,6 +43,7 @@ import { Shockwave } from './systems/Shockwave';
 import { LevelUpMoment } from './systems/levelUpMoment';
 import { LevelUpAura } from './systems/LevelUpAura';
 import { ShieldFx } from './systems/ShieldFx';
+import { InkFx } from './monsters/kraken/InkFx';
 import { shieldHitPoint } from './systems/shieldHit';
 import { dashTarget, leapTarget } from './monster/leap';
 import { FRONT_LEFT, footTargets, strikePlan } from './monster/strike';
@@ -97,6 +98,7 @@ export class GameScene {
   private groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
   private tmpV = new THREE.Vector3();
   private particles: Particles;
+  private inkFx: InkFx;
   private projectiles: Projectiles;
   private enemies: EnemyRegistry;
   private ctx!: WorldContext;
@@ -158,6 +160,7 @@ export class GameScene {
     this.aura = new LevelUpAura(this.scene);
     this.novaWave = new Shockwave(this.scene, CONFIG.palette.acid);
     this.shieldFx = new ShieldFx(this.scene);
+    this.inkFx = new InkFx(this.scene);
     this.passives = new Passives(() => this.progression.ranks);
     this.acid = new AcidPools(this.scene);
     this.brood = new BroodDrones(this.scene);
@@ -304,6 +307,7 @@ export class GameScene {
     this.rotRing.clear();
     this.gazes = [];
     this.shieldFx.clear();
+    this.inkFx.clear();
     this.moment.reset();
     this.aura.clear();
     this.monster.glow = 0;
@@ -581,6 +585,9 @@ export class GameScene {
       this.novaWave.update(dt);
       this.rotRing.update(dt);
       this.shieldFx.update(dt, this.monster.position, this.passives.bubbleActive());
+      // Ink Cloud's armed haze shows while the living Kraken has shots banked.
+      const inkArmed = this.monster.kind.fx.inkJet === true && this.monster.alive && this.state === 'playing';
+      this.inkFx.update(dt, this.monster.position, inkArmed ? this.passives.interceptCharge() : 0);
       if (this.moment.update(realDt) && this.state === 'playing' && this.progression.pendingLevels > 0) this.enterLevelUp();
       const dm = this.dmgMult();
       this.acid.update(dt, this.enemyTargets(), dm);
@@ -923,7 +930,14 @@ export class GameScene {
     ];
     const picks = nearestWithin(center, r, threats, budget, (t) => t.pos);
     const shards = this.monster.kind.fx.shards;
+    const ink = this.monster.kind.fx.inkJet === true;
     for (const t of picks) {
+      // Ink Cloud: a blob squirts from the siphon and bursts into a cloud where the shot dies.
+      if (ink) {
+        this.inkFx.jet(this.monster.siphonOrigin(t.pos, this.tmpV), t.pos);
+        t.kill();
+        continue;
+      }
       this.particles.emit(this.monster.kind.fx.intercept, t.pos, 8, 0.6);
       this.particles.emit('smoke', t.pos, 1, 0.3);
       // Bone Ward: a little volley of bone shards flies from the body to the stopped shot.
@@ -933,7 +947,7 @@ export class GameScene {
       }
       t.kill();
     }
-    if (picks.length > 0) this.particles.emit(shards !== undefined ? 'bone' : 'spark', this.monster.launchOrigin(this.tmpV), 3, 0.4);
+    if (picks.length > 0 && !ink) this.particles.emit(shards !== undefined ? 'bone' : 'spark', this.monster.launchOrigin(this.tmpV), 3, 0.4);
     return picks.length;
   }
 

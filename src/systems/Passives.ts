@@ -73,6 +73,12 @@ export class Passives {
     return P.spines.radius[this.ranks().spines]!;
   }
 
+  /** Spine Shield's banked shots as a fraction of its one-second cap (0..1); 0 when not taken. */
+  interceptCharge(): number {
+    const rate = P.spines.rate[this.ranks().spines]!;
+    return rate > 0 ? Math.min(1, this.interceptBank / rate) : 0;
+  }
+
   bubbleActive(): boolean {
     return this.bubbleT > 0;
   }

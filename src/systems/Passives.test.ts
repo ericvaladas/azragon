@@ -75,6 +75,20 @@ describe('Passives', () => {
     expect(p.spineRadius()).toBe(P.spines.radius[1]);
   });
 
+  it('reports the intercept bank as a 0..1 charge (0 when not taken), draining as shots are spent', () => {
+    expect(new Passives(ranks({})).interceptCharge()).toBe(0);
+    const p = new Passives(ranks({ spines: 2 }));
+    expect(p.interceptCharge()).toBe(0);
+    p.update(0.5);
+    expect(p.interceptCharge()).toBeCloseTo(0.5);
+    p.update(10);
+    expect(p.interceptCharge()).toBe(1);
+    p.spendIntercepts(1);
+    expect(p.interceptCharge()).toBeCloseTo(1 - 1 / P.spines.rate[2]!);
+    p.reset();
+    expect(p.interceptCharge()).toBe(0);
+  });
+
   it('banks at most one second of intercepts while nothing needs shooting down', () => {
     const p = new Passives(ranks({ spines: 3 }));
     expect(p.update(10).intercepts).toBe(Math.floor(P.spines.rate[3]!));

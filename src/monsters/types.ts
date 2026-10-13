@@ -58,6 +58,11 @@ export type FxTheme = {
   mortarGaze?: boolean;
   /** When set, a visible shard of this colour flies from the body to each shot the intercept passive stops. */
   shards?: number;
+  /**
+   * Intercepts show as ink: a blob squirts from the body's siphon to each stopped shot and bursts into a lingering
+   * cloud, and a faint ink haze hangs around the body while shots are banked (Kraken's Ink Cloud).
+   */
+  inkJet?: boolean;
 };
 
 /** A Rending Claws strike's kind (Wendigo), decided once by the game as it starts; the body poses that one. */
@@ -104,6 +109,8 @@ export interface MonsterBody {
   aimError(): number;
   /** World point the monster's own projectiles (storm, mortar, interceptors) launch from. */
   launchOrigin(out: THREE.Vector3): THREE.Vector3;
+  /** World point on the body's side facing `toward` that ink squirts from (Kraken siphon). Optional; launchOrigin when absent. */
+  siphon?(toward: THREE.Vector3, out: THREE.Vector3): THREE.Vector3;
   /** Per-tentacle strike state (Kraken); absent for single-strike bodies. */
   readonly arms?: TentacleArms;
   /** The nova passive just fired (Wendigo: both clawed hands slam the ground). Optional. */
