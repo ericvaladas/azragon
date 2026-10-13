@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { CONFIG } from '../config';
 import { angleDelta, dist2, yawTo, type Vec2 } from '../util/math';
 import { leapPosition } from './leap';
-import { SWAT_TIMES, swatWeight } from './tailSwat';
+import { SWAT_TIMES, swatWeight, type SwatTiming } from './tailSwat';
 import type { BodyFrame, MonsterBody, MonsterKind } from '../monsters/types';
 
 const FACE_BEFORE_WALK = 1.0; // radians of yaw error allowed while walking
@@ -68,7 +68,7 @@ export class Monster {
     melee: null, antiAir: null, roaring: false, airborne: false, dashing: false, tailSweep: null, lookAt: null, charge: 0, heat: 0, flash: false, glow: 0,
   };
   private meleeFrame = { t: 0, side: 0, target: this.strikePoint };
-  private antiAirFrame = { weight: 0, target: new THREE.Vector3() };
+  private antiAirFrame = { t: 0, weight: 0, target: new THREE.Vector3() };
 
   constructor(
     private scene: THREE.Scene,
@@ -144,6 +144,11 @@ export class Monster {
     this.tailSide = side;
     this.tailHit = false;
     Object.assign(this.tailTiming, timing);
+  }
+
+  /** This kind's anti-air timeline. */
+  private get swatTimes(): SwatTiming {
+    return this.kind.swatTiming ?? SWAT_TIMES;
   }
 
   get swatting(): boolean {
@@ -277,7 +282,8 @@ export class Monster {
       f.melee = this.meleeFrame;
     } else f.melee = null;
     if (this.swatT >= 0 && this.swatTarget) {
-      this.antiAirFrame.weight = swatWeight(this.swatT);
+      this.antiAirFrame.t = this.swatT;
+      this.antiAirFrame.weight = swatWeight(this.swatT, this.swatTimes);
       this.antiAirFrame.target.copy(this.swatTarget);
       f.antiAir = this.antiAirFrame;
     } else f.antiAir = null;
@@ -325,11 +331,11 @@ export class Monster {
     }
     if (this.swatT >= 0) {
       this.swatT += dt;
-      if (!this.swatHit && this.swatT >= SWAT_TIMES.impact) {
+      if (!this.swatHit && this.swatT >= this.swatTimes.impact) {
         this.swatHit = true;
         this.onSwatImpact();
       }
-      if (this.swatT >= SWAT_TIMES.total) {
+      if (this.swatT >= this.swatTimes.total) {
         this.swatT = -1;
         this.swatTarget = null;
       }

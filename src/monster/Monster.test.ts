@@ -5,6 +5,7 @@ import type { BodyFrame, MonsterBody, MonsterKind } from '../monsters/types';
 import { INSECT } from '../monsters/insect/kind';
 import { CONFIG } from '../config';
 import { STRIKE_TIMES } from './strike';
+import { SWAT_TIMES, swatTiming } from './tailSwat';
 
 function stubBody(): MonsterBody & { frames: number; last: BodyFrame | null } {
   const root = new THREE.Group();
@@ -132,5 +133,24 @@ describe('INSECT kind', () => {
     expect([s.rangedRange, s.rangedDamage, s.rangedCooldown]).toEqual([M.spikeRange, M.spikeDamage, M.spikeCooldown]);
     expect(s.headHeight).toBe(CONFIG.passives.swat.headHeight);
     expect([INSECT.melee.kind, INSECT.ranged, INSECT.antiAir]).toEqual(['point', 'spikes', 'tail']);
+  });
+
+  it('times its anti-air strike by its kind (the shared timeline unless the kind has its own)', () => {
+    const impactAt = (k: MonsterKind) => {
+      const m = new Monster(new THREE.Scene(), k);
+      let hit = -1;
+      let t = 0;
+      m.onSwatImpact = () => { hit = t; };
+      m.startSwat(new THREE.Vector3(0, 300, 300));
+      for (let i = 0; i < 200 && m.swatting; i++) { m.tick(0.01); t += 0.01; }
+      return { hit, end: t };
+    };
+    const shared = impactAt(kind());
+    expect(shared.hit).toBeCloseTo(SWAT_TIMES.impact, 1);
+    expect(shared.end).toBeCloseTo(SWAT_TIMES.total, 1);
+    const own = swatTiming(0.2, 0.1, 0.1, 0.4);
+    const slow = impactAt({ ...kind(), swatTiming: own });
+    expect(slow.hit).toBeCloseTo(own.impact, 1);
+    expect(slow.end).toBeCloseTo(own.total, 1);
   });
 });

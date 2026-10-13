@@ -1,14 +1,20 @@
 import * as THREE from 'three';
-import { SWAT_TIMES } from '../../monster/tailSwat';
+import { swatTiming } from '../../monster/tailSwat';
 
 /**
- * Shadow Hands timeline (s from the grab's start), on the shared anti-air clock: the hand bursts out of its pool by
- * EMERGE, lunges onto the flyer by IMPACT (when the anti-air damage lands), crushes until HOLD, drags the wreck down
- * to the pool by DRAG, then dissolves into smoke by TOTAL.
+ * The Wendigo's anti-air timeline (its kind's `swatTiming`): the shared one slowed about a third, so the claw it
+ * lifts at the flyer reads as a deliberate, heavy reach; the damage lands 0.07 s later than the shared impact.
+ */
+export const WENDIGO_SWAT = swatTiming(0.16, 0.13, 0.11, 0.31);
+
+/**
+ * Shadow Hands timeline (s from the grab's start), on the Wendigo's anti-air clock: the hand bursts out of its pool
+ * by EMERGE, lunges onto the flyer by IMPACT (when the anti-air damage lands), crushes until HOLD, drags the wreck
+ * down to the pool by DRAG, then dissolves into smoke by TOTAL.
  */
 export const HAND_T = (() => {
-  const emerge = SWAT_TIMES.windup;
-  const impact = SWAT_TIMES.impact;
+  const emerge = WENDIGO_SWAT.windup;
+  const impact = WENDIGO_SWAT.impact;
   const hold = impact + 0.14;
   const drag = hold + 0.6;
   return { emerge, impact, hold, drag, total: drag + 0.45 };
@@ -29,6 +35,19 @@ export type HandPhase = {
 
 const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
 const smooth = (x: number) => x * x * (3 - 2 * x);
+
+/**
+ * 0..1: how far the Wendigo's own claw has lifted toward the flyer `t` s into its anti-air strike. A slow, heavy
+ * lift (still under half way at the end of the wind-up) that arrives at full reach exactly at impact, holds, then
+ * eases back down to the walk by the end.
+ */
+export function clawRaise(t: number): number {
+  const T = WENDIGO_SWAT;
+  if (t <= 0 || t >= T.total) return 0;
+  if (t < T.impact) return Math.pow(smooth(t / T.impact), 1.5);
+  if (t < T.impact + T.hold) return 1;
+  return 1 - smooth(clamp01((t - T.impact - T.hold) / T.recover));
+}
 
 /** Pose weights at `t` seconds into a grab. The grip opens again while dragging when the flyer survived (`released`). */
 export function handPhase(t: number, released = false): HandPhase {

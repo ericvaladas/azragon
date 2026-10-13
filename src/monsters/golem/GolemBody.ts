@@ -5,6 +5,7 @@ import { solveTwoBone } from '../../monster/ik';
 import type { BodyFrame, MonsterBody } from '../types';
 import { fistKind, lungeAmount, lungeWeight, strikeReturn, strikeStarted, type FistKind } from './fist';
 import { merge, piece, rng, SHAPES, type V3 } from './golemParts';
+import { clawRaise } from './handMath';
 import { SWING, limbPlanted, limbSwing } from './knuckleGait';
 import { clampShoulder, reachTwist, softCap, springStep, type ShoulderLimits } from './shoulder';
 
@@ -797,13 +798,13 @@ export class GolemBody implements MonsterBody {
       lean = LUNGE_LEAN * k;
     } else this.meleePrevT = -1;
 
-    // Shadow Hands: the claw on the flyer's side lifts toward it, beckoning, while the hand rises (weight ≤ 0 is the cock-back).
+    // Shadow Hands: the claw on the flyer's side lifts slowly toward it, beckoning, reaching full stretch as the hand strikes.
     let summonSide = -1;
     let summon = 0;
     if (f.antiAir && !f.airborne && !f.roaring) {
       this.root.worldToLocal(_sum.copy(f.antiAir.target));
       summonSide = _sum.x >= 0 ? 0 : 1;
-      summon = Math.min(1, Math.max(0, f.antiAir.weight * 1.4 + 0.35));
+      summon = clawRaise(f.antiAir.t);
     }
 
     // Where each hand wants to be (root space): creep on it, or strike, slam (Withering Ring), claw at the sky

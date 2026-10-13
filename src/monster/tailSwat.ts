@@ -1,17 +1,17 @@
 import * as THREE from 'three';
 
-/** Tail Swat timeline (s): cock back, lash to the target, hold, recover. Impact is when the tip arrives. */
-export const SWAT_TIMES = (() => {
-  const windup = 0.12;
-  const strike = 0.1;
-  const hold = 0.08;
-  const recover = 0.22;
-  return { windup, strike, hold, recover, impact: windup + strike, total: windup + strike + hold + recover };
-})();
+/** An anti-air strike's timeline (s): cock back, lash to the target, hold, recover. Impact is when it arrives. */
+export type SwatTiming = { windup: number; strike: number; hold: number; recover: number; impact: number; total: number };
 
-/** How far the tail is bent toward the target: slightly negative while cocking back, 1 at full extension. */
-export function swatWeight(t: number): number {
-  const T = SWAT_TIMES;
+export function swatTiming(windup: number, strike: number, hold: number, recover: number): SwatTiming {
+  return { windup, strike, hold, recover, impact: windup + strike, total: windup + strike + hold + recover };
+}
+
+/** The shared anti-air timeline (Tail Swat, Snap Bite, Tentacle Lash; any kind without its own `swatTiming`). */
+export const SWAT_TIMES = swatTiming(0.12, 0.1, 0.08, 0.22);
+
+/** How far the tail is bent toward the target on timeline T: slightly negative while cocking back, 1 at full extension. */
+export function swatWeight(t: number, T: SwatTiming = SWAT_TIMES): number {
   if (t <= 0 || t >= T.total) return 0;
   if (t < T.windup) return -0.25 * (t / T.windup);
   if (t < T.impact) return -0.25 + 1.25 * ((t - T.windup) / T.strike);

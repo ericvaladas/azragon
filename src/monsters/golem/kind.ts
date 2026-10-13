@@ -1,6 +1,7 @@
 import { CONFIG } from '../../config';
 import type { MonsterKind } from '../types';
 import { GolemBody } from './GolemBody';
+import { WENDIGO_SWAT } from './handMath';
 
 const G = CONFIG.golem;
 
@@ -19,6 +20,7 @@ export const GOLEM: MonsterKind = {
   melee: { kind: 'fist' },
   ranged: 'gaze',
   antiAir: 'hands',
+  swatTiming: WENDIGO_SWAT,
   tailSweep: false,
   signatures: ['acid', 'storm', 'chitin', 'frenzy', 'spines', 'swat', 'nova', 'mortar', 'core'],
   abilityText: {

@@ -2,6 +2,7 @@ import type * as THREE from 'three';
 import type { ParticleKind } from '../systems/Particles';
 import type { PoolSpec } from '../systems/Progression';
 import type { TentacleArms } from './kraken/TentacleArms';
+import type { SwatTiming } from '../monster/tailSwat';
 
 /** Playable creatures (widened as each one is built). */
 export type MonsterId = 'insect' | 'kaiju' | 'kraken' | 'golem';
@@ -70,8 +71,8 @@ export type BodyFrame = {
   pose: { dip: number; pitch: number; collapse: number };
   /** Active melee strike: seconds since start, which side (0 = left/+X, 1 = right), world target. */
   melee: { t: number; side: number; target: THREE.Vector3 } | null;
-  /** Active anti-air strike: reach weight (tailSwat curve) toward the world target. */
-  antiAir: { weight: number; target: THREE.Vector3 } | null;
+  /** Active anti-air strike: seconds since it started, reach weight (swatWeight curve) toward the world target. */
+  antiAir: { t: number; weight: number; target: THREE.Vector3 } | null;
   roaring: boolean;
   airborne: boolean;
   dashing: boolean;
@@ -118,6 +119,8 @@ export type MonsterKind = PoolSpec & {
   ranged: 'spikes' | 'breath' | 'hurl' | 'gaze';
   /** `hands`: Shadow Hands (Wendigo), spectral arms rising from the ground under the flyer. */
   antiAir: 'tail' | 'bite' | 'lash' | 'hands';
+  /** This kind's own anti-air timeline (impact, end); the shared SWAT_TIMES when absent. */
+  swatTiming?: SwatTiming;
   /** Has the auto Tail Sweep melee (CONFIG.kaiju.tail). */
   tailSweep: boolean;
   fx: FxTheme;

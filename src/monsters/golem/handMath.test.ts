@@ -1,11 +1,12 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { SWAT_TIMES } from '../../monster/tailSwat';
-import { armJoints, HAND_T, handBase, handPhase } from './handMath';
+import { armJoints, clawRaise, HAND_T, handBase, handPhase, WENDIGO_SWAT } from './handMath';
 
 describe('handPhase', () => {
-  it('reaches the flyer exactly at the shared anti-air impact, fist closed', () => {
-    expect(HAND_T.impact).toBe(SWAT_TIMES.impact);
+  it("reaches the flyer exactly at the Wendigo's anti-air impact, fist closed", () => {
+    expect(HAND_T.impact).toBe(WENDIGO_SWAT.impact);
+    expect(HAND_T.emerge).toBe(WENDIGO_SWAT.windup);
     expect(handPhase(0).rise).toBe(0);
     expect(handPhase(HAND_T.emerge).rise).toBeCloseTo(0.25);
     expect(handPhase(HAND_T.impact).rise).toBeCloseTo(1);
@@ -78,5 +79,40 @@ describe('armJoints', () => {
     expect(Math.abs(j[3]!.x)).toBeCloseTo(50);
     const z = armJoints(new THREE.Vector3(5, 0, 5), new THREE.Vector3(5, 0, 5), 0.3, 0.1, pts());
     for (const p of z) expect(p.toArray()).toEqual([5, 0, 5]);
+  });
+});
+
+describe('WENDIGO_SWAT', () => {
+  it('is a slower, heavier take on the shared anti-air timeline, with only a small delay to the damage', () => {
+    expect(WENDIGO_SWAT.total / SWAT_TIMES.total).toBeGreaterThan(1.3);
+    expect(WENDIGO_SWAT.total / SWAT_TIMES.total).toBeLessThan(1.45);
+    expect(WENDIGO_SWAT.recover / SWAT_TIMES.recover).toBeGreaterThan(1.3);
+    expect(WENDIGO_SWAT.impact).toBeGreaterThan(SWAT_TIMES.impact);
+    expect(WENDIGO_SWAT.impact - SWAT_TIMES.impact).toBeLessThanOrEqual(0.08);
+  });
+});
+
+describe('clawRaise', () => {
+  const T = WENDIGO_SWAT;
+  it('lifts from rest to full reach exactly at impact, holds, and is back at rest by the end', () => {
+    expect(clawRaise(0)).toBe(0);
+    expect(clawRaise(T.impact)).toBeCloseTo(1);
+    expect(clawRaise(T.impact + T.hold * 0.5)).toBeCloseTo(1);
+    expect(clawRaise(T.total)).toBe(0);
+    expect(clawRaise(-1)).toBe(0);
+    expect(clawRaise(T.total + 1)).toBe(0);
+  });
+  it('is still well short of full reach through the wind-up (no early snap)', () => {
+    expect(clawRaise(T.windup)).toBeLessThan(0.45);
+  });
+  it('moves smoothly: no jump from one frame to the next, rising then falling', () => {
+    let prev = 0;
+    for (let t = 0; t <= T.total + 1e-9; t += 1 / 120) {
+      const v = clawRaise(t);
+      expect(Math.abs(v - prev)).toBeLessThan(0.06);
+      if (t <= T.impact) expect(v).toBeGreaterThanOrEqual(prev - 1e-12);
+      if (t >= T.impact + T.hold) expect(v).toBeLessThanOrEqual(prev + 1e-12);
+      prev = v;
+    }
   });
 });
