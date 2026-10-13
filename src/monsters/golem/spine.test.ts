@@ -8,6 +8,18 @@ const v = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 const bend = (p: THREE.Vector3, a: number) => bendPoint(p, a, Z0, Z1, new THREE.Vector3());
 
 describe('spine bend', () => {
+  it('stays put under a GPU sin with ~1e-6 absolute error, even for a barely-bent spine (no flicker)', () => {
+    // Fast-math GPU sin is only accurate to an absolute ~1e-6; the bend must not divide that error by a tiny curvature.
+    const noisy = (x: number) => Math.sin(x) + 1e-6 * Math.sign(Math.cos(x * 1e6) || 1);
+    for (const a of [1e-7, 1e-5, 3e-4, 2e-3, 0.05, 0.7, 1.6, -1e-5, -0.9]) {
+      for (const p of [v(40, 420, 120), v(-70, 380, 0), v(10, 500, 260)]) {
+        const exact = bend(p, a);
+        const gpu = bendPoint(p, a, Z0, Z1, new THREE.Vector3(), noisy);
+        expect(gpu.distanceTo(exact)).toBeLessThan(0.5);
+      }
+    }
+  });
+
   it('leaves the body alone when straight, and the rump behind the bend always', () => {
     for (const p of [v(30, 400, -40), v(-80, 500, 200), v(0, 450, 400)]) expect(bend(p, 0).distanceTo(p)).toBeLessThan(1e-9);
     expect(bend(v(60, 380, -170), 1.4).distanceTo(v(60, 380, -170))).toBeLessThan(1e-9);

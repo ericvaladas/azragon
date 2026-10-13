@@ -99,14 +99,18 @@ const STEP_TIME = 0.24;
 /** The spine bend, run in the torso's vertex shader (the same map as spine.ts bendPoint, for the shoulders and head). */
 const SPINE_BEND_GLSL = `
 uniform float uSpineBend;
+float spineSinc(float x) {
+  return abs(x) < 0.05 ? 1.0 - x * x / 6.0 + x * x * x * x / 120.0 : sin(x) / x;
+}
 vec3 spineBend(vec3 p) {
   float s = p.z - (${SPINE_Z0.toFixed(1)});
   if (s <= 0.0 || uSpineBend == 0.0) return p;
   float L = ${(SPINE_Z1 - SPINE_Z0).toFixed(1)};
-  float k = uSpineBend / L;
-  float th = k * min(s, L);
-  float sh = sin(th * 0.5);
-  vec3 o = vec3(p.x * cos(th) + 2.0 * sh * sh / k, p.y, ${SPINE_Z0.toFixed(1)} + sin(th) / k - p.x * sin(th));
+  float m = min(s, L);
+  float th = uSpineBend * m / L;
+  // sinc, never a division by the curvature: a GPU sin's absolute error must not be blown up by a near-straight spine.
+  float sc = spineSinc(th * 0.5);
+  vec3 o = vec3(p.x * cos(th) + m * (th * 0.5) * sc * sc, p.y, ${SPINE_Z0.toFixed(1)} + m * spineSinc(th) - p.x * sin(th));
   if (s > L) o += (s - L) * vec3(sin(uSpineBend), 0.0, cos(uSpineBend));
   return o;
 }

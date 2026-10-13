@@ -6,21 +6,27 @@ import * as THREE from 'three';
  * ahead of z1 is carried on rigidly, turned by `a`; everything behind z0 stays put. The torso's vertex shader runs
  * the same map (GolemBody's SPINE_BEND_GLSL); this is its CPU twin, for the shoulders, head and launch points.
  */
-export function bendPoint(p: THREE.Vector3, a: number, z0: number, z1: number, out: THREE.Vector3): THREE.Vector3 {
+export function bendPoint(p: THREE.Vector3, a: number, z0: number, z1: number, out: THREE.Vector3, sin = Math.sin): THREE.Vector3 {
   const s = p.z - z0;
   if (s <= 0 || a === 0) return out.copy(p);
   const L = z1 - z0;
-  const k = a / L;
-  const th = k * Math.min(s, L);
-  const sh = Math.sin(th / 2);
-  // Slice at arc length min(s, L), turned by th about the centre of curvature 1/k off to the side.
-  let x = p.x * Math.cos(th) + (2 * sh * sh) / k;
-  let z = z0 + Math.sin(th) / k - p.x * Math.sin(th);
+  const m = Math.min(s, L);
+  const th = (a * m) / L;
+  // Slice at arc length m, turned by th about the centre of curvature L/a off to the side. Written with sinc rather
+  // than dividing by the curvature, so a GPU sin's small absolute error is never blown up by a nearly straight spine.
+  const sc = sinc(th / 2, sin);
+  let x = p.x * Math.cos(th) + m * (th / 2) * sc * sc;
+  let z = z0 + m * sinc(th, sin) - p.x * sin(th);
   if (s > L) {
     x += (s - L) * Math.sin(a);
     z += (s - L) * Math.cos(a);
   }
   return out.set(x, p.y, z);
+}
+
+/** sin(x)/x, by its series near 0 (where a GPU sin's absolute error would swamp the quotient). */
+function sinc(x: number, sin: (x: number) => number): number {
+  return Math.abs(x) < 0.05 ? 1 - (x * x) / 6 + (x * x * x * x) / 120 : sin(x) / x;
 }
 
 /** How far (rad) the slice of the spine at z is turned by a bend of `a` (bendPoint). */
