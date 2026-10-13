@@ -30,13 +30,14 @@ function makeCtx() {
 
 type TruckView = { position: THREE.Vector3; phase: string; heading: number; aim: THREE.Vector3; muzzle: THREE.Vector3; beamEnd: THREE.Vector3 };
 
-/** One truck parked in range at +Z (`dist` from the monster), so it deploys on the first update; it faces the monster unless `heading` is given. */
+/** One truck parked in range at +Z (`dist` from the monster), so it deploys on the first update; it and its stowed cannon face the monster unless `heading` is given. */
 function parked(ctx: WorldContext, dist = 800, heading = Math.PI) {
   const sys = new LaserTrucks(new THREE.Scene());
   sys.spawn(ctx);
   const t = (sys as unknown as { trucks: TruckView[] }).trucks[0]!;
   t.position.set(0, t.position.y, dist);
   t.heading = heading;
+  t.aim.set(Math.sin(heading), 0, Math.cos(heading));
   return { sys, t };
 }
 

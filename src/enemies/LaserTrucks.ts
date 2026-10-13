@@ -1,12 +1,13 @@
 import * as THREE from 'three';
 import { CONFIG } from '../config';
 import type { Target } from '../combat';
-import { faceted, toonMat } from '../render/toon';
+import { toonMat } from '../render/toon';
 import { dist2, type Vec2 } from '../util/math';
 import { ROAD_ORIGIN } from '../world/chunks';
 import { planRoadPath, snapToRoad } from '../world/roads';
-import { rotateToward, stepAngle } from './aimMath';
+import { rotateToward, stepAngle, yawPitch } from './aimMath';
 import { beamHits } from './beamMath';
+import { BARREL as BARREL_U, LEG_Z, PIVOT_DEPLOYED, cannonGeometry, chassisGeometry, deployPose, legBoxes, legGeometry, TRUNNION, turretGeometry } from './truckModel';
 import type { EnemySystem, WorldContext } from './types';
 
 const T = CONFIG.truck;
@@ -19,11 +20,17 @@ const _s = new THREE.Vector3();
 const _p = new THREE.Vector3();
 const _body = new THREE.Vector3();
 const _to = new THREE.Vector3();
+const _fwd = new THREE.Vector3();
+const _e = new THREE.Euler(0, 0, 0, 'YXZ');
+const _c = new THREE.Color();
 const UP = new THREE.Vector3(0, 1, 0);
-const FWD = new THREE.Vector3(0, 0, 1);
 /** Height of the deployed cannon's pivot above the truck's ground point, and the pivot-to-emitter length. */
-const PIVOT_Y = S * 0.9;
-const BARREL = S * 0.45;
+const PIVOT_Y = S * PIVOT_DEPLOYED;
+const BARREL = S * BARREL_U;
+/** Outrigger instances per truck: 4 outriggers of beam, jack and pad. */
+const LEG_PARTS = 12;
+/** Seconds the emitter glow takes to fade after firing. */
+const GLOW_FADE = 1.5;
 /** Points sampled along a firing beam for building damage. */
 const BEAM_SAMPLES = 12;
 
@@ -40,6 +47,8 @@ class LaserTruck implements Target {
   phase: Phase = 'driving';
   t = 0;
   heading = 0;
+  /** 0 stowed for driving, 1 deployed (outriggers down, turret raised). */
+  deploy = 0;
   /** Unit direction the cannon points (world space); turns toward the monster at `trackRate` while aiming. */
   readonly aim = new THREE.Vector3(0, 0, 1);
   path: Vec2[] = [];
@@ -73,30 +82,39 @@ function bodyPoint(monster: THREE.Vector3, out: THREE.Vector3): THREE.Vector3 {
 export class LaserTrucks implements EnemySystem {
   readonly kind = 'truck' as const;
   private trucks: LaserTruck[] = [];
-  private body: THREE.InstancedMesh;
-  private dish: THREE.InstancedMesh;
+  private chassis: THREE.InstancedMesh;
+  private turret: THREE.InstancedMesh;
+  private cannon: THREE.InstancedMesh;
+  private legs: THREE.InstancedMesh;
+  private glow: THREE.InstancedMesh;
   private sight: THREE.InstancedMesh;
   private beam: THREE.InstancedMesh;
   private core: THREE.InstancedMesh;
   private ctx: WorldContext | null = null;
 
   constructor(scene: THREE.Scene) {
-    const P = CONFIG.palette;
-    this.body = new THREE.InstancedMesh(faceted(new THREE.BoxGeometry(1, 1, 1)), toonMat(P.truck), MAX * 2);
-    this.dish = new THREE.InstancedMesh(faceted(new THREE.CylinderGeometry(0.5, 0.15, 0.35, 8)).rotateX(Math.PI / 2), toonMat(P.truckDark), MAX);
+    const vc = () => toonMat(0xffffff, { vertexColors: true });
+    this.chassis = new THREE.InstancedMesh(chassisGeometry(), vc(), MAX);
+    this.turret = new THREE.InstancedMesh(turretGeometry(), vc(), MAX);
+    this.cannon = new THREE.InstancedMesh(cannonGeometry(), vc(), MAX);
+    this.legs = new THREE.InstancedMesh(legGeometry(), toonMat(0xffffff), MAX * LEG_PARTS);
     const line = new THREE.CylinderGeometry(0.5, 0.5, 1, 6).translate(0, 0.5, 0);
     const glow = (color: number) =>
       new THREE.MeshBasicMaterial({ color, transparent: true, depthWrite: false, fog: false, blending: THREE.AdditiveBlending });
     this.sight = new THREE.InstancedMesh(line, glow(0xff2a1a), MAX);
     this.beam = new THREE.InstancedMesh(line, glow(0xff7a1a), MAX);
     this.core = new THREE.InstancedMesh(line, glow(0xfff2c0), MAX);
-    for (const m of [this.body, this.dish, this.sight, this.beam, this.core]) {
+    this.glow = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.5, 0), glow(0xffffff), MAX);
+    // Allocate per-instance colours up front so the materials compile with them.
+    for (let i = 0; i < MAX * LEG_PARTS; i++) this.legs.setColorAt(i, _c.setHex(CONFIG.palette.truckDark));
+    for (let i = 0; i < MAX; i++) this.glow.setColorAt(i, _c.setHex(0));
+    for (const m of [this.chassis, this.turret, this.cannon, this.legs, this.glow, this.sight, this.beam, this.core]) {
       m.count = 0;
       m.frustumCulled = false;
       scene.add(m);
     }
-    this.body.castShadow = this.dish.castShadow = true;
-    this.sight.renderOrder = this.beam.renderOrder = this.core.renderOrder = 4;
+    for (const m of [this.chassis, this.turret, this.cannon, this.legs]) m.castShadow = m.receiveShadow = true;
+    this.sight.renderOrder = this.beam.renderOrder = this.core.renderOrder = this.glow.renderOrder = 4;
   }
 
   targets(): readonly Target[] {
@@ -143,9 +161,9 @@ export class LaserTrucks implements EnemySystem {
     t.t = 0;
   }
 
-  /** Points the cannon along the truck's heading (stowed, or turned with the body before deploying). */
-  private aimForward(t: LaserTruck): void {
-    t.aim.set(Math.sin(t.heading), 0, Math.cos(t.heading));
+  /** Swings the cannon back to lie along the truck's heading (stowed), at the body's turn rate. */
+  private aimForward(t: LaserTruck, dt: number): void {
+    rotateToward(t.aim, _fwd.set(Math.sin(t.heading), 0, Math.cos(t.heading)), T.turnRate * dt, t.aim);
   }
 
   /**
@@ -173,7 +191,8 @@ export class LaserTrucks implements EnemySystem {
       const here = { x: t.position.x, z: t.position.z };
       const d = dist2(here, goal);
       if (t.phase !== 'driving' && d > 1e-3) t.heading = stepAngle(t.heading, Math.atan2(goal.x - here.x, goal.z - here.z), T.turnRate * dt);
-      if (t.phase === 'driving' || t.phase === 'deploying') this.aimForward(t);
+      if (t.phase === 'driving' || t.phase === 'deploying') this.aimForward(t, dt);
+      t.deploy = THREE.MathUtils.clamp(t.deploy + (t.phase === 'driving' ? -dt : dt) / T.deployTime, 0, 1);
       switch (t.phase) {
         case 'driving': {
           if (d <= T.range && ctx.monster.alive) {
@@ -241,19 +260,44 @@ export class LaserTrucks implements EnemySystem {
   }
 
   private draw(): void {
+    const P = CONFIG.palette;
     let sights = 0;
     let beams = 0;
+    let glows = 0;
     this.trucks.forEach((t, i) => {
       _q.setFromAxisAngle(UP, t.heading);
-      _m.compose(_p.set(t.position.x, S * 0.25, t.position.z), _q, _s.set(S * 0.55, S * 0.45, S * 1.4));
-      this.body.setMatrixAt(i * 2, _m);
-      _p.set(Math.sin(t.heading), 0, Math.cos(t.heading)).multiplyScalar(S * 0.75).add(t.position).setY(S * 0.4);
-      _m.compose(_p, _q, _s.set(S * 0.5, S * 0.6, S * 0.4));
-      this.body.setMatrixAt(i * 2 + 1, _m);
-      const raised = t.phase === 'driving' ? 0.55 : 0.9;
-      _q.setFromUnitVectors(FWD, t.aim);
-      _m.compose(_p.set(t.position.x, S * raised, t.position.z), _q, _s.setScalar(S * 0.9));
-      this.dish.setMatrixAt(i, _m);
+      _m.compose(_p.set(t.position.x, 0, t.position.z), _q, _s.setScalar(S));
+      this.chassis.setMatrixAt(i, _m);
+      // Outriggers: beams slide out from under the deck, then jacks drop their pads to the ground.
+      const pose = deployPose(t.deploy);
+      let k = i * LEG_PARTS;
+      for (const z of LEG_Z) {
+        for (const sx of [-1, 1]) {
+          for (const b of legBoxes(pose, sx, z)) {
+            _p.set(b.c[0], b.c[1], b.c[2]).multiplyScalar(S).applyQuaternion(_q).add(_to.set(t.position.x, 0, t.position.z));
+            _m.compose(_p, _q, _s.set(b.s[0], b.s[1], b.s[2]).multiplyScalar(S));
+            this.legs.setMatrixAt(k, _m);
+            this.legs.setColorAt(k++, _c.setHex(b.part === 'pad' ? P.samHazard : b.part === 'jack' ? P.truckHub : P.truckDark));
+          }
+        }
+      }
+      // Turret yaws with the aim; the cannon also pitches with it once unfolded.
+      const { yaw, pitch } = yawPitch(t.aim);
+      const pivotY = S * pose.pivotY;
+      _e.set(0, yaw, 0);
+      _m.compose(_p.set(t.position.x, pivotY - S * TRUNNION, t.position.z), _q.setFromEuler(_e), _s.setScalar(S));
+      this.turret.setMatrixAt(i, _m);
+      _e.set(-pitch * pose.pitch, yaw, 0);
+      _m.compose(_p.set(t.position.x, pivotY, t.position.z), _q.setFromEuler(_e), _s.setScalar(S));
+      this.cannon.setMatrixAt(i, _m);
+      const g = this.glowLevel(t);
+      if (g > 0) {
+        const size = t.phase === 'firing' ? 0.5 : 0.07 + 0.13 * g;
+        _m.compose(t.muzzle, _q.identity(), _s.setScalar(S * size));
+        this.glow.setMatrixAt(glows, _m);
+        // Deep red while charging, hotter orange when locked, white-hot while firing.
+        this.glow.setColorAt(glows++, _c.setRGB(1, 0.12 + 0.6 * g * g, 0.05 + 0.6 * g * g * g).multiplyScalar(0.35 + 0.65 * g));
+      }
       if (t.phase === 'aiming' || t.phase === 'locked') {
         this.placeLine(this.sight, sights++, t.muzzle, t.beamEnd, t.phase === 'locked' ? 10 : 5);
       } else if (t.phase === 'firing') {
@@ -261,10 +305,30 @@ export class LaserTrucks implements EnemySystem {
         this.placeLine(this.core, beams++, t.muzzle, t.beamEnd, T.beamWidth * 0.4);
       }
     });
-    this.body.count = this.trucks.length * 2;
-    this.dish.count = this.trucks.length;
+    this.chassis.count = this.turret.count = this.cannon.count = this.trucks.length;
+    this.legs.count = this.trucks.length * LEG_PARTS;
+    this.glow.count = glows;
     this.sight.count = sights;
     this.beam.count = this.core.count = beams;
-    for (const m of [this.body, this.dish, this.sight, this.beam, this.core]) m.instanceMatrix.needsUpdate = true;
+    for (const m of [this.chassis, this.turret, this.cannon, this.legs, this.glow, this.sight, this.beam, this.core]) {
+      m.instanceMatrix.needsUpdate = true;
+      if (m.instanceColor) m.instanceColor.needsUpdate = true;
+    }
+  }
+
+  /** Emitter charge 0..1: builds while aiming, pulses bright when locked, full while firing, fades after. */
+  private glowLevel(t: LaserTruck): number {
+    switch (t.phase) {
+      case 'aiming':
+        return 0.15 + 0.35 * Math.min(1, t.t / T.aimTime) + 0.05 * Math.sin(t.t * 31);
+      case 'locked':
+        return 0.75 + 0.15 * Math.sin(t.t * 40);
+      case 'firing':
+        return 1;
+      case 'cooldown':
+        return Math.max(0, 0.8 * (1 - t.t / GLOW_FADE));
+      default:
+        return 0;
+    }
   }
 }
