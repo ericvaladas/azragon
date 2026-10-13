@@ -1099,7 +1099,7 @@ With the dev server running (already up at http://localhost:5173; don't start an
 3. **Checks framing:** project the root, the fists and the vent tops each frame for 8 camera angles. The highest and lowest projected points must sit between the header's bottom and the panel's top (`.select-header`, `.select-panel`).
 4. **Walks:** `g.playSelected()`, `g.skipIntro()`, then `g.order = { kind: 'move', to: { x: 0, z: 2000 } }`. Over 2.5 s:
    - record z, and count plants by wrapping `g.monster.onFootLand`;
-   - record each plant's world position, and for every plant measure how far that limb's ground contact moves while planted (skate). Get the contact from the fist/foot mesh positions via `g.monster.body.arms` / `legs`, which are private but reachable at runtime;
+   - record each plant's world position, and for every plant measure how far that limb's ground contact moves while planted (skate). Get the contact from the fist/foot mesh positions via `g.monster.body.limbArms` / `legs`, which are private but reachable at runtime;
    - screenshot mid-walk from the gameplay camera, from high above (`g.rig.orbit.pitch = 1.15`), and from the side (`o.pitch = 0.25; o.yaw += Math.PI / 2; o.distance *= 1.3`).
 5. **Draw calls:** log `g.pixel.renderer.info.render.calls`.
 
