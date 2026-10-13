@@ -6,7 +6,7 @@ import { edgeArrow } from './systems/edgeArrows';
 import { Lighting } from './render/Lighting';
 import { PixelRenderer } from './render/PixelRenderer';
 import { createSky } from './render/Sky';
-import { clampDelta, type Vec2 } from './util/math';
+import { clampDelta, yawTo, type Vec2 } from './util/math';
 import { resolveHit, type DamageSource, type Target } from './combat';
 import { City, CRATER_RADIUS } from './world/City';
 import { IntroCinematic } from './intro/IntroCinematic';
@@ -21,6 +21,7 @@ import { Particles } from './systems/Particles';
 import { BreathBeam } from './systems/BreathBeam';
 import { arcTargets, inArc, linePoints, lineTargets } from './systems/sweep';
 import { canAim } from './monsters/kaiju/neck';
+import { tailSide, tailSweepTarget } from './monsters/kaiju/tailSweep';
 import { Projectiles, type Hit } from './systems/Projectiles';
 import { spikeTargets } from './systems/projectileMath';
 import { EnemyRegistry } from './enemies/EnemyRegistry';
@@ -110,6 +111,7 @@ export class GameScene {
   private browsed = false;
   private jaws = new THREE.Vector3();
   private swatCd = 0;
+  private tailCd = 0;
   private shieldFx: ShieldFx;
   private passives: Passives;
   private acid: AcidPools;
@@ -253,6 +255,7 @@ export class GameScene {
     this.openingDone = false;
     this.abilities.reset();
     this.swatCd = 0;
+    this.tailCd = 0;
     this.shieldFx.clear();
     this.moment.reset();
     this.aura.clear();
@@ -474,11 +477,12 @@ export class GameScene {
         this.abilities.tick(dt);
         const fire = this.passives.update(dt);
         if (fire.storm > 0) this.spikeStorm(fire.storm);
-        if (fire.brood > 0) this.brood.spawn(fire.brood, this.monster.rangedOrigin(new THREE.Vector3()));
+        if (fire.brood > 0) this.brood.spawn(fire.brood, this.monster.launchOrigin(new THREE.Vector3()));
         if (fire.nova > 0) this.venomNova();
         if (fire.mortar > 0) this.acidMortar(fire.mortar);
         if (fire.intercepts > 0) this.passives.spendIntercepts(this.spineShield(fire.intercepts));
         this.tailSwat(dt);
+        this.tailSweep(dt);
         const shields = this.passives.tryShields(this.threatImminent());
         if (shields.bubble || shields.reflect) this.rig.addTrauma(0.1);
         if (this.passives.reflectActive()) this.reflectProjectiles();
@@ -651,13 +655,44 @@ export class GameScene {
         .filter((t) => t.position.distanceTo(m.position) <= this.ms.rangedRange)
         .sort((a, b) => a.position.distanceToSquared(m.position) - b.position.distanceToSquared(m.position));
       if (inRange.length === 0) return;
-      const from = m.rangedOrigin(new THREE.Vector3());
       const dmg = this.ms.rangedDamage * this.dmgMult();
       for (let i = 0; i < n; i++) {
+        // Each bolt asks for its own launch point (the Kaiju cycles through its back vents).
+        const from = m.launchOrigin(new THREE.Vector3());
         this.projectiles.fireSpike(from, inRange[i % inRange.length]!, dmg, (i - (n - 1) / 2) * 0.25);
+        this.particles.emit('spark', from, 3, 1.2);
       }
-      this.particles.emit('spark', from, 10, 1.5);
     }
+
+  /**
+   * Tail Sweep (Kaiju base kit): on its own cooldown, whip the tail at the nearest ground enemy beside or
+   * behind; when it lands, everything on the ground in a wedge toward that side takes the hit. Never stops walking.
+   */
+  private tailSweep(dt: number): void {
+    this.tailCd = Math.max(0, this.tailCd - dt);
+    const m = this.monster;
+    if (!m.kind.tailSweep || this.tailCd > 0 || m.airborne || m.tailSweeping || !m.alive) return;
+    const TS = CONFIG.kaiju.tail;
+    const from = { x: m.position.x, z: m.position.z };
+    const target = tailSweepTarget(from, m.yaw, this.enemyTargets(), TS.reach, TS.rearHalf);
+    if (!target) return;
+    this.tailCd = TS.cooldown * this.progression.stats.cooldownMult;
+    const aim = { x: target.position.x, z: target.position.z };
+    m.onTailImpact = () => {
+      const at = { x: m.position.x, z: m.position.z };
+      const yaw = yawTo(at, aim);
+      const dmg = TS.damage * this.dmgMult();
+      for (const t of arcTargets(at, yaw, TS.reach, TS.hitHalf, this.enemyTargets())) t.applyDamage(dmg);
+      const buildings: Target[] = [];
+      this.city.forEachStandingInRadius(at, TS.reach, (t) => buildings.push(t));
+      for (const t of arcTargets(at, yaw, TS.reach, TS.hitHalf, buildings)) t.applyDamage(dmg * TS.buildingMult);
+      this.tmpV.set(at.x + Math.sin(yaw) * TS.reach * 0.75, 0, at.z + Math.cos(yaw) * TS.reach * 0.75);
+      this.particles.ring('dust', this.tmpV, 120, 14);
+      this.particles.emit('debris', this.tmpV.setY(15), 8, 1.2);
+      this.rig.addTrauma(0.3);
+    };
+    m.startTailSweep(tailSide(from, m.yaw, aim), TS.timing);
+  }
 
   /** Head-height point the tail swats around and spines fire from (world space). */
   private bodyPoint(height: number): THREE.Vector3 {
@@ -769,7 +804,7 @@ export class GameScene {
       this.particles.emit('smoke', t.pos, 1, 0.3);
       t.kill();
     }
-    if (picks.length > 0) this.particles.emit('spark', center, 3, 0.4);
+    if (picks.length > 0) this.particles.emit('spark', this.monster.launchOrigin(this.tmpV), 3, 0.4);
     return picks.length;
   }
 
@@ -790,10 +825,12 @@ export class GameScene {
     const M = CONFIG.passives.mortar;
     const targets = mortarTargets(this.monster.position, M.range, this.enemyTargets(), globs);
     if (targets.length === 0) return;
-    const from = this.monster.rangedOrigin(new THREE.Vector3());
     const dmg = M.damage * this.dmgMult();
-    targets.forEach((t) => this.projectiles.fireGlob(from, t.position.clone().setY(0), dmg));
-    this.particles.emit(this.monster.kind.fx.particle, from, 6, 0.6);
+    for (const t of targets) {
+      const from = this.monster.launchOrigin(new THREE.Vector3());
+      this.projectiles.fireGlob(from, t.position.clone().setY(0), dmg);
+      this.particles.emit(this.monster.kind.fx.particle, from, 3, 0.6);
+    }
   }
 
   /** Live targetable enemies (cached per frame by the registry). */

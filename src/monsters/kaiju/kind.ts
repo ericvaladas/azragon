@@ -13,11 +13,13 @@ export const KAIJU: MonsterKind = {
     { icon: '🦖', label: 'Claw Rake' },
     { icon: '🔥', label: 'Plasma Breath' },
     { icon: '🦷', label: 'Snap Bite' },
+    { icon: '🌀', label: 'Tail Sweep' },
   ],
   stats: K.stats,
   melee: { kind: 'arc', halfAngle: K.rakeHalfAngle },
   ranged: 'breath',
   antiAir: 'bite',
+  tailSweep: true,
   signatures: ['acid', 'storm', 'chitin', 'frenzy', 'spines', 'swat', 'nova', 'mortar', 'meltdown'],
   abilityText: {
     acid: { title: 'Radiant Wake', icon: '☢️', desc: (r) => (r === 1 ? 'Steps leave glowing radioactive pools' : 'Bigger, longer-lasting pools') },

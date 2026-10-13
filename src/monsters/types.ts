@@ -53,6 +53,8 @@ export type BodyFrame = {
   /** Active anti-air strike: reach weight (tailSwat curve) toward the world target. */
   antiAir: { weight: number; target: THREE.Vector3 } | null;
   roaring: boolean;
+  /** Active Tail Sweep: seconds in, which side (+1 = left/+X), its timeline. */
+  tailSweep: { t: number; side: number; timing: { windup: number; impact: number; end: number } } | null;
   /** World point the head should turn toward (breath aim), or null to face forward. */
   lookAt: THREE.Vector3 | null;
   /** Ranged charge 0..1 (Kaiju plates). */
@@ -70,6 +72,8 @@ export interface MonsterBody {
   rangedOrigin(out: THREE.Vector3): THREE.Vector3;
   /** How far (rad) the head still is from facing the last `lookAt` point; 0 for bodies that aim with the whole body. */
   aimError(): number;
+  /** World point the monster's own projectiles (storm, mortar, interceptors) launch from. */
+  launchOrigin(out: THREE.Vector3): THREE.Vector3;
   dispose(): void;
 }
 
@@ -84,6 +88,8 @@ export type MonsterKind = PoolSpec & {
   melee: MeleeShape;
   ranged: 'spikes' | 'breath';
   antiAir: 'tail' | 'bite';
+  /** Has the auto Tail Sweep melee (CONFIG.kaiju.tail). */
+  tailSweep: boolean;
   fx: FxTheme;
   createBody(): MonsterBody;
 };

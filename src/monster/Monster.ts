@@ -33,6 +33,8 @@ export class Monster {
   onMeleeImpact: (p: THREE.Vector3) => void = () => {};
   /** Fires once per anti-air strike, when the tail tip or jaws reach the target. */
   onSwatImpact: () => void = () => {};
+  /** Fires once per Tail Sweep, when the tail lands. */
+  onTailImpact: () => void = () => {};
 
   private cycle = 0;
   private lastCycle = 0;
@@ -48,6 +50,11 @@ export class Monster {
   private swatT = -1;
   private swatTarget: THREE.Vector3 | null = null;
   private swatHit = false;
+  private tailT = -1;
+  private tailSide = 1;
+  private tailHit = false;
+  private tailTiming = { windup: 0, impact: 0, end: 0 };
+  private tailFrame = { t: 0, side: 1, timing: this.tailTiming };
   private meleeCd = 0;
   private rangedCd = 0;
   private meleeT = -1;
@@ -56,7 +63,7 @@ export class Monster {
   private strikePoint = new THREE.Vector3();
   private frame: BodyFrame = {
     dt: 0, time: 0, cycle: 0, prevCycle: 0, motion: 0, pose: this.pose,
-    melee: null, antiAir: null, roaring: false, lookAt: null, charge: 0, flash: false, glow: 0,
+    melee: null, antiAir: null, roaring: false, tailSweep: null, lookAt: null, charge: 0, flash: false, glow: 0,
   };
   private meleeFrame = { t: 0, side: 0, target: this.strikePoint };
   private antiAirFrame = { weight: 0, target: new THREE.Vector3() };
@@ -102,6 +109,11 @@ export class Monster {
     return this.body.aimError();
   }
 
+  /** World point the monster's own projectiles launch from (stinger tip, back vents). */
+  launchOrigin(out: THREE.Vector3): THREE.Vector3 {
+    return this.body.launchOrigin(out);
+  }
+
   /** World point ranged attacks leave from (stinger tip, jaws). */
   rangedOrigin(out: THREE.Vector3): THREE.Vector3 {
     return this.body.rangedOrigin(out);
@@ -118,6 +130,18 @@ export class Monster {
 
   get dashing(): boolean {
     return this.dashT >= 0;
+  }
+
+  get tailSweeping(): boolean {
+    return this.tailT >= 0;
+  }
+
+  /** Tail Sweep toward `side` (+1 left, -1 right) on its own timeline; it never stops walking. */
+  startTailSweep(side: number, timing: { windup: number; impact: number; end: number }): void {
+    this.tailT = 0;
+    this.tailSide = side;
+    this.tailHit = false;
+    Object.assign(this.tailTiming, timing);
   }
 
   get swatting(): boolean {
@@ -138,6 +162,7 @@ export class Monster {
     this.roarT = -1;
     this.swatT = -1;
     this.swatTarget = null;
+    this.tailT = -1;
     this.dashT = -1;
     this.crouch = false;
     this.charge = 0;
@@ -254,6 +279,11 @@ export class Monster {
       f.antiAir = this.antiAirFrame;
     } else f.antiAir = null;
     f.roaring = this.roarT >= 0;
+    if (this.tailT >= 0) {
+      this.tailFrame.t = this.tailT;
+      this.tailFrame.side = this.tailSide;
+      f.tailSweep = this.tailFrame;
+    } else f.tailSweep = null;
     f.lookAt = this.lookAt;
     f.charge = this.charge;
     f.flash = this.flashT > 0;
@@ -297,6 +327,14 @@ export class Monster {
         this.swatT = -1;
         this.swatTarget = null;
       }
+    }
+    if (this.tailT >= 0) {
+      this.tailT += dt;
+      if (!this.tailHit && this.tailT >= this.tailTiming.impact) {
+        this.tailHit = true;
+        this.onTailImpact();
+      }
+      if (this.tailT >= this.tailTiming.end) this.tailT = -1;
     }
     if (this.roarT >= 0) {
       this.roarT += dt;

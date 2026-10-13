@@ -39,6 +39,7 @@ export const INSECT: MonsterKind = {
   melee: { kind: 'point' },
   ranged: 'spikes',
   antiAir: 'tail',
+  tailSweep: false,
   signatures: ['acid', 'storm', 'chitin', 'frenzy', 'brood', 'spines', 'swat', 'nova', 'mortar'],
   abilityText: {},
   upgradeText: {},

@@ -158,6 +158,11 @@ export const CONFIG = {
      * head must be to fire (rad), and how long a charged breath waits for the head before giving up (s).
      */
     neck: { limit: 1.6, turnRate: 3.5, aimTolerance: 0.1, maxWait: 1.2 },
+    /**
+     * Tail Sweep (auto): hits ground targets beside/behind within `reach`, chosen within `rearHalf` (rad) of
+     * straight behind; damage lands in a wedge of ±`hitHalf` toward the target. Buildings take buildingMult×.
+     */
+    tail: { reach: 520, rearHalf: 1.9, hitHalf: 0.8, damage: 90, buildingMult: 3, cooldown: 2.0, timing: { windup: 0.25, impact: 0.45, end: 1.0 } },
     /** Claw Rake: half-angle (rad) of the forward arc. */
     rakeHalfAngle: 0.9,
     /** Plasma Breath: charge (s), beam on-screen time (s), beam half-width (m), visual sweep (rad), fan per extra beam (rad), beam cap, building damage per hit. */

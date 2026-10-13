@@ -6,6 +6,7 @@ import type { BodyFrame, MonsterBody } from '../types';
 import { bipedFoot, bipedLanded } from './bipedGait';
 import { rakeSwing } from './rake';
 import { neckAim, stepNeck } from './neck';
+import { tailSwing } from './tailSweep';
 
 const K = CONFIG.kaiju;
 const C = K.colors;
@@ -30,6 +31,13 @@ const PLATES: readonly (readonly [number, number, number, number, number, number
   [0, 490, -92, 62, 100, -0.85],
   [0, 420, -118, 52, 80, -1.0],
   [0, 372, -160, 42, 60, -1.1],
+];
+/** Launch vents on the back, beside the spine between the plates (body space): x, y, z. */
+const VENTS: readonly (readonly [number, number, number])[] = [
+  [52, 548, -8],
+  [-52, 548, -8],
+  [50, 478, -78],
+  [-50, 478, -78],
 ];
 const _hip = new THREE.Vector3();
 const _foot = new THREE.Vector3();
@@ -62,6 +70,11 @@ export class KaijuBody implements MonsterBody {
   private neckYaw = 0;
   private neckPitch = 0;
   private aimErr = 0;
+  /** Back vents projectiles launch from; each flares briefly when used. */
+  private vents: THREE.Object3D[] = [];
+  private ventMats: THREE.MeshToonMaterial[] = [];
+  private ventFlash: number[] = [];
+  private nextVent = 0;
 
   constructor() {
     const scale = toonMat(C.scale);
@@ -122,6 +135,25 @@ export class KaijuBody implements MonsterBody {
 
     // Glowing back plates, raked back.
     for (const [x, y, z, w, h, tilt] of PLATES) add(this.body, cone, this.plateMat, [x, y, z], [w * 0.45, h, w], tilt);
+
+    // Launch vents: a dark collar around a glowing throat, angled up and back off the spine.
+    const collar = this.keep(faceted(new THREE.CylinderGeometry(1, 1.15, 1, 8)));
+    const throat = this.keep(new THREE.CircleGeometry(1, 8).rotateX(-Math.PI / 2));
+    for (const [x, y, z] of VENTS) {
+      const vent = new THREE.Object3D();
+      vent.position.set(x, y, z);
+      vent.rotation.set(-0.55, 0, -Math.sign(x) * 0.5);
+      add(vent, collar, dark, [0, 0, 0], [26, 22, 26]);
+      const mat = toonMat(C.plate, { emissive: C.plate });
+      this.ventMats.push(mat);
+      this.ventFlash.push(0);
+      add(vent, throat, mat, [0, 11.5, 0], [19, 1, 19]);
+      const mouth = new THREE.Object3D();
+      mouth.position.set(0, 30, 0);
+      vent.add(mouth);
+      this.vents.push(mouth);
+      this.body.add(vent);
+    }
 
     // Tail chain.
     for (let i = 0; i < TAIL_BASE.length - 1; i++) {
@@ -227,6 +259,18 @@ export class KaijuBody implements MonsterBody {
         base.z,
       );
     }
+    if (f.tailSweep) {
+      // Tail Sweep: cock away, then whip the tail across and down onto the target's side.
+      const w = tailSwing(f.tailSweep.t, f.tailSweep.timing);
+      const side = f.tailSweep.side;
+      for (let i = 1; i < n; i++) {
+        const k = i / (n - 1);
+        const p = this.tailPts[i]!;
+        p.x += side * w * 430 * Math.pow(k, 1.3);
+        p.z += Math.abs(w) * 170 * k * k;
+        p.y = THREE.MathUtils.lerp(p.y, 25, Math.max(0, w) * k);
+      }
+    }
     for (let i = 0; i < this.tailSegs.length; i++) placeSegment(this.tailSegs[i]!, this.tailPts[i]!, this.tailPts[i + 1]!);
 
     for (const mat of this.tintMats) {
@@ -234,6 +278,19 @@ export class KaijuBody implements MonsterBody {
       else mat.emissive.setHex(CONFIG.levelUp.color).multiplyScalar(f.glow);
     }
     this.plateMat.emissiveIntensity = f.flash ? 3 : 0.35 + 2.2 * (f.roaring ? 1 : f.charge);
+    for (let i = 0; i < this.ventMats.length; i++) {
+      this.ventFlash[i] = Math.max(0, this.ventFlash[i]! - f.dt * 5);
+      this.ventMats[i]!.emissiveIntensity = f.flash ? 3 : 0.5 + 1.2 * f.charge + 3 * this.ventFlash[i]!;
+    }
+  }
+
+  /** Projectiles leave from the back vents in turn; the one used flares. */
+  launchOrigin(out: THREE.Vector3): THREE.Vector3 {
+    const i = this.nextVent++ % this.vents.length;
+    this.ventFlash[i] = 1;
+    const v = this.vents[i]!;
+    v.updateWorldMatrix(true, false);
+    return v.getWorldPosition(out);
   }
 
   aimError(): number {

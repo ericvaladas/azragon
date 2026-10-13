@@ -78,6 +78,11 @@ export class InsectBody implements MonsterBody {
     return this.model.stingerTip.getWorldPosition(out);
   }
 
+  /** Stinger spikes, storm, and mortar all leave from the stinger tip. */
+  launchOrigin(out: THREE.Vector3): THREE.Vector3 {
+    return this.model.stingerTip.getWorldPosition(out);
+  }
+
   /** The Insect aims with its whole body. */
   aimError(): number {
     return 0;

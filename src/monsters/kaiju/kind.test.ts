@@ -11,6 +11,11 @@ describe('KAIJU kind', () => {
     expect(KAIJU.stats.turnRate).toBeLessThan(INSECT.stats.turnRate);
     expect(KAIJU.pips).toEqual({ toughness: 4, power: 4, speed: 3 });
   });
+  it('sweeps its tail; the Insect does not', () => {
+    expect(KAIJU.tailSweep).toBe(true);
+    expect(INSECT.tailSweep).toBe(false);
+    expect(KAIJU.moves.map((m) => m.label)).toContain('Tail Sweep');
+  });
   it('rakes, breathes, and bites', () => {
     expect(KAIJU.melee).toEqual({ kind: 'arc', halfAngle: CONFIG.kaiju.rakeHalfAngle });
     expect(KAIJU.ranged).toBe('breath');

@@ -16,6 +16,7 @@ function stubBody(): MonsterBody & { frames: number } {
     },
     rangedOrigin: (out) => out.set(1, 2, 3),
     aimError: () => 0,
+    launchOrigin: (out) => out.set(4, 5, 6),
     dispose() {},
   };
 }
@@ -75,6 +76,29 @@ describe('Monster', () => {
     expect(m.rangedOrigin(new THREE.Vector3()).toArray()).toEqual([1, 2, 3]);
     m.animate(0.016, 0);
     expect((m.body as ReturnType<typeof stubBody>).frames).toBe(1);
+  });
+});
+
+describe('Monster tail sweep', () => {
+  it('runs its own timeline: impact once at the impact time, free again after the end, walking unaffected', () => {
+    const m = new Monster(new THREE.Scene(), kind());
+    let hits = 0;
+    m.onTailImpact = () => hits++;
+    m.startTailSweep(1, { windup: 0.2, impact: 0.4, end: 0.8 });
+    expect(m.tailSweeping).toBe(true);
+    expect(m.busy).toBe(false);
+    m.tick(0.35);
+    expect(hits).toBe(0);
+    m.tick(0.1);
+    expect(hits).toBe(1);
+    m.tick(0.2);
+    expect(hits).toBe(1);
+    m.tick(0.2);
+    expect(m.tailSweeping).toBe(false);
+  });
+  it('delegates the launch origin to its body', () => {
+    const m = new Monster(new THREE.Scene(), kind());
+    expect(m.launchOrigin(new THREE.Vector3()).toArray()).toEqual([4, 5, 6]);
   });
 });
 
