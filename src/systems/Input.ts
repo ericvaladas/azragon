@@ -1,4 +1,4 @@
-import { abilityKey, canTap, classifyGesture, isSkipKey, pinchToWheel } from './tap';
+import { abilityKey, canTap, classifyGesture, isSkipKey, menuKey, pinchToWheel } from './tap';
 
 export type InputHandlers = {
   tap(x: number, y: number): void;
@@ -9,6 +9,8 @@ export type InputHandlers = {
   key(id: 'leap' | 'dash' | 'roar'): boolean | void;
   /** A plain key press; return true when it skipped the intro (then it isn't also an ability key). */
   skipKey(): boolean;
+  /** Select-screen browse/confirm key; return true when the menu used it. */
+  menuKey(k: 'left' | 'right' | 'confirm'): boolean;
   };
 
 /**
@@ -126,6 +128,11 @@ export class Input {
   private onContextMenu = (e: Event) => e.preventDefault();
 
   private onKey = (e: KeyboardEvent) => {
+    const mk = menuKey(e);
+    if (mk && this.h.menuKey(mk)) {
+      e.preventDefault();
+      return;
+    }
     if (isSkipKey(e) && this.h.skipKey()) {
       e.preventDefault();
       return;

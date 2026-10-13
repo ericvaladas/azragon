@@ -130,6 +130,54 @@ export const CONFIG = {
     spikeSpreadRad: 0.12,
     deathTime: 2.2,
   },
+  /** Reptile Kaiju. Stats feed its MonsterKind; breath tunes Plasma Breath; colours its body and effects. */
+  kaiju: {
+    stats: {
+      maxHp: 1250,
+      moveSpeed: 140,
+      turnRate: 1.9,
+      damageMult: 1.15,
+      strideLength: 300,
+      bodyRadius: 140 * MONSTER_SCALE,
+      footRadius: 70,
+      footDamage: 150,
+      meleeRange: 420,
+      meleeRadius: 0,
+      meleeDamage: 75,
+      meleeCooldown: 0.9,
+      meleeTiming: { windup: 0.25, impact: 0.4, end: 0.8 },
+      rangedRange: 1300,
+      rangedDamage: 70,
+      rangedCooldown: 2.2,
+      headHeight: 560,
+      /** Measured standing bounding box (world m) — re-measure in Step 6 after any model change. */
+      size: { width: 180, length: 617, height: 385 },
+    },
+    /**
+     * Neck aiming for Plasma Breath: reach either side of the body (rad), turn speed (rad/s), how close the
+     * head must be to fire (rad), and how long a charged breath waits for the head before giving up (s).
+     */
+    neck: { limit: 1.6, turnRate: 3.5, aimTolerance: 0.1, maxWait: 1.2 },
+    /**
+     * Tail Sweep (auto): hits ground targets beside/behind within `reach`, chosen within `rearHalf` (rad) of
+     * straight behind; damage lands in a wedge of ±`hitHalf` toward the target. Buildings take buildingMult×.
+     */
+    tail: { reach: 520, rearHalf: 1.9, hitHalf: 0.8, damage: 90, buildingMult: 3, cooldown: 2.0, timing: { windup: 0.25, impact: 0.45, end: 1.0 } },
+    /** Claw Rake: half-angle (rad) of the forward arc. */
+    rakeHalfAngle: 0.9,
+    /** Plasma Breath: charge (s), beam on-screen time (s), beam half-width (m), visual sweep (rad), fan per extra beam (rad), beam cap, building damage per hit. */
+    breath: { charge: 0.4, show: 0.35, halfWidth: 45, sweep: 0.1, fan: 0.12, maxLines: 4, buildingDamage: 120 },
+    colors: {
+      scale: 0x3f5f48,
+      scaleDark: 0x2b4234,
+      belly: 0x9aa883,
+      claw: 0xe6e0cc,
+      plate: 0x6ff6ff,
+      eye: 0xa8fdff,
+      plasma: 0x6ff6ff,
+      ember: 0xff9a3c,
+    },
+  },
   artillery: {
     hp: 120, exp: 20, size: 40, guns: 3, gunSpacing: 70, distMin: 2500, distMax: 3500,
     salvoEvery: 6, fillTime: 3.2, shellFlight: 1.8, shellArc: 750, radius: 90, damage: 60, buildingDamage: 200, spread: 260,
@@ -150,6 +198,8 @@ export const CONFIG = {
     mortar: { interval: [0, 4, 3.5, 3], globs: [0, 2, 3, 4], splash: [0, 90, 110, 130], damage: 90, range: 1800, flightTime: 1.2, arc: 300 },
     bubble: { duration: [0, 3, 3.5, 4], cooldown: [0, 25, 21, 17] },
     reflect: { duration: [0, 4, 5, 6], cooldown: [0, 20, 17, 14], radius: 380, damage: 60 },
+    /** Meltdown (Kaiju): below threshold[rank] of max HP, damage × damageMult and ranged cooldown × cooldownMult. */
+    meltdown: { threshold: [0, 0.3, 0.4, 0.5], damageMult: 1.5, cooldownMult: 0.5 },
     /** Auto-shields trigger only when something is about to hit: projectiles or blimps within this range. */
     threatRange: 700,
     earlyAbilityPicks: 3,
@@ -197,6 +247,11 @@ export const CONFIG = {
   progression: { expBase: 20, expExponent: 1.55, offerCount: 3 },
   /** One-off wave at the start of every run, outside the spawn budget. */
   opening: { time: 5, count: 8, radius: 1200 },
+  /** Menu cameras: a slow high circle over the city (title), and a turntable orbit of the monster (select). */
+  menu: {
+    title: { radius: 2400, height: 1300, speed: 0.04, startAngle: 2.4 },
+    select: { distance: 2.4, pad: 250, lift: 1.0, speed: 0.25, startAngle: 0.5 },
+  },
   intro: {
     /** Phase start times (s); `done` is the intro length. The cut to the game world is at `clouds`. */
     starts: { space: 0, reentry: 3.5, clouds: 5.5, descent: 8.5, impact: 10.5, settle: 11, emerge: 13, done: 15 },
@@ -216,8 +271,8 @@ export const CONFIG = {
     clouds: { count: 80, minY: 1500, maxY: 4000, spreadX: 1500, minZ: -2200, maxZ: 900, minSize: 500, maxSize: 1100 },
     /** Fog while inside the cloud band (eases back to CONFIG.fog through the descent). */
     cloudFog: { near: 700, far: 3400 },
-    /** Cocoon length (m): big enough to hold the curled-up monster (about 480 × 450 × 340 m at scale 0.6). */
-    podLength: 620,
+    /** Cocoon length = the monster's largest dimension × podFit (the Insect's 484 m span gets a 620 m cocoon). */
+    podFit: 1.28,
     /** Screen wash: builds over `rise` s before the cut, holds, fades; a full white-out at impact. */
     flash: { rise: 1.0, hold: 0.15, fade: 0.7, impactPeak: 1, impactFade: 0.9 },
     /** Camera shake offset (m) at full trauma. */

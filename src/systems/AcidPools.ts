@@ -27,6 +27,10 @@ export class AcidPools {
     scene.add(this.mesh);
   }
 
+  setColor(c: number): void {
+    (this.mesh.material as THREE.MeshBasicMaterial).color.setHex(c);
+  }
+
   add(p: THREE.Vector3, radius: number, life: number): void {
     if (this.pools.length >= MAX) this.pools.shift();
     this.pools.push({ x: p.x, z: p.z, r: radius, life, age: 0 });

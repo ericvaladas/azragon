@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
-import { CUT_TIME, EMERGE_TIME, IMPACT_TIME, INTRO_LENGTH, cameraPath, flashAt, gameplayPose, monsterCrouch, phaseAt, podPath, shakeAt } from './timeline';
+import { CUT_TIME, EMERGE_TIME, IMPACT_TIME, INTRO_LENGTH, cameraPath, flashAt, gameplayPose, monsterCrouch, phaseAt, podLengthFor, podPath, shakeAt } from './timeline';
 import { CONFIG } from '../config';
 
 const S = CONFIG.intro.starts;
@@ -104,5 +104,14 @@ describe('monsterCrouch', () => {
     expect(monsterCrouch(EMERGE_TIME + CONFIG.intro.riseTime / 2)).toBeLessThan(0.5);
     expect(monsterCrouch(EMERGE_TIME + CONFIG.intro.riseTime)).toBe(0);
     expect(monsterCrouch(INTRO_LENGTH)).toBe(0);
+  });
+});
+
+describe('podLengthFor', () => {
+  it('fits the monster\'s largest dimension with room to spare (the Insect gets the 620 m cocoon)', () => {
+    expect(podLengthFor({ width: 484, length: 451, height: 344 })).toBeCloseTo(620, -1);
+    const big = podLengthFor({ width: 300, length: 700, height: 400 });
+    expect(big).toBeGreaterThan(700);
+    expect(big).toBeCloseTo(700 * CONFIG.intro.podFit);
   });
 });

@@ -6,9 +6,9 @@ import { edgeArrow } from './systems/edgeArrows';
 import { Lighting } from './render/Lighting';
 import { PixelRenderer } from './render/PixelRenderer';
 import { createSky } from './render/Sky';
-import { clampDelta, type Vec2 } from './util/math';
+import { clampDelta, yawTo, type Vec2 } from './util/math';
 import { resolveHit, type DamageSource, type Target } from './combat';
-import { City } from './world/City';
+import { City, CRATER_RADIUS } from './world/City';
 import { IntroCinematic } from './intro/IntroCinematic';
 import { ringOnRoads } from './world/roads';
 import { ROAD_ORIGIN } from './world/chunks';
@@ -18,6 +18,10 @@ import { Input } from './systems/Input';
 import { Markers } from './systems/Markers';
 import { pickEnemy } from './systems/tap';
 import { Particles } from './systems/Particles';
+import { BreathBeam } from './systems/BreathBeam';
+import { arcTargets, inArc, linePoints, lineTargets } from './systems/sweep';
+import { canAim } from './monsters/kaiju/neck';
+import { tailSide, tailSweepTarget } from './monsters/kaiju/tailSweep';
 import { Projectiles, type Hit } from './systems/Projectiles';
 import { spikeTargets } from './systems/projectileMath';
 import { EnemyRegistry } from './enemies/EnemyRegistry';
@@ -47,6 +51,12 @@ import { Passives } from './systems/Passives';
 import { AcidPools } from './systems/AcidPools';
 import { BroodDrones } from './systems/BroodDrones';
 import { decide, nearestInRange, type BrainOrder, type BrainTarget } from './monster/brain';
+import { INSECT } from './monsters/insect/kind';
+import { KINDS, ROSTER_ORDER, isMonsterId, rosterEntries } from './monsters/roster';
+import { loadPick, savePick, type PickStore } from './monsters/pick';
+import type { MonsterKind } from './monsters/types';
+import { flowNext } from './menuFlow';
+import { selectPose, titlePose } from './systems/menuCamera';
 
 type Order = { kind: 'move'; to: Vec2 } | { kind: 'attack'; target: Target } | null;
 
@@ -64,6 +74,11 @@ export class GameScene {
   private city: City;
   private kills = 0;
   private monster: Monster;
+
+  /** The current monster's stats. */
+  private get ms() {
+    return this.monster.kind.stats;
+  }
   private elapsed = 0;
   private rig: CameraRig;
   private input: Input;
@@ -91,20 +106,29 @@ export class GameScene {
   private moment = new LevelUpMoment();
   private aura: LevelUpAura;
   private novaWave: Shockwave;
+  private breath: BreathBeam;
+  /** Set once the player browses the carousel, so a late saved pick cannot move it. */
+  private browsed = false;
+  private jaws = new THREE.Vector3();
   private swatCd = 0;
+  private tailCd = 0;
   private shieldFx: ShieldFx;
   private passives: Passives;
   private acid: AcidPools;
   private brood: BroodDrones;
   private intro: IntroCinematic;
+  private selIndex = 0;
+  private menuT = 0;
+  private menuPose = { pos: new THREE.Vector3(), look: new THREE.Vector3() };
 
-  constructor(private container: HTMLDivElement) {
+  constructor(private container: HTMLDivElement, private store: PickStore | null = null) {
     this.pixel = new PixelRenderer(container);
     this.lighting = new Lighting(this.scene);
     this.lighting.attachSky(createSky(this.scene));
 
     this.city = new City(this.scene, CONFIG.world.seed, this.onTargetDestroyed);
-    this.monster = new Monster(this.scene);
+    this.monster = new Monster(this.scene, INSECT);
+    this.progression.setPool(this.monster.kind);
     this.rig = new CameraRig(this.camera);
     this.markers = new Markers(this.scene);
     this.particles = new Particles(this.scene);
@@ -117,6 +141,7 @@ export class GameScene {
     this.acid = new AcidPools(this.scene);
     this.brood = new BroodDrones(this.scene);
     this.projectiles = new Projectiles(this.scene);
+    this.breath = new BreathBeam(this.scene);
     this.projectiles.onTrail = (p) => this.particles.emit('smoke', p, 1, 0.2);
     this.projectiles.onHit = this.onProjectileHit;
     this.enemies = new EnemyRegistry(this.rng);
@@ -148,7 +173,17 @@ export class GameScene {
       drag: (dx, dy) => this.rig.drag(dx, dy),
       wheel: (dy) => this.rig.zoom(dy),
       hover: this.onHover,
+      menuKey: (k) => {
+        if (this.state !== 'select') return false;
+        if (k === 'confirm') this.playSelected();
+        else this.selectStep(k === 'left' ? -1 : 1);
+        return true;
+      },
       skipKey: () => {
+        if (this.state === 'title') {
+          this.startFromTitle();
+          return true;
+        }
         if (this.state !== 'intro') return false;
         this.skipIntro();
         return true;
@@ -167,7 +202,13 @@ export class GameScene {
     this.resizeObserver.observe(container);
     this.clock.start();
     this.update();
-    this.startIntro();
+    this.enterTitle();
+    // The saved pick arrives asynchronously; it only picks the carousel's starting monster.
+    void loadPick(this.store).then((id) => {
+      if (this.browsed) return;
+      this.selIndex = ROSTER_ORDER.indexOf(id);
+      if (this.state === 'select') this.showSelection();
+    });
   }
 
   getState(): GameState {
@@ -180,7 +221,7 @@ export class GameScene {
     if (id === 'dash' || id === 'roar') this.abilities.setRank(id, this.progression.ranks[id]);
     const s = this.progression.stats;
     const m = this.monster;
-    const newMax = Math.round(CONFIG.monster.maxHp * s.maxHpMult);
+    const newMax = Math.round(this.ms.maxHp * s.maxHpMult);
     if (id === 'vitality') m.hp = Math.min(newMax, m.hp + newMax * 0.3);
     m.maxHp = newMax;
     this.emitHud();
@@ -189,7 +230,7 @@ export class GameScene {
   }
 
   pause(): void {
-    if (this.state === 'paused' || this.state === 'gameover') return;
+    if (this.state === 'paused' || this.state === 'gameover' || this.state === 'title' || this.state === 'select') return;
     this.stateBeforePause = this.state;
     this.setState('paused');
   }
@@ -198,9 +239,10 @@ export class GameScene {
     if (this.state === 'paused') this.setState(this.stateBeforePause);
   }
 
-  restart(): void {
+  private resetRun(): void {
     this.city.reset();
     this.projectiles.clear();
+    this.breath.clear();
     this.particles.clear();
     this.monster.reset();
     this.progression.reset();
@@ -213,6 +255,7 @@ export class GameScene {
     this.openingDone = false;
     this.abilities.reset();
     this.swatCd = 0;
+    this.tailCd = 0;
     this.shieldFx.clear();
     this.moment.reset();
     this.aura.clear();
@@ -222,8 +265,94 @@ export class GameScene {
     this.brood.clear();
     this.markers.setAim(null, 0);
     this.dyingT = 0;
+  }
+
+  /** Game over → Play Again: same monster, fresh world, the intro replays. */
+  restart(): void {
+    if (flowNext(this.state, 'playAgain') === null) return;
+    this.resetRun();
     this.startIntro();
     this.emitHud();
+  }
+
+  /** Game over → Change Monster: fresh world, back to the select screen. */
+  changeMonster(): void {
+    if (flowNext(this.state, 'changeMonster') === null) return;
+    this.resetRun();
+    this.enterSelect();
+  }
+
+  startFromTitle(): void {
+    if (flowNext(this.state, 'start') === null) return;
+    this.enterSelect();
+  }
+
+  /** Browse the carousel (wraps around). */
+  selectStep(delta: number): void {
+    if (this.state !== 'select') return;
+    this.browsed = true;
+    const n = ROSTER_ORDER.length;
+    this.selIndex = (((this.selIndex + delta) % n) + n) % n;
+    this.showSelection();
+  }
+
+  /** PLAY: only for a playable monster; the city is rebuilt so the intro crashes into it. */
+  playSelected(): void {
+    if (flowNext(this.state, 'play') === null) return;
+    if (!rosterEntries()[this.selIndex]!.available) return;
+    this.resetRun();
+    this.startIntro();
+    this.emitHud();
+  }
+
+  private enterTitle(): void {
+    this.monster.visible = false;
+    this.menuT = 0;
+    this.setState('title');
+  }
+
+  private enterSelect(): void {
+    this.menuT = 0;
+    this.setState('select');
+    this.showSelection();
+  }
+
+  /** Show the carousel's current entry: the monster in its crater (or an empty crater for coming-soon). */
+  private showSelection(): void {
+    const entries = rosterEntries();
+    const e = entries[this.selIndex]!;
+    if (isMonsterId(e.id)) {
+      this.applyKind(KINDS[e.id]);
+      this.monster.visible = true;
+      void savePick(this.store, e.id);
+    } else {
+      this.monster.visible = false;
+    }
+    // Diorama crater: the same instant blast a skipped intro applies (no EXP, no stat).
+    this.city.blast({ x: 0, z: 0 }, CRATER_RADIUS, true, CRATER_RADIUS * CONFIG.intro.impact.outer);
+    this.events.emit('roster', { entries, index: this.selIndex });
+  }
+
+  /** Become `kind`: body, stats, and level-up pool. */
+  private applyKind(kind: MonsterKind): void {
+    this.monster.setKind(kind);
+    this.progression.setPool(kind);
+    this.projectiles.setTheme(kind.fx.spike, kind.fx.glob);
+    this.acid.setColor(kind.fx.pool);
+    this.novaWave.setColor(kind.fx.nova);
+    this.breath.clear();
+  }
+
+  /** All of the monster's damage: upgrades × the creature's own multiplier × Meltdown. */
+  private dmgMult(): number {
+    const m = this.monster;
+    return this.progression.stats.damageMult * m.kind.stats.damageMult * this.passives.meltdown(m.hp / m.maxHp).damage;
+  }
+
+  /** Ranged recharge: upgrades × Meltdown. */
+  private rangedCdMult(): number {
+    const m = this.monster;
+    return this.progression.stats.cooldownMult * this.passives.meltdown(m.hp / m.maxHp).cooldown;
   }
 
   private startIntro(): void {
@@ -299,6 +428,9 @@ export class GameScene {
   }
 
   private startDying(): void {
+    this.breath.clear();
+    this.monster.charge = 0;
+    this.monster.lookAt = null;
     this.monster.alive = false;
     this.order = null;
     this.markers.setTarget(null);
@@ -345,11 +477,12 @@ export class GameScene {
         this.abilities.tick(dt);
         const fire = this.passives.update(dt);
         if (fire.storm > 0) this.spikeStorm(fire.storm);
-        if (fire.brood > 0) this.brood.spawn(fire.brood, this.monster.model.stingerTip.getWorldPosition(new THREE.Vector3()));
+        if (fire.brood > 0) this.brood.spawn(fire.brood, this.monster.launchOrigin(new THREE.Vector3()));
         if (fire.nova > 0) this.venomNova();
         if (fire.mortar > 0) this.acidMortar(fire.mortar);
         if (fire.intercepts > 0) this.passives.spendIntercepts(this.spineShield(fire.intercepts));
         this.tailSwat(dt);
+        this.tailSweep(dt);
         const shields = this.passives.tryShields(this.threatImminent());
         if (shields.bubble || shields.reflect) this.rig.addTrauma(0.1);
         if (this.passives.reflectActive()) this.reflectProjectiles();
@@ -360,6 +493,12 @@ export class GameScene {
           for (const p of ringOnRoads(c, CONFIG.opening.count, CONFIG.opening.radius, ROAD_ORIGIN, CONFIG.world.blockSize)) this.enemies.get<TankFleet>('tank').spawnAt(p.x, p.z, this.ctx);
         }
         this.updateMonster(dt);
+        // The head turns to the breath's aim; the breath fires once the head is on target.
+        this.monster.lookAt = this.breath.busy ? this.breath.aimPoint : null;
+        const headOnTarget = this.monster.aimError() < CONFIG.kaiju.neck.aimTolerance;
+        this.breath.update(dt, this.monster.rangedOrigin(this.jaws), this.monster.position, this.ms.rangedRange, headOnTarget, this.onBreathFire);
+        const melting = this.passives.meltdown(this.monster.hp / this.monster.maxHp).active;
+        this.monster.charge = Math.max(this.breath.charge, melting ? 0.5 : 0);
         if (this.monster.hp <= 0 && this.monster.alive) this.startDying();
       }
       if (this.state === 'dying') {
@@ -384,7 +523,7 @@ export class GameScene {
       this.novaWave.update(dt);
       this.shieldFx.update(dt, this.monster.position, this.passives.bubbleActive());
       if (this.moment.update(realDt) && this.state === 'playing' && this.progression.pendingLevels > 0) this.enterLevelUp();
-      const dm = this.progression.stats.damageMult;
+      const dm = this.dmgMult();
       this.acid.update(dt, this.enemyTargets(), dm);
       this.brood.update(dt, this.enemyTargets(), dm);
       this.markers.update(dt);
@@ -404,8 +543,17 @@ export class GameScene {
       this.monster.glow = this.aura.glow();
       if (frozen) this.monster.animate(0, this.elapsed);
     }
-    // While the intro runs (even paused) it owns the camera.
-    if (!this.intro.active) this.rig.update(frozen ? 0 : dt, this.monster.position);
+    const shown = this.state === 'paused' ? this.stateBeforePause : this.state;
+    if (shown === 'title' || shown === 'select') {
+      if (!frozen) this.menuT += realDt;
+      if (shown === 'title') titlePose(this.menuT, this.menuPose);
+      else selectPose(this.menuT, this.ms.size.height, this.camera.aspect, this.menuPose);
+      this.camera.position.copy(this.menuPose.pos);
+      this.camera.lookAt(this.menuPose.look);
+    } else if (!this.intro.active) {
+      // While the intro runs (even paused) it owns the camera.
+      this.rig.update(frozen ? 0 : dt, this.monster.position);
+    }
     this.chevrons.update(this.enemyTargets(), this.camera, this.elapsed);
     this.lighting.follow(this.monster.position);
     this.lighting.followCamera(this.camera);
@@ -473,7 +621,7 @@ export class GameScene {
 
     private leapLand(p: THREE.Vector3): void {
       const L = CONFIG.abilities.leap;
-      const dmg = L.damage * this.progression.stats.damageMult;
+      const dmg = L.damage * this.dmgMult();
       this.city.forEachStandingInRadius({ x: p.x, z: p.z }, L.landRadius, (t) => t.applyDamage(dmg * 3));
       for (const t of this.enemyTargets()) {
         if (!t.airborne && Math.hypot(t.position.x - p.x, t.position.z - p.z) <= L.landRadius + t.radius) t.applyDamage(dmg);
@@ -490,7 +638,7 @@ export class GameScene {
       m.startRoar();
       this.order = null;
             this.shockwave.start(p, R.radius);
-      const dmg = R.damage * this.progression.stats.damageMult;
+      const dmg = R.damage * this.dmgMult();
       this.city.forEachStandingInRadius({ x: p.x, z: p.z }, R.radius, (t) => t.applyDamage(R.buildingDamage));
       for (const t of [...this.enemyTargets()]) {
         if (Math.hypot(t.position.x - p.x, t.position.z - p.z) > R.radius + t.radius) continue;
@@ -504,16 +652,47 @@ export class GameScene {
     private spikeStorm(n: number): void {
       const m = this.monster;
       const inRange = this.enemyTargets()
-        .filter((t) => t.position.distanceTo(m.position) <= CONFIG.monster.spikeRange)
+        .filter((t) => t.position.distanceTo(m.position) <= this.ms.rangedRange)
         .sort((a, b) => a.position.distanceToSquared(m.position) - b.position.distanceToSquared(m.position));
       if (inRange.length === 0) return;
-      const from = m.model.stingerTip.getWorldPosition(new THREE.Vector3());
-      const dmg = CONFIG.monster.spikeDamage * this.progression.stats.damageMult;
+      const dmg = this.ms.rangedDamage * this.dmgMult();
       for (let i = 0; i < n; i++) {
+        // Each bolt asks for its own launch point (the Kaiju cycles through its back vents).
+        const from = m.launchOrigin(new THREE.Vector3());
         this.projectiles.fireSpike(from, inRange[i % inRange.length]!, dmg, (i - (n - 1) / 2) * 0.25);
+        this.particles.emit('spark', from, 3, 1.2);
       }
-      this.particles.emit('spark', from, 10, 1.5);
     }
+
+  /**
+   * Tail Sweep (Kaiju base kit): on its own cooldown, whip the tail at the nearest ground enemy beside or
+   * behind; when it lands, everything on the ground in a wedge toward that side takes the hit. Never stops walking.
+   */
+  private tailSweep(dt: number): void {
+    this.tailCd = Math.max(0, this.tailCd - dt);
+    const m = this.monster;
+    if (!m.kind.tailSweep || this.tailCd > 0 || m.airborne || m.tailSweeping || !m.alive) return;
+    const TS = CONFIG.kaiju.tail;
+    const from = { x: m.position.x, z: m.position.z };
+    const target = tailSweepTarget(from, m.yaw, this.enemyTargets(), TS.reach, TS.rearHalf);
+    if (!target) return;
+    this.tailCd = TS.cooldown * this.progression.stats.cooldownMult;
+    const aim = { x: target.position.x, z: target.position.z };
+    m.onTailImpact = () => {
+      const at = { x: m.position.x, z: m.position.z };
+      const yaw = yawTo(at, aim);
+      const dmg = TS.damage * this.dmgMult();
+      for (const t of arcTargets(at, yaw, TS.reach, TS.hitHalf, this.enemyTargets())) t.applyDamage(dmg);
+      const buildings: Target[] = [];
+      this.city.forEachStandingInRadius(at, TS.reach, (t) => buildings.push(t));
+      for (const t of arcTargets(at, yaw, TS.reach, TS.hitHalf, buildings)) t.applyDamage(dmg * TS.buildingMult);
+      this.tmpV.set(at.x + Math.sin(yaw) * TS.reach * 0.75, 0, at.z + Math.cos(yaw) * TS.reach * 0.75);
+      this.particles.ring('dust', this.tmpV, 120, 14);
+      this.particles.emit('debris', this.tmpV.setY(15), 8, 1.2);
+      this.rig.addTrauma(0.3);
+    };
+    m.startTailSweep(tailSide(from, m.yaw, aim), TS.timing);
+  }
 
   /** Head-height point the tail swats around and spines fire from (world space). */
   private bodyPoint(height: number): THREE.Vector3 {
@@ -525,12 +704,12 @@ export class GameScene {
     this.swatCd = Math.max(0, this.swatCd - dt);
     if (this.swatCd > 0 || this.monster.airborne || this.monster.swatting) return;
     const sw = this.passives.swat();
-    const head = this.bodyPoint(CONFIG.passives.swat.headHeight);
+    const head = this.bodyPoint(this.ms.headHeight);
     const flyers = this.enemyTargets().filter((t) => t.airborne && t.isAlive());
     const hits = nearestWithin(head, sw.range, flyers, sw.targets, (t) => t.position);
     if (hits.length === 0) return;
     this.swatCd = sw.cooldown;
-    const dmg = sw.damage * this.progression.stats.damageMult;
+    const dmg = sw.damage * this.dmgMult();
     // Damage lands when the tail tip arrives at the first target (it follows that target as it moves).
     this.monster.onSwatImpact = () => {
       for (const t of hits) {
@@ -550,7 +729,7 @@ export class GameScene {
    */
   private overload(source: DamageSource, attacker?: Target): void {
     const O = CONFIG.passives.overload;
-    const mult = this.progression.stats.damageMult;
+    const mult = this.dmgMult();
     const from = this.bodyPoint(300);
     if (source === 'beam' && attacker) {
       for (let k = 0; k <= 10; k++) this.particles.emit('spark', from.clone().lerp(attacker.position, k / 10), 3, 0.4);
@@ -586,12 +765,12 @@ export class GameScene {
   private reflectProjectiles(): void {
     const R = CONFIG.passives.reflect;
     const center = this.bodyPoint(300);
-    const dmg = R.damage * this.progression.stats.damageMult;
+    const dmg = R.damage * this.dmgMult();
     const bounce = (from: THREE.Vector3) => {
       // The shield is invisible except for a patch flashing where the shot struck it.
       const at = shieldHitPoint(center, R.radius, from, new THREE.Vector3());
       this.shieldFx.reflectHit(at, at.clone().sub(center));
-      const target = nearestInRange({ x: from.x, z: from.z }, this.enemyTargets(), CONFIG.monster.spikeRange * 1.5);
+      const target = nearestInRange({ x: from.x, z: from.z }, this.enemyTargets(), this.ms.rangedRange * 1.5);
       if (target) this.projectiles.fireSpike(at.clone(), target, dmg, 0);
       this.particles.emit('spark', at, 8, 0.6);
     };
@@ -625,7 +804,7 @@ export class GameScene {
       this.particles.emit('smoke', t.pos, 1, 0.3);
       t.kill();
     }
-    if (picks.length > 0) this.particles.emit('spark', center, 3, 0.4);
+    if (picks.length > 0) this.particles.emit('spark', this.monster.launchOrigin(this.tmpV), 3, 0.4);
     return picks.length;
   }
 
@@ -633,11 +812,11 @@ export class GameScene {
   private venomNova(): void {
     const { radius, damage } = this.passives.nova();
     const p = this.monster.position;
-    const dmg = damage * this.progression.stats.damageMult;
+    const dmg = damage * this.dmgMult();
     this.novaWave.start(p, radius);
     this.city.forEachStandingInRadius({ x: p.x, z: p.z }, radius, (t) => t.applyDamage(dmg));
     for (const t of footTargets({ x: p.x, z: p.z }, radius, this.enemyTargets())) t.applyDamage(dmg);
-    this.particles.ring('acid', p, radius * 0.6, 24);
+    this.particles.ring(this.monster.kind.fx.particle, p, radius * 0.6, 24);
     this.rig.addTrauma(0.25);
   }
 
@@ -646,10 +825,12 @@ export class GameScene {
     const M = CONFIG.passives.mortar;
     const targets = mortarTargets(this.monster.position, M.range, this.enemyTargets(), globs);
     if (targets.length === 0) return;
-    const from = this.monster.model.stingerTip.getWorldPosition(new THREE.Vector3());
-    const dmg = M.damage * this.progression.stats.damageMult;
-    targets.forEach((t) => this.projectiles.fireGlob(from, t.position.clone().setY(0), dmg));
-    this.particles.emit('acid', from, 6, 0.6);
+    const dmg = M.damage * this.dmgMult();
+    for (const t of targets) {
+      const from = this.monster.launchOrigin(new THREE.Vector3());
+      this.projectiles.fireGlob(from, t.position.clone().setY(0), dmg);
+      this.particles.emit(this.monster.kind.fx.particle, from, 3, 0.6);
+    }
   }
 
   /** Live targetable enemies (cached per frame by the registry). */
@@ -738,6 +919,10 @@ export class GameScene {
   }
 
   private onTap = (x: number, y: number): void => {
+    if (this.state === 'title') {
+      this.startFromTitle();
+      return;
+    }
     if (this.state === 'intro') {
       this.skipIntro();
       return;
@@ -785,16 +970,40 @@ export class GameScene {
   /** A landed foot damages buildings and ground enemies under it. */
   private footCrush(p: THREE.Vector3): void {
     if (this.state !== 'playing' || !this.monster.alive) return;
-    const r = CONFIG.monster.footRadius;
-    const dmg = CONFIG.monster.footDamage * this.progression.stats.damageMult;
+    const r = this.ms.footRadius;
+    const dmg = this.ms.footDamage * this.dmgMult();
     this.city.forEachStandingInRadius({ x: p.x, z: p.z }, r, (t) => t.applyDamage(dmg));
     for (const t of footTargets({ x: p.x, z: p.z }, r, this.enemyTargets())) t.applyDamage(dmg);
   }
 
+  /** Claw Rake: everything on the ground in a forward arc within reach; buildings take triple damage. */
+  private clawRake(halfAngle: number): void {
+    const m = this.monster;
+    const from = { x: m.position.x, z: m.position.z };
+    const range = this.ms.meleeRange * this.progression.stats.stompRadiusMult;
+    const dmg = this.ms.meleeDamage * this.dmgMult();
+    for (const t of arcTargets(from, m.yaw, range, halfAngle, this.enemyTargets())) t.applyDamage(dmg);
+    const buildings: Target[] = [];
+    this.city.forEachStandingInRadius(from, range, (t) => buildings.push(t));
+    for (const t of arcTargets(from, m.yaw, range, halfAngle, buildings)) t.applyDamage(dmg * 3);
+    for (let i = -2; i <= 2; i++) {
+      const a = m.yaw + (i / 2) * halfAngle;
+      this.tmpV.set(from.x + Math.sin(a) * range * 0.7, 0, from.z + Math.cos(a) * range * 0.7);
+      this.particles.ring('dust', this.tmpV, 60, 6);
+      this.particles.emit('debris', this.tmpV.setY(15), 4, 1);
+    }
+    this.rig.addTrauma(0.3);
+  }
+
   private meleeImpact(p: THREE.Vector3): void {
+    const shape = this.monster.kind.melee;
+    if (shape.kind === 'arc') {
+      this.clawRake(shape.halfAngle);
+      return;
+    }
     const s = this.progression.stats;
-    const r = CONFIG.monster.meleeRadius * s.stompRadiusMult;
-    const dmg = CONFIG.monster.meleeDamage * s.damageMult;
+    const r = this.ms.meleeRadius * s.stompRadiusMult;
+    const dmg = this.ms.meleeDamage * this.dmgMult();
     this.city.forEachStandingInRadius({ x: p.x, z: p.z }, r, (t) => t.applyDamage(dmg));
     for (const t of this.enemyTargets()) {
       if (!t.airborne && t.isAlive() && Math.hypot(t.position.x - p.x, t.position.z - p.z) <= r + t.radius) t.applyDamage(dmg);
@@ -810,8 +1019,10 @@ export class GameScene {
     const s = this.progression.stats;
     const pos = { x: m.position.x, z: m.position.z };
     if (!m.busy) {
-      const auto = nearestInRange(pos, this.enemyTargets(), CONFIG.monster.spikeRange);
-      const autoMelee = nearestInRange(pos, this.enemyTargets().filter((t) => !t.airborne), CONFIG.monster.meleeRange);
+      // A breather only picks targets its neck can reach, so the body never has to turn away from its path.
+      const rangedPool = m.kind.ranged === 'breath' ? this.enemyTargets().filter((t) => this.canBreatheAt(t)) : this.enemyTargets();
+      const auto = nearestInRange(pos, rangedPool, this.ms.rangedRange);
+      const autoMelee = nearestInRange(pos, this.enemyTargets().filter((t) => !t.airborne), this.ms.meleeRange);
       const order: BrainOrder =
         this.order?.kind === 'attack' ? { kind: 'attack', target: this.toBrain(this.order.target) } : this.order;
       const d = decide({
@@ -819,10 +1030,10 @@ export class GameScene {
         order,
         auto: auto ? this.toBrain(auto) : null,
         autoMelee: autoMelee ? this.toBrain(autoMelee) : null,
-        meleeRange: CONFIG.monster.meleeRange,
-        spikeRange: CONFIG.monster.spikeRange,
+        meleeRange: this.ms.meleeRange,
+        spikeRange: this.ms.rangedRange,
         meleeReady: m.meleeReady(),
-        spikeReady: m.spikeReady(),
+        spikeReady: m.rangedReady(),
         arriveRadius: CONFIG.monster.arriveRadius,
       });
       if (d.orderDone) {
@@ -831,17 +1042,60 @@ export class GameScene {
       }
       if (d.moveTo) m.moveToward(d.moveTo, dt, s.moveSpeedMult);
       else if (d.face) m.faceToward(d.face, dt);
-      if (d.attack === 'melee' && d.meleeAt) {
-        const plan = strikePlan(pos, m.yaw, d.meleeAt, CONFIG.monster.meleeRange);
+      // An arc melee only strikes forward: turn to a target outside the arc first.
+      const shape = m.kind.melee;
+      const outsideArc =
+        d.attack === 'melee' && d.meleeAt !== null && shape.kind === 'arc' && !inArc(pos, m.yaw, Infinity, shape.halfAngle, d.meleeAt);
+      if (outsideArc && !d.moveTo && !d.face && d.meleeAt) m.faceToward(d.meleeAt, dt);
+      if (d.attack === 'melee' && d.meleeAt && !outsideArc) {
+        const plan = strikePlan(pos, m.yaw, d.meleeAt, this.ms.meleeRange);
         m.startMelee(s.cooldownMult, plan.leg, plan.point);
       }
-      if (d.attack === 'ranged') this.fireSpikes(d.attackOn === 'order' && this.order?.kind === 'attack' ? this.order.target : auto);
+      if (d.attack === 'ranged') this.fireRanged(d.attackOn === 'order' && this.order?.kind === 'attack' ? this.order.target : auto);
     }
     m.tick(dt);
 
-    if (!m.airborne) this.city.forEachStandingInRadius(pos, CONFIG.monster.bodyRadius, (t) => t.applyDamage(CONFIG.monster.contactDps * dt));
+    if (!m.airborne) this.city.forEachStandingInRadius(pos, this.ms.bodyRadius, (t) => t.applyDamage(CONFIG.monster.contactDps * dt));
     m.hp = regen(m.hp, m.maxHp, CONFIG.monster.regenPerSec + s.regenBonus, dt);
   }
+
+  private fireRanged(target: Target | null): void {
+    if (this.monster.kind.ranged === 'breath') this.breathAt(target);
+    else this.fireSpikes(target);
+  }
+
+  /** The Kaiju's neck can turn to `t` without the body turning. */
+  private canBreatheAt(t: Target): boolean {
+    const m = this.monster;
+    return canAim({ x: m.position.x, z: m.position.z }, m.yaw, t.position, CONFIG.kaiju.neck.limit);
+  }
+
+  /** Plasma Breath: start charging at the target; hits land when it fires (onBreathFire). */
+  private breathAt(target: Target | null): void {
+    if (!target || this.breath.busy || !this.canBreatheAt(target)) return;
+    this.breath.start(target.position, 1 + this.progression.stats.extraSpikes);
+    this.monster.consumeRanged(this.rangedCdMult());
+  }
+
+  /** Each beam hits every enemy (ground or air) and building along its line, from the jaws to the beam's end. */
+  private onBreathFire = (from: THREE.Vector3, ends: readonly THREE.Vector3[]): void => {
+    const B = CONFIG.kaiju.breath;
+    const a = { x: from.x, z: from.z };
+    const mult = this.dmgMult();
+    const enemies = new Set<Target>();
+    const buildings = new Set<Target>();
+    for (const e of ends) {
+      const b = { x: e.x, z: e.z };
+      for (const t of lineTargets(a, b, B.halfWidth, this.enemyTargets())) enemies.add(t);
+      for (const p of linePoints(a, b, B.halfWidth * 1.5)) this.city.forEachStandingInRadius(p, B.halfWidth, (t) => buildings.add(t));
+      for (let k = 1; k <= 8; k++) this.particles.emit('fire', this.tmpV.set(a.x + (b.x - a.x) * (k / 8), 20, a.z + (b.z - a.z) * (k / 8)), 2, 0.5);
+      this.particles.explosion(e, 0.8);
+    }
+    for (const t of enemies) t.applyDamage(this.ms.rangedDamage * mult);
+    for (const t of buildings) t.applyDamage(B.buildingDamage * mult);
+    this.particles.emit('spark', this.monster.rangedOrigin(this.tmpV), 10, 1.5);
+    this.rig.addTrauma(0.25);
+  };
 
   private fireSpikes(target: Target | null): void {
     if (!target) return;
@@ -850,14 +1104,14 @@ export class GameScene {
     const count = 1 + s.extraSpikes;
     const pos = { x: m.position.x, z: m.position.z };
     const others = this.enemyTargets()
-      .filter((t) => t.isAlive() && Math.hypot(t.position.x - pos.x, t.position.z - pos.z) <= CONFIG.monster.spikeRange)
+      .filter((t) => t.isAlive() && Math.hypot(t.position.x - pos.x, t.position.z - pos.z) <= this.ms.rangedRange)
       .sort((a, b) => a.position.distanceToSquared(target.position) - b.position.distanceToSquared(target.position));
-    const from = m.model.stingerTip.getWorldPosition(new THREE.Vector3());
+    const from = m.rangedOrigin(new THREE.Vector3());
     spikeTargets(target, others, count).forEach((t, i) => {
-      this.projectiles.fireSpike(from, t, CONFIG.monster.spikeDamage * s.damageMult, (i - (count - 1) / 2) * CONFIG.monster.spikeSpreadRad);
+      this.projectiles.fireSpike(from, t, this.ms.rangedDamage * this.dmgMult(), (i - (count - 1) / 2) * CONFIG.monster.spikeSpreadRad);
     });
     this.particles.emit('spark', from, 4);
-    m.consumeSpike(s.cooldownMult);
+    m.consumeRanged(this.rangedCdMult());
   }
 
   private onProjectileHit = (h: Hit): void => {
@@ -865,8 +1119,8 @@ export class GameScene {
       const r = this.passives.mortarSplash();
       this.city.forEachStandingInRadius({ x: h.point.x, z: h.point.z }, r, (t) => t.applyDamage(h.damage));
       for (const t of footTargets({ x: h.point.x, z: h.point.z }, r, this.enemyTargets())) t.applyDamage(h.damage);
-      this.particles.ring('acid', h.point, r, 14);
-      this.particles.emit('acid', h.point, 10, 1);
+      this.particles.ring(this.monster.kind.fx.particle, h.point, r, 14);
+      this.particles.emit(this.monster.kind.fx.particle, h.point, 10, 1);
       return;
     }
     if (h.kind === 'spike') {

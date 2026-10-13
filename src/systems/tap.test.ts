@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { abilityKey, classifyGesture, pickEnemy, canTap, pinchToWheel, isSkipKey } from './tap';
+import { abilityKey, classifyGesture, pickEnemy, canTap, pinchToWheel, isSkipKey, menuKey } from './tap';
 import { CONFIG } from '../config';
 
 describe('classifyGesture', () => {
@@ -103,5 +103,25 @@ describe('isSkipKey', () => {
   });
   it('leaves browser function keys alone (F5 reload, F11 fullscreen, F12 devtools)', () => {
     for (const f of ['F1', 'F5', 'F11', 'F12', 'ContextMenu']) expect(isSkipKey(k(f))).toBe(false);
+  });
+});
+
+describe('menuKey', () => {
+  const k = (code: string, mods: Partial<{ repeat: boolean; metaKey: boolean; ctrlKey: boolean; altKey: boolean }> = {}) => ({
+    code, repeat: false, metaKey: false, ctrlKey: false, altKey: false, ...mods,
+  });
+  it('maps arrows/A/D to browse and Enter/Space to confirm', () => {
+    expect(menuKey(k('ArrowLeft'))).toBe('left');
+    expect(menuKey(k('KeyA'))).toBe('left');
+    expect(menuKey(k('ArrowRight'))).toBe('right');
+    expect(menuKey(k('KeyD'))).toBe('right');
+    expect(menuKey(k('Enter'))).toBe('confirm');
+    expect(menuKey(k('Space'))).toBe('confirm');
+  });
+  it('ignores other keys, repeats, and shortcuts', () => {
+    expect(menuKey(k('KeyQ'))).toBeNull();
+    expect(menuKey(k('ArrowLeft', { repeat: true }))).toBeNull();
+    expect(menuKey(k('ArrowRight', { metaKey: true }))).toBeNull();
+    expect(menuKey(k('Enter', { ctrlKey: true }))).toBeNull();
   });
 });

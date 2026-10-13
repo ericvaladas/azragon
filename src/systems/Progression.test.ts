@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { Progression, expToNext, UPGRADES, BASE_STATS } from './Progression';
-import { ABILITIES, MAX_RANK, type AbilityId } from './Progression';
+import { ABILITIES, MAX_RANK, SHARED_ABILITIES, type AbilityId, type PoolSpec } from './Progression';
 
 import { mulberry32 } from '../util/rng';
 
@@ -132,5 +132,38 @@ describe('Progression abilities', () => {
     p.choose('frenzy');
     p.reset();
     expect(p.ranks.frenzy).toBe(0);
+  });
+});
+
+describe('Progression pools', () => {
+  const pool: PoolSpec = {
+    signatures: ['acid', 'nova'],
+    abilityText: { acid: { title: 'Radiant Wake', icon: '☢️', desc: () => 'glow' } },
+    upgradeText: { vitality: { title: 'Ironscale Hide' } },
+  };
+
+  it('offers only the shared abilities, the pool\'s signatures, and stat upgrades', () => {
+    const p = new Progression(mulberry32(11));
+    p.setPool(pool);
+    const allowed = new Set<string>([...SHARED_ABILITIES, 'acid', 'nova', 'damage', 'attackSpeed', 'vitality', 'regen', 'stompRadius', 'multiShot', 'moveSpeed']);
+    for (let i = 0; i < 300; i++) for (const o of p.offer()) expect(allowed.has(o.id)).toBe(true);
+  });
+
+  it('uses the pool\'s display names', () => {
+    const p = new Progression(mulberry32(12));
+    p.setPool(pool);
+    const seen = new Map<string, string>();
+    for (let i = 0; i < 300; i++) for (const o of p.offer()) seen.set(o.id, o.title);
+    expect(seen.get('acid')).toBe('Radiant Wake I');
+    expect(seen.get('vitality')).toBe('Ironscale Hide');
+    expect(seen.get('nova')).toBe('Venom Nova I');
+  });
+
+  it('refuses to rank up a signature outside the pool', () => {
+    const p = new Progression(mulberry32(13));
+    p.setPool(pool);
+    p.addExp(1e6);
+    expect(p.choose('brood')).toBe(false);
+    expect(p.choose('acid')).toBe(true);
   });
 });

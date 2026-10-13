@@ -1,6 +1,6 @@
 import type { RunStats } from '../GameEvents';
 
-export function GameOver({ stats, onRestart }: { stats: RunStats; onRestart: () => void }) {
+export function GameOver({ stats, onRestart, onChangeMonster }: { stats: RunStats; onRestart: () => void; onChangeMonster: () => void }) {
   const t = `${Math.floor(stats.timeSec / 60)}:${String(stats.timeSec % 60).padStart(2, '0')}`;
   return (
     <div className="overlay gameover">
@@ -12,6 +12,7 @@ export function GameOver({ stats, onRestart }: { stats: RunStats; onRestart: () 
         <div><span>Level</span><b>{stats.level}</b></div>
       </div>
       <button className="btn-primary" onClick={onRestart}>Play Again</button>
+      <button className="btn-secondary" onClick={onChangeMonster}>Change Monster</button>
     </div>
   );
 }

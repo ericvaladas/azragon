@@ -1,9 +1,10 @@
 import type { TargetKind } from './combat';
 import type { AbilityView } from './systems/abilities';
+import type { RosterEntry } from './monsters/roster';
 
 export type ThreatArrow = { x: number; y: number; angle: number; kind: TargetKind };
 
-export type GameState = 'loading' | 'intro' | 'playing' | 'paused' | 'levelup' | 'dying' | 'gameover';
+export type GameState = 'loading' | 'title' | 'select' | 'intro' | 'playing' | 'paused' | 'levelup' | 'dying' | 'gameover';
 
 export type HudSnapshot = {
   hp: number;
@@ -28,6 +29,7 @@ export type GameEventMap = {
   gameOver: RunStats;
   threats: ThreatArrow[];
   abilities: AbilityView[];
+  roster: { entries: RosterEntry[]; index: number };
 };
 
 type Handler<T> = (data: T) => void;

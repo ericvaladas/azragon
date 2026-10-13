@@ -48,19 +48,26 @@ export class Projectiles {
 
   constructor(scene: THREE.Scene) {
     const P = CONFIG.palette;
-    const make = (geo: THREE.BufferGeometry, color: number, max: number) => {
+    const make = (name: string, geo: THREE.BufferGeometry, color: number, max: number) => {
       const m = new THREE.InstancedMesh(geo, new THREE.MeshBasicMaterial({ color }), max);
+      m.name = name;
       m.count = 0;
       m.frustumCulled = false;
       scene.add(m);
       return m;
     };
     this.meshes = {
-      spike: make(faceted(new THREE.ConeGeometry(0.5, 1, 4)), P.stinger, 64),
-      shell: make(new THREE.BoxGeometry(1, 1, 1), P.eye, 128),
-      rocket: make(faceted(new THREE.CylinderGeometry(0.5, 0.5, 1, 5)), 0xf2f2f2, 64),
-      glob: make(faceted(new THREE.IcosahedronGeometry(0.5, 0)), CONFIG.palette.acid, 48),
+      spike: make('shot-spike', faceted(new THREE.ConeGeometry(0.5, 1, 4)), P.stinger, 64),
+      shell: make('shot-shell', new THREE.BoxGeometry(1, 1, 1), P.eye, 128),
+      rocket: make('shot-rocket', faceted(new THREE.CylinderGeometry(0.5, 0.5, 1, 5)), 0xf2f2f2, 64),
+      glob: make('shot-glob', faceted(new THREE.IcosahedronGeometry(0.5, 0)), CONFIG.palette.acid, 48),
     };
+  }
+
+  /** The monster's own shots take its colours (spikes / storm bolts, mortar globs). */
+  setTheme(spike: number, glob: number): void {
+    (this.meshes.spike.material as THREE.MeshBasicMaterial).color.setHex(spike);
+    (this.meshes.glob.material as THREE.MeshBasicMaterial).color.setHex(glob);
   }
 
   clear(): void {

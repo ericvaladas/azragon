@@ -1,40 +1,45 @@
 import * as THREE from 'three';
 import { CONFIG } from '../config';
 import { angleDelta, dist2, yawTo, type Vec2 } from '../util/math';
-import { InsectTitanModel } from './InsectTitanModel';
-import { didLand, footState } from './gait';
-import { solveTwoBone, placeSegment } from './ik';
 import { leapPosition } from './leap';
-import { STRIKE_TIMES, strikeFootPose } from './strike';
 import { SWAT_TIMES, swatWeight } from './tailSwat';
+import type { BodyFrame, MonsterBody, MonsterKind } from '../monsters/types';
 
-const FEMUR = 300;
-const TIBIA = 400;
-const LIFT = 110;
 const FACE_BEFORE_WALK = 1.0; // radians of yaw error allowed while walking
-const _hip = new THREE.Vector3();
-const _foot = new THREE.Vector3();
-const _knee = new THREE.Vector3();
-const _pole = new THREE.Vector3();
-const _world = new THREE.Vector3();
-const _gait = new THREE.Vector3();
-const _target = new THREE.Vector3();
-/** Foot offset (model units) for the cocked leg: high and pulled back. */
-const _strikeLift = new THREE.Vector3(0, 420, -80);
-const { strike: STRIKE, recover: RECOVER } = STRIKE_TIMES;
-const _swat = new THREE.Vector3();
 
+/**
+ * The player's monster: the logic every creature shares (movement, HP, cooldowns, attack timelines,
+ * Leap/Dash/Roar poses). The creature itself — model, gait, stats — comes from its MonsterKind.
+ */
 export class Monster {
-  readonly model = new InsectTitanModel();
-  readonly position: THREE.Vector3;
+  readonly position = new THREE.Vector3();
+  kind: MonsterKind;
+  body: MonsterBody;
   yaw = 0;
-  hp: number = CONFIG.monster.maxHp;
-  maxHp: number = CONFIG.monster.maxHp;
+  hp: number;
+  maxHp: number;
   alive = true;
-  onLeapLand: (p: THREE.Vector3) => void = () => {};
   crouch = false;
   /** Gold level-up glow, 0..1; the hit flash takes priority. */
   glow = 0;
+  /** Ranged charge 0..1, shown by bodies that telegraph it (Kaiju plates). */
+  charge = 0;
+  /** World point the head should turn toward (Kaiju breath), or null. */
+  lookAt: THREE.Vector3 | null = null;
+  /** Extra body pose offsets driven by attacks, abilities, the intro, and death. */
+  readonly pose = { dip: 0, pitch: 0, collapse: 0 };
+  onLeapLand: (p: THREE.Vector3) => void = () => {};
+  onFootLand: (p: THREE.Vector3) => void = () => {};
+  onMeleeImpact: (p: THREE.Vector3) => void = () => {};
+  /** Fires once per anti-air strike, when the tail tip or jaws reach the target. */
+  onSwatImpact: () => void = () => {};
+  /** Fires once per Tail Sweep, when the tail lands. */
+  onTailImpact: () => void = () => {};
+
+  private cycle = 0;
+  private lastCycle = 0;
+  private motion = 0;
+  private flashT = 0;
   private leapT = -1;
   private dashT = -1;
   private dashFrom = { x: 0, z: 0 };
@@ -45,20 +50,123 @@ export class Monster {
   private swatT = -1;
   private swatTarget: THREE.Vector3 | null = null;
   private swatHit = false;
-  /** Fires once per swat, when the tail tip reaches the target. */
-  onSwatImpact: () => void = () => {};
+  private tailT = -1;
+  private tailSide = 1;
+  private tailHit = false;
+  private tailTiming = { windup: 0, impact: 0, end: 0 };
+  private tailFrame = { t: 0, side: 1, timing: this.tailTiming };
+  private meleeCd = 0;
+  private rangedCd = 0;
+  private meleeT = -1;
+  private impactDone = false;
+  private meleeSide = 0;
+  private strikePoint = new THREE.Vector3();
+  private frame: BodyFrame = {
+    dt: 0, time: 0, cycle: 0, prevCycle: 0, motion: 0, pose: this.pose,
+    melee: null, antiAir: null, roaring: false, tailSweep: null, lookAt: null, charge: 0, flash: false, glow: 0,
+  };
+  private meleeFrame = { t: 0, side: 0, target: this.strikePoint };
+  private antiAirFrame = { weight: 0, target: new THREE.Vector3() };
+
+  constructor(
+    private scene: THREE.Scene,
+    kind: MonsterKind,
+  ) {
+    this.kind = kind;
+    this.hp = this.maxHp = kind.stats.maxHp;
+    this.body = this.mount(kind);
+  }
+
+  private mount(kind: MonsterKind): MonsterBody {
+    const b = kind.createBody();
+    b.root.scale.setScalar(CONFIG.monster.scale);
+    this.scene.add(b.root);
+    return b;
+  }
+
+  /** Become another creature (select screen): new body and stats, fresh state, same visibility. */
+  setKind(kind: MonsterKind): void {
+    if (kind === this.kind) return;
+    const visible = this.visible;
+    this.scene.remove(this.body.root);
+    this.body.dispose();
+    this.kind = kind;
+    this.body = this.mount(kind);
+    this.visible = visible;
+    this.reset();
+  }
+
+  get visible(): boolean {
+    return this.body.root.visible;
+  }
+
+  set visible(v: boolean) {
+    this.body.root.visible = v;
+  }
+
+  /** How far (rad) the head is from facing `lookAt` (as of the last animate). */
+  aimError(): number {
+    return this.body.aimError();
+  }
+
+  /** World point the monster's own projectiles launch from (stinger tip, back vents). */
+  launchOrigin(out: THREE.Vector3): THREE.Vector3 {
+    return this.body.launchOrigin(out);
+  }
+
+  /** World point ranged attacks leave from (stinger tip, jaws). */
+  rangedOrigin(out: THREE.Vector3): THREE.Vector3 {
+    return this.body.rangedOrigin(out);
+  }
 
   get airborne(): boolean {
     return this.leapT >= 0;
   }
 
-  /** Leaping or roaring: the brain must not move or attack. */
+  /** Leaping, roaring or dashing: the brain must not move or attack. */
   get busy(): boolean {
     return this.leapT >= 0 || this.roarT >= 0 || this.dashT >= 0;
   }
 
   get dashing(): boolean {
     return this.dashT >= 0;
+  }
+
+  get tailSweeping(): boolean {
+    return this.tailT >= 0;
+  }
+
+  /** Tail Sweep toward `side` (+1 left, -1 right) on its own timeline; it never stops walking. */
+  startTailSweep(side: number, timing: { windup: number; impact: number; end: number }): void {
+    this.tailT = 0;
+    this.tailSide = side;
+    this.tailHit = false;
+    Object.assign(this.tailTiming, timing);
+  }
+
+  get swatting(): boolean {
+    return this.swatT >= 0;
+  }
+
+  reset(): void {
+    this.position.set(0, 0, 0);
+    this.yaw = 0;
+    this.hp = this.maxHp = this.kind.stats.maxHp;
+    this.alive = true;
+    this.cycle = this.lastCycle = 0;
+    this.motion = 0;
+    this.pose.dip = this.pose.pitch = this.pose.collapse = 0;
+    this.meleeCd = this.rangedCd = 0;
+    this.meleeT = -1;
+    this.leapT = -1;
+    this.roarT = -1;
+    this.swatT = -1;
+    this.swatTarget = null;
+    this.tailT = -1;
+    this.dashT = -1;
+    this.crouch = false;
+    this.charge = 0;
+    this.lookAt = null;
   }
 
   /** Dash: charge in a straight line along the ground to `to`. */
@@ -78,53 +186,16 @@ export class Monster {
     this.meleeT = -1;
   }
 
-  /** Tail Swat: lash the tail tip onto `target` (a live world position, followed as it moves). */
+  /** Anti-air strike (Tail Swat / Snap Bite) at `target`, a live world position followed as it moves. */
   startSwat(target: THREE.Vector3): void {
     this.swatT = 0;
     this.swatTarget = target;
     this.swatHit = false;
   }
 
-  get swatting(): boolean {
-    return this.swatT >= 0;
-  }
-
   startRoar(): void {
     this.roarT = 0;
     this.meleeT = -1;
-  }
-  onFootLand: (p: THREE.Vector3) => void = () => {};
-
-  private cycle = 0;
-  private motion = 0; // 0..1 how much the gait is engaged
-  private flashT = 0;
-  /** Extra body pose offsets driven by attacks (Task 7) and death. */
-  readonly pose = { dip: 0, pitch: 0, collapse: 0 };
-
-  constructor(scene: THREE.Scene) {
-    this.position = this.model.root.position;
-    this.model.root.scale.setScalar(CONFIG.monster.scale);
-    scene.add(this.model.root);
-  }
-
-  reset(): void {
-    this.position.set(0, 0, 0);
-    this.yaw = 0;
-    this.hp = this.maxHp = CONFIG.monster.maxHp;
-    this.alive = true;
-    this.cycle = 0;
-    this.pose.dip = this.pose.pitch = this.pose.collapse = 0;
-    this.meleeCd = 0;
-    this.spikeCd = 0;
-    this.meleeT = -1;
-    this.strikeLeg = -1;
-    this.leapT = -1;
-    this.roarT = -1;
-    this.swatT = -1;
-    this.swatTarget = null;
-    this.dashT = -1;
-    this.crouch = false;
-    this.position.y = 0;
   }
 
   forward(out: THREE.Vector3): THREE.Vector3 {
@@ -135,9 +206,9 @@ export class Monster {
   faceToward(p: Vec2, dt: number): number {
     const target = yawTo({ x: this.position.x, z: this.position.z }, p);
     const err = angleDelta(this.yaw, target);
-    const step = Math.sign(err) * Math.min(Math.abs(err), CONFIG.monster.turnRate * dt);
+    const step = Math.sign(err) * Math.min(Math.abs(err), this.kind.stats.turnRate * dt);
     this.yaw += step;
-    this.cycle += (Math.abs(step) * 160) / CONFIG.monster.strideLength;
+    this.cycle += (Math.abs(step) * 160) / this.kind.stats.strideLength;
     this.motion = Math.max(this.motion, Math.min(1, Math.abs(step) * 40));
     return Math.abs(err - step);
   }
@@ -149,10 +220,10 @@ export class Monster {
     if (d <= CONFIG.monster.arriveRadius) return true;
     const err = this.faceToward(goal, dt);
     if (err < FACE_BEFORE_WALK) {
-      const step = Math.min(d, CONFIG.monster.moveSpeed * speedMult * dt * (1 - err / FACE_BEFORE_WALK));
+      const step = Math.min(d, this.kind.stats.moveSpeed * speedMult * dt * (1 - err / FACE_BEFORE_WALK));
       this.position.x += Math.sin(this.yaw) * step;
       this.position.z += Math.cos(this.yaw) * step;
-      this.cycle += step / (CONFIG.monster.strideLength * CONFIG.monster.scale);
+      this.cycle += step / (this.kind.stats.strideLength * CONFIG.monster.scale);
       this.motion = 1;
     }
     return false;
@@ -162,103 +233,65 @@ export class Monster {
     this.flashT = 0.12;
   }
 
-  /** Pose body, legs, mandibles, tail. Call once per frame after movement. */
-  animate(dt: number, time: number): void {
-    const prevCycle = this.lastCycle;
-    this.lastCycle = this.cycle;
-    this.motion = Math.max(0, this.motion - dt * 2);
-
-    const root = this.model.root;
-    root.rotation.y = this.yaw;
-    const body = this.model.body;
-    const bob = Math.sin(this.cycle * Math.PI * 4) * 10 * this.motion;
-    const breathe = Math.sin(time * 1.6) * 5;
-    body.position.y = bob + breathe - this.pose.dip - this.pose.collapse * 230;
-    body.rotation.x = this.pose.pitch;
-    body.rotation.z = Math.sin(this.cycle * Math.PI * 2) * 0.03 * this.motion;
-    root.updateMatrixWorld(true);
-
-    for (let i = 0; i < 6; i++) {
-      const leg = this.model.legs[i]!;
-      const fs = footState(this.cycle, i);
-      _hip.copy(leg.hipLocal).applyMatrix4(body.matrix);
-      const splay = 1 + this.pose.collapse * 0.35;
-      _foot.set(
-        leg.restFoot.x * splay,
-        fs.lift * LIFT * this.motion,
-        leg.restFoot.z + fs.stride * (CONFIG.monster.strideLength / 2) * this.motion,
-      );
-      if (i === this.strikeLeg && this.meleeT >= 0) this.strikeFoot(_foot);
-      _pole.copy(_hip).add(_knee.set(leg.side * 120, 700, 0));
-      solveTwoBone(_hip, _foot, FEMUR, TIBIA, _pole, _knee);
-      placeSegment(leg.femur, _hip, _knee);
-      placeSegment(leg.tibia, _knee, _foot);
-      leg.knee.position.copy(_knee);
-      if (this.motion > 0.3 && i !== this.strikeLeg && didLand(prevCycle, this.cycle, i)) {
-        this.onFootLand(_world.copy(_foot).applyMatrix4(root.matrixWorld));
-      }
-    }
-
-    const twitch = this.roarT >= 0 ? 0.55 : 0.18 + Math.sin(time * 7) * 0.08;
-    this.model.mandibles[0]!.rotation.y = -twitch;
-    this.model.mandibles[1]!.rotation.y = twitch;
-    if (this.swatT >= 0 && this.swatTarget) {
-      this.model.updateTail(time, this.model.body.worldToLocal(_swat.copy(this.swatTarget)), swatWeight(this.swatT));
-    } else {
-      this.model.updateTail(time);
-    }
-
-    if (this.flashT > 0) this.flashT -= dt;
-    for (const m of this.model.materials) {
-      if (this.flashT > 0) m.emissive.setHex(0xffffff);
-      else m.emissive.setHex(CONFIG.levelUp.color).multiplyScalar(this.glow);
-    }
-  }
-
-  private lastCycle = 0;
-
-  onMeleeImpact: (p: THREE.Vector3) => void = () => {};
-  private meleeCd = 0;
-  private spikeCd = 0;
-  private meleeT = -1; // -1 = not attacking; else time since start
-  private impactDone = false;
-  private strikeLeg = -1;
-  private strikePoint = new THREE.Vector3();
-
   meleeReady(): boolean {
     return this.alive && this.meleeCd <= 0 && this.meleeT < 0;
   }
 
-  spikeReady(): boolean {
-    return this.alive && this.spikeCd <= 0;
+  rangedReady(): boolean {
+    return this.alive && this.rangedCd <= 0;
   }
 
-  /** Leg strike: `leg` (a front leg index) spears down onto `point` (world XZ, already clamped to reach). */
-  startMelee(cooldownMult: number, leg: number, point: Vec2): void {
-    this.meleeCd = CONFIG.monster.meleeCooldown * cooldownMult;
+  /** Melee strike on `side` (0 = left/+X, 1 = right) at `point` (world XZ, already clamped to reach). */
+  startMelee(cooldownMult: number, side: number, point: Vec2): void {
+    this.meleeCd = this.kind.stats.meleeCooldown * cooldownMult;
     this.meleeT = 0;
     this.impactDone = false;
-    this.strikeLeg = leg;
+    this.meleeSide = side;
     this.strikePoint.set(point.x, 0, point.z);
   }
 
-  /**
-   * Strike timeline (s after start, w = windup): raise the foot high and back until w, spear onto the
-   * target by w + STRIKE, hold until w + HOLD, then ease back to the gait pose by w + RECOVER.
-   */
-  private strikeFoot(foot: THREE.Vector3): void {
-    _target.copy(this.strikePoint);
-    this.model.root.worldToLocal(_target);
-    _target.y = 0;
-    _gait.copy(foot);
-    strikeFootPose(this.meleeT, CONFIG.monster.meleeWindup, _gait, _strikeLift, _target, foot);
+  consumeRanged(cooldownMult: number): void {
+    this.rangedCd = this.kind.stats.rangedCooldown * cooldownMult;
   }
 
-  consumeSpike(cooldownMult: number): void {
-    this.spikeCd = CONFIG.monster.spikeCooldown * cooldownMult;
+  /** Place the body and pose it. Call once per frame after movement. */
+  animate(dt: number, time: number): void {
+    const f = this.frame;
+    f.prevCycle = this.lastCycle;
+    this.lastCycle = this.cycle;
+    this.motion = Math.max(0, this.motion - dt * 2);
+    if (this.flashT > 0) this.flashT -= dt;
+    const root = this.body.root;
+    root.position.copy(this.position);
+    root.rotation.y = this.yaw;
+    f.dt = dt;
+    f.time = time;
+    f.cycle = this.cycle;
+    f.motion = this.motion;
+    if (this.meleeT >= 0) {
+      this.meleeFrame.t = this.meleeT;
+      this.meleeFrame.side = this.meleeSide;
+      f.melee = this.meleeFrame;
+    } else f.melee = null;
+    if (this.swatT >= 0 && this.swatTarget) {
+      this.antiAirFrame.weight = swatWeight(this.swatT);
+      this.antiAirFrame.target.copy(this.swatTarget);
+      f.antiAir = this.antiAirFrame;
+    } else f.antiAir = null;
+    f.roaring = this.roarT >= 0;
+    if (this.tailT >= 0) {
+      this.tailFrame.t = this.tailT;
+      this.tailFrame.side = this.tailSide;
+      f.tailSweep = this.tailFrame;
+    } else f.tailSweep = null;
+    f.lookAt = this.lookAt;
+    f.charge = this.charge;
+    f.flash = this.flashT > 0;
+    f.glow = this.glow;
+    this.body.animate(f, this.onFootLand);
   }
 
-  /** Cooldowns, the leg-strike timing, and leap/roar poses. */
+  /** Cooldowns, the melee timeline, and leap/dash/roar/anti-air timing. */
   tick(dt: number): void {
     const L = CONFIG.abilities.leap;
     if (this.leapT >= 0) {
@@ -279,7 +312,7 @@ export class Monster {
       const p = leapPosition(this.dashFrom, this.dashTo, this.dashT, D.duration, 0);
       const step = Math.hypot(p.x - this.position.x, p.z - this.position.z);
       this.position.set(p.x, 0, p.z);
-      this.cycle += step / (CONFIG.monster.strideLength * CONFIG.monster.scale);
+      this.cycle += step / (this.kind.stats.strideLength * CONFIG.monster.scale);
       this.motion = 1;
       this.pose.pitch = 0.18;
       if (this.dashT >= D.duration) this.dashT = -1;
@@ -295,6 +328,14 @@ export class Monster {
         this.swatTarget = null;
       }
     }
+    if (this.tailT >= 0) {
+      this.tailT += dt;
+      if (!this.tailHit && this.tailT >= this.tailTiming.impact) {
+        this.tailHit = true;
+        this.onTailImpact();
+      }
+      if (this.tailT >= this.tailTiming.end) this.tailT = -1;
+    }
     if (this.roarT >= 0) {
       this.roarT += dt;
       const k = this.roarT / CONFIG.abilities.roar.duration;
@@ -302,27 +343,23 @@ export class Monster {
       if (k >= 1) this.roarT = -1;
     }
     this.meleeCd = Math.max(0, this.meleeCd - dt);
-    this.spikeCd = Math.max(0, this.spikeCd - dt);
+    this.rangedCd = Math.max(0, this.rangedCd - dt);
     if (this.meleeT < 0) {
       if (this.leapT < 0 && this.roarT < 0) this.pose.pitch *= Math.exp(-10 * dt);
       this.pose.dip += ((this.crouch ? 35 : 0) - this.pose.dip) * (1 - Math.exp(-10 * dt));
       return;
     }
     this.meleeT += dt;
-    const w = CONFIG.monster.meleeWindup;
-    if (this.meleeT < w) {
-      // Rear back slightly while the leg cocks.
-      const k = this.meleeT / w;
-      this.pose.pitch = -0.12 * k;
-    } else if (this.meleeT >= w + STRIKE && !this.impactDone) {
+    const T = this.kind.stats.meleeTiming;
+    if (this.meleeT < T.windup) {
+      // Rear back slightly while the strike cocks.
+      this.pose.pitch = -0.12 * (this.meleeT / T.windup);
+    } else if (this.meleeT >= T.impact && !this.impactDone) {
       this.impactDone = true;
       this.pose.pitch = 0.1;
       this.pose.dip = 25;
       this.onMeleeImpact(this.strikePoint.clone());
     }
-    if (this.meleeT > w + RECOVER) {
-      this.meleeT = -1;
-      this.strikeLeg = -1;
-    }
+    if (this.meleeT > T.end) this.meleeT = -1;
   }
 }
