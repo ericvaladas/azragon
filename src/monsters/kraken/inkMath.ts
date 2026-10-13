@@ -11,17 +11,6 @@ export const CLOUD = { life: 1.9, growTime: 0.28, fadeStart: 0.85, swell: 0.35 }
 
 const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
 
-/** How thick the armed-haze is for an intercept charge (0..1 of the bank's cap). */
-export function hazeStrength(charge: number): number {
-  return clamp01(charge);
-}
-
-/** Move `cur` toward `target` by at most `rate * dt`. */
-export function approach(cur: number, target: number, dt: number, rate: number): number {
-  const step = rate * dt;
-  return cur < target ? Math.min(target, cur + step) : Math.max(target, cur - step);
-}
-
 /** Seconds an ink blob takes to fly `dist` metres. */
 export function blobFlightTime(dist: number): number {
   return Math.min(JET.maxTime, Math.max(JET.minTime, dist / JET.speed));

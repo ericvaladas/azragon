@@ -585,9 +585,7 @@ export class GameScene {
       this.novaWave.update(dt);
       this.rotRing.update(dt);
       this.shieldFx.update(dt, this.monster.position, this.passives.bubbleActive());
-      // Ink Cloud's armed haze shows while the living Kraken has shots banked.
-      const inkArmed = this.monster.kind.fx.inkJet === true && this.monster.alive && this.state === 'playing';
-      this.inkFx.update(dt, this.monster.position, inkArmed ? this.passives.interceptCharge() : 0);
+      this.inkFx.update(dt);
       if (this.moment.update(realDt) && this.state === 'playing' && this.progression.pendingLevels > 0) this.enterLevelUp();
       const dm = this.dmgMult();
       this.acid.update(dt, this.enemyTargets(), dm);

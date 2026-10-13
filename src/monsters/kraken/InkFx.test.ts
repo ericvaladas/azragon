@@ -11,7 +11,7 @@ describe('InkFx', () => {
     const scene = new THREE.Scene();
     const fx = new InkFx(scene);
     expect(scene.children).toHaveLength(1);
-    fx.update(0.016, ORIGIN, 0);
+    fx.update(0.016);
     expect(meshOf(scene).visible).toBe(false);
   });
 
@@ -21,24 +21,29 @@ describe('InkFx', () => {
     const from = new THREE.Vector3(0, 100, 0);
     const to = new THREE.Vector3(600, 300, 0);
     fx.jet(from, to);
-    fx.update(0.01, ORIGIN, 0);
+    fx.update(0.01);
     expect(fx.active.blobs).toBe(1);
     expect(meshOf(scene).visible).toBe(true);
-    for (let t = 0; t < blobFlightTime(from.distanceTo(to)); t += 0.01) fx.update(0.01, ORIGIN, 0);
+    for (let t = 0; t < blobFlightTime(from.distanceTo(to)); t += 0.01) fx.update(0.01);
     expect(fx.active.blobs).toBe(0);
     const puffs = fx.active.puffs;
     expect(puffs).toBeGreaterThan(8);
-    for (let t = 0; t < CLOUD.life + 0.3; t += 0.05) fx.update(0.05, ORIGIN, 0);
+    for (let t = 0; t < CLOUD.life + 0.3; t += 0.05) fx.update(0.05);
     expect(fx.active.puffs).toBe(0);
     expect(meshOf(scene).visible).toBe(false);
   });
 
-  it('dissipates the haze quickly once the charge is spent', () => {
+  it('clears the little puffs at the body within half a second of a jet', () => {
     const scene = new THREE.Scene();
     const fx = new InkFx(scene);
-    for (let i = 0; i < 60; i++) fx.update(0.05, ORIGIN, 1);
-    for (let t = 0; t < 0.15; t += 0.01) fx.update(0.01, ORIGIN, 0);
-    expect(fx.active.haze).toBe(0);
+    const from = new THREE.Vector3(0, 100, 0);
+    // The cloud bursts far away; nothing may be left near the body.
+    fx.jet(from, new THREE.Vector3(5000, 300, 0));
+    for (let t = 0; t < 0.5; t += 0.01) fx.update(0.01);
+    const mesh = meshOf(scene);
+    const m = new THREE.Matrix4();
+    const at = new THREE.Vector3();
+    for (let i = 0; i < mesh.count; i++) expect(at.setFromMatrixPosition((mesh.getMatrixAt(i, m), m)).distanceTo(from)).toBeGreaterThan(400);
   });
 
   it('draws the cloud translucent, never a solid blot', () => {
@@ -47,37 +52,58 @@ describe('InkFx', () => {
     const from = new THREE.Vector3(0, 100, 0);
     const to = new THREE.Vector3(300, 200, 0);
     fx.jet(from, to);
-    for (let t = 0; t < blobFlightTime(from.distanceTo(to)) + 0.02; t += 0.01) fx.update(0.01, ORIGIN, 0);
+    for (let t = 0; t < blobFlightTime(from.distanceTo(to)) + 0.02; t += 0.01) fx.update(0.01);
     expect(fx.active.blobs).toBe(0);
     let max = 0;
     for (let t = 0; t < 1; t += 0.02) {
-      fx.update(0.02, ORIGIN, 0);
+      fx.update(0.02);
       const a = meshOf(scene).geometry.getAttribute('instAlpha');
       for (let i = 0; i < meshOf(scene).count; i++) max = Math.max(max, a.getX(i));
     }
     expect(max).toBeGreaterThan(0.3);
-    expect(max).toBeLessThanOrEqual(0.66);
+    expect(max).toBeLessThanOrEqual(0.42);
   });
 
-  it('grows the haze with the intercept charge and thins it when spent', () => {
+  it('keeps the cloud compact so it never blankets the screen', () => {
     const scene = new THREE.Scene();
     const fx = new InkFx(scene);
-    for (let i = 0; i < 60; i++) fx.update(0.05, ORIGIN, 1);
-    expect(fx.active.haze).toBe(1);
-    expect(meshOf(scene).count).toBeGreaterThan(0);
-    for (let i = 0; i < 60; i++) fx.update(0.05, ORIGIN, 0);
-    expect(fx.active.haze).toBe(0);
+    const at = new THREE.Vector3(0, 300, 0);
+    fx.burst(at);
+    const mesh = meshOf(scene);
+    const m = new THREE.Matrix4();
+    const pos = new THREE.Vector3();
+    const q = new THREE.Quaternion();
+    const sc = new THREE.Vector3();
+    let maxR = 0;
+    let maxD = 0;
+    for (let t = 0; t < CLOUD.life; t += 0.05) {
+      fx.update(0.05);
+      for (let i = 0; i < mesh.count; i++) {
+        mesh.getMatrixAt(i, m);
+        m.decompose(pos, q, sc);
+        maxR = Math.max(maxR, sc.x);
+        maxD = Math.max(maxD, pos.distanceTo(at));
+      }
+    }
+    expect(maxR).toBeLessThanOrEqual(80);
+    expect(maxD).toBeLessThanOrEqual(130);
+  });
+
+  it('draws nothing around the body while there are no jets or clouds (no haze)', () => {
+    const scene = new THREE.Scene();
+    const fx = new InkFx(scene);
+    for (let i = 0; i < 60; i++) fx.update(0.05);
+    expect(meshOf(scene).count).toBe(0);
     expect(meshOf(scene).visible).toBe(false);
   });
 
-  it('clear drops every blob, cloud and the haze', () => {
+  it('clear drops every blob and cloud', () => {
     const scene = new THREE.Scene();
     const fx = new InkFx(scene);
-    for (let i = 0; i < 40; i++) fx.update(0.05, ORIGIN, 1);
     fx.jet(ORIGIN, new THREE.Vector3(500, 0, 0));
     fx.burst(new THREE.Vector3(0, 200, 0));
     fx.clear();
-    expect(fx.active).toEqual({ blobs: 0, puffs: 0, haze: 0 });
+    expect(fx.active).toEqual({ blobs: 0, puffs: 0 });
     expect(meshOf(scene).visible).toBe(false);
   });
 });

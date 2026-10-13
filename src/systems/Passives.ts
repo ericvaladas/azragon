@@ -12,8 +12,6 @@ export class Passives {
   private novaT = 0;
   private mortarT = 0;
   private interceptBank = 0;
-  /** The current kind's intercept-rate scale (MonsterKind.interceptRate), from the last update. */
-  private interceptScale = 1;
   private overloadCd = 0;
   private bubbleT = 0;
   private bubbleCd = 0;
@@ -73,12 +71,6 @@ export class Passives {
 
   spineRadius(): number {
     return P.spines.radius[this.ranks().spines]!;
-  }
-
-  /** Spine Shield's banked shots as a fraction of its one-second cap (0..1); 0 when not taken. */
-  interceptCharge(): number {
-    const rate = P.spines.rate[this.ranks().spines]! * this.interceptScale;
-    return rate > 0 ? Math.min(1, this.interceptBank / interceptCap(rate)) : 0;
   }
 
   bubbleActive(): boolean {
@@ -149,7 +141,6 @@ export class Passives {
     this.bubbleCd = Math.max(0, this.bubbleCd - dt);
     this.reflectT = Math.max(0, this.reflectT - dt);
     this.reflectCd = Math.max(0, this.reflectCd - dt);
-    this.interceptScale = interceptScale;
     const rate = P.spines.rate[r.spines]! * interceptScale;
     this.interceptBank = Math.min(interceptCap(rate), this.interceptBank + rate * dt);
     const intercepts = Math.floor(this.interceptBank + 1e-9);

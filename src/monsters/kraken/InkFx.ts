@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { faceted, toonMat } from '../../render/toon';
-import { approach, blobFlightTime, blobPoint, CLOUD, cloudPuff, hazeStrength } from './inkMath';
+import { blobFlightTime, blobPoint, CLOUD, cloudPuff } from './inkMath';
 
 /** Ink palette: near-black core, the Kraken's ink, a dark violet body and a violet sheen that reads over dark city blocks. */
 const INK_DEEP = 0x12091a;
@@ -8,10 +8,8 @@ const INK = 0x2a1838;
 const INK_VIOLET = 0x45265e;
 const INK_SHEEN = 0x6a3d8c;
 const CLOUD_COLORS = [INK_DEEP, INK_DEEP, INK_DEEP, INK, INK, INK_VIOLET, INK_VIOLET, INK_SHEEN] as const;
-/** The haze is thin, so it uses brighter, saturated violets: dark ink at low opacity just reads as a muddy shadow. */
-const HAZE_COLORS = [0x5a2a85, 0x6e38a0, 0x4a2370] as const;
 
-/** Pool size shared by blobs (head + trail), cloud puffs and haze wisps. */
+/** Pool size shared by blobs (head + trail) and cloud puffs. */
 const MAX = 400;
 const MAX_BLOBS = 16;
 const MAX_PUFFS = 240;
@@ -21,34 +19,21 @@ const BLOB_STRETCH = 2.2;
 const TRAIL = 4;
 const TRAIL_LAG = 0.075;
 /** Cloud burst: puffs per cloud, spread (m), puff radius range (m), outward speed (m/s) and its drag. */
-const CLOUD_PUFFS = 14;
-const CLOUD_SPREAD = 85;
-const PUFF_R: readonly [number, number] = [50, 92];
-const PUFF_SPEED: readonly [number, number] = [60, 170];
+const CLOUD_PUFFS = 12;
+const CLOUD_SPREAD = 50;
+const PUFF_R: readonly [number, number] = [28, 52];
+const PUFF_SPEED: readonly [number, number] = [35, 95];
 const PUFF_DRAG = 2.4;
 const PUFF_RISE = 18;
-/** The cloud's peak opacity: translucent, so the city shows through it. */
-const PUFF_ALPHA = 0.65;
-/** Siphon puffs: a few small, quick puffs where the jet leaves the body. */
+/** The cloud's peak opacity: well translucent, so it never hides the city or the action behind it. */
+const PUFF_ALPHA = 0.4;
+/** Siphon puffs: a few small, quick puffs where the jet leaves the body, gone in under half a second. */
 const SIPHON_PUFFS = 3;
 const SIPHON_R = 22;
-const SIPHON_RATE = 1.8;
-/** Armed haze: wisps orbiting the mantle and lower body, their max opacity, and how fast the haze follows the bank. */
-const HAZE_WISPS = 16;
-const HAZE_ALPHA = 0.42;
-const HAZE_R: readonly [number, number] = [120, 200];
-const HAZE_Y: readonly [number, number] = [70, 230];
-const HAZE_SIZE: readonly [number, number] = [24, 40];
-/** Puffs per wisp and their spacing along the orbit (rad). */
-const WISP_PUFFS = 3;
-const WISP_GAP = 0.16;
-/** How fast (per s) the haze grows back as the bank recharges, and how fast it dissipates when spent. */
-const HAZE_FOLLOW = 2.5;
-const HAZE_DISSIPATE = 8;
+const SIPHON_RATE = 4.5;
 
 type Blob = { from: THREE.Vector3; to: THREE.Vector3; t: number; dur: number; seed: number };
 type Puff = { pos: THREE.Vector3; vel: THREE.Vector3; age: number; delay: number; size: number; color: number; rate: number; spin: number };
-type Wisp = { angle: number; radius: number; y: number; speed: number; size: number; phase: number; color: number };
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
@@ -64,8 +49,8 @@ const pick = <T>(a: readonly T[]): T => a[Math.floor(Math.random() * a.length)]!
 
 /**
  * Ink Cloud visuals (Kraken): a gooey blob squirts from the siphon to each stopped shot and bursts into a
- * billowing black-violet cloud that lingers, then thins; while shots are banked, faint ink wisps drift around
- * the body. Blobs, puffs and wisps share one pooled, per-instance-alpha InstancedMesh: one draw call, none when idle.
+ * billowing black-violet cloud that lingers, then thins. Blobs and puffs share one pooled, per-instance-alpha
+ * InstancedMesh: one draw call, none when idle.
  */
 export class InkFx {
   private mesh: THREE.InstancedMesh;
@@ -74,9 +59,6 @@ export class InkFx {
   private freeBlobs: Blob[] = [];
   private puffs: Puff[] = [];
   private freePuffs: Puff[] = [];
-  private wisps: Wisp[];
-  private haze = 0;
-  private time = 0;
   private n = 0;
 
   constructor(scene: THREE.Scene) {
@@ -96,15 +78,6 @@ export class InkFx {
     this.mesh.count = 0;
     this.mesh.visible = false;
     for (let i = 0; i < MAX; i++) this.mesh.setColorAt(i, _c.setHex(0xffffff));
-    this.wisps = Array.from({ length: HAZE_WISPS }, (_, i) => ({
-      angle: (i / HAZE_WISPS) * Math.PI * 2 + rand(-0.2, 0.2),
-      radius: rand(...HAZE_R),
-      y: rand(...HAZE_Y),
-      speed: (i % 2 ? 1 : -1) * rand(0.18, 0.4),
-      size: rand(...HAZE_SIZE),
-      phase: rand(0, Math.PI * 2),
-      color: HAZE_COLORS[i % HAZE_COLORS.length]!,
-    }));
     scene.add(this.mesh);
   }
 
@@ -150,12 +123,8 @@ export class InkFx {
     this.puffs.push(p);
   }
 
-  /**
-   * Advance and draw. `center`: the monster's ground position the haze orbits; `charge`: the intercept bank
-   * (0..1) the haze thickens with, 0 to let it thin away.
-   */
-  update(dt: number, center: THREE.Vector3, charge: number): void {
-    this.time += dt;
+  /** Advance and draw. */
+  update(dt: number): void {
     this.n = 0;
 
     for (let i = this.blobs.length - 1; i >= 0; i--) {
@@ -202,27 +171,6 @@ export class InkFx {
       this.put(p.pos, _q, _s.set(r, r * 0.85, r), p.color, PUFF_ALPHA * _fade.alpha);
     }
 
-    const want = hazeStrength(charge);
-    this.haze = approach(this.haze, want, dt, want < this.haze ? HAZE_DISSIPATE : HAZE_FOLLOW);
-    if (this.haze > 0.01) {
-      for (const w of this.wisps) {
-        const a = w.angle + this.time * w.speed;
-        const breathe = Math.sin(this.time * 0.9 + w.phase);
-        const rad = w.radius + 22 * Math.sin(this.time * 0.5 + w.phase);
-        const y = center.y + w.y + 18 * Math.sin(this.time * 0.7 + w.phase * 1.3);
-        // A short chain of puffs trailing along its orbit, so each wisp reads as drifting smoke.
-        const r = w.size * (0.55 + 0.45 * this.haze) * (1 + 0.15 * breathe);
-        const alpha = HAZE_ALPHA * this.haze * (0.7 + 0.3 * breathe);
-        for (let j = 0; j < WISP_PUFFS; j++) {
-          const aj = a - Math.sign(w.speed) * j * WISP_GAP;
-          _p.set(center.x + Math.sin(aj) * rad, y - j * 6, center.z + Math.cos(aj) * rad);
-          _q.setFromAxisAngle(_dir.set(0, 1, 0), aj + w.phase * j);
-          const rj = r * (1 - 0.22 * j);
-          this.put(_p, _q, _s.set(rj * 1.5, rj * 0.7, rj), w.color, alpha * (1 - 0.28 * j));
-        }
-      }
-    }
-
     this.mesh.count = this.n;
     this.mesh.visible = this.n > 0;
     this.mesh.instanceMatrix.needsUpdate = true;
@@ -239,17 +187,16 @@ export class InkFx {
   }
 
   /** Blobs in flight and puffs alive (for tests and debugging). */
-  get active(): { blobs: number; puffs: number; haze: number } {
-    return { blobs: this.blobs.length, puffs: this.puffs.length, haze: this.haze };
+  get active(): { blobs: number; puffs: number } {
+    return { blobs: this.blobs.length, puffs: this.puffs.length };
   }
 
-  /** Drop every blob, cloud and the haze (new run, monster change). */
+  /** Drop every blob and cloud (new run, monster change). */
   clear(): void {
     this.freeBlobs.push(...this.blobs);
     this.blobs.length = 0;
     this.freePuffs.push(...this.puffs);
     this.puffs.length = 0;
-    this.haze = 0;
     this.n = 0;
     this.mesh.count = 0;
     this.mesh.visible = false;

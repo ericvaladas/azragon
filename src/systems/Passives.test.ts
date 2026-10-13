@@ -75,20 +75,6 @@ describe('Passives', () => {
     expect(p.spineRadius()).toBe(P.spines.radius[1]);
   });
 
-  it('reports the intercept bank as a 0..1 charge (0 when not taken), draining as shots are spent', () => {
-    expect(new Passives(ranks({})).interceptCharge()).toBe(0);
-    const p = new Passives(ranks({ spines: 2 }));
-    expect(p.interceptCharge()).toBe(0);
-    p.update(0.5);
-    expect(p.interceptCharge()).toBeCloseTo(0.5);
-    p.update(10);
-    expect(p.interceptCharge()).toBe(1);
-    p.spendIntercepts(1);
-    expect(p.interceptCharge()).toBeCloseTo(1 - 1 / P.spines.rate[2]!);
-    p.reset();
-    expect(p.interceptCharge()).toBe(0);
-  });
-
   it('scales the intercept rate for a kind (Kraken Ink Cloud fires far less often), still firing at rank 1', () => {
     const p = new Passives(ranks({ spines: 1 }));
     const k = 1 / 3;
@@ -101,9 +87,8 @@ describe('Passives', () => {
     // 30 s at a third of rank 1's rate.
     expect(shots).toBeGreaterThanOrEqual(Math.floor(30 * P.spines.rate[1]! * k) - 1);
     expect(shots).toBeLessThanOrEqual(Math.ceil(30 * P.spines.rate[1]! * k));
-    expect(p.interceptCharge()).toBeLessThan(1);
-    p.update(10, k);
-    expect(p.interceptCharge()).toBe(1);
+    // A slowed rate still banks a whole shot.
+    expect(p.update(10, k).intercepts).toBe(1);
   });
   it('banks at most one second of intercepts while nothing needs shooting down', () => {
     const p = new Passives(ranks({ spines: 3 }));

@@ -1,29 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
-import { approach, blobFlightTime, blobPoint, CLOUD, cloudPuff, hazeStrength, JET } from './inkMath';
-
-describe('hazeStrength', () => {
-  it('is 0 with nothing banked and 1 with a full bank', () => {
-    expect(hazeStrength(0)).toBe(0);
-    expect(hazeStrength(1)).toBe(1);
-  });
-
-  it('grows with the bank and clamps outside 0..1', () => {
-    expect(hazeStrength(0.25)).toBeLessThan(hazeStrength(0.5));
-    expect(hazeStrength(0.5)).toBeLessThan(hazeStrength(0.9));
-    expect(hazeStrength(-1)).toBe(0);
-    expect(hazeStrength(3)).toBe(1);
-  });
-});
-
-describe('approach', () => {
-  it('moves toward the target at the rate and never overshoots', () => {
-    expect(approach(0, 1, 0.1, 4)).toBeCloseTo(0.4);
-    expect(approach(0, 1, 1, 4)).toBe(1);
-    expect(approach(1, 0, 0.1, 4)).toBeCloseTo(0.6);
-    expect(approach(0.5, 0.5, 0.1, 4)).toBe(0.5);
-  });
-});
+import { blobFlightTime, blobPoint, CLOUD, cloudPuff, JET } from './inkMath';
 
 describe('blobFlightTime', () => {
   it('scales with distance at the jet speed', () => {
