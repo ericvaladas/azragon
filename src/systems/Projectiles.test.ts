@@ -35,21 +35,26 @@ describe('Projectiles.fireChunk', () => {
   });
 });
 
-describe('Projectiles.fireBomb', () => {
-  it('lobs a magma bomb on a high arc that lands on the target after the lob flight time', () => {
+describe('Projectiles.fireWisp and fireShard', () => {
+  it('a Hungry Ghost wisp homes onto its target and hits it as a wisp', () => {
     const p = new Projectiles(new THREE.Scene());
-    const hits: { kind: string; x: number; z: number; damage: number }[] = [];
-    p.onHit = (h) => hits.push({ kind: h.kind, x: h.point.x, z: h.point.z, damage: h.damage });
-    p.fireBomb(new THREE.Vector3(0, 380, 0), new THREE.Vector3(0, 0, 1000), 90);
-    let peak = 0;
-    const steps = Math.ceil(CONFIG.golem.lob.flight / 0.05) + 2;
-    for (let i = 0; i < steps; i++) {
-      p.update(0.05);
-      const s = (p as unknown as { shots: { pos: THREE.Vector3 }[] }).shots[0];
-      if (s) peak = Math.max(peak, s.pos.y);
-    }
-    expect(hits).toEqual([{ kind: 'bomb', x: 0, z: 1000, damage: 90 }]);
-    expect(peak).toBeGreaterThan(CONFIG.golem.lob.arc * 0.8);
+    const hits: { kind: string; damage: number; hit: boolean }[] = [];
+    const target = { position: new THREE.Vector3(600, 0, 300), radius: 40, airborne: false, kind: 'tank', isAlive: () => true, applyDamage: () => {} };
+    p.onHit = (h) => hits.push({ kind: h.kind, damage: h.damage, hit: h.target === target });
+    p.fireWisp(new THREE.Vector3(0, 300, 0), target as never, 50, 0.2);
+    for (let i = 0; i < 80 && hits.length === 0; i++) p.update(0.03);
+    expect(hits).toEqual([{ kind: 'wisp', damage: 50, hit: true }]);
+  });
+  it('a Bone Ward shard flies straight to the point quickly, with no damage and no target', () => {
+    const p = new Projectiles(new THREE.Scene());
+    const hits: { kind: string; x: number; damage: number; t: number }[] = [];
+    let t = 0;
+    p.onHit = (h) => hits.push({ kind: h.kind, x: Math.round(h.point.x), damage: h.damage, t });
+    p.fireShard(new THREE.Vector3(0, 300, 0), new THREE.Vector3(400, 300, 0));
+    for (let i = 0; i < 20 && hits.length === 0; i++) { t += 0.02; p.update(0.02); }
+    expect(hits).toHaveLength(1);
+    expect(hits[0]).toMatchObject({ kind: 'shard', x: 400, damage: 0 });
+    expect(hits[0]!.t).toBeLessThanOrEqual(0.26);
     expect(p.incoming()).toHaveLength(0);
   });
 });

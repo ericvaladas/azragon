@@ -134,7 +134,7 @@ describe('grip', () => {
 });
 
 describe('core', () => {
-  it('Molten Core: off at rank 0, then a growing damage bonus, aura radius and burn per rank', () => {
+  it('Ravenous Hunger: off at rank 0, then a growing damage bonus, aura radius and wither per rank', () => {
     expect(new Passives(ranks({})).core()).toBeNull();
     const c1 = new Passives(ranks({ core: 1 })).core()!;
     const c3 = new Passives(ranks({ core: 3 })).core()!;

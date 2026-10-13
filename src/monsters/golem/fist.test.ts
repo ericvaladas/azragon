@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { backhandYaw, bearingTo, fistKind, lungeAmount, lungeWeight, strikeReturn, strikeStarted } from './fist';
 
-describe('Molten Fist', () => {
+describe('Rending Claws', () => {
   it('measures bearing from the nose, positive toward the left (+X)', () => {
     expect(bearingTo({ x: 0, z: 0 }, 0, { x: 0, z: 100 })).toBeCloseTo(0);
     expect(bearingTo({ x: 0, z: 0 }, 0, { x: 100, z: 0 })).toBeCloseTo(Math.PI / 2);

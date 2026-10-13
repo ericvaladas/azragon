@@ -218,7 +218,7 @@ export const CONFIG = {
       chunk: 0x8a8378,
     },
   },
-  /** The Magma Golem. Stats feed its MonsterKind; fist and lob tune its attacks; colours its body and effects. */
+  /** The Wendigo (id `golem`). Stats feed its MonsterKind; fist and lob tune its attacks; colours its body and effects. */
   golem: {
     stats: {
       maxHp: 1450,
@@ -244,12 +244,15 @@ export const CONFIG = {
       size: { width: 415, length: 453, height: 413 },
     },
     /**
-     * Molten Fist: targets within `frontHalf` (rad) of dead ahead take a slam; others a backhand whose hit arc
+     * Rending Claws: targets within `frontHalf` (rad) of dead ahead take a slam; others a backhand whose hit arc
      * is centred `backhandCenter` rad off the nose on the target's side, ±`backhandHalf`. Buildings take buildingMult×.
      */
     fist: { frontHalf: 0.75, backhandCenter: 1.95, backhandHalf: 1.25, buildingMult: 2 },
-    /** Magma Lob: splash radius (m), flight time (s), arc height (m); the lava pool it leaves (radius m, life s). */
-    lob: { splash: 120, flight: 1.4, arc: 520, poolRadius: 110, poolLife: 3 },
+    /**
+     * Dread Gaze: the target burns `delay` s after the Wendigo looks at it, then the black fire flares over `splash` m;
+     * it leaves a patch of black fire (radius m, life s).
+     */
+    gaze: { splash: 120, delay: 1.4, poolRadius: 110, poolLife: 3 },
     colors: {
       /** Tight, starved olive-grey skin (base, ridge highlight over the ribs and bones, shadowed underside) and the black sinew. */
       skin: 0x4c5142,
@@ -269,10 +272,21 @@ export const CONFIG = {
       /** Hooves and claws; the empty sockets, nasal cavity and mouth. */
       horn: 0x121010,
       socket: 0x090707,
-      /** Magma FX (bombs, pools, particles, Eruption): not on the body. */
-      magma: 0xff6a1a,
-      ember: 0xffb347,
-      lava: 0xff4a12,
+      /**
+       * Death-and-decay FX, not on the body: black fire (near-black flame tongues, a deep violet heart) and the patches it
+       * leaves, rotting black-green ground, rot clumps, black-purple shade smoke, dark blood mist, bone-white shards,
+       * the pale Hungry Ghosts and Shadow Hands.
+       */
+      hexfire: 0x0c0710,
+      hexember: 0x3d1a52,
+      hexPool: 0x120a17,
+      blight: 0x1a2312,
+      rot: 0x2a3319,
+      shade: 0x150e19,
+      mist: 0x4a0e14,
+      boneShard: 0xdcd4c0,
+      ghost: 0xd6d3dc,
+      handSmoke: 0x2b1d33,
     },
   },
   artillery: {
@@ -300,8 +314,8 @@ export const CONFIG = {
     /** Sucker Grip (Kraken): each plant crushes the nearest ground enemy within radius[rank] of the tip. */
     grip: { radius: [0, 140, 180, 220], damage: [0, 90, 140, 200] },
     /**
-     * Molten Core (Golem): heat 0..1 rises by (damage taken / max HP) × gain and cools by `cool` per second.
-     * Damage × (1 + heat × bonus[rank]); at heat ≥ auraAt a burn aura of radius[rank] deals dps[rank] to ground enemies.
+     * Ravenous Hunger (Wendigo): heat 0..1 rises by (damage taken / max HP) × gain and cools by `cool` per second.
+     * Damage × (1 + heat × bonus[rank]); at heat ≥ auraAt a withering aura of radius[rank] deals dps[rank] to ground enemies.
      */
     core: { gain: 4, cool: 0.12, auraAt: 0.5, bonus: [0, 0.3, 0.45, 0.6], radius: [0, 260, 320, 380], dps: [0, 40, 60, 85] },
     /** Auto-shields trigger only when something is about to hit: projectiles or blimps within this range. */

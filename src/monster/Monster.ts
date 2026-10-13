@@ -24,7 +24,7 @@ export class Monster {
   glow = 0;
   /** Ranged charge 0..1, shown by bodies that telegraph it (Kaiju plates). */
   charge = 0;
-  /** Molten Core heat 0..1, written by GameScene; the Golem's seams glow with it. */
+  /** Ravenous Hunger heat 0..1 (Wendigo), written by GameScene. */
   heat = 0;
   /** World point the head should turn toward (Kaiju breath), or null. */
   lookAt: THREE.Vector3 | null = null;
@@ -111,7 +111,7 @@ export class Monster {
     return this.body.aimError();
   }
 
-  /** World point the monster's own projectiles launch from (stinger tip, back vents). */
+  /** World point the monster's own projectiles launch from (stinger tip, back vents, the Wendigo's flanks). */
   launchOrigin(out: THREE.Vector3): THREE.Vector3 {
     return this.body.launchOrigin(out);
   }

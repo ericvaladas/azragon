@@ -187,9 +187,9 @@ describe('Progression.offer(all)', () => {
   });
 });
 
-describe('Molten Core ability', () => {
+describe('Ravenous Hunger ability', () => {
   it('exists with a title, and the Insect\'s default pool never offers it', () => {
-    expect(ABILITIES.core.title).toBe('Molten Core');
+    expect(ABILITIES.core.title).toBe('Ravenous Hunger');
     const p = new Progression(mulberry32(5));
     expect(p.offer(true).map((o) => o.id)).not.toContain('core');
   });

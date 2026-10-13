@@ -69,7 +69,7 @@ export const ABILITIES: Record<AbilityId, { title: string; icon: string; desc(ra
   mortar: { title: 'Acid Mortar', icon: '☄️', desc: (r) => (r === 1 ? 'Lobs acid at artillery, SAMs, trucks' : 'More globs, bigger splash') },
   bubble: { title: 'Shield Bubble', icon: '🫧', desc: (r) => (r === 1 ? 'Auto: 3s invincibility when hit is coming' : 'Longer bubble, shorter cooldown') },
   grip: { title: 'Sucker Grip', icon: '🐙', desc: (r) => (r === 1 ? 'Planted arms crush an enemy beside them' : 'Wider, harder grip') },
-  core: { title: 'Molten Core', icon: '❤️‍🔥', desc: (r) => (r === 1 ? 'Hits heat your core: more damage, and a burning aura when hot' : 'Hotter core: more damage, wider aura') },
+  core: { title: 'Ravenous Hunger', icon: '🫀', desc: (r) => (r === 1 ? 'Wounds feed its hunger: more damage, and a withering aura when starved' : 'Deeper hunger: more damage, wider aura') },
   meltdown: { title: 'Meltdown', icon: '🌋', desc: (r) => (r === 1 ? 'Below 30% HP: +50% damage, ranged recharges 2x' : 'Meltdown kicks in at higher HP') },
   reflect: { title: 'Reflect Shield', icon: '🔮', desc: (r) => (r === 1 ? 'Auto: bounce projectiles back at enemies' : 'Longer reflect, shorter cooldown') },
   overload: { title: 'Overload', icon: '⚡', desc: (r) => (r === 1 ? 'Absorb a laser hit and fire it back' : 'Overload recharges faster') },

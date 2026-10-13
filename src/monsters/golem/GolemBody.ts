@@ -4,7 +4,6 @@ import { faceted, toonMat } from '../../render/toon';
 import { solveTwoBone } from '../../monster/ik';
 import type { BodyFrame, MonsterBody } from '../types';
 import { fistKind, lungeAmount, lungeWeight, strikeReturn, strikeStarted, type FistKind } from './fist';
-import { FireTendrils } from './FireTendrils';
 import { merge, piece, rng, SHAPES, type V3 } from './golemParts';
 import { SWING, limbPlanted, limbSwing } from './knuckleGait';
 
@@ -38,7 +37,7 @@ const BACKHAND_COCK = new THREE.Vector3(-60, 280, 320);
 const BACKHAND_R = 450;
 const ARM_REACH = UPPER + FORE - 30;
 /**
- * Molten Fist lunge: for a target farther than the hand reaches standing (LUNGE_FROM for a slam, BACKHAND_R for a
+ * Rending Claws lunge: for a target farther than the hand reaches standing (LUNGE_FROM for a slam, BACKHAND_R for a
  * backhand), the torso shifts toward the strike by the shortfall (up to LUNGE_MAX), sinks up to LUNGE_DROP and leans
  * up to LUNGE_LEAN rad, so the hand reaches it.
  */
@@ -46,9 +45,9 @@ const LUNGE_FROM = 380;
 const LUNGE_MAX = 200;
 const LUNGE_DROP = 60;
 const LUNGE_LEAN = 0.25;
-/** Molten Fist: seconds the hand stays on its target after impact before it eases home. */
+/** Rending Claws: seconds the hand stays on its target after impact before it eases home. */
 const STRIKE_HOLD = 0.1;
-/** Eruption: seconds for both hands to rise and slam. */
+/** Withering Ring: seconds for both hands to rise and slam. */
 const NOVA_TIME = 0.6;
 
 
@@ -140,16 +139,16 @@ function cageAt(theta: number, z: number, lift = 0, out = new THREE.Vector3(), n
   return out.addScaledVector(_ec, lift);
 }
 
-/** Shadow tendrils rise from the spine away from this point (torso space): deep in the trunk. */
-const HUMP_CENTRE = new THREE.Vector3(0, CAGE_Y - 40, 60);
-/** Shadow tendrils (torso space): two pairs either side of the spine, between the shoulders, under the mane. */
-const TENDRIL_ROOTS: readonly THREE.Vector3[] = [0.5, 0.6].flatMap((u) => {
-  const p = SPINE.getPointAt(u);
-  return [1, -1].map((sx) => p.clone().add(new THREE.Vector3(sx * 30, 14, 0)));
-});
 /** The skull (torso space): hung low and forward at the end of the neck, the snout pitched down HEAD_PITCH rad. */
 const HEAD_AT = new THREE.Vector3(0, 472, 408);
 const HEAD_PITCH = 0.62;
+/** Dread Gaze turns the skull about this point (torso space), where the neck meets the back of the skull. */
+const HEAD_PIVOT = new THREE.Vector3(0, 480, 380);
+/** Dread Gaze: how far the skull may turn (rad) left/right, down and up from its rest pose, and how fast it follows. */
+const GAZE_YAW = 1.1;
+const GAZE_DOWN = 0.35;
+const GAZE_UP = 0.3;
+const GAZE_RATE = 9;
 /** Scale of the antler rack's layout. */
 const RACK = 1.25;
 
@@ -175,6 +174,7 @@ const _elbow = new THREE.Vector3();
 const _knee = new THREE.Vector3();
 const _pole = new THREE.Vector3();
 const _aim = new THREE.Vector3();
+const _sum = new THREE.Vector3();
 const _raise = new THREE.Vector3();
 const _end = new THREE.Vector3();
 const _tmp = new THREE.Vector3();
@@ -283,12 +283,13 @@ type Arm = { upper: THREE.Mesh; fore: THREE.Mesh; fist: THREE.Mesh };
 type Leg = { thigh: THREE.Mesh; shin: THREE.Mesh; foot: THREE.Mesh };
 
 /**
- * The Magma Golem, built as a wendigo of the northern woods: a gaunt, starved thing that stalks on very long,
+ * The Wendigo (internally the Golem), a folklore horror of the northern woods: a gaunt, starved thing that stalks on very long,
  * sinewy arms and bony, clawed hands. Tight olive-grey skin shows the ribs and the knuckled lower spine beneath it;
  * a ragged black mane of matted fur hangs off its hunched withers, neck, shoulders and chest. Its face is a
  * weathered deer skull with empty sockets, carried low and forward on a long neck under a small gnarled rack hung
- * with moss. Digitigrade hind legs on cloven hooves. Shadowy tendrils of smoke writhe off its back and whip at
- * flyers; Magma Lob shots leave from hidden points on its back. Faces +Z; +X is its left.
+ * with moss. Digitigrade hind legs on cloven hooves. It has no glow: its dark magic shows in the world around it.
+ * Hungry Ghosts and Bone Ward shards leave from hidden points on its back; for Dread Gaze the skull turns to stare;
+ * for Shadow Hands it lifts a claw toward the flyer as the hand rises. Faces +Z; +X is its left.
  */
 export class GolemBody implements MonsterBody {
   readonly root = new THREE.Group();
@@ -300,12 +301,15 @@ export class GolemBody implements MonsterBody {
   private legs: Leg[] = [];
   /** One matte, vertex-coloured toon material for the whole body; its emissive only carries the hit flash and level-up glow. */
   private bodyMat: THREE.MeshToonMaterial;
-  private flares = new FireTendrils(TENDRIL_ROOTS, HUMP_CENTRE);
   private geos: THREE.BufferGeometry[] = [];
-  private vents: THREE.Object3D[] = [];
-  private nextVent = 0;
+  private launchPts: THREE.Object3D[] = [];
+  /** The skull and antlers, turned toward `lookAt` (Dread Gaze) and eased back to rest. */
+  private headPivot = new THREE.Group();
+  private headYaw = 0;
+  private headPitch = 0;
+  private nextLaunch = 0;
   private novaT = -1;
-  /** Molten Fist: the strike's clock last frame (−1 when none), and its slam/backhand kind, latched at its start. */
+  /** Rending Claws: the strike's clock last frame (−1 when none), and its slam/backhand kind, latched at its start. */
   private meleePrevT = -1;
   private strikeKind: FistKind = 'slam';
 
@@ -417,36 +421,38 @@ export class GolemBody implements MonsterBody {
       for (const sx of [1, -1]) strut(torso, TUBE, C.sinew, [sx * 16, 506, 250], [sx * 12, 456, 380], 7);
     }
 
+    // The skull and rack are their own mesh on a pivot at the top of the neck, so Dread Gaze can turn the head.
+    const skull: THREE.BufferGeometry[] = [];
     // The skull: a weathered deer skull, small and long-faced, the jaw hanging a little open; empty black sockets.
     const head = new THREE.Matrix4().compose(HEAD_AT, _q.setFromEuler(new THREE.Euler(HEAD_PITCH, 0, 0)), _s.set(1, 1, 1));
     // In `head` space +Z runs out along the snout and +Y up over the brow.
     const hp = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z).applyMatrix4(head);
-    piece(torso, BALL, C.bone, [0, 0, 0], [68, 58, 78], [0, 0, 0], head);
-    piece(torso, BALL, C.boneShade, [0, 2, -30], [54, 48, 34], [0, 0, 0], head);
-    piece(torso, SNOUT, C.bone, [0, -8, 62], [44, 82, 34], [Math.PI / 2, 0, 0], head);
-    piece(torso, box, C.boneShade, [0, 6, 60], [14, 6, 68], [0.1, 0, 0], head);
+    piece(skull, BALL, C.bone, [0, 0, 0], [68, 58, 78], [0, 0, 0], head);
+    piece(skull, BALL, C.boneShade, [0, 2, -30], [54, 48, 34], [0, 0, 0], head);
+    piece(skull, SNOUT, C.bone, [0, -8, 62], [44, 82, 34], [Math.PI / 2, 0, 0], head);
+    piece(skull, box, C.boneShade, [0, 6, 60], [14, 6, 68], [0.1, 0, 0], head);
     // Brow ridges overhanging the sockets, cheekbones under them.
     for (const sx of [1, -1]) {
-      piece(torso, NUB, C.bone, [sx * 22, 20, 24], [26, 12, 32], [0, 0, 0], head);
-      piece(torso, NUB, C.boneShade, [sx * 22, -16, 34], [18, 16, 40], [0, 0, 0], head);
+      piece(skull, NUB, C.bone, [sx * 22, 20, 24], [26, 12, 32], [0, 0, 0], head);
+      piece(skull, NUB, C.boneShade, [sx * 22, -16, 34], [18, 16, 40], [0, 0, 0], head);
       // The sockets: deep, empty, black.
-      piece(torso, BALL, C.socket, [sx * 27, 6, 28], [28, 26, 30], [0, 0, 0], head);
+      piece(skull, BALL, C.socket, [sx * 27, 6, 28], [28, 26, 30], [0, 0, 0], head);
     }
     // Nasal cavity at the tip and the dark of the mouth under the upper jaw.
-    piece(torso, box, C.socket, [0, -4, 100], [12, 10, 14], [0, 0, 0], head);
-    piece(torso, box, C.socket, [0, -24, 58], [24, 8, 62], [0, 0, 0], head);
+    piece(skull, box, C.socket, [0, -4, 100], [12, 10, 14], [0, 0, 0], head);
+    piece(skull, box, C.socket, [0, -24, 58], [24, 8, 62], [0, 0, 0], head);
     // The lower jaw: two thin bars hinged under the skull, hanging slightly open, a few worn teeth.
     for (const sx of [1, -1]) {
       const j0 = hp(sx * 22, -18, 6);
       const j1 = hp(sx * 16, -38, 50);
       const j2 = hp(sx * 8, -40, 88);
-      strut(torso, TUBE, C.boneShade, v3(j0), v3(j1), 7);
-      strut(torso, TUBE, C.boneShade, v3(j1), v3(j2), 5);
+      strut(skull, TUBE, C.boneShade, v3(j0), v3(j1), 7);
+      strut(skull, TUBE, C.boneShade, v3(j1), v3(j2), 5);
       for (let i = 0; i < 3; i++) {
         _at.lerpVectors(j1, j2, 0.15 + i * 0.3);
-        strut(torso, spike, C.boneShade, v3(_at), v3(_at.clone().add(hp(0, 12, 0).sub(HEAD_AT))), 3.5);
+        strut(skull, spike, C.boneShade, v3(_at), v3(_at.clone().add(hp(0, 12, 0).sub(HEAD_AT))), 3.5);
         const u = hp(sx * (13 - i * 2.5), -20, 48 + i * 15);
-        strut(torso, spike, C.boneShade, v3(u), v3(u.clone().add(hp(0, -10, 0).sub(HEAD_AT))), 3.5);
+        strut(skull, spike, C.boneShade, v3(u), v3(u.clone().add(hp(0, -10, 0).sub(HEAD_AT))), 3.5);
       }
     }
 
@@ -456,17 +462,17 @@ export class GolemBody implements MonsterBody {
       const root = hp(sx * 20, 24, -10);
       const X = (x: number, y: number, z: number, j = 4) => root.clone().add(_tmp.set(sx * (x * RACK + jit(j)), y * RACK + jit(j), z * RACK + jit(j)));
       const beam = [X(0, 0, 0), X(24, 30, -24), X(56, 50, -30), X(86, 62, -12), X(102, 66, 20), X(104, 62, 54), X(92, 58, 82)];
-      piece(torso, NUB, C.antler, v3(beam[0]!), [24, 14, 24]);
-      branch(torso, C.antler, C.antlerTip, beam, 13, 7);
+      piece(skull, NUB, C.antler, v3(beam[0]!), [24, 14, 24]);
+      branch(skull, C.antler, C.antlerTip, beam, 13, 7);
       // Tines: a short brow tine, then three off the beam, each bent its own way.
-      branch(torso, C.antler, C.antlerTip, [beam[1]!, X(32, 58, -8), X(38, 80, 8, 8)], 7, 5);
-      branch(torso, C.antler, C.antlerTip, [beam[3]!, X(86, 106, -18), X(76, 146, -4, 10)], 8, 5);
-      branch(torso, C.antler, C.antlerTip, [beam[4]!, X(114, 100, 26), X(126, 128, 42, 10)], 7, 5);
-      branch(torso, C.antler, C.antlerTip, [beam[5]!, X(112, 88, 72, 8)], 6, 4);
+      branch(skull, C.antler, C.antlerTip, [beam[1]!, X(32, 58, -8), X(38, 80, 8, 8)], 7, 5);
+      branch(skull, C.antler, C.antlerTip, [beam[3]!, X(86, 106, -18), X(76, 146, -4, 10)], 8, 5);
+      branch(skull, C.antler, C.antlerTip, [beam[4]!, X(114, 100, 26), X(126, 128, 42, 10)], 7, 5);
+      branch(skull, C.antler, C.antlerTip, [beam[5]!, X(112, 88, 72, 8)], 6, 4);
       for (const [i, len] of [[2, 58], [3, 40], [5, 70]] as const) {
         const at = beam[i]!.clone().add(_tmp.set(0, -6, 0));
-        shard(torso, at, _dir.set(jit(0.15), -1, jit(0.15)), len, 4.5, C.moss, C.furDark, rand() * 3);
-        shard(torso, at.add(_tmp.set(sx * 6, 0, 8)), _dir.set(jit(0.2), -1, jit(0.2)), len * 0.6, 3.5, C.furDark, C.moss, rand() * 3);
+        shard(skull, at, _dir.set(jit(0.15), -1, jit(0.15)), len, 4.5, C.moss, C.furDark, rand() * 3);
+        shard(skull, at.add(_tmp.set(sx * 6, 0, 8)), _dir.set(jit(0.2), -1, jit(0.2)), len * 0.6, 3.5, C.furDark, C.moss, rand() * 3);
       }
     }
 
@@ -563,7 +569,7 @@ export class GolemBody implements MonsterBody {
       shard(torso, p, _dir.set(jit(0.4), -0.9 + jit(0.2), -0.8), 50 + rand() * 30, 11 + rand() * 4, furRoot(), furTip(), rand() * 3);
     }
 
-    // Magma Lob points: two on the flanks behind the shoulders and one on the lumbar spine; `mouth` is where shots leave.
+    // Launch points (Hungry Ghosts, Bone Ward shards): two on the flanks behind the shoulders and one on the lumbar spine; `mouth` is where shots leave.
     const lobs: { at: THREE.Vector3; n: THREE.Vector3 }[] = [];
     for (const sx of [1, -1]) {
       const wn = new THREE.Vector3();
@@ -571,17 +577,20 @@ export class GolemBody implements MonsterBody {
     }
     lobs.push({ at: SPINE.getPointAt(0.12).add(new THREE.Vector3(0, 34, 0)), n: new THREE.Vector3(0, 1, -0.35).normalize() });
     for (const { at, n: wn } of lobs) {
-      const vent = new THREE.Object3D();
-      along(at, wn).decompose(vent.position, vent.quaternion, vent.scale);
+      const pt = new THREE.Object3D();
+      along(at, wn).decompose(pt.position, pt.quaternion, pt.scale);
       const mouth = new THREE.Object3D();
       mouth.position.set(0, 50, 0);
-      vent.add(mouth);
-      this.vents.push(mouth);
-      this.shell.add(vent);
+      pt.add(mouth);
+      this.launchPts.push(mouth);
+      this.shell.add(pt);
     }
 
     // The torso casts shadows but takes none: the mane and antlers would otherwise drown the trunk in shade.
     this.mesh(this.shell, this.keep(merge(torso)), this.bodyMat).receiveShadow = false;
+    this.headPivot.position.copy(HEAD_PIVOT);
+    this.shell.add(this.headPivot);
+    this.mesh(this.headPivot, this.keep(merge(skull).translate(-HEAD_PIVOT.x, -HEAD_PIVOT.y, -HEAD_PIVOT.z)), this.bodyMat).receiveShadow = false;
 
     this.shell.position.copy(PIVOT).multiplyScalar(-1);
     this.body.add(this.shell);
@@ -680,9 +689,6 @@ export class GolemBody implements MonsterBody {
       this.limbArms.push({ upper: limb(upperGeo, UPPER), fore: limb(foreGeo, FORE), fist: limb(handGeo, 1) });
       this.legs.push({ thigh: limb(thighGeo, THIGH), shin: limb(shinGeo, SHIN), foot: limb(footGeo, 1) });
     }
-
-    // Shadow tendrils writhing off the back; Vent Burst whips one at a flyer.
-    this.root.add(this.flares.mesh);
   }
 
   private mesh(parent: THREE.Object3D, geo: THREE.BufferGeometry, mat: THREE.Material, shadow = true): THREE.Mesh {
@@ -698,7 +704,7 @@ export class GolemBody implements MonsterBody {
     return g;
   }
 
-  /** Eruption: both hands rise and slam the ground. */
+  /** Withering Ring: both hands rise and slam the ground. */
   nova(): void {
     this.novaT = 0;
   }
@@ -715,7 +721,7 @@ export class GolemBody implements MonsterBody {
     const nova = this.novaT >= 0 ? this.novaT / NOVA_TIME : -1;
     const slam = nova >= 0 ? Math.sin(Math.PI * nova) : 0;
 
-    // Molten Fist: slam or backhand is decided once, as the strike starts; the body lunges toward the strike.
+    // Rending Claws: slam or backhand is decided once, as the strike starts; the body lunges toward the strike.
     let lean = 0;
     let leanA = 0;
     _lunge.set(0, 0, 0);
@@ -746,7 +752,16 @@ export class GolemBody implements MonsterBody {
     this.root.updateMatrixWorld(true);
     _rel.multiplyMatrices(this.body.matrix, this.shell.matrix);
 
-    // Arms: creep on the hands, or strike, slam (Eruption), claw at the sky (Roar), reach down (Leap).
+    // Shadow Hands: the claw on the flyer's side lifts toward it, beckoning, while the hand rises (weight ≤ 0 is the cock-back).
+    let summonSide = -1;
+    let summon = 0;
+    if (f.antiAir && !f.airborne && !f.roaring) {
+      this.root.worldToLocal(_sum.copy(f.antiAir.target));
+      summonSide = _sum.x >= 0 ? 0 : 1;
+      summon = Math.min(1, Math.max(0, f.antiAir.weight * 1.4 + 0.35));
+    }
+
+    // Arms: creep on the hands, or strike, slam (Withering Ring), claw at the sky (Roar), reach down (Leap), beckon (Shadow Hands).
     for (let side = 0; side < 2; side++) {
       const sx = side === 0 ? 1 : -1;
       const limb = side === 0 ? 0 : 2;
@@ -767,6 +782,11 @@ export class GolemBody implements MonsterBody {
           _fist.lerpVectors(_end, _gait, u * u * (3 - 2 * u));
         }
       }
+      const beckoning = side === summonSide && !striking && nova < 0 && summon > 0;
+      if (beckoning) {
+        _raise.set(sx * 150, 470, 300).lerp(_tmp.copy(_sum).setLength(320).setY(560), 0.4);
+        _fist.lerp(_raise, summon);
+      }
       if (f.roaring) _fist.set(sx * 90, 430 + Math.sin(f.time * 14 + side * Math.PI) * 45, 250);
       if (f.airborne) _fist.set(sx * 230, -30, 260);
       mirror(SHOULDER, sx, _sh).applyMatrix4(_rel);
@@ -777,7 +797,7 @@ export class GolemBody implements MonsterBody {
       placeLimb(arm.upper, _sh, _elbow, _ref);
       placeLimb(arm.fore, _elbow, _fist, _ref);
       arm.fist.position.copy(_fist);
-      if (m > 0.3 && !striking && nova < 0 && limbPlanted(f.prevCycle, f.cycle, limb)) {
+      if (m > 0.3 && !striking && !beckoning && nova < 0 && limbPlanted(f.prevCycle, f.cycle, limb)) {
         onFootLand(_world.copy(_gait).setY(0).applyMatrix4(this.root.matrixWorld));
       }
     }
@@ -800,10 +820,21 @@ export class GolemBody implements MonsterBody {
       if (m > 0.3 && limbPlanted(f.prevCycle, f.cycle, limb)) onFootLand(_world.copy(_foot).setY(0).applyMatrix4(this.root.matrixWorld));
     }
 
-    // Shadow tendrils off the back (longer with heat); for Vent Burst the nearest one cocks back and cracks onto the flyer.
-    const lashAt = f.antiAir ? this.root.worldToLocal(_aim.copy(f.antiAir.target)) : null;
-    const hot = Math.max(f.heat, f.roaring ? 1 : 0);
-    this.flares.update(f.dt, f.time, _rel, this.root.matrixWorld, lashAt, f.antiAir ? Math.min(1, f.antiAir.weight) : 0, hot, f.pose.collapse);
+    // Dread Gaze: the skull turns (within limits) to stare at the target; the body's heading never changes for it.
+    let yaw = 0;
+    let pitch = 0;
+    if (f.lookAt && f.pose.collapse === 0) {
+      this.shell.updateMatrixWorld(true);
+      this.shell.worldToLocal(_sum.copy(f.lookAt)).sub(HEAD_PIVOT);
+      const horiz = Math.hypot(_sum.x, _sum.z);
+      yaw = Math.max(-GAZE_YAW, Math.min(GAZE_YAW, Math.atan2(_sum.x, _sum.z)));
+      // At rest the skull already looks ~0.45 rad below level; pitch only makes up the difference.
+      pitch = Math.max(-GAZE_UP, Math.min(GAZE_DOWN, Math.atan2(-_sum.y, horiz) - 0.45));
+    }
+    const k = 1 - Math.exp(-(f.lookAt ? GAZE_RATE : GAZE_RATE * 0.5) * f.dt);
+    this.headYaw += (yaw - this.headYaw) * k;
+    this.headPitch += (pitch - this.headPitch) * k;
+    this.headPivot.rotation.set(this.headPitch, this.headYaw, 0, 'YXZ');
 
     // The body is matte: its emissive carries only the hit flash and the level-up glow.
     if (f.flash) this.bodyMat.emissive.setHex(0xffffff);
@@ -811,7 +842,7 @@ export class GolemBody implements MonsterBody {
   }
 
   /**
-   * Molten Fist (root space; `_aim` holds the target and `_lunge` the body's lunge). Slam: rise, then drop onto the
+   * Rending Claws (root space; `_aim` holds the target and `_lunge` the body's lunge). Slam: rise, then drop onto the
    * target. Backhand: cock across the chest, then sweep out along an arc around the lunging body to the target's
    * side. Both hold on the target for STRIKE_HOLD, then ease back to the gait position. The kind is the one latched
    * at the strike's start.
@@ -841,16 +872,16 @@ export class GolemBody implements MonsterBody {
     } else out.lerpVectors(_end, gait, strikeReturn(t, T, STRIKE_HOLD));
   }
 
-  /** Shots leave from the lob points on the back in turn. */
+  /** Shots leave from the launch points on the back in turn. */
   launchOrigin(out: THREE.Vector3): THREE.Vector3 {
-    const v = this.vents[this.nextVent++ % this.vents.length]!;
+    const v = this.launchPts[this.nextLaunch++ % this.launchPts.length]!;
     v.updateWorldMatrix(true, false);
     return v.getWorldPosition(out);
   }
 
-  /** The first lob point. */
+  /** The first launch point. */
   rangedOrigin(out: THREE.Vector3): THREE.Vector3 {
-    const v = this.vents[0]!;
+    const v = this.launchPts[0]!;
     v.updateWorldMatrix(true, false);
     return v.getWorldPosition(out);
   }
@@ -861,6 +892,5 @@ export class GolemBody implements MonsterBody {
 
   dispose(): void {
     for (const g of this.geos) g.dispose();
-    this.flares.dispose();
   }
 }

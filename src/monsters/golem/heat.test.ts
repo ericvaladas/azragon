@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { auraOn, coolHeat, coreDamageMult, heatAfterHit } from './heat';
 
-describe('Molten Core heat', () => {
+describe('Ravenous Hunger heat', () => {
   it('heats in proportion to the hit\'s share of max HP, capped at 1', () => {
     expect(heatAfterHit(0, 100, 1000, 4)).toBeCloseTo(0.4);
     expect(heatAfterHit(0.8, 100, 1000, 4)).toBe(1);

@@ -7,7 +7,7 @@ export function bearingTo(from: Vec2, yaw: number, p: Vec2): number {
   return angleDelta(yaw, yawTo(from, p));
 }
 
-/** Molten Fist: a target within `frontHalf` of dead ahead takes a slam; anything beside or behind, a backhand. */
+/** Rending Claws: a target within `frontHalf` of dead ahead takes a slam; anything beside or behind, a backhand. */
 export function fistKind(bearing: number, frontHalf: number): FistKind {
   return Math.abs(bearing) <= frontHalf ? 'slam' : 'backhand';
 }

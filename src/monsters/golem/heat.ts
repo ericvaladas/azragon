@@ -1,4 +1,4 @@
-/** Molten Core heat after taking `damage`: up by the hit's share of max HP × gain, capped at 1. */
+/** Ravenous Hunger heat after taking `damage`: up by the hit's share of max HP × gain, capped at 1. */
 export function heatAfterHit(heat: number, damage: number, maxHp: number, gain: number): number {
   return Math.min(1, heat + (Math.max(0, damage) / maxHp) * gain);
 }
@@ -13,7 +13,7 @@ export function coreDamageMult(heat: number, maxBonus: number): number {
   return 1 + heat * maxBonus;
 }
 
-/** Whether the core is hot enough to burn what's close by. */
+/** Whether the hunger is deep enough for the withering aura. */
 export function auraOn(heat: number, threshold: number): boolean {
   return heat >= threshold;
 }

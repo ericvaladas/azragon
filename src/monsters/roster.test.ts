@@ -7,7 +7,7 @@ describe('roster', () => {
     expect(e.map((x) => x.id)).toEqual(['insect', 'kaiju', 'kraken', 'golem']);
     expect(e.map((x) => x.available)).toEqual([true, true, true, true]);
     expect(e[0]!.name).toBe('Insect Titan');
-    expect(e[3]!.name).toBe('Magma Golem');
+    expect(e[3]!.name).toBe('Wendigo');
     expect(e[0]!.pips).toEqual(KINDS.insect.pips);
     expect(e[2]!.pips).toEqual(KINDS.kraken.pips);
     expect(e[3]!.pips).toEqual(KINDS.golem.pips);

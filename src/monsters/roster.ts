@@ -11,7 +11,7 @@ export const ROSTER_ORDER: readonly RosterId[] = ['insect', 'kaiju', 'kraken', '
 /** Creatures shown in the carousel but not playable yet. */
 const COMING_SOON: Partial<Record<RosterId, { name: string; blurb: string }>> = {};
 
-const SILHOUETTE: Record<RosterId, string> = { insect: '🦂', kaiju: '🦖', kraken: '🐙', golem: '🌋' };
+const SILHOUETTE: Record<RosterId, string> = { insect: '🦂', kaiju: '🦖', kraken: '🐙', golem: '🦌' };
 
 export type RosterEntry = {
   id: RosterId;
