@@ -8,18 +8,31 @@ type XYZ = { x: number; y: number; z: number };
  * of the facing `yaw` (forward = (sin yaw, cos yaw)), widened by each target's angular size.
  */
 export function arcTargets<T extends Cand & { airborne: boolean }>(from: Vec2, yaw: number, range: number, halfAngle: number, cands: readonly T[]): T[] {
-  const fx = Math.sin(yaw);
-  const fz = Math.cos(yaw);
-  return cands.filter((c) => {
-    if (!c.isAlive() || c.airborne) return false;
-    const dx = c.position.x - from.x;
-    const dz = c.position.z - from.z;
-    const d = Math.hypot(dx, dz);
-    if (d > range + c.radius) return false;
-    if (d <= c.radius) return true;
-    const ang = Math.acos(Math.min(1, Math.max(-1, (dx * fx + dz * fz) / d)));
-    return ang <= halfAngle + Math.asin(Math.min(1, c.radius / d));
-  });
+  return cands.filter((c) => c.isAlive() && !c.airborne && inArc(from, yaw, range, halfAngle, c.position, c.radius));
+}
+
+/** Whether point p (a disc of `radius`) lies in the forward arc from `from` facing `yaw`, within `range`. */
+export function inArc(from: Vec2, yaw: number, range: number, halfAngle: number, p: Vec2, radius = 0): boolean {
+  const dx = p.x - from.x;
+  const dz = p.z - from.z;
+  const d = Math.hypot(dx, dz);
+  if (d > range + radius) return false;
+  if (d <= radius) return true;
+  const ang = Math.acos(Math.min(1, Math.max(-1, (dx * Math.sin(yaw) + dz * Math.cos(yaw)) / d)));
+  return ang <= halfAngle + Math.asin(Math.min(1, radius / d));
+}
+
+/**
+ * Ground end of a beam leaving `from` along unit direction (dx, dz): the point on that ray exactly `range`
+ * from `origin` (the monster), so the lane length does not depend on how far ahead the jaws are.
+ */
+export function groundBeamEnd(from: Vec2, dir: Vec2, origin: Vec2, range: number): Vec2 {
+  const ox = from.x - origin.x;
+  const oz = from.z - origin.z;
+  const b = ox * dir.x + oz * dir.z;
+  const c = ox * ox + oz * oz - range * range;
+  const t = Math.max(0, -b + Math.sqrt(Math.max(0, b * b - c)));
+  return { x: from.x + dir.x * t, z: from.z + dir.z * t };
 }
 
 /** Distance from p to segment a→b in the XZ plane. */

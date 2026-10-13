@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { arcTargets, beamEnd, linePoints, lineTargets } from './sweep';
+import { arcTargets, beamEnd, groundBeamEnd, inArc, linePoints, lineTargets, segDist } from './sweep';
 
 const t = (x: number, z: number, radius = 10, airborne = false, alive = true) => ({ position: { x, z }, radius, airborne, isAlive: () => alive });
 
@@ -61,5 +61,42 @@ describe('beamEnd', () => {
   });
   it('fires straight down when the aim is directly below', () => {
     expect(beamEnd(jaws, { x: 0, y: 0, z: 0 }, 1300)).toEqual({ x: 0, y: 0, z: 0 });
+  });
+});
+
+describe('segDist', () => {
+  const a = { x: 0, z: 0 };
+  const b = { x: 100, z: 0 };
+  it('measures to the nearest point on the segment', () => {
+    expect(segDist({ x: 50, z: 30 }, a, b)).toBeCloseTo(30);
+    expect(segDist({ x: -40, z: 30 }, a, b)).toBeCloseTo(50);
+    expect(segDist({ x: 130, z: -40 }, a, b)).toBeCloseTo(50);
+    expect(segDist({ x: 3, z: 4 }, a, a)).toBeCloseTo(5);
+  });
+});
+
+describe('inArc', () => {
+  const from = { x: 0, z: 0 };
+  it('is true only inside the forward cone and range', () => {
+    expect(inArc(from, 0, 500, 0.5, { x: 0, z: 300 })).toBe(true);
+    expect(inArc(from, 0, 500, 0.5, { x: 300, z: 0 })).toBe(false);
+    expect(inArc(from, 0, 500, 0.5, { x: 0, z: -300 })).toBe(false);
+    expect(inArc(from, 0, 500, 0.5, { x: 0, z: 600 })).toBe(false);
+    expect(inArc(from, 0, Infinity, 0.5, { x: 0, z: 600 })).toBe(true);
+    expect(inArc(from, Math.PI / 2, 500, 0.5, { x: 300, z: 0 })).toBe(true);
+  });
+});
+
+describe('groundBeamEnd', () => {
+  it('ends `range` from the origin along the jaws->aim ray', () => {
+    const jaws = { x: 0, z: 210 };
+    const origin = { x: 0, z: 0 };
+    const e = groundBeamEnd(jaws, { x: 0, z: 1 }, origin, 1300);
+    expect(e.x).toBeCloseTo(0);
+    expect(e.z).toBeCloseTo(1300);
+    const back = groundBeamEnd(jaws, { x: 0, z: -1 }, origin, 1300);
+    expect(back.z).toBeCloseTo(-1300);
+    const side = groundBeamEnd(jaws, { x: 1, z: 0 }, origin, 1300);
+    expect(Math.hypot(side.x - origin.x, side.z - origin.z)).toBeCloseTo(1300);
   });
 });

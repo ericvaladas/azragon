@@ -19,7 +19,7 @@ import { Markers } from './systems/Markers';
 import { pickEnemy } from './systems/tap';
 import { Particles } from './systems/Particles';
 import { BreathBeam } from './systems/BreathBeam';
-import { arcTargets, linePoints, lineTargets } from './systems/sweep';
+import { arcTargets, inArc, linePoints, lineTargets } from './systems/sweep';
 import { Projectiles, type Hit } from './systems/Projectiles';
 import { spikeTargets } from './systems/projectileMath';
 import { EnemyRegistry } from './enemies/EnemyRegistry';
@@ -105,6 +105,8 @@ export class GameScene {
   private aura: LevelUpAura;
   private novaWave: Shockwave;
   private breath: BreathBeam;
+  /** Set once the player browses the carousel, so a late saved pick cannot move it. */
+  private browsed = false;
   private jaws = new THREE.Vector3();
   private swatCd = 0;
   private shieldFx: ShieldFx;
@@ -200,6 +202,7 @@ export class GameScene {
     this.enterTitle();
     // The saved pick arrives asynchronously; it only picks the carousel's starting monster.
     void loadPick(this.store).then((id) => {
+      if (this.browsed) return;
       this.selIndex = ROSTER_ORDER.indexOf(id);
       if (this.state === 'select') this.showSelection();
     });
@@ -283,6 +286,7 @@ export class GameScene {
   /** Browse the carousel (wraps around). */
   selectStep(delta: number): void {
     if (this.state !== 'select') return;
+    this.browsed = true;
     const n = ROSTER_ORDER.length;
     this.selIndex = (((this.selIndex + delta) % n) + n) % n;
     this.showSelection();
@@ -483,7 +487,7 @@ export class GameScene {
           for (const p of ringOnRoads(c, CONFIG.opening.count, CONFIG.opening.radius, ROAD_ORIGIN, CONFIG.world.blockSize)) this.enemies.get<TankFleet>('tank').spawnAt(p.x, p.z, this.ctx);
         }
         this.updateMonster(dt);
-        this.breath.update(dt, this.monster.rangedOrigin(this.jaws), this.ms.rangedRange, this.onBreathFire);
+        this.breath.update(dt, this.monster.rangedOrigin(this.jaws), this.monster.position, this.ms.rangedRange, this.onBreathFire);
         const melting = this.passives.meltdown(this.monster.hp / this.monster.maxHp).active;
         this.monster.charge = Math.max(this.breath.charge, melting ? 0.5 : 0);
         if (this.monster.hp <= 0 && this.monster.alive) this.startDying();
@@ -772,7 +776,7 @@ export class GameScene {
     this.novaWave.start(p, radius);
     this.city.forEachStandingInRadius({ x: p.x, z: p.z }, radius, (t) => t.applyDamage(dmg));
     for (const t of footTargets({ x: p.x, z: p.z }, radius, this.enemyTargets())) t.applyDamage(dmg);
-    this.particles.ring('acid', p, radius * 0.6, 24);
+    this.particles.ring(this.monster.kind.fx.particle, p, radius * 0.6, 24);
     this.rig.addTrauma(0.25);
   }
 
@@ -784,7 +788,7 @@ export class GameScene {
     const from = this.monster.rangedOrigin(new THREE.Vector3());
     const dmg = M.damage * this.dmgMult();
     targets.forEach((t) => this.projectiles.fireGlob(from, t.position.clone().setY(0), dmg));
-    this.particles.emit('acid', from, 6, 0.6);
+    this.particles.emit(this.monster.kind.fx.particle, from, 6, 0.6);
   }
 
   /** Live targetable enemies (cached per frame by the registry). */
@@ -992,9 +996,17 @@ export class GameScene {
         this.order = null;
         this.markers.setTarget(null);
       }
-      if (d.moveTo) m.moveToward(d.moveTo, dt, s.moveSpeedMult);
+      // A breath in progress turns the monster to its aim so the beam leaves the mouth forward.
+      const breathing = this.breath.busy;
+      if (breathing) m.faceToward(this.breath.aimPoint, dt);
+      else if (d.moveTo) m.moveToward(d.moveTo, dt, s.moveSpeedMult);
       else if (d.face) m.faceToward(d.face, dt);
-      if (d.attack === 'melee' && d.meleeAt) {
+      // An arc melee only strikes forward: turn to a target outside the arc first.
+      const shape = m.kind.melee;
+      const outsideArc =
+        d.attack === 'melee' && d.meleeAt !== null && shape.kind === 'arc' && !inArc(pos, m.yaw, Infinity, shape.halfAngle, d.meleeAt);
+      if (outsideArc && !breathing && !d.moveTo && !d.face && d.meleeAt) m.faceToward(d.meleeAt, dt);
+      if (d.attack === 'melee' && d.meleeAt && !outsideArc) {
         const plan = strikePlan(pos, m.yaw, d.meleeAt, this.ms.meleeRange);
         m.startMelee(s.cooldownMult, plan.leg, plan.point);
       }
@@ -1018,10 +1030,10 @@ export class GameScene {
     this.monster.consumeRanged(this.rangedCdMult());
   }
 
-  /** Each beam hits every enemy (ground or air) and building along its line, from the monster to the beam's end. */
-  private onBreathFire = (_from: THREE.Vector3, ends: readonly THREE.Vector3[]): void => {
+  /** Each beam hits every enemy (ground or air) and building along its line, from the jaws to the beam's end. */
+  private onBreathFire = (from: THREE.Vector3, ends: readonly THREE.Vector3[]): void => {
     const B = CONFIG.kaiju.breath;
-    const a = { x: this.monster.position.x, z: this.monster.position.z };
+    const a = { x: from.x, z: from.z };
     const mult = this.dmgMult();
     const enemies = new Set<Target>();
     const buildings = new Set<Target>();
@@ -1060,8 +1072,8 @@ export class GameScene {
       const r = this.passives.mortarSplash();
       this.city.forEachStandingInRadius({ x: h.point.x, z: h.point.z }, r, (t) => t.applyDamage(h.damage));
       for (const t of footTargets({ x: h.point.x, z: h.point.z }, r, this.enemyTargets())) t.applyDamage(h.damage);
-      this.particles.ring('acid', h.point, r, 14);
-      this.particles.emit('acid', h.point, 10, 1);
+      this.particles.ring(this.monster.kind.fx.particle, h.point, r, 14);
+      this.particles.emit(this.monster.kind.fx.particle, h.point, 10, 1);
       return;
     }
     if (h.kind === 'spike') {

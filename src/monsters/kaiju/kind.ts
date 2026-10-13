@@ -39,6 +39,6 @@ export const KAIJU: MonsterKind = {
     multiShot: { title: 'Wide Sweep', desc: 'Breath fires +1 extra beam' },
     moveSpeed: { title: 'Long Stride' },
   },
-  fx: { spike: K.colors.plasma, glob: K.colors.plasma, pool: 0x4fd8ff, nova: K.colors.ember },
+  fx: { spike: K.colors.plasma, glob: K.colors.plasma, pool: 0x4fd8ff, nova: K.colors.ember, particle: 'plasma' },
   createBody: () => new KaijuBody(),
 };

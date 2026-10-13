@@ -212,7 +212,7 @@ export class KaijuBody implements MonsterBody {
       if (f.flash) mat.emissive.setHex(0xffffff);
       else mat.emissive.setHex(CONFIG.levelUp.color).multiplyScalar(f.glow);
     }
-    this.plateMat.emissiveIntensity = f.flash ? 3 : 0.35 + 2.2 * f.charge;
+    this.plateMat.emissiveIntensity = f.flash ? 3 : 0.35 + 2.2 * (f.roaring ? 1 : f.charge);
   }
 
   rangedOrigin(out: THREE.Vector3): THREE.Vector3 {

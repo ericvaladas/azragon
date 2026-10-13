@@ -30,7 +30,7 @@ describe('pick', () => {
     expect(await loadPick(store(null, true))).toBe('insect');
     expect(await loadPick(null)).toBe('insect');
   });
-  it('saves under the azragon key and never throws', async () => {
+  it('saves under PICK_KEY and never throws', async () => {
     const s = store(null);
     await savePick(s, 'insect');
     expect(s.saved[PICK_KEY]).toBe('insect');

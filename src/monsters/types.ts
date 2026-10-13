@@ -1,4 +1,5 @@
 import type * as THREE from 'three';
+import type { ParticleKind } from '../systems/Particles';
 import type { PoolSpec } from '../systems/Progression';
 
 /** Playable creatures (widened as each one is built). */
@@ -36,7 +37,7 @@ export type MonsterStats = {
 export type MeleeShape = { kind: 'point' } | { kind: 'arc'; halfAngle: number };
 
 /** Colours the shared effect systems take on for this monster. */
-export type FxTheme = { spike: number; glob: number; pool: number; nova: number };
+export type FxTheme = { spike: number; glob: number; pool: number; nova: number; particle: ParticleKind };
 
 /** One frame of pose input for a body; positions are world space. */
 export type BodyFrame = {

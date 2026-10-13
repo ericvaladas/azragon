@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { CONFIG } from '../config';
 import { placeSegment } from '../monster/ik';
-import { beamEnd } from './sweep';
+import { beamEnd, groundBeamEnd } from './sweep';
 
 const B = CONFIG.kaiju.breath;
 const _jaws = new THREE.Vector3();
@@ -45,6 +45,11 @@ export class BreathBeam {
     }
   }
 
+  /** World point the current breath is aimed at (valid while busy). */
+  get aimPoint(): THREE.Vector3 {
+    return this.aim;
+  }
+
   get busy(): boolean {
     return this.phase !== 'idle';
   }
@@ -59,10 +64,10 @@ export class BreathBeam {
   }
 
   /**
-   * Advance by dt. `from` is the jaws this frame. On the frame the charge completes, `onFire` gets the jaws
+   * Advance by dt. `from` is the jaws this frame; `origin` is the monster's XZ, from which `range` is measured. On the frame the charge completes, `onFire` gets the jaws
    * and each beam's end: fanned around the aim, at most `range` away horizontally, stopping at the ground.
    */
-  update(dt: number, from: THREE.Vector3, range: number, onFire: (from: THREE.Vector3, ends: readonly THREE.Vector3[]) => void): void {
+  update(dt: number, from: THREE.Vector3, origin: { x: number; z: number }, range: number, onFire: (from: THREE.Vector3, ends: readonly THREE.Vector3[]) => void): void {
     if (this.phase === 'idle') {
       this.charge = Math.max(0, this.charge - dt * 4);
       return;
@@ -82,10 +87,11 @@ export class BreathBeam {
         if (_aim.y < 100) {
           // Ground aim: the beam runs the whole lane out to full range.
           const h = Math.hypot(_aim.x - from.x, _aim.z - from.z) || 1;
-          _far.set(from.x + ((_aim.x - from.x) / h) * range, 0, from.z + ((_aim.z - from.z) / h) * range);
-          e = beamEnd(from, _far, range);
+          const g = groundBeamEnd(from, { x: (_aim.x - from.x) / h, z: (_aim.z - from.z) / h }, origin, range);
+          _far.set(g.x, 0, g.z);
+          e = _far;
         } else {
-          e = beamEnd(from, _aim, range);
+          e = beamEnd(from, _aim, Math.max(0, range - Math.hypot(from.x - origin.x, from.z - origin.z)));
         }
         this.ends[i]!.set(e.x, e.y, e.z);
       }
