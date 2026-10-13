@@ -18,6 +18,8 @@ import { Input } from './systems/Input';
 import { Markers } from './systems/Markers';
 import { pickEnemy } from './systems/tap';
 import { Particles } from './systems/Particles';
+import { BreathBeam } from './systems/BreathBeam';
+import { arcTargets, linePoints, lineTargets } from './systems/sweep';
 import { Projectiles, type Hit } from './systems/Projectiles';
 import { spikeTargets } from './systems/projectileMath';
 import { EnemyRegistry } from './enemies/EnemyRegistry';
@@ -102,6 +104,8 @@ export class GameScene {
   private moment = new LevelUpMoment();
   private aura: LevelUpAura;
   private novaWave: Shockwave;
+  private breath: BreathBeam;
+  private jaws = new THREE.Vector3();
   private swatCd = 0;
   private shieldFx: ShieldFx;
   private passives: Passives;
@@ -132,6 +136,7 @@ export class GameScene {
     this.acid = new AcidPools(this.scene);
     this.brood = new BroodDrones(this.scene);
     this.projectiles = new Projectiles(this.scene);
+    this.breath = new BreathBeam(this.scene);
     this.projectiles.onTrail = (p) => this.particles.emit('smoke', p, 1, 0.2);
     this.projectiles.onHit = this.onProjectileHit;
     this.enemies = new EnemyRegistry(this.rng);
@@ -231,6 +236,7 @@ export class GameScene {
   private resetRun(): void {
     this.city.reset();
     this.projectiles.clear();
+    this.breath.clear();
     this.particles.clear();
     this.monster.reset();
     this.progression.reset();
@@ -323,6 +329,22 @@ export class GameScene {
   private applyKind(kind: MonsterKind): void {
     this.monster.setKind(kind);
     this.progression.setPool(kind);
+    this.projectiles.setTheme(kind.fx.spike, kind.fx.glob);
+    this.acid.setColor(kind.fx.pool);
+    this.novaWave.setColor(kind.fx.nova);
+    this.breath.clear();
+  }
+
+  /** All of the monster's damage: upgrades × the creature's own multiplier × Meltdown. */
+  private dmgMult(): number {
+    const m = this.monster;
+    return this.progression.stats.damageMult * m.kind.stats.damageMult * this.passives.meltdown(m.hp / m.maxHp).damage;
+  }
+
+  /** Ranged recharge: upgrades × Meltdown. */
+  private rangedCdMult(): number {
+    const m = this.monster;
+    return this.progression.stats.cooldownMult * this.passives.meltdown(m.hp / m.maxHp).cooldown;
   }
 
   private startIntro(): void {
@@ -398,6 +420,7 @@ export class GameScene {
   }
 
   private startDying(): void {
+    this.breath.clear();
     this.monster.alive = false;
     this.order = null;
     this.markers.setTarget(null);
@@ -459,6 +482,9 @@ export class GameScene {
           for (const p of ringOnRoads(c, CONFIG.opening.count, CONFIG.opening.radius, ROAD_ORIGIN, CONFIG.world.blockSize)) this.enemies.get<TankFleet>('tank').spawnAt(p.x, p.z, this.ctx);
         }
         this.updateMonster(dt);
+        this.breath.update(dt, this.monster.rangedOrigin(this.jaws), this.ms.rangedRange, this.onBreathFire);
+        const melting = this.passives.meltdown(this.monster.hp / this.monster.maxHp).active;
+        this.monster.charge = Math.max(this.breath.charge, melting ? 0.5 : 0);
         if (this.monster.hp <= 0 && this.monster.alive) this.startDying();
       }
       if (this.state === 'dying') {
@@ -483,7 +509,7 @@ export class GameScene {
       this.novaWave.update(dt);
       this.shieldFx.update(dt, this.monster.position, this.passives.bubbleActive());
       if (this.moment.update(realDt) && this.state === 'playing' && this.progression.pendingLevels > 0) this.enterLevelUp();
-      const dm = this.progression.stats.damageMult;
+      const dm = this.dmgMult();
       this.acid.update(dt, this.enemyTargets(), dm);
       this.brood.update(dt, this.enemyTargets(), dm);
       this.markers.update(dt);
@@ -581,7 +607,7 @@ export class GameScene {
 
     private leapLand(p: THREE.Vector3): void {
       const L = CONFIG.abilities.leap;
-      const dmg = L.damage * this.progression.stats.damageMult;
+      const dmg = L.damage * this.dmgMult();
       this.city.forEachStandingInRadius({ x: p.x, z: p.z }, L.landRadius, (t) => t.applyDamage(dmg * 3));
       for (const t of this.enemyTargets()) {
         if (!t.airborne && Math.hypot(t.position.x - p.x, t.position.z - p.z) <= L.landRadius + t.radius) t.applyDamage(dmg);
@@ -598,7 +624,7 @@ export class GameScene {
       m.startRoar();
       this.order = null;
             this.shockwave.start(p, R.radius);
-      const dmg = R.damage * this.progression.stats.damageMult;
+      const dmg = R.damage * this.dmgMult();
       this.city.forEachStandingInRadius({ x: p.x, z: p.z }, R.radius, (t) => t.applyDamage(R.buildingDamage));
       for (const t of [...this.enemyTargets()]) {
         if (Math.hypot(t.position.x - p.x, t.position.z - p.z) > R.radius + t.radius) continue;
@@ -616,7 +642,7 @@ export class GameScene {
         .sort((a, b) => a.position.distanceToSquared(m.position) - b.position.distanceToSquared(m.position));
       if (inRange.length === 0) return;
       const from = m.rangedOrigin(new THREE.Vector3());
-      const dmg = this.ms.rangedDamage * this.progression.stats.damageMult;
+      const dmg = this.ms.rangedDamage * this.dmgMult();
       for (let i = 0; i < n; i++) {
         this.projectiles.fireSpike(from, inRange[i % inRange.length]!, dmg, (i - (n - 1) / 2) * 0.25);
       }
@@ -638,7 +664,7 @@ export class GameScene {
     const hits = nearestWithin(head, sw.range, flyers, sw.targets, (t) => t.position);
     if (hits.length === 0) return;
     this.swatCd = sw.cooldown;
-    const dmg = sw.damage * this.progression.stats.damageMult;
+    const dmg = sw.damage * this.dmgMult();
     // Damage lands when the tail tip arrives at the first target (it follows that target as it moves).
     this.monster.onSwatImpact = () => {
       for (const t of hits) {
@@ -658,7 +684,7 @@ export class GameScene {
    */
   private overload(source: DamageSource, attacker?: Target): void {
     const O = CONFIG.passives.overload;
-    const mult = this.progression.stats.damageMult;
+    const mult = this.dmgMult();
     const from = this.bodyPoint(300);
     if (source === 'beam' && attacker) {
       for (let k = 0; k <= 10; k++) this.particles.emit('spark', from.clone().lerp(attacker.position, k / 10), 3, 0.4);
@@ -694,7 +720,7 @@ export class GameScene {
   private reflectProjectiles(): void {
     const R = CONFIG.passives.reflect;
     const center = this.bodyPoint(300);
-    const dmg = R.damage * this.progression.stats.damageMult;
+    const dmg = R.damage * this.dmgMult();
     const bounce = (from: THREE.Vector3) => {
       // The shield is invisible except for a patch flashing where the shot struck it.
       const at = shieldHitPoint(center, R.radius, from, new THREE.Vector3());
@@ -741,7 +767,7 @@ export class GameScene {
   private venomNova(): void {
     const { radius, damage } = this.passives.nova();
     const p = this.monster.position;
-    const dmg = damage * this.progression.stats.damageMult;
+    const dmg = damage * this.dmgMult();
     this.novaWave.start(p, radius);
     this.city.forEachStandingInRadius({ x: p.x, z: p.z }, radius, (t) => t.applyDamage(dmg));
     for (const t of footTargets({ x: p.x, z: p.z }, radius, this.enemyTargets())) t.applyDamage(dmg);
@@ -755,7 +781,7 @@ export class GameScene {
     const targets = mortarTargets(this.monster.position, M.range, this.enemyTargets(), globs);
     if (targets.length === 0) return;
     const from = this.monster.rangedOrigin(new THREE.Vector3());
-    const dmg = M.damage * this.progression.stats.damageMult;
+    const dmg = M.damage * this.dmgMult();
     targets.forEach((t) => this.projectiles.fireGlob(from, t.position.clone().setY(0), dmg));
     this.particles.emit('acid', from, 6, 0.6);
   }
@@ -898,15 +924,39 @@ export class GameScene {
   private footCrush(p: THREE.Vector3): void {
     if (this.state !== 'playing' || !this.monster.alive) return;
     const r = this.ms.footRadius;
-    const dmg = this.ms.footDamage * this.progression.stats.damageMult;
+    const dmg = this.ms.footDamage * this.dmgMult();
     this.city.forEachStandingInRadius({ x: p.x, z: p.z }, r, (t) => t.applyDamage(dmg));
     for (const t of footTargets({ x: p.x, z: p.z }, r, this.enemyTargets())) t.applyDamage(dmg);
   }
 
+  /** Claw Rake: everything on the ground in a forward arc within reach; buildings take triple damage. */
+  private clawRake(halfAngle: number): void {
+    const m = this.monster;
+    const from = { x: m.position.x, z: m.position.z };
+    const range = this.ms.meleeRange * this.progression.stats.stompRadiusMult;
+    const dmg = this.ms.meleeDamage * this.dmgMult();
+    for (const t of arcTargets(from, m.yaw, range, halfAngle, this.enemyTargets())) t.applyDamage(dmg);
+    const buildings: Target[] = [];
+    this.city.forEachStandingInRadius(from, range, (t) => buildings.push(t));
+    for (const t of arcTargets(from, m.yaw, range, halfAngle, buildings)) t.applyDamage(dmg * 3);
+    for (let i = -2; i <= 2; i++) {
+      const a = m.yaw + (i / 2) * halfAngle;
+      this.tmpV.set(from.x + Math.sin(a) * range * 0.7, 0, from.z + Math.cos(a) * range * 0.7);
+      this.particles.ring('dust', this.tmpV, 60, 6);
+      this.particles.emit('debris', this.tmpV.setY(15), 4, 1);
+    }
+    this.rig.addTrauma(0.3);
+  }
+
   private meleeImpact(p: THREE.Vector3): void {
+    const shape = this.monster.kind.melee;
+    if (shape.kind === 'arc') {
+      this.clawRake(shape.halfAngle);
+      return;
+    }
     const s = this.progression.stats;
     const r = this.ms.meleeRadius * s.stompRadiusMult;
-    const dmg = this.ms.meleeDamage * s.damageMult;
+    const dmg = this.ms.meleeDamage * this.dmgMult();
     this.city.forEachStandingInRadius({ x: p.x, z: p.z }, r, (t) => t.applyDamage(dmg));
     for (const t of this.enemyTargets()) {
       if (!t.airborne && t.isAlive() && Math.hypot(t.position.x - p.x, t.position.z - p.z) <= r + t.radius) t.applyDamage(dmg);
@@ -947,13 +997,44 @@ export class GameScene {
         const plan = strikePlan(pos, m.yaw, d.meleeAt, this.ms.meleeRange);
         m.startMelee(s.cooldownMult, plan.leg, plan.point);
       }
-      if (d.attack === 'ranged') this.fireSpikes(d.attackOn === 'order' && this.order?.kind === 'attack' ? this.order.target : auto);
+      if (d.attack === 'ranged') this.fireRanged(d.attackOn === 'order' && this.order?.kind === 'attack' ? this.order.target : auto);
     }
     m.tick(dt);
 
     if (!m.airborne) this.city.forEachStandingInRadius(pos, this.ms.bodyRadius, (t) => t.applyDamage(CONFIG.monster.contactDps * dt));
     m.hp = regen(m.hp, m.maxHp, CONFIG.monster.regenPerSec + s.regenBonus, dt);
   }
+
+  private fireRanged(target: Target | null): void {
+    if (this.monster.kind.ranged === 'breath') this.breathAt(target);
+    else this.fireSpikes(target);
+  }
+
+  /** Plasma Breath: start charging at the target; hits land when it fires (onBreathFire). */
+  private breathAt(target: Target | null): void {
+    if (!target || this.breath.busy) return;
+    this.breath.start(target.position, 1 + this.progression.stats.extraSpikes);
+    this.monster.consumeRanged(this.rangedCdMult());
+  }
+
+  /** Each beam hits every enemy (ground or air) and building along its line, from the monster to the beam's end. */
+  private onBreathFire = (_from: THREE.Vector3, ends: readonly THREE.Vector3[]): void => {
+    const B = CONFIG.kaiju.breath;
+    const a = { x: this.monster.position.x, z: this.monster.position.z };
+    const mult = this.dmgMult();
+    const enemies = new Set<Target>();
+    const buildings = new Set<Target>();
+    for (const e of ends) {
+      const b = { x: e.x, z: e.z };
+      for (const t of lineTargets(a, b, B.halfWidth, this.enemyTargets())) enemies.add(t);
+      for (const p of linePoints(a, b, B.halfWidth * 1.5)) this.city.forEachStandingInRadius(p, B.halfWidth, (t) => buildings.add(t));
+      for (let k = 1; k <= 8; k++) this.particles.emit('fire', this.tmpV.set(a.x + (b.x - a.x) * (k / 8), 20, a.z + (b.z - a.z) * (k / 8)), 2, 0.5);
+      this.particles.explosion(e, 0.8);
+    }
+    for (const t of enemies) t.applyDamage(this.ms.rangedDamage * mult);
+    for (const t of buildings) t.applyDamage(B.buildingDamage * mult);
+    this.rig.addTrauma(0.25);
+  };
 
   private fireSpikes(target: Target | null): void {
     if (!target) return;
@@ -966,10 +1047,10 @@ export class GameScene {
       .sort((a, b) => a.position.distanceToSquared(target.position) - b.position.distanceToSquared(target.position));
     const from = m.rangedOrigin(new THREE.Vector3());
     spikeTargets(target, others, count).forEach((t, i) => {
-      this.projectiles.fireSpike(from, t, this.ms.rangedDamage * s.damageMult, (i - (count - 1) / 2) * CONFIG.monster.spikeSpreadRad);
+      this.projectiles.fireSpike(from, t, this.ms.rangedDamage * this.dmgMult(), (i - (count - 1) / 2) * CONFIG.monster.spikeSpreadRad);
     });
     this.particles.emit('spark', from, 4);
-    m.consumeRanged(s.cooldownMult);
+    m.consumeRanged(this.rangedCdMult());
   }
 
   private onProjectileHit = (h: Hit): void => {

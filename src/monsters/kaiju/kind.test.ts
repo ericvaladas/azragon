@@ -19,6 +19,7 @@ describe('KAIJU kind', () => {
   });
   it('has its own signatures and names; never the Insect-only Brood Swarm', () => {
     expect(KAIJU.signatures).not.toContain('brood');
+    expect(KAIJU.signatures).toContain('meltdown');
     for (const id of KAIJU.signatures) expect(KAIJU.abilityText[id]?.title).toBeTruthy();
     expect(KAIJU.abilityText.acid?.title).toBe('Radiant Wake');
     expect(KAIJU.upgradeText.vitality?.title).toBe('Ironscale Hide');

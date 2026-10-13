@@ -188,6 +188,8 @@ export const CONFIG = {
     mortar: { interval: [0, 4, 3.5, 3], globs: [0, 2, 3, 4], splash: [0, 90, 110, 130], damage: 90, range: 1800, flightTime: 1.2, arc: 300 },
     bubble: { duration: [0, 3, 3.5, 4], cooldown: [0, 25, 21, 17] },
     reflect: { duration: [0, 4, 5, 6], cooldown: [0, 20, 17, 14], radius: 380, damage: 60 },
+    /** Meltdown (Kaiju): below threshold[rank] of max HP, damage × damageMult and ranged cooldown × cooldownMult. */
+    meltdown: { threshold: [0, 0.3, 0.4, 0.5], damageMult: 1.5, cooldownMult: 0.5 },
     /** Auto-shields trigger only when something is about to hit: projectiles or blimps within this range. */
     threatRange: 700,
     earlyAbilityPicks: 3,

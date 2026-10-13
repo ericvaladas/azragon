@@ -22,6 +22,10 @@ export class Shockwave {
     scene.add(this.mesh);
   }
 
+  setColor(c: number): void {
+    this.mat.color.setHex(c);
+  }
+
   start(center: THREE.Vector3, radius: number): void {
     this.mesh.position.set(center.x, 6, center.z);
     this.radius = radius;

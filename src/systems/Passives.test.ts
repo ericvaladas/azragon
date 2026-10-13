@@ -4,7 +4,7 @@ import type { AbilityId } from './Progression';
 import { CONFIG } from '../config';
 
 const P = CONFIG.passives;
-const ranks = (r: Partial<Record<AbilityId, number>>) => () => ({ dash: 0, roar: 0, acid: 0, storm: 0, chitin: 0, frenzy: 0, brood: 0, overload: 0, spines: 0, swat: 0, nova: 0, mortar: 0, bubble: 0, reflect: 0, ...r });
+const ranks = (r: Partial<Record<AbilityId, number>>) => () => ({ dash: 0, roar: 0, acid: 0, storm: 0, chitin: 0, frenzy: 0, brood: 0, overload: 0, spines: 0, swat: 0, nova: 0, mortar: 0, bubble: 0, reflect: 0, meltdown: 0, ...r });
 
 describe('Passives', () => {
   it('has no effect at rank 0', () => {
@@ -108,5 +108,16 @@ describe('Passives', () => {
     expect(p.tryOverload()).toBe(false);
     p.update(0.2);
     expect(p.tryOverload()).toBe(true);
+  });
+});
+
+describe('meltdown', () => {
+  it('kicks in below the rank\'s HP threshold only', () => {
+    const r1 = new Passives(ranks({ meltdown: 1 }));
+    expect(r1.meltdown(0.29)).toEqual({ active: true, damage: CONFIG.passives.meltdown.damageMult, cooldown: CONFIG.passives.meltdown.cooldownMult });
+    expect(r1.meltdown(0.31).active).toBe(false);
+    expect(r1.meltdown(0).active).toBe(false);
+    expect(new Passives(ranks({})).meltdown(0.1)).toEqual({ active: false, damage: 1, cooldown: 1 });
+    expect(new Passives(ranks({ meltdown: 3 })).meltdown(0.45).active).toBe(true);
   });
 });

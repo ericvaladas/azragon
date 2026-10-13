@@ -2,6 +2,8 @@ import { CONFIG } from '../config';
 import type { AbilityId } from './Progression';
 
 const P = CONFIG.passives;
+const MELTDOWN_OFF = { active: false, damage: 1, cooldown: 1 } as const;
+const MELTDOWN_ON = { active: true, damage: P.meltdown.damageMult, cooldown: P.meltdown.cooldownMult } as const;
 
 /** Rank-derived passive values plus the Spike Storm and Brood Swarm timers. */
 export class Passives {
@@ -61,6 +63,12 @@ export class Passives {
 
   bubbleActive(): boolean {
     return this.bubbleT > 0;
+  }
+
+  /** Meltdown (Kaiju): below the rank's HP fraction (and still alive), damage up and the ranged attack recharges faster. */
+  meltdown(hpFrac: number): { active: boolean; damage: number; cooldown: number } {
+    const r = this.ranks().meltdown;
+    return r > 0 && hpFrac > 0 && hpFrac < P.meltdown.threshold[r]! ? MELTDOWN_ON : MELTDOWN_OFF;
   }
 
   reflectActive(): boolean {

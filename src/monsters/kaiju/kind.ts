@@ -18,7 +18,7 @@ export const KAIJU: MonsterKind = {
   melee: { kind: 'arc', halfAngle: K.rakeHalfAngle },
   ranged: 'breath',
   antiAir: 'bite',
-  signatures: ['acid', 'storm', 'chitin', 'frenzy', 'spines', 'swat', 'nova', 'mortar'],
+  signatures: ['acid', 'storm', 'chitin', 'frenzy', 'spines', 'swat', 'nova', 'mortar', 'meltdown'],
   abilityText: {
     acid: { title: 'Radiant Wake', icon: '☢️', desc: (r) => (r === 1 ? 'Steps leave glowing radioactive pools' : 'Bigger, longer-lasting pools') },
     storm: { title: 'Plate Barrage', icon: '💠', desc: (r) => (r === 1 ? 'Plates fire homing plasma every 6s' : '+3 bolts, fires faster') },
@@ -27,6 +27,7 @@ export const KAIJU: MonsterKind = {
     spines: { title: 'Thermal Plates', icon: '⚡', desc: (r) => (r === 1 ? 'Plates zap incoming shells and missiles' : 'Faster, wider zapping') },
     swat: { title: 'Snap Bite+', icon: '🦷', desc: () => 'Bites flyers faster, harder, more at once' },
     nova: { title: 'Heat Pulse', icon: '🔆', desc: (r) => (r === 1 ? 'Heat shockwave pulse every 7s' : 'Bigger, stronger, more frequent pulses') },
+    meltdown: { title: 'Meltdown', icon: '🌋', desc: (r) => (r === 1 ? 'Below 30% HP: +50% damage, breath recharges 2x' : 'Meltdown kicks in at higher HP') },
     mortar: { title: 'Plasma Lob', icon: '☄️', desc: (r) => (r === 1 ? 'Lobs plasma at artillery, SAMs, trucks' : 'More globs, bigger splash') },
   },
   upgradeText: {
