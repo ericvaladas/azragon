@@ -35,8 +35,8 @@ export type MonsterStats = {
   size: { width: number; length: number; height: number };
 };
 
-/** `multi`: independent tentacle strikes (Kraken), driven by the body's `arms`. */
-export type MeleeShape = { kind: 'point' } | { kind: 'arc'; halfAngle: number } | { kind: 'multi' };
+/** `multi`: independent tentacle strikes (Kraken), driven by the body's `arms`. `fist`: Molten Fist (Golem) — a slam ahead or a backhand to the side, on the shared melee timeline. */
+export type MeleeShape = { kind: 'point' } | { kind: 'arc'; halfAngle: number } | { kind: 'multi' } | { kind: 'fist' };
 
 /** Colours the shared effect systems take on for this monster. */
 export type FxTheme = { spike: number; glob: number; pool: number; nova: number; particle: ParticleKind; /** Particles shown where a defensive shot is stopped. */ intercept: ParticleKind };
@@ -63,6 +63,8 @@ export type BodyFrame = {
   lookAt: THREE.Vector3 | null;
   /** Ranged charge 0..1 (Kaiju plates). */
   charge: number;
+  /** Molten Core heat 0..1 (Golem seams and core); 0 for every other body. */
+  heat: number;
   flash: boolean;
   glow: number;
 };
@@ -80,6 +82,8 @@ export interface MonsterBody {
   launchOrigin(out: THREE.Vector3): THREE.Vector3;
   /** Per-tentacle strike state (Kraken); absent for single-strike bodies. */
   readonly arms?: TentacleArms;
+  /** The nova passive just fired (Golem: both fists slam the ground). Optional. */
+  nova?(): void;
   dispose(): void;
 }
 
@@ -92,8 +96,8 @@ export type MonsterKind = PoolSpec & {
   moves: readonly { icon: string; label: string }[];
   stats: MonsterStats;
   melee: MeleeShape;
-  ranged: 'spikes' | 'breath' | 'hurl';
-  antiAir: 'tail' | 'bite' | 'lash';
+  ranged: 'spikes' | 'breath' | 'hurl' | 'lob';
+  antiAir: 'tail' | 'bite' | 'lash' | 'geyser';
   /** Has the auto Tail Sweep melee (CONFIG.kaiju.tail). */
   tailSweep: boolean;
   fx: FxTheme;

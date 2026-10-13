@@ -4,7 +4,7 @@ import type { Target } from '../combat';
 import { faceted } from '../render/toon';
 import { ballistic } from './projectileMath';
 
-export type ShotKind = 'spike' | 'shell' | 'rocket' | 'glob' | 'chunk';
+export type ShotKind = 'spike' | 'shell' | 'rocket' | 'glob' | 'chunk' | 'bomb';
 /** An enemy shell or rocket in flight, as seen by Spine Shield. */
 export type InFlight = { readonly kind: ShotKind; readonly pos: THREE.Vector3 };
 export type Hit = { kind: ShotKind; point: THREE.Vector3; target: Target | null; damage: number };
@@ -45,6 +45,7 @@ export class Projectiles {
     rocket: [6, 22, 6],
     glob: [26, 26, 26],
     chunk: [60, 60, 60],
+    bomb: [44, 44, 44],
   };
 
   constructor(scene: THREE.Scene) {
@@ -63,6 +64,7 @@ export class Projectiles {
       rocket: make('shot-rocket', faceted(new THREE.CylinderGeometry(0.5, 0.5, 1, 5)), 0xf2f2f2, 64),
       glob: make('shot-glob', faceted(new THREE.IcosahedronGeometry(0.5, 0)), CONFIG.palette.acid, 48),
       chunk: make('shot-chunk', faceted(new THREE.DodecahedronGeometry(0.5, 0)), CONFIG.kraken.colors.chunk, 32),
+      bomb: make('shot-bomb', faceted(new THREE.IcosahedronGeometry(0.5, 0)), CONFIG.golem.colors.magma, 32),
     };
   }
 
@@ -119,6 +121,12 @@ export class Projectiles {
     s.dur = CONFIG.kraken.arms.hurl.flight;
   }
 
+  /** Golem Magma Lob: a glowing bomb lobbed on a high arc; it splashes and leaves lava where it lands. */
+  fireBomb(from: THREE.Vector3, to: THREE.Vector3, damage: number): void {
+    const s = this.alloc('bomb', from, to, damage, null);
+    s.dur = CONFIG.golem.lob.flight;
+  }
+
   /** Enemy shells and rockets in flight. */
   incoming(): readonly InFlight[] {
     return this.shots.filter((s) => s.kind === 'shell' || s.kind === 'rocket');
@@ -158,6 +166,7 @@ export class Projectiles {
         if (s.kind === 'shell') ballistic(s.from, s.aim, CONFIG.tank.shellArc, k, s.pos);
         else if (s.kind === 'glob') ballistic(s.from, s.aim, CONFIG.passives.mortar.arc, k, s.pos);
         else if (s.kind === 'chunk') ballistic(s.from, s.aim, CONFIG.kraken.arms.hurl.arc, k, s.pos);
+        else if (s.kind === 'bomb') ballistic(s.from, s.aim, CONFIG.golem.lob.arc, k, s.pos);
         else s.pos.lerpVectors(s.from, s.aim, k);
         s.vel.subVectors(s.aim, s.from);
         done = k >= 1;
@@ -177,7 +186,7 @@ export class Projectiles {
   }
 
   private draw(): void {
-    const counts: Record<ShotKind, number> = { spike: 0, shell: 0, rocket: 0, glob: 0, chunk: 0 };
+    const counts: Record<ShotKind, number> = { spike: 0, shell: 0, rocket: 0, glob: 0, chunk: 0, bomb: 0 };
     for (const s of this.shots) {
       const mesh = this.meshes[s.kind];
       const i = counts[s.kind]++;

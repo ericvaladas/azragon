@@ -24,6 +24,8 @@ export class Monster {
   glow = 0;
   /** Ranged charge 0..1, shown by bodies that telegraph it (Kaiju plates). */
   charge = 0;
+  /** Molten Core heat 0..1, written by GameScene; the Golem's seams glow with it. */
+  heat = 0;
   /** World point the head should turn toward (Kaiju breath), or null. */
   lookAt: THREE.Vector3 | null = null;
   /** Extra body pose offsets driven by attacks, abilities, the intro, and death. */
@@ -63,7 +65,7 @@ export class Monster {
   private strikePoint = new THREE.Vector3();
   private frame: BodyFrame = {
     dt: 0, time: 0, cycle: 0, prevCycle: 0, motion: 0, pose: this.pose,
-    melee: null, antiAir: null, roaring: false, airborne: false, dashing: false, tailSweep: null, lookAt: null, charge: 0, flash: false, glow: 0,
+    melee: null, antiAir: null, roaring: false, airborne: false, dashing: false, tailSweep: null, lookAt: null, charge: 0, heat: 0, flash: false, glow: 0,
   };
   private meleeFrame = { t: 0, side: 0, target: this.strikePoint };
   private antiAirFrame = { weight: 0, target: new THREE.Vector3() };
@@ -166,6 +168,7 @@ export class Monster {
     this.dashT = -1;
     this.crouch = false;
     this.charge = 0;
+    this.heat = 0;
     this.lookAt = null;
   }
 
@@ -288,6 +291,7 @@ export class Monster {
     } else f.tailSweep = null;
     f.lookAt = this.lookAt;
     f.charge = this.charge;
+    f.heat = this.heat;
     f.flash = this.flashT > 0;
     f.glow = this.glow;
     this.body.animate(f, this.onFootLand);

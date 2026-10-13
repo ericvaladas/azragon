@@ -34,7 +34,7 @@ export const UPGRADES: Record<UpgradeId, { title: string; desc: string; icon: st
   moveSpeed: { title: 'Long Strides', desc: '+15% move speed', icon: '🦿', apply: (s) => ({ ...s, moveSpeedMult: s.moveSpeedMult * 1.15 }) },
 };
 
-export type AbilityId = 'dash' | 'roar' | 'acid' | 'storm' | 'chitin' | 'frenzy' | 'brood' | 'overload' | 'spines' | 'swat' | 'nova' | 'mortar' | 'bubble' | 'reflect' | 'meltdown' | 'grip';
+export type AbilityId = 'dash' | 'roar' | 'acid' | 'storm' | 'chitin' | 'frenzy' | 'brood' | 'overload' | 'spines' | 'swat' | 'nova' | 'mortar' | 'bubble' | 'reflect' | 'meltdown' | 'grip' | 'core';
 export const MAX_RANK = 3;
 const ROMAN = ['', 'I', 'II', 'III'];
 
@@ -69,12 +69,13 @@ export const ABILITIES: Record<AbilityId, { title: string; icon: string; desc(ra
   mortar: { title: 'Acid Mortar', icon: '☄️', desc: (r) => (r === 1 ? 'Lobs acid at artillery, SAMs, trucks' : 'More globs, bigger splash') },
   bubble: { title: 'Shield Bubble', icon: '🫧', desc: (r) => (r === 1 ? 'Auto: 3s invincibility when hit is coming' : 'Longer bubble, shorter cooldown') },
   grip: { title: 'Sucker Grip', icon: '🐙', desc: (r) => (r === 1 ? 'Planted arms crush an enemy beside them' : 'Wider, harder grip') },
+  core: { title: 'Molten Core', icon: '❤️‍🔥', desc: (r) => (r === 1 ? 'Hits heat your core: more damage, and a burning aura when hot' : 'Hotter core: more damage, wider aura') },
   meltdown: { title: 'Meltdown', icon: '🌋', desc: (r) => (r === 1 ? 'Below 30% HP: +50% damage, ranged recharges 2x' : 'Meltdown kicks in at higher HP') },
   reflect: { title: 'Reflect Shield', icon: '🔮', desc: (r) => (r === 1 ? 'Auto: bounce projectiles back at enemies' : 'Longer reflect, shorter cooldown') },
   overload: { title: 'Overload', icon: '⚡', desc: (r) => (r === 1 ? 'Absorb a laser hit and fire it back' : 'Overload recharges faster') },
 };
 
-const emptyRanks = (): Record<AbilityId, number> => ({ dash: 0, roar: 0, acid: 0, storm: 0, chitin: 0, frenzy: 0, brood: 0, overload: 0, spines: 0, swat: 0, nova: 0, mortar: 0, bubble: 0, reflect: 0, meltdown: 0, grip: 0 });
+const emptyRanks = (): Record<AbilityId, number> => ({ dash: 0, roar: 0, acid: 0, storm: 0, chitin: 0, frenzy: 0, brood: 0, overload: 0, spines: 0, swat: 0, nova: 0, mortar: 0, bubble: 0, reflect: 0, meltdown: 0, grip: 0, core: 0 });
 
 export function expToNext(level: number): number {
   return Math.round(CONFIG.progression.expBase * Math.pow(level, CONFIG.progression.expExponent));
