@@ -198,6 +198,19 @@ describe('INSECT kind', () => {
     expect(landed).toBeCloseTo(L.duration, 1);
     expect(m.position.z).toBeCloseTo(800);
   });
+  it('leaps lower over a short distance than a long one', () => {
+    const L = CONFIG.abilities.leap;
+    const top = (dist: number) => {
+      const m = new Monster(new THREE.Scene(), kind());
+      m.startLeap({ x: 0, z: dist });
+      let y = 0;
+      for (let i = 0; i < 300; i++) { m.tick(0.01); y = Math.max(y, m.position.y); }
+      return y;
+    };
+    expect(top(L.range)).toBeCloseTo(L.peak, -1);
+    expect(top(L.range / 2)).toBeCloseTo(L.peak / 2, -1);
+    expect(top(L.range / 4)).toBeLessThan(L.peak / 3);
+  });
   it('dashes the same distance more slowly when its kind sets a dash speed', () => {
     const D = CONFIG.abilities.dash;
     const run = (k: MonsterKind) => {

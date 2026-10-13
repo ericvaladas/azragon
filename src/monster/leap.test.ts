@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { dashTarget, leapPosition, leapTarget } from './leap';
+import { dashTarget, leapPeak, leapPosition, leapTarget } from './leap';
 
 describe('leapTarget', () => {
   it('keeps targets within range and clamps farther ones along the same direction', () => {
@@ -53,5 +53,18 @@ describe('leapPosition with a crouch before liftoff', () => {
   });
   it('is the plain arc with no crouch', () => {
     for (const t of [0, 0.3, 0.5, 0.9, 1]) expect(leapPosition(from, to, t, 1, 200, 0)).toEqual(leapPosition(from, to, t, 1, 200));
+  });
+});
+
+describe('leapPeak', () => {
+  it('jumps highest at full range and lower in proportion for shorter leaps', () => {
+    expect(leapPeak(1600, 1600, 340, 0.2)).toBeCloseTo(340);
+    expect(leapPeak(800, 1600, 340, 0.2)).toBeCloseTo(170);
+    expect(leapPeak(400, 1600, 340, 0.2)).toBeCloseTo(85);
+  });
+  it('still clears the ground on a tiny hop, and never tops the full-range height', () => {
+    expect(leapPeak(0, 1600, 340, 0.2)).toBeCloseTo(68);
+    expect(leapPeak(100, 1600, 340, 0.2)).toBeCloseTo(68);
+    expect(leapPeak(5000, 1600, 340, 0.2)).toBeCloseTo(340);
   });
 });

@@ -20,6 +20,11 @@ export function leapPosition(from: Vec2, to: Vec2, t: number, duration: number, 
   return { x: from.x + (to.x - from.x) * k, y: peak * 4 * k * (1 - k), z: from.z + (to.z - from.z) * k };
 }
 
+/** Leap height for a jump this far: `peak` at full `range`, lower in proportion for shorter leaps, never under `minFrac` of it. */
+export function leapPeak(distance: number, range: number, peak: number, minFrac: number): number {
+  return peak * Math.min(1, Math.max(minFrac, distance / range));
+}
+
 /** Dash destination: `range` straight ahead along the monster's facing (forward = (sin yaw, cos yaw)). */
 export function dashTarget(from: Vec2, yaw: number, range: number): Vec2 {
   return { x: from.x + Math.sin(yaw) * range, z: from.z + Math.cos(yaw) * range };

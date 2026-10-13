@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { CONFIG } from '../config';
 import { angleDelta, dist2, yawTo, type Vec2 } from '../util/math';
-import { leapPosition } from './leap';
+import { leapPeak, leapPosition } from './leap';
 import { SWAT_TIMES, swatWeight, type SwatTiming } from './tailSwat';
 import type { BodyFrame, MonsterBody, MonsterKind, MonsterStats, StrikeKind } from '../monsters/types';
 
@@ -50,6 +50,8 @@ export class Monster {
   private dashTo = { x: 0, z: 0 };
   private leapFrom = { x: 0, z: 0 };
   private leapTo = { x: 0, z: 0 };
+  /** This leap's height: lower for a shorter jump. */
+  private leapHeight = 0;
   private roarT = -1;
   private swatT = -1;
   private swatTarget: THREE.Vector3 | null = null;
@@ -202,6 +204,8 @@ export class Monster {
   startLeap(to: Vec2): void {
     this.leapFrom = { x: this.position.x, z: this.position.z };
     this.leapTo = { x: to.x, z: to.z };
+    const L = CONFIG.abilities.leap;
+    this.leapHeight = leapPeak(Math.hypot(to.x - this.leapFrom.x, to.z - this.leapFrom.z), L.range, L.peak, L.minPeak);
     this.leapT = 0;
     this.yaw = yawTo(this.leapFrom, this.leapTo);
     this.meleeT = -1;
@@ -335,7 +339,7 @@ export class Monster {
     if (this.leapT >= 0) {
       this.leapT += dt;
       const c = this.kind.leapCrouch ?? 0;
-      const p = leapPosition(this.leapFrom, this.leapTo, this.leapT, L.duration, L.peak, c);
+      const p = leapPosition(this.leapFrom, this.leapTo, this.leapT, L.duration, this.leapHeight, c);
       this.position.set(p.x, p.y, p.z);
       const k = Math.max(0, this.leapT - c * L.duration) / (L.duration * (1 - c));
       this.pose.pitch = 0.25 * Math.sin(Math.PI * Math.min(1, k)) - 0.1;
