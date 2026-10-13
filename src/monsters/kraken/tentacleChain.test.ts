@@ -73,6 +73,23 @@ describe('TentacleChain', () => {
     expect(c.joints[0]!.distanceTo(moved[0]!)).toBeLessThan(1e-6);
   });
 
+  it('resists sharp bends when given bending stiffness', () => {
+    const zig = Array.from({ length: N + 1 }, (_, j) => v(j * 10, 0, j % 2 ? 6 : 0));
+    const sharpest = (bend: number) => {
+      const c = new TentacleChain(N);
+      run(c, line(N, 100), 0.05);
+      for (let t = 0; t < 0.3; t += 1 / 60) c.step(1 / 60, zig, 10, { ...TUNE, bend }, [], () => 0);
+      let worst = 0;
+      for (let j = 1; j < N; j++) {
+        const a = c.joints[j]!.clone().sub(c.joints[j - 1]!).normalize();
+        const b = c.joints[j + 1]!.clone().sub(c.joints[j]!).normalize();
+        worst = Math.max(worst, a.angleTo(b));
+      }
+      return worst;
+    };
+    expect(sharpest(0.5)).toBeLessThan(sharpest(0) * 0.6);
+  });
+
   it('wraps around a body instead of passing through it', () => {
     const c = new TentacleChain(N);
     const body: Ellipsoid = { c: v(50, 0, 0), r: v(20, 20, 20) };

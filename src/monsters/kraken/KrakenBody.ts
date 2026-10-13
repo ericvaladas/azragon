@@ -34,14 +34,18 @@ const THICK = 58;
  * fully swung arm wraps the mantle. */
 const SWING = 2.5;
 const WRAP_R = 330;
+/** Whirlpool: tip radius at the fastest point of a lash (the arm flung out to full length), and the swing
+ * speed (whirl units per timeline unit) that counts as fastest. */
+const FLING_R = 1150;
+const FLING_SPEED = 10;
 /** A frame-to-frame jump longer than this (model units) is a teleport: the arms snap instead of trailing. */
 const SNAP = 500;
 /** Joint springs: stiff at the root, loose and underdamped at the tip, so motion cracks down the arm. */
 const TUNE: ChainTuning = { omegaRoot: 22, omegaTip: 9, zetaRoot: 0.9, zetaTip: 0.38 };
 /** Crawling arms place their tips deliberately and hold their grip: stiff and damped to the tip. */
 const PLANT_TUNE: ChainTuning = { omegaRoot: 26, omegaTip: 24, zetaRoot: 1, zetaTip: 1 };
-/** Whirlpool arms: softer near the root so each sweep bends the whole arm in one curve, not at an elbow. */
-const WHIRL_TUNE: ChainTuning = { omegaRoot: 15, omegaTip: 9, zetaRoot: 0.85, zetaTip: 0.5 };
+/** Whirlpool arms: stiff enough to keep up with the lash (so they fling out to full length) and to bend smoothly. */
+const WHIRL_TUNE: ChainTuning = { omegaRoot: 32, omegaTip: 22, zetaRoot: 0.85, zetaTip: 0.55, bend: 0.35 };
 /** Striking arms snap tighter so the tip lands near the impact time. */
 const STRIKE_TUNE: ChainTuning = { omegaRoot: 26, omegaTip: 14, zetaRoot: 0.9, zetaTip: 0.42 };
 /** The mantle as ellipsoids (mantle-local centre and radii): the sac, the brow, the skirt. */
@@ -313,13 +317,16 @@ export class KrakenBody implements MonsterBody {
       }
       if (this.arms.spinT >= 0) {
         // Whirlpool: every arm winds left until it nearly wraps the mantle, lashes all the way right to wrap
-        // it the other way, lashes back left, then settles back to rest; the further it swings, the closer it hugs the body.
+        // it the other way, lashes back left, then settles back to rest. Like a flung rope, the faster it
+        // swings the further it flies out — full length mid-lash — and it coils tight where it turns back.
         const k = this.arms.spinT / K.arms.spinTime;
-        const swing = SWING * whirl(k - i * 0.012);
+        const kk = k - i * 0.012;
+        const swing = SWING * whirl(kk);
         const w = Math.abs(swing) / SWING;
+        const fling = Math.min(1, Math.abs(whirl(kk + 0.01) - whirl(kk - 0.01)) / 0.02 / FLING_SPEED);
         const sa = ang + swing;
-        const r = PLANT_R * 1.05 + (WRAP_R - PLANT_R * 1.05) * Math.pow(w, 1.5);
-        _tip.set(Math.sin(sa) * r, 80 + 90 * w, Math.cos(sa) * r);
+        const r = WRAP_R + (FLING_R - WRAP_R) * fling + (REST_R - WRAP_R) * (1 - w) * (1 - fling);
+        _tip.set(Math.sin(sa) * r, 70 + 100 * w * (1 - fling), Math.cos(sa) * r);
         tune = WHIRL_TUNE;
         pin = false;
         arch = 60;

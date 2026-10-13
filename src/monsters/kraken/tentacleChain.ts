@@ -3,8 +3,11 @@ import * as THREE from 'three';
 /** An axis-aligned ellipsoid an arm must stay outside of (centre, radii). */
 export type Ellipsoid = { c: THREE.Vector3; r: THREE.Vector3 };
 
-/** Per-joint spring stiffness (rad/s) and damping ratio, blended from the root to the tip. */
-export type ChainTuning = { omegaRoot: number; omegaTip: number; zetaRoot: number; zetaTip: number };
+/**
+ * Per-joint spring stiffness (rad/s) and damping ratio, blended from the root to the tip; `bend` (0..1) is how
+ * strongly each joint straightens toward its neighbours' midpoint every step (the arm's bending stiffness).
+ */
+export type ChainTuning = { omegaRoot: number; omegaTip: number; zetaRoot: number; zetaTip: number; bend?: number };
 
 /** Push `p` out of `e` grown by `pad`, along its direction from the centre. True if it was inside. */
 export function pushOut(p: THREE.Vector3, e: Ellipsoid, pad: number): boolean {
@@ -40,6 +43,7 @@ export function resample(src: readonly THREE.Vector3[], out: THREE.Vector3[]): n
 }
 
 const _prev = new THREE.Vector3();
+const _mid = new THREE.Vector3();
 const _m3 = new THREE.Matrix3();
 
 /**
@@ -129,6 +133,13 @@ export class TentacleChain {
       }
       // Segments keep their length (follow the leader from the root; a pinned tip first pulls the chain to
       // its target from the other end, as in FABRIK); bodies push the arm around them.
+      const bend = tune.bend ?? 0;
+      if (bend > 0) {
+        for (let j = 1; j < n; j++) {
+          _mid.addVectors(this.next[j - 1]!, this.next[j + 1]!).multiplyScalar(0.5);
+          this.next[j]!.lerp(_mid, bend);
+        }
+      }
       for (let pass = 0; pass < (pinTip ? 4 : 2); pass++) {
         if (pinTip) {
           this.next[n]!.copy(targets[n]!);
