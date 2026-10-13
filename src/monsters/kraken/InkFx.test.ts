@@ -33,6 +33,32 @@ describe('InkFx', () => {
     expect(meshOf(scene).visible).toBe(false);
   });
 
+  it('dissipates the haze quickly once the charge is spent', () => {
+    const scene = new THREE.Scene();
+    const fx = new InkFx(scene);
+    for (let i = 0; i < 60; i++) fx.update(0.05, ORIGIN, 1);
+    for (let t = 0; t < 0.15; t += 0.01) fx.update(0.01, ORIGIN, 0);
+    expect(fx.active.haze).toBe(0);
+  });
+
+  it('draws the cloud translucent, never a solid blot', () => {
+    const scene = new THREE.Scene();
+    const fx = new InkFx(scene);
+    const from = new THREE.Vector3(0, 100, 0);
+    const to = new THREE.Vector3(300, 200, 0);
+    fx.jet(from, to);
+    for (let t = 0; t < blobFlightTime(from.distanceTo(to)) + 0.02; t += 0.01) fx.update(0.01, ORIGIN, 0);
+    expect(fx.active.blobs).toBe(0);
+    let max = 0;
+    for (let t = 0; t < 1; t += 0.02) {
+      fx.update(0.02, ORIGIN, 0);
+      const a = meshOf(scene).geometry.getAttribute('instAlpha');
+      for (let i = 0; i < meshOf(scene).count; i++) max = Math.max(max, a.getX(i));
+    }
+    expect(max).toBeGreaterThan(0.3);
+    expect(max).toBeLessThanOrEqual(0.66);
+  });
+
   it('grows the haze with the intercept charge and thins it when spent', () => {
     const scene = new THREE.Scene();
     const fx = new InkFx(scene);

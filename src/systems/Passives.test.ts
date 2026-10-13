@@ -89,6 +89,22 @@ describe('Passives', () => {
     expect(p.interceptCharge()).toBe(0);
   });
 
+  it('scales the intercept rate for a kind (Kraken Ink Cloud fires far less often), still firing at rank 1', () => {
+    const p = new Passives(ranks({ spines: 1 }));
+    const k = 1 / 3;
+    let shots = 0;
+    for (let i = 0; i < 1500; i++) {
+      const n = p.update(0.02, k).intercepts;
+      shots += n;
+      p.spendIntercepts(n);
+    }
+    // 30 s at a third of rank 1's rate.
+    expect(shots).toBeGreaterThanOrEqual(Math.floor(30 * P.spines.rate[1]! * k) - 1);
+    expect(shots).toBeLessThanOrEqual(Math.ceil(30 * P.spines.rate[1]! * k));
+    expect(p.interceptCharge()).toBeLessThan(1);
+    p.update(10, k);
+    expect(p.interceptCharge()).toBe(1);
+  });
   it('banks at most one second of intercepts while nothing needs shooting down', () => {
     const p = new Passives(ranks({ spines: 3 }));
     expect(p.update(10).intercepts).toBe(Math.floor(P.spines.rate[3]!));

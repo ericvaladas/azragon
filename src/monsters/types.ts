@@ -135,6 +135,8 @@ export type MonsterKind = PoolSpec & {
   leapCrouch?: number;
   /** Dash speed multiplier: the same range, covered over CONFIG.abilities.dash.duration / dashSpeed; 1 when absent. */
   dashSpeed?: number;
+  /** Spine Shield intercept-rate multiplier for this kind's version of it; 1 when absent. */
+  interceptRate?: number;
   /** This kind's own anti-air timeline (impact, end); the shared SWAT_TIMES when absent. */
   swatTiming?: SwatTiming;
   /** Has the auto Tail Sweep melee (CONFIG.kaiju.tail). */

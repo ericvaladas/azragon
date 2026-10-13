@@ -19,6 +19,8 @@ export const KRAKEN: MonsterKind = {
   ranged: 'hurl',
   antiAir: 'lash',
   tailSweep: false,
+  /** Ink Cloud fires about a third as often as Spine Shield. */
+  interceptRate: 1 / 3,
   signatures: ['acid', 'storm', 'chitin', 'frenzy', 'spines', 'swat', 'nova', 'mortar', 'grip'],
   abilityText: {
     acid: { title: 'Ink Trail', icon: '🖤', desc: (r) => (r === 1 ? 'Planted arms leave corrosive ink slicks' : 'Bigger, longer-lasting slicks') },

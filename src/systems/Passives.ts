@@ -12,6 +12,8 @@ export class Passives {
   private novaT = 0;
   private mortarT = 0;
   private interceptBank = 0;
+  /** The current kind's intercept-rate scale (MonsterKind.interceptRate), from the last update. */
+  private interceptScale = 1;
   private overloadCd = 0;
   private bubbleT = 0;
   private bubbleCd = 0;
@@ -75,8 +77,8 @@ export class Passives {
 
   /** Spine Shield's banked shots as a fraction of its one-second cap (0..1); 0 when not taken. */
   interceptCharge(): number {
-    const rate = P.spines.rate[this.ranks().spines]!;
-    return rate > 0 ? Math.min(1, this.interceptBank / rate) : 0;
+    const rate = P.spines.rate[this.ranks().spines]! * this.interceptScale;
+    return rate > 0 ? Math.min(1, this.interceptBank / interceptCap(rate)) : 0;
   }
 
   bubbleActive(): boolean {
@@ -118,9 +120,9 @@ export class Passives {
 
   /**
    * Advance timers. Returns this frame's storm spikes, brood drones, nova pulses (0/1), mortar globs,
-   * and the Spine Shield shots available (banked up to one second's worth; spend what you use).
+   * and the Spine Shield shots available (banked up to one second's worth, at least one shot; spend what you use). `interceptScale` scales the rate for the monster kind.
    */
-  update(dt: number): { storm: number; brood: number; nova: number; mortar: number; intercepts: number } {
+  update(dt: number, interceptScale = 1): { storm: number; brood: number; nova: number; mortar: number; intercepts: number } {
     const r = this.ranks();
     let storm = 0;
     let brood = 0;
@@ -147,8 +149,9 @@ export class Passives {
     this.bubbleCd = Math.max(0, this.bubbleCd - dt);
     this.reflectT = Math.max(0, this.reflectT - dt);
     this.reflectCd = Math.max(0, this.reflectCd - dt);
-    const rate = P.spines.rate[r.spines]!;
-    this.interceptBank = Math.min(rate, this.interceptBank + rate * dt);
+    this.interceptScale = interceptScale;
+    const rate = P.spines.rate[r.spines]! * interceptScale;
+    this.interceptBank = Math.min(interceptCap(rate), this.interceptBank + rate * dt);
     const intercepts = Math.floor(this.interceptBank + 1e-9);
     if (r.storm > 0) {
       this.stormT += dt;
@@ -177,4 +180,9 @@ export class Passives {
     this.bubbleT = this.bubbleCd = this.reflectT = this.reflectCd = 0;
     this.overloadCd = 0;
   }
+}
+
+/** The intercept bank's cap: one second's worth, but never under one shot (so a slowed rate still fires). */
+function interceptCap(rate: number): number {
+  return Math.max(1, rate);
 }

@@ -27,7 +27,8 @@ const PUFF_R: readonly [number, number] = [50, 92];
 const PUFF_SPEED: readonly [number, number] = [60, 170];
 const PUFF_DRAG = 2.4;
 const PUFF_RISE = 18;
-const PUFF_ALPHA = 0.9;
+/** The cloud's peak opacity: translucent, so the city shows through it. */
+const PUFF_ALPHA = 0.65;
 /** Siphon puffs: a few small, quick puffs where the jet leaves the body. */
 const SIPHON_PUFFS = 3;
 const SIPHON_R = 22;
@@ -41,7 +42,9 @@ const HAZE_SIZE: readonly [number, number] = [24, 40];
 /** Puffs per wisp and their spacing along the orbit (rad). */
 const WISP_PUFFS = 3;
 const WISP_GAP = 0.16;
+/** How fast (per s) the haze grows back as the bank recharges, and how fast it dissipates when spent. */
 const HAZE_FOLLOW = 2.5;
+const HAZE_DISSIPATE = 8;
 
 type Blob = { from: THREE.Vector3; to: THREE.Vector3; t: number; dur: number; seed: number };
 type Puff = { pos: THREE.Vector3; vel: THREE.Vector3; age: number; delay: number; size: number; color: number; rate: number; spin: number };
@@ -199,7 +202,8 @@ export class InkFx {
       this.put(p.pos, _q, _s.set(r, r * 0.85, r), p.color, PUFF_ALPHA * _fade.alpha);
     }
 
-    this.haze = approach(this.haze, hazeStrength(charge), dt, HAZE_FOLLOW);
+    const want = hazeStrength(charge);
+    this.haze = approach(this.haze, want, dt, want < this.haze ? HAZE_DISSIPATE : HAZE_FOLLOW);
     if (this.haze > 0.01) {
       for (const w of this.wisps) {
         const a = w.angle + this.time * w.speed;

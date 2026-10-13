@@ -532,7 +532,7 @@ export class GameScene {
       if (this.state === 'playing') {
         this.runTime += dt;
         this.abilities.tick(dt);
-        const fire = this.passives.update(dt);
+        const fire = this.passives.update(dt, this.monster.kind.interceptRate ?? 1);
         if (fire.storm > 0) this.spikeStorm(fire.storm);
         if (fire.brood > 0) this.brood.spawn(fire.brood, this.monster.launchOrigin(new THREE.Vector3()));
         if (fire.nova > 0) this.venomNova();
