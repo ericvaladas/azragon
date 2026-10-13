@@ -9,7 +9,7 @@ import { CloudLayer } from './CloudLayer';
 import { PodModel } from './PodModel';
 import { SpaceScene } from './SpaceScene';
 import { heatColor } from './spaceMath';
-import { CUT_TIME, EMERGE_TIME, IMPACT_TIME, INTRO_LENGTH, cameraPath, flashAt, monsterCrouch, podPath, shakeAt } from './timeline';
+import { CUT_TIME, EMERGE_TIME, IMPACT_TIME, INTRO_LENGTH, cameraPath, flashAt, monsterCrouch, podLengthFor, podPath, shakeAt } from './timeline';
 
 export type IntroHost = {
   scene: THREE.Scene;
@@ -40,10 +40,12 @@ export class IntroCinematic {
   readonly space = new SpaceScene();
   active = false;
   t = 0;
-  private pod = new PodModel(I.podLength);
+  private pod = new PodModel(1);
+  /** Cocoon length for the selected monster; set in start(). */
+  private podLength = 1;
   private clouds: CloudLayer;
   private fragments: Fragment[] = [];
-  private fragGeo = faceted(new THREE.TetrahedronGeometry(I.podLength * 0.17, 0));
+  private fragGeo = faceted(new THREE.TetrahedronGeometry(0.17, 0));
   private fragMat = toonMat(0x3b2433);
   /** Boulders: simulated as plain transforms, drawn as one instanced mesh (one draw call). */
   private boulders: Fragment[] = [];
@@ -74,6 +76,8 @@ export class IntroCinematic {
   }
 
   start(): void {
+    this.podLength = podLengthFor(this.host.monster.kind.stats.size);
+    this.pod.setLength(this.podLength);
     this.active = true;
     this.t = 0;
     this.trailT = 0;
@@ -134,7 +138,7 @@ export class IntroCinematic {
       if (this.trailT <= 0) {
         // Fire wraps the whole (large) shell; smoke streams from its trailing top.
         this.trailT = 0.02;
-        const L = I.podLength;
+        const L = this.podLength;
         for (let i = 0; i < 3; i++) h.particles.emit('fire', this.around(pod.position, L * 0.3, L * 0.1), 2, 0.8);
         h.particles.emit('smoke', this.around(pod.position, L * 0.25, L * 0.5), 3, 0.6);
       }
@@ -222,15 +226,15 @@ export class IntroCinematic {
   private burst(): void {
     const h = this.host;
     this.pod.root.visible = false;
-    _p.set(0, I.podLength * 0.3, 0);
+    _p.set(0, this.podLength * 0.3, 0);
     for (let i = 0; i < FRAGMENTS; i++) {
       const a = (i / FRAGMENTS) * Math.PI * 2 + 0.4;
       const mesh = new THREE.Mesh(this.fragGeo, this.fragMat);
       mesh.castShadow = true;
       h.scene.add(mesh);
-      this.fragments.push(this.launch(mesh, _p.set(0, I.podLength * 0.3, 0), 1, a, 520, 480 + 160 * (i % 2)));
+      this.fragments.push(this.launch(mesh, _p.set(0, this.podLength * 0.3, 0), this.podLength, a, 520, 480 + 160 * (i % 2)));
     }
-    h.particles.emit('acid', _p.set(0, I.podLength * 0.3, 0), 60, 3);
+    h.particles.emit('acid', _p.set(0, this.podLength * 0.3, 0), 60, 3);
     h.particles.ring('dust', ORIGIN, CRATER_RADIUS * 0.6, 24);
     h.monster.visible = true;
   }

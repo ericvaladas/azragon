@@ -39,6 +39,11 @@ export class PodModel {
     this.root.scale.setScalar(length);
   }
 
+  /** Resize the cocoon (its length along Z, in metres). */
+  setLength(length: number): void {
+    this.root.scale.setScalar(length);
+  }
+
   /** Re-entry glow on the shell (black = none). */
   setHeat(c: THREE.Color): void {
     this.shellMat.emissive.copy(c);

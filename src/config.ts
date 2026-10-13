@@ -221,8 +221,8 @@ export const CONFIG = {
     clouds: { count: 80, minY: 1500, maxY: 4000, spreadX: 1500, minZ: -2200, maxZ: 900, minSize: 500, maxSize: 1100 },
     /** Fog while inside the cloud band (eases back to CONFIG.fog through the descent). */
     cloudFog: { near: 700, far: 3400 },
-    /** Cocoon length (m): big enough to hold the curled-up monster (about 480 × 450 × 340 m at scale 0.6). */
-    podLength: 620,
+    /** Cocoon length = the monster's largest dimension × podFit (the Insect's 484 m span gets a 620 m cocoon). */
+    podFit: 1.28,
     /** Screen wash: builds over `rise` s before the cut, holds, fades; a full white-out at impact. */
     flash: { rise: 1.0, hold: 0.15, fade: 0.7, impactPeak: 1, impactFade: 0.9 },
     /** Camera shake offset (m) at full trauma. */

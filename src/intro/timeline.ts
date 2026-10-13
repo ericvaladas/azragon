@@ -36,6 +36,11 @@ const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
 const easeInOut = (u: number) => (u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2);
 const V = (a: readonly [number, number, number]) => new THREE.Vector3(a[0], a[1], a[2]);
 
+/** Cocoon length for a monster of this size: its largest dimension with room to spare. */
+export function podLengthFor(size: { width: number; length: number; height: number }): number {
+  return Math.max(size.width, size.length, size.height) * I.podFit;
+}
+
 /** Game-world pod position: accelerating fall from high and behind to the origin, then half-buried. */
 export function podPath(t: number, out: THREE.Vector3): THREE.Vector3 {
   if (t > IMPACT_TIME) return out.set(0, I.podRestY, 0);
