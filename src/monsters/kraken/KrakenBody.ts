@@ -34,9 +34,11 @@ const THICK = 58;
  * fully swung arm wraps the mantle. */
 const SWING = 2.5;
 const WRAP_R = 330;
-/** Whirlpool: tip radius at the fastest point of a lash (the arm flung out to full length), and the swing
+/** Whirlpool: the arm's length while it swings (about its longest idle length, so it doesn't visibly
+ * stretch), the tip radius at the fastest point of a lash (that length flung straight out), and the swing
  * speed (whirl units per second) that counts as fastest. */
-const FLING_R = 1150;
+const WHIRL_LEN = 800;
+const FLING_R = ANCHOR_R + WHIRL_LEN - 30;
 const FLING_SPEED = 5.5;
 /** A frame-to-frame jump longer than this (model units) is a teleport: the arms snap instead of trailing. */
 const SNAP = 500;
@@ -264,6 +266,7 @@ export class KrakenBody implements MonsterBody {
       let curl = 0.6 + 0.4 * Math.sin(f.time * 0.8 + i * 2.1);
       let wave = 1;
       let tune = TUNE;
+      let maxLen = ARM_LEN;
       // A pulling arm's tip is gripping the ground: pinned there unless another pose takes the arm.
       let pin = role === 'pull';
 
@@ -327,6 +330,7 @@ export class KrakenBody implements MonsterBody {
         const r = WRAP_R + (FLING_R - WRAP_R) * fling + (REST_R - WRAP_R) * (1 - w) * (1 - fling);
         _tip.set(Math.sin(sa) * r, 70 + 100 * w * (1 - fling), Math.cos(sa) * r);
         tune = WHIRL_TUNE;
+        maxLen = WHIRL_LEN;
         pin = false;
         arch = 60;
         drop = -40;
@@ -397,7 +401,7 @@ export class KrakenBody implements MonsterBody {
         if (u > 0.12) for (const h of this.hull) pushOut(p, h, radiusAt(u * SEGS));
       }
       const len = resample(_path, _targets);
-      const segLen = Math.min(ARM_LEN, Math.max(ARM_LEN * ARM_MIN, len)) / SEGS;
+      const segLen = Math.min(maxLen, Math.max(ARM_LEN * ARM_MIN, len)) / SEGS;
 
       // The arm springs toward that pose, stiff at the root and whippy at the tip, and wraps the mantle.
       const chain = this.chains[i]!;
