@@ -30,14 +30,18 @@ const REST_ARCH = -200;
 const CURL = 150;
 const WAVE = 55;
 const THICK = 58;
-/** Whirlpool: how far (rad) each arm swings either side of its rest bearing. */
-const SWING = 0.85;
+/** Whirlpool: how far (rad) each arm swings either side of its rest bearing, and how close (tip radius) a
+ * fully swung arm wraps the mantle. */
+const SWING = 2.5;
+const WRAP_R = 330;
 /** A frame-to-frame jump longer than this (model units) is a teleport: the arms snap instead of trailing. */
 const SNAP = 500;
 /** Joint springs: stiff at the root, loose and underdamped at the tip, so motion cracks down the arm. */
 const TUNE: ChainTuning = { omegaRoot: 22, omegaTip: 9, zetaRoot: 0.9, zetaTip: 0.38 };
 /** Crawling arms place their tips deliberately and hold their grip: stiff and damped to the tip. */
 const PLANT_TUNE: ChainTuning = { omegaRoot: 26, omegaTip: 24, zetaRoot: 1, zetaTip: 1 };
+/** Whirlpool arms: softer near the root so each sweep bends the whole arm in one curve, not at an elbow. */
+const WHIRL_TUNE: ChainTuning = { omegaRoot: 15, omegaTip: 9, zetaRoot: 0.85, zetaTip: 0.5 };
 /** Striking arms snap tighter so the tip lands near the impact time. */
 const STRIKE_TUNE: ChainTuning = { omegaRoot: 26, omegaTip: 14, zetaRoot: 0.9, zetaTip: 0.42 };
 /** The mantle as ellipsoids (mantle-local centre and radii): the sac, the brow, the skirt. */
@@ -82,6 +86,17 @@ function curve(u: number, out: THREE.Vector3): THREE.Vector3 {
     a * _anchor.y + b * _ctrl.y + c * _ctrl2.y + d * _tip.y,
     a * _anchor.z + b * _ctrl.z + c * _ctrl2.z + d * _tip.z,
   );
+}
+
+/** Whirlpool swing (−1 right … +1 left) over its 0..1 timeline: wind left, lash right, settle. */
+function whirl(k: number): number {
+  const ease = (t: number) => {
+    const c = Math.max(0, Math.min(1, t));
+    return c * c * (3 - 2 * c);
+  };
+  if (k < 0.3) return ease(k / 0.3);
+  if (k < 0.72) return 1 - 2 * ease((k - 0.3) / 0.42);
+  return -1 + ease((k - 0.72) / 0.28);
 }
 
 /** Segment radius at joint j (root to tip). */
@@ -296,11 +311,15 @@ export class KrakenBody implements MonsterBody {
         tune = STRIKE_TUNE;
       }
       if (this.arms.spinT >= 0) {
-        // Whirlpool: every arm lashes left–right–left about its own root, low over the ground, each a little
-        // behind its neighbour so the sweep ripples round the ring.
+        // Whirlpool: every arm winds left until it nearly wraps the mantle, lashes all the way right to wrap
+        // it the other way, then settles back to rest; the further it swings, the closer it hugs the body.
         const k = this.arms.spinT / K.arms.spinTime;
-        const sa = ang + SWING * Math.sin(Math.PI * k) * Math.sin(3 * Math.PI * k - i * 0.35);
-        _tip.set(Math.sin(sa) * PLANT_R * 1.1, 50 + Math.sin(Math.PI * k) * 110, Math.cos(sa) * PLANT_R * 1.1);
+        const swing = SWING * whirl(k - i * 0.012);
+        const w = Math.abs(swing) / SWING;
+        const sa = ang + swing;
+        const r = PLANT_R * 1.05 + (WRAP_R - PLANT_R * 1.05) * Math.pow(w, 1.5);
+        _tip.set(Math.sin(sa) * r, 80 + 90 * w, Math.cos(sa) * r);
+        tune = WHIRL_TUNE;
         pin = false;
         arch = 60;
         drop = -40;
