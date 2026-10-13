@@ -58,10 +58,6 @@ body {
   cursor: default;
 }
 
-.scene-container.can-target {
-  cursor: crosshair;
-}
-
 .scene-container canvas {
   display: block;
   image-rendering: pixelated;

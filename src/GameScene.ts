@@ -1119,7 +1119,6 @@ export class GameScene {
     }
     const t = this.state === 'playing' ? this.pickTarget(x, y) : null;
     this.markers.setHover(t);
-    this.container.classList.toggle('can-target', t !== null);
   };
 
   private toBrain(t: Target): BrainTarget {
