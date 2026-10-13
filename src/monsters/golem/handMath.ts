@@ -60,6 +60,85 @@ export function beckonResume(lift: number): number {
   return (lo + hi) / 2;
 }
 
+/**
+ * The shadow hand's dimensions (m, before ShadowHands' scale), in its own frame: x across the knuckles (S, + toward
+ * the little finger), y along the hand from the wrist (F), z out of the palm (N). The closed fist wraps round the
+ * prize at (0, holdFwd, holdIn).
+ */
+export const HAND_DIM = {
+  palmLen: 34,
+  palmWidth: 40,
+  thick: 13,
+  /** Proximal, middle and distal phalanges, and each finger's length (index to little). */
+  phalanx: [30, 25, 21] as const,
+  fingerScale: [0.92, 1, 0.97, 0.8] as const,
+  /** Thumb: metacarpal, proximal and distal, from its root at the heel of the palm on the index side. */
+  thumb: [18, 22, 15] as const,
+  thumbRoot: [-20, 10, 0] as const,
+  holdFwd: 25,
+  holdIn: 20,
+};
+
+/** Finger joint angles (rad, + curling toward the palm): knuckle, middle, tip; open (a little bent back), shut, squeeze. */
+const CURL_OPEN = [-0.35, -0.12, -0.05] as const;
+const CURL_SHUT = [1.25, 1.35, 0.95] as const;
+const CURL_SQUEEZE = [0.1, 0.14, 0.12] as const;
+
+/**
+ * Joint angles [knuckle, middle, tip] of finger f (0 index .. 3 little) at grip g (0 open .. 1 shut) and squeeze
+ * (0..1, the crush): each joint flexes in turn, knuckle first, and each finger a beat after the one before.
+ */
+export function jointCurl(g: number, squeeze: number, f: number): [number, number, number] {
+  const gs = clamp01((g - 0.05 * f) / 0.85);
+  const out: [number, number, number] = [0, 0, 0];
+  for (let j = 0; j < 3; j++) {
+    const e = smooth(clamp01((gs - 0.14 * j) / 0.72));
+    out[j] = CURL_OPEN[j]! + (CURL_SHUT[j]! - CURL_OPEN[j]!) * e + CURL_SQUEEZE[j]! * squeeze;
+  }
+  return out;
+}
+
+/**
+ * Finger f's joints in the hand's frame (HAND_DIM): out[0] the knuckle on the end of the palm, out[1..2] the middle
+ * and tip joints, out[3] the claw tip. Fanned wide when open, drawn together as it closes, curling toward the palm.
+ */
+export function fingerPoints(g: number, squeeze: number, f: number, out: THREE.Vector3[]): THREE.Vector3[] {
+  const D = HAND_DIM;
+  const off = (f - 1.5) / 1.5;
+  const c = jointCurl(g, squeeze, f);
+  const spread = (0.5 - 0.42 * smooth(clamp01(g / 0.6))) * off;
+  const sx = Math.sin(spread);
+  const sy = Math.cos(spread);
+  out[0]!.set(off * D.palmWidth * 0.42, D.palmLen, 0);
+  let th = 0;
+  for (let j = 0; j < 3; j++) {
+    th += c[j]!;
+    const l = D.phalanx[j]! * D.fingerScale[f]!;
+    out[j + 1]!.set(out[j]!.x + sx * Math.cos(th) * l, out[j]!.y + sy * Math.cos(th) * l, out[j]!.z + Math.sin(th) * l);
+  }
+  return out;
+}
+
+/** Thumb segment directions (hand frame), open (out to the side, a little back) and shut (across, round the prize). */
+const THUMB_OPEN = [new THREE.Vector3(-0.84, 0.54, -0.08), new THREE.Vector3(-0.8, 0.6, -0.05), new THREE.Vector3(-0.75, 0.66, 0)];
+const THUMB_SHUT = [new THREE.Vector3(0.45, 0.55, 0.7), new THREE.Vector3(0.75, 0.35, 0.55), new THREE.Vector3(0.74, -0.56, -0.37)];
+const _td = new THREE.Vector3();
+
+/**
+ * The thumb's joints in the hand's frame (out[0] its root at the heel of the palm .. out[3] the claw tip): splayed
+ * out to the side when open; it swings across (opposed) and curls round the prize as it closes, joint by joint.
+ */
+export function thumbPoints(g: number, squeeze: number, out: THREE.Vector3[]): THREE.Vector3[] {
+  const D = HAND_DIM;
+  out[0]!.set(...D.thumbRoot);
+  for (let j = 0; j < 3; j++) {
+    const e = Math.min(1.08, smooth(clamp01((g - 0.1 * j) / 0.8)) + 0.08 * squeeze);
+    _td.copy(THUMB_OPEN[j]!).lerp(THUMB_SHUT[j]!, e).normalize();
+    out[j + 1]!.copy(out[j]!).addScaledVector(_td, D.thumb[j]!);
+  }
+  return out;
+}
+
 export type HandPhase = {
   /** 0..1: how far the hand has travelled from the pool to the flyer (1 from IMPACT on). */
   rise: number;
@@ -71,6 +150,8 @@ export type HandPhase = {
   fade: number;
   /** 0..1: the shadow pool's size. */
   pool: number;
+  /** 0..1: the crush, the fist clenched tighter on the wreck it holds (0 when it lets a survivor go). */
+  squeeze: number;
 };
 
 const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
@@ -97,7 +178,8 @@ export function handPhase(t: number, released = false): HandPhase {
   const drag = d * d * d;
   const fade = smooth(clamp01((t - T.drag) / (T.total - T.drag)));
   const pool = smooth(clamp01(t / T.emerge)) * (1 - fade);
-  return { rise, grip, drag, fade, pool };
+  const squeeze = released ? 0 : smooth(clamp01((t - T.impact - 0.06) / 0.12)) * (1 - smooth(clamp01((t - T.drag) / 0.25)));
+  return { rise, grip, drag, fade, pool, squeeze };
 }
 
 /**

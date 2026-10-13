@@ -3,30 +3,30 @@ import { CONFIG } from '../../config';
 import type { Target } from '../../combat';
 import type { Particles } from '../../systems/Particles';
 import { faceted, toonMat } from '../../render/toon';
-import { armJoints, fistPoint, HAND_T, handBase, handFrame, handPhase } from './handMath';
+import { armJoints, fingerPoints, fistPoint, HAND_DIM, HAND_T, handBase, handFrame, handPhase, thumbPoints } from './handMath';
 
 /** Hands alive at once (Shadow Hands+ grabs up to four flyers per strike; strikes can overlap). */
 const MAX = 10;
 /** Bones in each arm (knobbed joints between them). */
 const SEGS = 7;
-/** Per hand: arm bones, joint knobs, palm, four 3-bone fingers, a 2-bone thumb. */
-const CORE_PER = SEGS + (SEGS - 1) + 1 + 4 * 3 + 2;
+/** Per hand: arm bones, joint knobs, palm, four fingers of 3 phalanges and 3 knuckles, a 3-bone thumb with 2 knuckles. */
+const CORE_PER = SEGS + (SEGS - 1) + 1 + 4 * 6 + 5;
 /** Smoke shell around the arm bones and the palm. */
 const HALO_PER = SEGS + 1;
 /** Hand scale; dimensions below are in metres before it. */
 const HS = 2;
-const PALM = { len: 34, width: 40, thick: 13 };
-const FINGER_LEN = [30, 25, 21];
-const FINGER_R = [5.2, 4.4, 3.2];
-/** Index to little finger: relative length. */
-const FINGER_SCALE = [0.92, 1, 0.97, 0.8];
-const THUMB_LEN = [26, 20];
+const PALM = { len: HAND_DIM.palmLen, width: HAND_DIM.palmWidth, thick: HAND_DIM.thick };
+/** Phalanx radii (proximal, middle, distal) and their knuckles, a shade fatter. */
+const FINGER_R = [5.6, 4.6, 3.4];
+const KNUCKLE = 1.45;
 /** Arm radius at the pool and at the wrist (m). */
 const ARM_R0 = 34;
 const ARM_R1 = 17;
-/** Where the closed fist holds its prize, from the wrist: along the hand and toward the palm side. */
-const HOLD_FWD = PALM.len + 14;
-const HOLD_IN = 20;
+/** Where the closed fist holds its prize, from the wrist: along the hand and toward the palm side (in the fingers' curl). */
+const HOLD_FWD = HAND_DIM.holdFwd;
+const HOLD_IN = HAND_DIM.holdIn;
+/** A finger's or the thumb's joints in the hand's frame (fingerPoints / thumbPoints). */
+const _P = Array.from({ length: 4 }, () => new THREE.Vector3());
 
 type Hand = {
   target: Target;
@@ -50,8 +50,6 @@ const _w = new THREE.Vector3();
 const _c = new THREE.Vector3();
 const _p = new THREE.Vector3();
 const _e = new THREE.Vector3();
-const _fd = new THREE.Vector3();
-const _cd = new THREE.Vector3();
 const _base = new THREE.Vector3();
 const _up = new THREE.Vector3(0, 1, 0);
 const _m = new THREE.Matrix4();
@@ -227,36 +225,19 @@ export class ShadowHands {
       _scale.y *= 1.2;
       this.halo.setMatrixAt(nh++, _m.compose(_p, _q, _scale));
 
-      // Fingers: fanned wide while lunging, curling into a fist around the prize; they twitch as they hold.
+      // Fingers: fanned wide and bent back while lunging; each curls joint by joint (knuckle, middle, tip), the
+      // index first, into a fist round the prize, clenching tighter in the crush (twitching as it holds).
       const g = ph.grip;
+      const ls = 0.6 + 0.4 * life;
       for (let fi = 0; fi < 4; fi++) {
-        const off = (fi - 1.5) / 1.5;
-        _p.copy(_w).addScaledVector(_f, PALM.len * HS).addScaledVector(_s, off * PALM.width * 0.42 * HS);
-        const spread = (0.55 - 0.42 * g) * off;
-        _fd.copy(_f).multiplyScalar(Math.cos(spread)).addScaledVector(_s, Math.sin(spread));
-        const curl = -0.3 + 1.45 * g + 0.08 * Math.sin(h.t * 12.5 + fi * 2.1 + h.seed);
-        let th = 0;
-        for (let j = 0; j < 3; j++) {
-          th += curl * (j === 0 ? 0.75 : 1);
-          _cd.copy(_fd).multiplyScalar(Math.cos(th)).addScaledVector(_n, Math.sin(th));
-          _e.copy(_p).addScaledVector(_cd, FINGER_LEN[j]! * FINGER_SCALE[fi]! * HS * (0.6 + 0.4 * life));
-          this.bone(nc++, _p, _e, FINGER_R[j]! * HS * life, j === 2 ? CLAW : FINGER);
-          _p.copy(_e);
-        }
+        fingerPoints(g, ph.squeeze * (1 + 0.15 * Math.sin(h.t * 12.5 + fi * 2.1 + h.seed)), fi, _P);
+        this.digit(nc, _P, 3, ls, life, g);
+        nc += 6;
       }
-      // Thumb: from the heel of the palm on the −S side, swinging across as the fist closes.
-      _p.copy(_w).addScaledVector(_f, PALM.len * HS * 0.3).addScaledVector(_s, -PALM.width * 0.5 * HS);
-      const ta = 1.0 - 0.6 * g;
-      _fd.copy(_f).multiplyScalar(Math.cos(ta)).addScaledVector(_s, -Math.sin(ta));
-      _c.copy(_n).multiplyScalar(0.6).addScaledVector(_s, 0.8);
-      let th = 0;
-      for (let j = 0; j < 2; j++) {
-        th += -0.1 + 1.0 * g;
-        _cd.copy(_fd).multiplyScalar(Math.cos(th)).addScaledVector(_c, Math.sin(th));
-        _e.copy(_p).addScaledVector(_cd, THUMB_LEN[j]! * HS * (0.6 + 0.4 * life));
-        this.bone(nc++, _p, _e, FINGER_R[j]! * 1.1 * HS * life, j === 1 ? CLAW : FINGER);
-        _p.copy(_e);
-      }
+      // Thumb: from the heel of the palm on the index side, swinging across to oppose the fingers as it closes.
+      thumbPoints(g, ph.squeeze, _P);
+      this.digit(nc, _P, 2, ls, life, g);
+      nc += 5;
 
       // Shadow pool: two ragged discs turning against each other.
       const pr = (70 + 5 * Math.sin(h.t * 6 + h.seed)) * ph.pool;
@@ -272,6 +253,26 @@ export class ShadowHands {
     this.finish(this.core, nc);
     this.finish(this.halo, nh);
     this.finish(this.pools, np);
+  }
+
+  /**
+   * One finger (or the thumb) from its joints `P` in the hand's frame (fingerPoints), placed on the current hand
+   * (`_w` the wrist, `_f`, `_s`, `_n` its frame): a tapering bone per phalanx, the last a claw, and a knob over each of
+   * the first `knobs` joints (instances i .. i + 2 + knobs). Lengths shrink by `ls` and girth by `life` as it dissolves.
+   */
+  private digit(i: number, P: THREE.Vector3[], knobs: number, ls: number, life: number, grip: number): void {
+    for (let k = 3; k >= 0; k--) {
+      _e.copy(P[k]!).sub(P[0]!).multiplyScalar(ls).add(P[0]!);
+      _D[k]!.copy(_w).addScaledVector(_s, _e.x * HS).addScaledVector(_f, _e.y * HS).addScaledVector(_n, _e.z * HS);
+    }
+    for (let j = 0; j < 3; j++) this.bone(i++, _D[j]!, _D[j + 1]!, FINGER_R[j]! * HS * life, j === 2 ? CLAW : FINGER);
+    for (let j = 0; j < knobs; j++) {
+      // A knuckle over the joint, along the bone it starts, standing out more as the fist clenches.
+      const k = knobs === 3 ? j : j + 1;
+      _e.subVectors(_D[k + 1]!, _D[k]!).setLength(FINGER_R[Math.min(2, k)]! * HS * KNUCKLE * 1.2);
+      _p.copy(_D[k]!).addScaledVector(_e, -0.5);
+      this.bone(i++, _p, _c.copy(_p).add(_e), FINGER_R[Math.min(2, k)]! * HS * life * (KNUCKLE + 0.15 * grip), KNOB);
+    }
   }
 
   /** One bone from a to b, radius r at a (the shared geometry tapers to 0.55 r at b); its smoke shell when `mesh` is the halo. */
@@ -309,5 +310,6 @@ export class ShadowHands {
 }
 
 const _p2 = new THREE.Vector3();
+const _D = Array.from({ length: 4 }, () => new THREE.Vector3());
 const _bd = new THREE.Vector3();
 const _scale2 = new THREE.Vector3();

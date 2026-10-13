@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { SWAT_TIMES } from '../../monster/tailSwat';
-import { armJoints, BECKON_T, beckonLift, beckonPull, beckonResume, fistPoint, HAND_T, handBase, handFrame, handPhase, WENDIGO_SWAT } from './handMath';
+import { armJoints, BECKON_T, beckonLift, beckonPull, beckonResume, fingerPoints, fistPoint, HAND_DIM, jointCurl, thumbPoints, HAND_T, handBase, handFrame, handPhase, WENDIGO_SWAT } from './handMath';
 
 describe('handPhase', () => {
   it("reaches the flyer exactly at the Wendigo's anti-air impact, fist closed", () => {
@@ -199,5 +199,56 @@ describe('beckon (the Wendigo claw over a whole Shadow Hands grab)', () => {
       expect(t).toBeLessThanOrEqual(BECKON_T.rise);
       expect(beckonLift(t)).toBeCloseTo(lift, 2);
     }
+  });
+});
+
+describe('fist grasp', () => {
+  const D = HAND_DIM;
+  const hold = new THREE.Vector3(0, D.holdFwd, D.holdIn);
+  const pts = () => Array.from({ length: 4 }, () => new THREE.Vector3());
+  it('flexes each finger knuckle first, then the middle joint, then the tip; index leading, little finger last', () => {
+    const a = jointCurl(0.3, 0, 1);
+    const open = jointCurl(0, 0, 1);
+    const shut = jointCurl(1, 0, 1);
+    const k = (j: 0 | 1 | 2) => (a[j] - open[j]) / (shut[j] - open[j]);
+    expect(k(0)).toBeGreaterThan(k(1));
+    expect(k(1)).toBeGreaterThan(k(2));
+    expect(jointCurl(0.4, 0, 0)[0]).toBeGreaterThan(jointCurl(0.4, 0, 3)[0]);
+  });
+  it('opens wide on the approach: straight out past the palm, bent back a little (hyperextended)', () => {
+    const open = jointCurl(0, 0, 2);
+    expect(open[0]).toBeLessThan(0);
+    for (let f = 0; f < 4; f++) {
+      const P = fingerPoints(0, 0, f, pts());
+      expect(P[3]!.y).toBeGreaterThan(D.palmLen + 0.75 * (D.phalanx[0] + D.phalanx[1] + D.phalanx[2]) * D.fingerScale[f]!);
+      expect(P[3]!.z).toBeLessThanOrEqual(0);
+      expect(P[3]!.distanceTo(hold)).toBeGreaterThan(45);
+    }
+  });
+  it('closes into a fist round the prize: every finger curled round it, tips back in on the palm side', () => {
+    for (let f = 0; f < 4; f++) {
+      const P = fingerPoints(1, 0, f, pts());
+      expect(P[3]!.z).toBeGreaterThan(10);
+      expect(P[3]!.y).toBeLessThan(D.palmLen);
+      for (const p of P.slice(1)) expect(Math.hypot(p.y - hold.y, p.z - hold.z)).toBeLessThan(32);
+    }
+    const T = thumbPoints(1, 0, pts());
+    expect(T[3]!.distanceTo(hold)).toBeLessThan(28);
+    // The thumb crosses over toward the fingers (opposed), from its root on the index side.
+    expect(T[3]!.x).toBeGreaterThan(T[0]!.x + 15);
+    const To = thumbPoints(0, 0, pts());
+    expect(To[3]!.x).toBeLessThan(To[0]!.x - 15);
+  });
+  it('squeezes tighter in the crush', () => {
+    const a = fingerPoints(1, 0, 1, pts());
+    const b = fingerPoints(1, 1, 1, pts());
+    expect(Math.hypot(b[3]!.y - hold.y, b[3]!.z - hold.z)).toBeLessThan(Math.hypot(a[3]!.y - hold.y, a[3]!.z - hold.z) + 1e-9);
+    expect(jointCurl(1, 1, 1)[1]).toBeGreaterThan(jointCurl(1, 0, 1)[1]);
+  });
+  it('squeezes only while it holds a wreck, and the grip opens again on a survivor', () => {
+    expect(handPhase(HAND_T.impact - 0.01).squeeze).toBe(0);
+    expect(handPhase(HAND_T.hold).squeeze).toBeGreaterThan(0.8);
+    expect(handPhase(HAND_T.hold, true).squeeze).toBe(0);
+    expect(handPhase(HAND_T.hold + 0.3, true).grip).toBe(0);
   });
 });
