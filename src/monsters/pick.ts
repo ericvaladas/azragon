@@ -1,7 +1,7 @@
 import { isMonsterId } from './roster';
 import type { MonsterId } from './types';
 
-export const PICK_KEY = 'azragon.monster';
+export const PICK_KEY = 'azragon_monster';
 
 /** The subset of RundotGameAPI.appStorage the pick needs (async; may reject). */
 export type PickStore = {

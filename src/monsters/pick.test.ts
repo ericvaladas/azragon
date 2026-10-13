@@ -37,4 +37,10 @@ describe('pick', () => {
     await expect(savePick(store(null, true), 'insect')).resolves.toBeUndefined();
     await expect(savePick(null, 'insect')).resolves.toBeUndefined();
   });
+
+  it('uses a storage key the RUN SDK accepts (no dots, no leading __)', () => {
+    expect(PICK_KEY).not.toContain('.');
+    expect(PICK_KEY.startsWith('__')).toBe(false);
+    expect(PICK_KEY.length).toBeGreaterThan(0);
+  });
 });
