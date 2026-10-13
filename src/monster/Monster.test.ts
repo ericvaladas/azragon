@@ -1,18 +1,20 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import { Monster } from './Monster';
-import type { MonsterBody, MonsterKind } from '../monsters/types';
+import type { BodyFrame, MonsterBody, MonsterKind } from '../monsters/types';
 import { INSECT } from '../monsters/insect/kind';
 import { CONFIG } from '../config';
 import { STRIKE_TIMES } from './strike';
 
-function stubBody(): MonsterBody & { frames: number } {
+function stubBody(): MonsterBody & { frames: number; last: BodyFrame | null } {
   const root = new THREE.Group();
   return {
     root,
     frames: 0,
-    animate() {
+    last: null,
+    animate(f: BodyFrame) {
       this.frames++;
+      this.last = f;
     },
     rangedOrigin: (out) => out.set(1, 2, 3),
     aimError: () => 0,
@@ -99,6 +101,23 @@ describe('Monster tail sweep', () => {
   it('delegates the launch origin to its body', () => {
     const m = new Monster(new THREE.Scene(), kind());
     expect(m.launchOrigin(new THREE.Vector3()).toArray()).toEqual([4, 5, 6]);
+  });
+});
+
+describe('Monster frame flags', () => {
+  it('tells the body when it is airborne (Leap) or dashing', () => {
+    const m = new Monster(new THREE.Scene(), kind());
+    const body = m.body as ReturnType<typeof stubBody>;
+    m.animate(0.016, 0);
+    expect(body.last!.airborne).toBe(false);
+    expect(body.last!.dashing).toBe(false);
+    m.startLeap({ x: 0, z: 500 });
+    m.animate(0.016, 0);
+    expect(body.last!.airborne).toBe(true);
+    m.reset();
+    m.startDash({ x: 0, z: 500 });
+    m.animate(0.016, 0);
+    expect(body.last!.dashing).toBe(true);
   });
 });
 

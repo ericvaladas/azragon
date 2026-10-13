@@ -63,7 +63,7 @@ export class Monster {
   private strikePoint = new THREE.Vector3();
   private frame: BodyFrame = {
     dt: 0, time: 0, cycle: 0, prevCycle: 0, motion: 0, pose: this.pose,
-    melee: null, antiAir: null, roaring: false, tailSweep: null, lookAt: null, charge: 0, flash: false, glow: 0,
+    melee: null, antiAir: null, roaring: false, airborne: false, dashing: false, tailSweep: null, lookAt: null, charge: 0, flash: false, glow: 0,
   };
   private meleeFrame = { t: 0, side: 0, target: this.strikePoint };
   private antiAirFrame = { weight: 0, target: new THREE.Vector3() };
@@ -279,6 +279,8 @@ export class Monster {
       f.antiAir = this.antiAirFrame;
     } else f.antiAir = null;
     f.roaring = this.roarT >= 0;
+    f.airborne = this.airborne;
+    f.dashing = this.dashing;
     if (this.tailT >= 0) {
       this.tailFrame.t = this.tailT;
       this.tailFrame.side = this.tailSide;

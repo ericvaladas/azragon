@@ -21,7 +21,8 @@ describe('pick', () => {
     expect(parsePick('insect')).toBe('insect');
     expect(parsePick(null)).toBe('insect');
     expect(parsePick(undefined)).toBe('insect');
-    expect(parsePick('kraken')).toBe('insect');
+    expect(parsePick('kraken')).toBe('kraken');
+    expect(parsePick('golem')).toBe('insect');
     expect(parsePick('{"x":1}')).toBe('insect');
   });
   it('loads through the store, surviving a missing or failing store', async () => {

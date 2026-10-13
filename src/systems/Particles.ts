@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { CONFIG } from '../config';
 import { faceted } from '../render/toon';
 
-export type ParticleKind = 'dust' | 'debris' | 'fire' | 'smoke' | 'spark' | 'acid' | 'plasma' | 'trail';
+export type ParticleKind = 'dust' | 'debris' | 'fire' | 'smoke' | 'spark' | 'acid' | 'plasma' | 'trail' | 'ink';
 
 type Preset = { color: number; life: number; size0: number; size1: number; speed: number; up: number; gravity: number; drag: number };
 
@@ -17,6 +17,7 @@ const PRESETS: Record<ParticleKind, Preset> = {
   acid: { color: P.acid, life: 0.7, size0: 26, size1: 6, speed: 150, up: 90, gravity: 120, drag: 1 },
   plasma: { color: CONFIG.kaiju.colors.plasma, life: 0.7, size0: 26, size1: 6, speed: 150, up: 90, gravity: 120, drag: 1 },
   spark: { color: P.eye, life: 0.3, size0: 10, size1: 2, speed: 260, up: 80, gravity: 200, drag: 0.5 },
+  ink: { color: CONFIG.kraken.colors.ink, life: 1.1, size0: 30, size1: 70, speed: 120, up: 50, gravity: -10, drag: 2 },
 };
 
 const _m = new THREE.Matrix4();
@@ -29,7 +30,7 @@ const HIDDEN = new THREE.Matrix4().makeScale(0, 0, 0);
 /** Opacity per draw layer. Smoke and dust are see-through so trails never hide units behind them. */
 const LAYER_OPACITY = { solid: 1, dust: 0.65, smoke: 0.35 } as const;
 type LayerName = keyof typeof LAYER_OPACITY;
-const LAYER_OF: Record<ParticleKind, LayerName> = { dust: 'dust', smoke: 'smoke', debris: 'solid', fire: 'solid', spark: 'solid', acid: 'solid', plasma: 'solid', trail: 'dust' };
+const LAYER_OF: Record<ParticleKind, LayerName> = { dust: 'dust', smoke: 'smoke', debris: 'solid', fire: 'solid', spark: 'solid', acid: 'solid', plasma: 'solid', trail: 'dust', ink: 'smoke' };
 const LAYER_MAX: Record<LayerName, number> = { solid: 500, dust: 400, smoke: 500 };
 
 /** One pooled InstancedMesh: swap-remove on death, no per-frame allocation. */

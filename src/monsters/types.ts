@@ -1,9 +1,10 @@
 import type * as THREE from 'three';
 import type { ParticleKind } from '../systems/Particles';
 import type { PoolSpec } from '../systems/Progression';
+import type { TentacleArms } from './kraken/TentacleArms';
 
 /** Playable creatures (widened as each one is built). */
-export type MonsterId = 'insect' | 'kaiju';
+export type MonsterId = 'insect' | 'kaiju' | 'kraken';
 /** Everything the select carousel shows, including creatures still to come. */
 export type RosterId = 'insect' | 'kaiju' | 'kraken' | 'golem';
 
@@ -34,10 +35,11 @@ export type MonsterStats = {
   size: { width: number; length: number; height: number };
 };
 
-export type MeleeShape = { kind: 'point' } | { kind: 'arc'; halfAngle: number };
+/** `multi`: independent tentacle strikes (Kraken), driven by the body's `arms`. */
+export type MeleeShape = { kind: 'point' } | { kind: 'arc'; halfAngle: number } | { kind: 'multi' };
 
 /** Colours the shared effect systems take on for this monster. */
-export type FxTheme = { spike: number; glob: number; pool: number; nova: number; particle: ParticleKind };
+export type FxTheme = { spike: number; glob: number; pool: number; nova: number; particle: ParticleKind; /** Particles shown where a defensive shot is stopped. */ intercept: ParticleKind };
 
 /** One frame of pose input for a body; positions are world space. */
 export type BodyFrame = {
@@ -53,6 +55,8 @@ export type BodyFrame = {
   /** Active anti-air strike: reach weight (tailSwat curve) toward the world target. */
   antiAir: { weight: number; target: THREE.Vector3 } | null;
   roaring: boolean;
+  airborne: boolean;
+  dashing: boolean;
   /** Active Tail Sweep: seconds in, which side (+1 = left/+X), its timeline. */
   tailSweep: { t: number; side: number; timing: { windup: number; impact: number; end: number } } | null;
   /** World point the head should turn toward (breath aim), or null to face forward. */
@@ -74,6 +78,8 @@ export interface MonsterBody {
   aimError(): number;
   /** World point the monster's own projectiles (storm, mortar, interceptors) launch from. */
   launchOrigin(out: THREE.Vector3): THREE.Vector3;
+  /** Per-tentacle strike state (Kraken); absent for single-strike bodies. */
+  readonly arms?: TentacleArms;
   dispose(): void;
 }
 
@@ -86,8 +92,8 @@ export type MonsterKind = PoolSpec & {
   moves: readonly { icon: string; label: string }[];
   stats: MonsterStats;
   melee: MeleeShape;
-  ranged: 'spikes' | 'breath';
-  antiAir: 'tail' | 'bite';
+  ranged: 'spikes' | 'breath' | 'hurl';
+  antiAir: 'tail' | 'bite' | 'lash';
   /** Has the auto Tail Sweep melee (CONFIG.kaiju.tail). */
   tailSweep: boolean;
   fx: FxTheme;

@@ -60,7 +60,7 @@ export class KaijuBody implements MonsterBody {
   readonly root = new THREE.Group();
   private body = new THREE.Group();
   private legs: Leg[] = [];
-  private arms: Arm[] = [];
+  private shortArms: Arm[] = [];
   private neck = new THREE.Object3D();
   private jaw = new THREE.Object3D();
   private mouth = new THREE.Object3D();
@@ -133,7 +133,7 @@ export class KaijuBody implements MonsterBody {
       add(pivot, box, scale, [0, -80, 85], [26, 26, 80], 1.2);
       for (const dx of [-10, 0, 10]) add(pivot, cone, claw, [dx, -112, 118], [9, 34, 9], 2.0);
       this.body.add(pivot);
-      this.arms.push({ side, pivot });
+      this.shortArms.push({ side, pivot });
     }
 
     // Glowing back plates, raked back.
@@ -206,7 +206,7 @@ export class KaijuBody implements MonsterBody {
     }
 
     for (let i = 0; i < 2; i++) {
-      const arm = this.arms[i]!;
+      const arm = this.shortArms[i]!;
       let swing = Math.sin(f.time * 1.3 + i) * 0.06 - shift * arm.side * 0.12 * m;
       if (f.melee && f.melee.side === i) swing = rakeSwing(f.melee.t, K.stats.meleeTiming);
       // While slashing forward (negative swing) the arm also sweeps across the body.
