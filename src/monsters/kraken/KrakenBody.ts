@@ -4,24 +4,46 @@ import { faceted, toonMat } from '../../render/toon';
 import { angleDelta } from '../../util/math';
 import type { BodyFrame, MonsterBody } from '../types';
 import { ARM_COUNT, armAngle, armPlanted, armRole, crawlPhase, isFrontArm } from './crawl';
+import { type ChainTuning, type Ellipsoid, pushOut, resample, TentacleChain } from './tentacleChain';
 import { TentacleArms } from './TentacleArms';
 
 const K = CONFIG.kraken;
 const C = K.colors;
 /** Segments per tentacle; all 8 × SEGS segments are one instanced mesh (one draw call). */
-const SEGS = 7;
+const SEGS = 14;
+/** Points sampled along each arm's pose curve before it is evened out into SEGS + 1 joint targets. */
+const SAMPLES = 24;
 /** Model units (before CONFIG.monster.scale). */
 const MANTLE_Y = 265;
 const ANCHOR_R = 115;
 const ANCHOR_Y = 170;
-const REST_R = 470;
-const PLANT_R = 560;
-const LIFT = 140;
+/** Full arm length; an arm can contract to ARM_MIN of it, never stretch past it. */
+const ARM_LEN = 1150;
+const ARM_MIN = 0.45;
+const REST_R = 640;
+const PLANT_R = 760;
+const LIFT = 190;
 /** Resting tip height and the (negative) arch that sags the resting arm onto the ground before it curls up. */
-const REST_CURL = 120;
-const REST_ARCH = -170;
-const MAX_TIP = 820;
-const THICK = 62;
+const REST_CURL = 90;
+const REST_ARCH = -200;
+/** How high a resting tip curls back up, and how far the free arms undulate. */
+const CURL = 150;
+const WAVE = 55;
+const THICK = 58;
+/** A frame-to-frame jump longer than this (model units) is a teleport: the arms snap instead of trailing. */
+const SNAP = 500;
+/** Joint springs: stiff at the root, loose and underdamped at the tip, so motion cracks down the arm. */
+const TUNE: ChainTuning = { omegaRoot: 22, omegaTip: 9, zetaRoot: 0.9, zetaTip: 0.38 };
+/** Crawling arms place their tips deliberately and hold their grip: stiff and damped to the tip. */
+const PLANT_TUNE: ChainTuning = { omegaRoot: 26, omegaTip: 24, zetaRoot: 1, zetaTip: 1 };
+/** Striking arms snap tighter so the tip lands near the impact time. */
+const STRIKE_TUNE: ChainTuning = { omegaRoot: 26, omegaTip: 14, zetaRoot: 0.9, zetaTip: 0.42 };
+/** The mantle as ellipsoids (mantle-local centre and radii): the sac, the brow, the skirt. */
+const HULL: readonly [readonly [number, number, number], readonly [number, number, number]][] = [
+  [[0, 75, -70], [170, 196, 206]],
+  [[0, -25, 40], [152, 98, 134]],
+  [[0, -95, 15], [172, 62, 167]],
+];
 
 const _anchor = new THREE.Vector3();
 const _tip = new THREE.Vector3();
@@ -33,25 +55,35 @@ const _p1 = new THREE.Vector3();
 const _tmp = new THREE.Vector3();
 const _a = new THREE.Vector3();
 const _b = new THREE.Vector3();
-const _q = new THREE.Quaternion();
 const _m = new THREE.Matrix4();
-const _s = new THREE.Vector3();
 const _up = new THREE.Vector3(0, 1, 0);
 const _fwd = new THREE.Vector3(0, 0, 1);
 const _c = new THREE.Color();
 const _tint = new THREE.Color();
+const _side = new THREE.Vector3();
+const _c3 = new THREE.Vector3();
+const _ctrl2 = new THREE.Vector3();
+const _plant = new THREE.Vector3();
+const _delta = new THREE.Matrix4();
+const _path = Array.from({ length: SAMPLES + 1 }, () => new THREE.Vector3());
+const _targets = Array.from({ length: SEGS + 1 }, () => new THREE.Vector3());
 
-/** Root-space point on the quadratic curve anchor → ctrl → tip at u. */
+/** Root-space point on the cubic curve anchor → ctrl → ctrl2 → tip at u. */
 function curve(u: number, out: THREE.Vector3): THREE.Vector3 {
-  const a = (1 - u) * (1 - u);
-  const b = 2 * (1 - u) * u;
-  const c = u * u;
+  const v = 1 - u;
+  const a = v * v * v;
+  const b = 3 * v * v * u;
+  const c = 3 * v * u * u;
+  const d = u * u * u;
   return out.set(
-    a * _anchor.x + b * _ctrl.x + c * _tip.x,
-    a * _anchor.y + b * _ctrl.y + c * _tip.y,
-    a * _anchor.z + b * _ctrl.z + c * _tip.z,
+    a * _anchor.x + b * _ctrl.x + c * _ctrl2.x + d * _tip.x,
+    a * _anchor.y + b * _ctrl.y + c * _ctrl2.y + d * _tip.y,
+    a * _anchor.z + b * _ctrl.z + c * _ctrl2.z + d * _tip.z,
   );
 }
+
+/** Segment radius at joint j (root to tip). */
+const radiusAt = (j: number) => THICK * (1 - 0.84 * Math.pow(j / SEGS, 0.75));
 
 /**
  * The Kraken: a bulbous mantle carried low, two glowing eyes at the front (+Z), and eight tentacles. The
@@ -67,7 +99,10 @@ export class KrakenBody implements MonsterBody {
   private tintMats: THREE.MeshToonMaterial[];
   private eyeMat: THREE.MeshToonMaterial;
   private geos: THREE.BufferGeometry[] = [];
-  private tipsLocal: THREE.Vector3[] = Array.from({ length: ARM_COUNT }, () => new THREE.Vector3());
+  private chains = Array.from({ length: ARM_COUNT }, () => new TentacleChain(SEGS));
+  private hull: Ellipsoid[] = HULL.map(() => ({ c: new THREE.Vector3(), r: new THREE.Vector3() }));
+  private prevWorld = new THREE.Matrix4();
+  private hasPrev = false;
   private nextLaunch = 0;
 
   constructor() {
@@ -118,15 +153,15 @@ export class KrakenBody implements MonsterBody {
     this.root.add(this.mantle);
 
     // Tentacles: one instanced mesh of tapered segments; colour per instance (top / dark band / pale tip).
-    const seg = this.keep(faceted(new THREE.CylinderGeometry(0.72, 1, 1, 6)));
+    const seg = this.keep(faceted(new THREE.CylinderGeometry(0.88, 1, 1, 6)));
     this.segments = new THREE.InstancedMesh(seg, this.segMat, ARM_COUNT * SEGS);
     this.segments.castShadow = true;
     this.segments.receiveShadow = true;
     this.segments.frustumCulled = false;
     for (let i = 0; i < ARM_COUNT; i++) {
       for (let k = 0; k < SEGS; k++) {
-        // Mantle-coloured roots fading to pale tips over the last three segments; a dark band at the root.
-        const fade = Math.max(0, (k - (SEGS - 4)) / 3);
+        // Mantle-coloured roots fading to pale tips over the last third; a dark band at the root.
+        const fade = Math.max(0, (k - SEGS * 0.6) / (SEGS * 0.4));
         this.segments.setColorAt(i * SEGS + k, _c.setHex(k === 0 ? C.mantleDark : C.mantle).lerp(_tint.setHex(C.underside), fade));
       }
     }
@@ -149,6 +184,20 @@ export class KrakenBody implements MonsterBody {
     const breathe = 1 + Math.sin(f.time * 1.2) * 0.02;
     this.mantle.scale.set(breathe, 1 / breathe, breathe);
     this.root.updateMatrixWorld(true);
+
+    // The arms live in the world: carry them over the body's own motion so they trail when it moves or turns.
+    if (this.hasPrev) {
+      _delta.copy(this.root.matrixWorld).invert().multiply(this.prevWorld);
+      for (const c of this.chains) c.shift(_delta, SNAP);
+    }
+    this.prevWorld.copy(this.root.matrixWorld);
+    this.hasPrev = true;
+    // The mantle's hull (root space) the arms wrap around instead of passing through.
+    for (let h = 0; h < HULL.length; h++) {
+      const [c, r] = HULL[h]!;
+      this.hull[h]!.c.set(...c).applyMatrix4(this.mantle.matrix);
+      this.hull[h]!.r.set(...r).multiply(this.mantle.scale);
+    }
 
     // Lash: the free arm whose anchor points most nearly at the flyer, kept for the whole swing
     // (reserved in `arms.lashArm` so no strike can take it) while it stays free in the crawl.
@@ -180,14 +229,22 @@ export class KrakenBody implements MonsterBody {
       _dir.set(Math.sin(ang), 0, Math.cos(ang));
       _anchor.copy(_dir).multiplyScalar(ANCHOR_R).setY(ANCHOR_Y + bob);
 
-      // Resting pose: curled around the mantle, writhing; back arms trail while crawling.
+      // Resting pose: sprawled on the ground around the mantle, tips curled up, writhing; back arms trail
+      // while crawling.
       const sway = Math.sin(f.time * 0.9 + i * 1.3) * 0.15;
-      _rest.set(Math.sin(ang + sway), 0, Math.cos(ang + sway)).multiplyScalar(REST_R + Math.sin(f.time * 1.3 + i * 1.7) * 40);
-      _rest.y = REST_CURL + Math.max(0, Math.sin(f.time * 1.1 + i)) * 60;
-      if (moving && !isFrontArm(i)) _rest.addScaledVector(_fwd, -S * 0.25 * f.motion);
+      _rest.set(Math.sin(ang + sway), 0, Math.cos(ang + sway)).multiplyScalar(REST_R + Math.sin(f.time * 1.3 + i * 1.7) * 50);
+      _rest.y = REST_CURL + Math.max(0, Math.sin(f.time * 1.1 + i)) * 70;
+      if (moving && !isFrontArm(i)) _rest.addScaledVector(_fwd, -S * 0.3 * f.motion);
       _tip.copy(_rest);
-      // Resting arms sag onto the ground and curl their tips up.
+      // arch: how far the curve bows up (negative sags it onto the ground); drop: how the root leaves the
+      // skirt; curl and wave: tip curl and travelling undulation (fractions of CURL and WAVE).
       let arch = REST_ARCH;
+      let drop = -190;
+      let curl = 0.6 + 0.4 * Math.sin(f.time * 0.8 + i * 2.1);
+      let wave = 1;
+      let tune = TUNE;
+      // A pulling arm's tip is gripping the ground: pinned there unless another pose takes the arm.
+      let pin = role === 'pull';
 
       if (role !== 'free') {
         // Crawl: plant ahead, slide back under the mantle (world-still), then lift and reach forward again.
@@ -200,16 +257,23 @@ export class KrakenBody implements MonsterBody {
           _tip.lerpVectors(_p1, _p0, u);
           _tip.y = LIFT * Math.sin(Math.PI * u);
         }
-        arch = 120;
+        arch = 150;
+        drop = -60;
+        curl = role === 'pull' ? 0 : 0.25;
+        wave = 0.3;
+        tune = PLANT_TUNE;
       }
+      _plant.copy(_tip);
 
       const s = this.arms.strikes[i];
       if (s) {
         const T = s.timing;
         this.root.worldToLocal(_b.copy(s.target));
         _b.y = 0;
-        if (s.kind === 'slam') _a.copy(_dir).multiplyScalar(PLANT_R * 0.55).setY(560);
-        else _a.set(0, 680, -120);
+        // Slam: rear high over its own side. Hurl: hold the rubble up behind the mantle, on the arm's side,
+        // so the arm wraps around the body.
+        if (s.kind === 'slam') _a.copy(_dir).multiplyScalar(PLANT_R * 0.5).setY(780);
+        else _a.copy(_dir).multiplyScalar(110).add(_tmp.set(0, 820, -230));
         if (s.kind === 'hurl') _p0.copy(_dir).multiplyScalar(PLANT_R * 0.6);
         if (s.t < T.windup) {
           // Slam: rear up; Hurl: reach down to grab rubble.
@@ -222,50 +286,111 @@ export class KrakenBody implements MonsterBody {
           const u = Math.min(1, (s.t - T.impact) / (T.end - T.impact));
           _tip.lerpVectors(s.kind === 'slam' ? _b : _a, _rest, u);
         }
-        arch = 260;
+        pin = false;
+        arch = s.kind === 'slam' ? 320 : 380;
+        drop = 0;
+        curl = 0;
+        wave = 0;
+        tune = STRIKE_TUNE;
       }
       if (this.arms.spinT >= 0) {
         const k = this.arms.spinT / K.arms.spinTime;
         const sa = ang + k * Math.PI * 2;
-        _tip.set(Math.sin(sa) * PLANT_R * 1.1, 40 + Math.sin(Math.PI * k) * 120, Math.cos(sa) * PLANT_R * 1.1);
+        _tip.set(Math.sin(sa) * PLANT_R * 1.15, 40 + Math.sin(Math.PI * k) * 160, Math.cos(sa) * PLANT_R * 1.15);
+        pin = false;
         arch = 60;
+        drop = -40;
+        curl = 0;
+        wave = 0;
       }
       if (f.roaring) {
-        _tip.copy(_dir).multiplyScalar(REST_R * 1.05).setY(260);
-        arch = 200;
+        _tip.copy(_dir).multiplyScalar(REST_R * 1.05).setY(340);
+        pin = false;
+        arch = 260;
+        drop = 0;
+        curl = 0.8;
+        wave = 0.6;
       }
       if (f.dashing) {
-        _tip.copy(_dir).multiplyScalar(REST_R * 0.7).addScaledVector(_fwd, -300).setY(40);
+        _tip.copy(_dir).multiplyScalar(REST_R * 0.6).addScaledVector(_fwd, -420).setY(40);
+        pin = false;
         arch = 60;
+        drop = -40;
+        curl = 0;
+        wave = 0.5;
       }
-      if (f.airborne) _tip.copy(_dir).multiplyScalar(REST_R * 0.6).setY(-120);
+      if (f.airborne) {
+        _tip.copy(_dir).multiplyScalar(REST_R * 0.55).setY(-160);
+        pin = false;
+        curl = 0.4;
+      }
       if (i === lashArm && f.antiAir) {
         this.root.worldToLocal(_b.copy(f.antiAir.target));
         _tip.lerp(_b, Math.max(0, Math.min(1, f.antiAir.weight)));
-        arch = 40;
+        pin = false;
+        arch = 60;
+        drop = 0;
+        curl = 0;
+        wave = 0;
+        tune = STRIKE_TUNE;
       }
-      if (f.pose.collapse > 0) _tip.multiplyScalar(1 + f.pose.collapse * 0.15).setY(_tip.y * (1 - f.pose.collapse));
-      // Never stretch past the arm's length.
+      if (f.pose.collapse > 0) {
+        _tip.multiplyScalar(1 + f.pose.collapse * 0.15).setY(_tip.y * (1 - f.pose.collapse));
+        wave *= 1 - f.pose.collapse;
+        pin = false;
+      }
+      // Never reach past the arm's length.
       _tmp.copy(_tip).sub(_anchor);
-      if (_tmp.length() > MAX_TIP) _tip.copy(_anchor).add(_tmp.setLength(MAX_TIP));
+      if (_tmp.length() > ARM_LEN * 0.95) _tip.copy(_anchor).add(_tmp.setLength(ARM_LEN * 0.95));
 
-      // Arched chain anchor → tip, drawn as SEGS tapered instances.
-      _ctrl.addVectors(_anchor, _tip).multiplyScalar(0.5).addScaledVector(_dir, 40);
-      _ctrl.y += arch;
+      // Pose curve: out of the skirt (ctrl), bowed by the arch (ctrl2), to the tip; then the tip curl and a
+      // wave travelling root → tip, kept off the ground and outside the mantle.
+      const reach = Math.hypot(_tip.x - _anchor.x, _tip.z - _anchor.z);
+      _ctrl.copy(_anchor).addScaledVector(_dir, Math.max(160, reach * 0.35)).setY(_anchor.y + drop);
+      _ctrl2.lerpVectors(_anchor, _tip, 0.65).addScaledVector(_dir, 60);
+      _ctrl2.y += arch;
+      _side.crossVectors(_up, _dir);
+      for (let k = 0; k <= SAMPLES; k++) {
+        const u = k / SAMPLES;
+        const p = curve(u, _path[k]!);
+        if (curl > 0 && u > 0.6) {
+          const w = (u - 0.6) / 0.4;
+          p.y += CURL * curl * w * w;
+          p.addScaledVector(_dir, -CURL * 0.9 * curl * w * w * w);
+        }
+        if (wave > 0) {
+          const amp = WAVE * wave * u;
+          p.addScaledVector(_side, amp * Math.sin(f.time * 3.1 - u * 7 + i * 1.3));
+          p.y += amp * 0.5 * Math.sin(f.time * 2.3 - u * 6 + i * 2.1);
+        }
+        if (!f.airborne) p.y = Math.max(p.y, radiusAt(u * SEGS) * 0.7);
+        if (u > 0.12) for (const h of this.hull) pushOut(p, h, radiusAt(u * SEGS));
+      }
+      const len = resample(_path, _targets);
+      const segLen = Math.min(ARM_LEN, Math.max(ARM_LEN * ARM_MIN, len)) / SEGS;
+
+      // The arm springs toward that pose, stiff at the root and whippy at the tip, and wraps the mantle.
+      const chain = this.chains[i]!;
+      chain.step(f.dt, _targets, segLen, tune, this.hull, radiusAt, 2, pin);
+      const J = chain.joints;
       for (let k = 0; k < SEGS; k++) {
-        curve(k / SEGS, _a);
-        curve((k + 1) / SEGS, _b);
-        _tmp.subVectors(_b, _a);
-        const len = _tmp.length();
-        _q.setFromUnitVectors(_up, _tmp.divideScalar(Math.max(len, 1e-6)));
-        const r = THICK * (1 - 0.78 * (k / SEGS));
-        _m.compose(_tmp.addVectors(_a, _b).multiplyScalar(0.5), _q, _s.set(r, len, r));
+        _tmp.subVectors(J[k + 1]!, J[k]!);
+        const r = radiusAt(k);
+        const l = _tmp.length();
+        _tmp.divideScalar(Math.max(l, 1e-6));
+        // Every segment keeps the same roll (its X toward the arm's side), so the facets line up down the arm.
+        _a.copy(_side).addScaledVector(_tmp, -_side.dot(_tmp)).normalize();
+        _b.crossVectors(_a, _tmp);
+        // A little longer than the segment so the joints close over at bends.
+        _m.makeBasis(_a.multiplyScalar(r), _tmp.multiplyScalar(l + r * 0.3), _b.multiplyScalar(r));
+        _m.setPosition(_c3.addVectors(J[k]!, J[k + 1]!).multiplyScalar(0.5));
         this.segments.setMatrixAt(i * SEGS + k, _m);
       }
 
-      this.tipsLocal[i]!.copy(_tip);
-      this.root.localToWorld(this.arms.tips[i]!.copy(_tip));
-      if (moving && !this.arms.strikes[i] && this.arms.spinT < 0 && i !== lashArm && armPlanted(f.prevCycle, f.cycle, i)) onFootLand(_tmp.copy(this.arms.tips[i]!).setY(0));
+      this.root.localToWorld(this.arms.tips[i]!.copy(J[SEGS]!));
+      if (moving && !this.arms.strikes[i] && this.arms.spinT < 0 && i !== lashArm && armPlanted(f.prevCycle, f.cycle, i)) {
+        onFootLand(this.root.localToWorld(_plant).setY(0));
+      }
     }
     this.segments.instanceMatrix.needsUpdate = true;
 

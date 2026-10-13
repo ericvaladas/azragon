@@ -201,7 +201,7 @@ export const CONFIG = {
       rangedCooldown: 1.8,
       headHeight: 420,
       /** Measured standing bounding box (world m), resting arms included. */
-      size: { width: 576, length: 551, height: 356 },
+      size: { width: 689, length: 661, height: 369 },
     },
     arms: {
       /** Hurl: seconds to grab, release (throw), end; chunk splash radius (m), flight time (s), arc height (m). */
