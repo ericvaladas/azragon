@@ -32,13 +32,21 @@ describe('spaceCamera', () => {
   const look = new THREE.Vector3();
   const c = new THREE.Vector3();
   const gap = (t: number, aspect = 1.6) => {
-    spaceCamera(t, aspect, pos, look);
+    spaceCamera(aspect, pos, look);
     return pos.distanceTo(earthCenter(t, c)) - SP.earthRadius;
   };
-  it('keeps closing on the surface at a brisk rate right up to the cut (Earth never stops growing)', () => {
+  it('holds the same offset from the pod the whole way down (no zoom as it starts to burn)', () => {
     for (const aspect of [1.6, 0.46]) {
-      for (let t = 0.5; t <= CUT_TIME - 0.3; t += 0.1) expect(gap(t, aspect) / gap(t + 0.3, aspect)).toBeGreaterThan(1.12);
+      spaceCamera(aspect, pos, look);
+      const first = pos.clone();
+      for (let t = 0; t <= CUT_TIME; t += 0.1) {
+        spaceCamera(aspect, pos, look);
+        expect(pos.distanceTo(first)).toBeLessThan(1e-9);
+      }
     }
+  });
+  it('still closes on the surface right up to the cut', () => {
+    for (let t = 0.5; t <= CUT_TIME - 0.1; t += 0.1) expect(gap(t + 0.1)).toBeLessThan(gap(t));
   });
   it('stays above the surface and behind the pod', () => {
     for (let t = 0; t <= CUT_TIME; t += 0.25) {

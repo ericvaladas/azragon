@@ -108,7 +108,7 @@ export class SpaceScene {
     const s = shakeAt(t);
     const amp = s * s * L * 0.12;
     // Three-quarter view from behind and above, so the seams read along the shell.
-    spaceCamera(t, this.camera.aspect, this.camera.position, _look);
+    spaceCamera(this.camera.aspect, this.camera.position, _look);
     this.camera.position.x += Math.sin(t * 43) * amp;
     this.camera.position.y += Math.sin(t * 61 + 1) * amp;
     this.camera.lookAt(_look);

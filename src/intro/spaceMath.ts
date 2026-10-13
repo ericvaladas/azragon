@@ -32,14 +32,12 @@ export function earthCenter(t: number, out: THREE.Vector3): THREE.Vector3 {
 }
 
 /**
- * Space camera (before shake): behind, above and to the side of the pod, looking ahead and down. Narrow
- * (portrait) screens get less sideways offset so the pod stays on screen. Below zoomAlt the whole offset
- * shrinks with the altitude, so the camera's own distance to the ground keeps falling as fast as the pod's.
+ * Space camera (before shake): behind, above and to the side of the pod, looking ahead and down, at a fixed
+ * offset (no zoom). Narrow (portrait) screens get less sideways offset so the pod stays on screen.
  */
-export function spaceCamera(t: number, aspect: number, pos: THREE.Vector3, look: THREE.Vector3): void {
+export function spaceCamera(aspect: number, pos: THREE.Vector3, look: THREE.Vector3): void {
   const L = SP.podLength;
-  const z = Math.min(1, Math.max(SP.zoomMin, podAltitude(t) / SP.zoomAlt));
-  pos.set(L * (aspect < 1 ? 0.5 : 1.2) * z, L * 0.9 * z, -L * 3.5 * z);
+  pos.set(L * (aspect < 1 ? 0.5 : 1.2), L * 0.9, -L * 3.5);
   look.set(0, -L * 0.3, L * 6);
 }
 

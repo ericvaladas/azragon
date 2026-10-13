@@ -438,8 +438,7 @@ export const CONFIG = {
      * atmosphere (rim radius × `atmosphere`). Earth's centre sits at (0, -(earthDrop + 0.3d), d) from the pod.
      */
     space: { earthRadius: 1000, atmosphere: 1.08, gapStart: 8000, gapEnd: 25, earthDrop: 650,
-      /** Below zoomAlt the camera tucks in toward the pod (down to zoomMin of its offset), so the ground keeps rushing up. */
-      zoomAlt: 100, zoomMin: 0.6, stars: 700, podLength: 20 },
+      stars: 700, podLength: 20 },
   },
   readability: {
     threatKinds: ['blimp', 'sam', 'artillery', 'truck'] as readonly string[],
