@@ -4,7 +4,8 @@ import type { Target } from '../combat';
 import { faceted } from '../render/toon';
 import { ballistic } from './projectileMath';
 
-export type ShotKind = 'spike' | 'shell' | 'rocket' | 'glob' | 'chunk';
+/** `wisp`: a Hungry Ghost (homes like a spike). `shard`: a cosmetic Bone Ward shard. */
+export type ShotKind = 'spike' | 'shell' | 'rocket' | 'glob' | 'chunk' | 'wisp' | 'shard';
 /** An enemy shell or rocket in flight, as seen by Spine Shield. */
 export type InFlight = { readonly kind: ShotKind; readonly pos: THREE.Vector3 };
 export type Hit = { kind: ShotKind; point: THREE.Vector3; target: Target | null; damage: number };
@@ -31,11 +32,15 @@ const _s = new THREE.Vector3();
 const _d = new THREE.Vector3();
 const _fwd = new THREE.Vector3(0, 1, 0);
 const _yaxis = new THREE.Vector3(0, 1, 0);
+const _p = new THREE.Vector3();
+/** Bone Ward shards (m/s); their flight is capped so they never lag the intercept they show. */
+const SHARD_SPEED = 2400;
 
 /** Pooled projectiles drawn with one InstancedMesh per kind. */
 export class Projectiles {
   onHit: (h: Hit) => void = () => {};
-  onTrail: (p: THREE.Vector3) => void = () => {};
+  /** Called every TRAIL_EVERY s for each shot in flight except shells, globs and shards. */
+  onTrail: (p: THREE.Vector3, kind: ShotKind) => void = () => {};
   private shots: Shot[] = [];
   private free: Shot[] = [];
   private meshes: Record<ShotKind, THREE.InstancedMesh>;
@@ -45,6 +50,8 @@ export class Projectiles {
     rocket: [6, 22, 6],
     glob: [26, 26, 26],
     chunk: [60, 60, 60],
+    wisp: [30, 42, 30],
+    shard: [18, 64, 18],
   };
 
   constructor(scene: THREE.Scene) {
@@ -63,6 +70,8 @@ export class Projectiles {
       rocket: make('shot-rocket', faceted(new THREE.CylinderGeometry(0.5, 0.5, 1, 5)), 0xf2f2f2, 64),
       glob: make('shot-glob', faceted(new THREE.IcosahedronGeometry(0.5, 0)), CONFIG.palette.acid, 48),
       chunk: make('shot-chunk', faceted(new THREE.DodecahedronGeometry(0.5, 0)), CONFIG.kraken.colors.chunk, 32),
+      wisp: make('shot-wisp', faceted(new THREE.IcosahedronGeometry(0.5, 0)), CONFIG.golem.colors.ghost, 64),
+      shard: make('shot-shard', faceted(new THREE.ConeGeometry(0.5, 1, 4)), CONFIG.golem.colors.boneShard, 48),
     };
   }
 
@@ -119,6 +128,18 @@ export class Projectiles {
     s.dur = CONFIG.kraken.arms.hurl.flight;
   }
 
+  /** Hungry Ghost: a soft wisp that launches like a spike and homes on the target's live position. */
+  fireWisp(from: THREE.Vector3, target: Target, damage: number, yawOffset: number): void {
+    this.fireSpike(from, target, damage, yawOffset);
+    this.shots[this.shots.length - 1]!.kind = 'wisp';
+  }
+
+  /** Bone Ward: a cosmetic shard flying straight to `to` (no damage); it reports a hit when it arrives. */
+  fireShard(from: THREE.Vector3, to: THREE.Vector3): void {
+    const s = this.alloc('shard', from, to, 0, null);
+    s.dur = Math.min(0.25, Math.max(0.08, from.distanceTo(to) / SHARD_SPEED));
+  }
+
   /** Enemy shells and rockets in flight. */
   incoming(): readonly InFlight[] {
     return this.shots.filter((s) => s.kind === 'shell' || s.kind === 'rocket');
@@ -143,7 +164,7 @@ export class Projectiles {
       const s = this.shots[i]!;
       s.t += dt;
       let done = false;
-      if (s.kind === 'spike') {
+      if (s.kind === 'spike' || s.kind === 'wisp') {
         if (s.target?.isAlive()) s.aim.copy(s.target.position);
         _d.subVectors(s.aim, s.pos);
         const dist = _d.length();
@@ -163,9 +184,9 @@ export class Projectiles {
         done = k >= 1;
       }
       s.trailT += dt;
-      if (s.kind !== 'shell' && s.kind !== 'glob' && s.trailT >= TRAIL_EVERY) {
+      if (s.kind !== 'shell' && s.kind !== 'glob' && s.kind !== 'shard' && s.trailT >= TRAIL_EVERY) {
         s.trailT = 0;
-        this.onTrail(s.pos);
+        this.onTrail(s.pos, s.kind);
       }
       if (done) {
         this.onHit({ kind: s.kind, point: s.pos.clone(), target: s.target, damage: s.damage });
@@ -177,14 +198,21 @@ export class Projectiles {
   }
 
   private draw(): void {
-    const counts: Record<ShotKind, number> = { spike: 0, shell: 0, rocket: 0, glob: 0, chunk: 0 };
+    const counts: Record<ShotKind, number> = { spike: 0, shell: 0, rocket: 0, glob: 0, chunk: 0, wisp: 0, shard: 0 };
     for (const s of this.shots) {
       const mesh = this.meshes[s.kind];
       const i = counts[s.kind]++;
       if (i >= mesh.instanceMatrix.count) continue;
       _q.setFromUnitVectors(_fwd, _d.copy(s.vel).normalize());
       const [x, y, z] = this.sizes[s.kind];
-      _m.compose(s.pos, _q, _s.set(x, y, z));
+      let at = s.pos;
+      if (s.kind === 'wisp') {
+        // Drawn only: ghosts drift and bob about their path, and pulse as they fly.
+        at = _p.set(Math.sin(s.t * 7 + i * 1.7) * 14, Math.sin(s.t * 9 + i) * 10, Math.cos(s.t * 6 + i * 2.3) * 14).add(s.pos);
+        const pulse = 1 + 0.18 * Math.sin(s.t * 13 + i);
+        _s.set(x * pulse, y * pulse, z * pulse);
+      } else _s.set(x, y, z);
+      _m.compose(at, _q, _s);
       mesh.setMatrixAt(i, _m);
     }
     for (const k of Object.keys(this.meshes) as ShotKind[]) {

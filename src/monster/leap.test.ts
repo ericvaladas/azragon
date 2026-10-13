@@ -37,3 +37,21 @@ describe('dashTarget', () => {
     expect(b.z).toBeCloseTo(0);
   });
 });
+
+describe('leapPosition with a crouch before liftoff', () => {
+  const from = { x: 0, z: 0 };
+  const to = { x: 1000, z: 0 };
+  it('holds on the ground through the crouch, then flies the same arc in the time left, landing on time', () => {
+    expect(leapPosition(from, to, 0.1, 1, 200, 0.2)).toEqual({ x: 0, y: 0, z: 0 });
+    expect(leapPosition(from, to, 0.2, 1, 200, 0.2).y).toBeCloseTo(0);
+    const mid = leapPosition(from, to, 0.6, 1, 200, 0.2);
+    expect(mid.x).toBeCloseTo(500);
+    expect(mid.y).toBeCloseTo(200);
+    const end = leapPosition(from, to, 1, 1, 200, 0.2);
+    expect(end.x).toBeCloseTo(1000);
+    expect(end.y).toBeCloseTo(0);
+  });
+  it('is the plain arc with no crouch', () => {
+    for (const t of [0, 0.3, 0.5, 0.9, 1]) expect(leapPosition(from, to, t, 1, 200, 0)).toEqual(leapPosition(from, to, t, 1, 200));
+  });
+});

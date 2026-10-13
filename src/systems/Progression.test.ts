@@ -167,3 +167,30 @@ describe('Progression pools', () => {
     expect(p.choose('acid')).toBe(true);
   });
 });
+
+describe('Progression.offer(all)', () => {
+  it('lists every upgrade and every pool ability below max rank, in a fixed order', () => {
+    const p = new Progression(mulberry32(3));
+    const ids = p.offer(true).map((o) => o.id);
+    const pool = (Object.keys(ABILITIES) as AbilityId[]).filter((id) => id !== 'meltdown' && id !== 'grip' && id !== 'core');
+    expect(ids).toEqual([...Object.keys(UPGRADES), ...pool]);
+    expect(p.offer(true).map((o) => o.id)).toEqual(ids);
+  });
+
+  it('drops maxed abilities and still accepts a pick against the offer', () => {
+    const p = new Progression(mulberry32(4));
+    p.addExp(1e9);
+    for (let i = 0; i < MAX_RANK; i++) expect(p.choose('dash', p.offerSeq)).toBe(true);
+    const offers = p.offer(true);
+    expect(offers.map((o) => o.id)).not.toContain('dash');
+    expect(p.choose('storm', p.offerSeq)).toBe(true);
+  });
+});
+
+describe('Ravenous Hunger ability', () => {
+  it('exists with a title, and the Insect\'s default pool never offers it', () => {
+    expect(ABILITIES.core.title).toBe('Ravenous Hunger');
+    const p = new Progression(mulberry32(5));
+    expect(p.offer(true).map((o) => o.id)).not.toContain('core');
+  });
+});

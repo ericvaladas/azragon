@@ -2,8 +2,10 @@ import * as THREE from 'three';
 import { CONFIG } from '../config';
 import { angleDelta, dist2, yawTo, type Vec2 } from '../util/math';
 import { leapPosition } from './leap';
-import { SWAT_TIMES, swatWeight } from './tailSwat';
-import type { BodyFrame, MonsterBody, MonsterKind } from '../monsters/types';
+import { SWAT_TIMES, swatWeight, type SwatTiming } from './tailSwat';
+import type { BodyFrame, MonsterBody, MonsterKind, MonsterStats, StrikeKind } from '../monsters/types';
+
+type MeleeTiming = MonsterStats['meleeTiming'];
 
 const FACE_BEFORE_WALK = 1.0; // radians of yaw error allowed while walking
 
@@ -24,6 +26,8 @@ export class Monster {
   glow = 0;
   /** Ranged charge 0..1, shown by bodies that telegraph it (Kaiju plates). */
   charge = 0;
+  /** Ravenous Hunger heat 0..1 (Wendigo), written by GameScene. */
+  heat = 0;
   /** World point the head should turn toward (Kaiju breath), or null. */
   lookAt: THREE.Vector3 | null = null;
   /** Extra body pose offsets driven by attacks, abilities, the intro, and death. */
@@ -58,15 +62,20 @@ export class Monster {
   private meleeCd = 0;
   private rangedCd = 0;
   private meleeT = -1;
+  /** The running strike's timeline. */
+  private meleeTiming: MeleeTiming = { windup: 0, impact: 0, end: 0 };
   private impactDone = false;
   private meleeSide = 0;
   private strikePoint = new THREE.Vector3();
   private frame: BodyFrame = {
     dt: 0, time: 0, cycle: 0, prevCycle: 0, motion: 0, pose: this.pose,
-    melee: null, antiAir: null, roaring: false, airborne: false, dashing: false, tailSweep: null, lookAt: null, charge: 0, flash: false, glow: 0,
+    melee: null, antiAir: null, roaring: false, airborne: false, dashing: false, tailSweep: null, lookAt: null, charge: 0, heat: 0, flash: false, glow: 0,
   };
-  private meleeFrame = { t: 0, side: 0, target: this.strikePoint };
-  private antiAirFrame = { weight: 0, target: new THREE.Vector3() };
+  private meleeFrame: { t: number; side: number; target: THREE.Vector3; kind?: StrikeKind } = { t: 0, side: 0, target: this.strikePoint };
+  /** The running strike's kind, when its starter decided one (the Wendigo's slam or backhand). */
+  private meleeKind: StrikeKind | undefined = undefined;
+  private antiAirFrame = { t: 0, weight: 0, target: new THREE.Vector3() };
+  private leapFrame = { t: 0, duration: 0, crouch: 0 };
 
   constructor(
     private scene: THREE.Scene,
@@ -109,7 +118,7 @@ export class Monster {
     return this.body.aimError();
   }
 
-  /** World point the monster's own projectiles launch from (stinger tip, back vents). */
+  /** World point the monster's own projectiles launch from (stinger tip, back vents, the Wendigo's flanks). */
   launchOrigin(out: THREE.Vector3): THREE.Vector3 {
     return this.body.launchOrigin(out);
   }
@@ -119,8 +128,9 @@ export class Monster {
     return this.body.rangedOrigin(out);
   }
 
+  /** Off the ground: leaping, once past any crouch before liftoff. */
   get airborne(): boolean {
-    return this.leapT >= 0;
+    return this.leapT >= (this.kind.leapCrouch ?? 0) * CONFIG.abilities.leap.duration;
   }
 
   /** Leaping, roaring or dashing: the brain must not move or attack. */
@@ -142,6 +152,11 @@ export class Monster {
     this.tailSide = side;
     this.tailHit = false;
     Object.assign(this.tailTiming, timing);
+  }
+
+  /** This kind's anti-air timeline. */
+  private get swatTimes(): SwatTiming {
+    return this.kind.swatTiming ?? SWAT_TIMES;
   }
 
   get swatting(): boolean {
@@ -166,6 +181,7 @@ export class Monster {
     this.dashT = -1;
     this.crouch = false;
     this.charge = 0;
+    this.heat = 0;
     this.lookAt = null;
   }
 
@@ -241,8 +257,14 @@ export class Monster {
     return this.alive && this.rangedCd <= 0;
   }
 
-  /** Melee strike on `side` (0 = left/+X, 1 = right) at `point` (world XZ, already clamped to reach). */
-  startMelee(cooldownMult: number, side: number, point: Vec2): void {
+  /**
+   * Melee strike on `side` (0 = left/+X, 1 = right) at `point` (world XZ, already clamped to reach), on the kind's
+   * meleeTiming unless the strike brings its own `timing` (the Wendigo's backhand). `kind` (the Wendigo's slam or
+   * backhand, decided by the game) is passed on to the body, so the pose is the strike the damage uses.
+   */
+  startMelee(cooldownMult: number, side: number, point: Vec2, timing?: MeleeTiming, kind?: StrikeKind): void {
+    this.meleeKind = kind;
+    this.meleeTiming = timing ?? this.kind.stats.meleeTiming;
     this.meleeCd = this.kind.stats.meleeCooldown * cooldownMult;
     this.meleeT = 0;
     this.impactDone = false;
@@ -271,13 +293,21 @@ export class Monster {
     if (this.meleeT >= 0) {
       this.meleeFrame.t = this.meleeT;
       this.meleeFrame.side = this.meleeSide;
+      this.meleeFrame.kind = this.meleeKind;
       f.melee = this.meleeFrame;
     } else f.melee = null;
     if (this.swatT >= 0 && this.swatTarget) {
-      this.antiAirFrame.weight = swatWeight(this.swatT);
+      this.antiAirFrame.t = this.swatT;
+      this.antiAirFrame.weight = swatWeight(this.swatT, this.swatTimes);
       this.antiAirFrame.target.copy(this.swatTarget);
       f.antiAir = this.antiAirFrame;
     } else f.antiAir = null;
+    if (this.leapT >= 0) {
+      this.leapFrame.t = this.leapT;
+      this.leapFrame.duration = CONFIG.abilities.leap.duration;
+      this.leapFrame.crouch = this.kind.leapCrouch ?? 0;
+      f.leap = this.leapFrame;
+    } else f.leap = null;
     f.roaring = this.roarT >= 0;
     f.airborne = this.airborne;
     f.dashing = this.dashing;
@@ -288,6 +318,7 @@ export class Monster {
     } else f.tailSweep = null;
     f.lookAt = this.lookAt;
     f.charge = this.charge;
+    f.heat = this.heat;
     f.flash = this.flashT > 0;
     f.glow = this.glow;
     this.body.animate(f, this.onFootLand);
@@ -298,9 +329,11 @@ export class Monster {
     const L = CONFIG.abilities.leap;
     if (this.leapT >= 0) {
       this.leapT += dt;
-      const p = leapPosition(this.leapFrom, this.leapTo, this.leapT, L.duration, L.peak);
+      const c = this.kind.leapCrouch ?? 0;
+      const p = leapPosition(this.leapFrom, this.leapTo, this.leapT, L.duration, L.peak, c);
       this.position.set(p.x, p.y, p.z);
-      this.pose.pitch = 0.25 * Math.sin(Math.PI * Math.min(1, this.leapT / L.duration)) - 0.1;
+      const k = Math.max(0, this.leapT - c * L.duration) / (L.duration * (1 - c));
+      this.pose.pitch = 0.25 * Math.sin(Math.PI * Math.min(1, k)) - 0.1;
       if (this.leapT >= L.duration) {
         this.leapT = -1;
         this.position.y = 0;
@@ -309,23 +342,24 @@ export class Monster {
       }
     }
     if (this.dashT >= 0) {
-      const D = CONFIG.abilities.dash;
+      // A slower kind covers the same range over a longer charge.
+      const duration = CONFIG.abilities.dash.duration / (this.kind.dashSpeed ?? 1);
       this.dashT += dt;
-      const p = leapPosition(this.dashFrom, this.dashTo, this.dashT, D.duration, 0);
+      const p = leapPosition(this.dashFrom, this.dashTo, this.dashT, duration, 0);
       const step = Math.hypot(p.x - this.position.x, p.z - this.position.z);
       this.position.set(p.x, 0, p.z);
       this.cycle += step / (this.kind.stats.strideLength * CONFIG.monster.scale);
       this.motion = 1;
       this.pose.pitch = 0.18;
-      if (this.dashT >= D.duration) this.dashT = -1;
+      if (this.dashT >= duration) this.dashT = -1;
     }
     if (this.swatT >= 0) {
       this.swatT += dt;
-      if (!this.swatHit && this.swatT >= SWAT_TIMES.impact) {
+      if (!this.swatHit && this.swatT >= this.swatTimes.impact) {
         this.swatHit = true;
         this.onSwatImpact();
       }
-      if (this.swatT >= SWAT_TIMES.total) {
+      if (this.swatT >= this.swatTimes.total) {
         this.swatT = -1;
         this.swatTarget = null;
       }
@@ -352,7 +386,7 @@ export class Monster {
       return;
     }
     this.meleeT += dt;
-    const T = this.kind.stats.meleeTiming;
+    const T = this.meleeTiming;
     if (this.meleeT < T.windup) {
       // Rear back slightly while the strike cocks.
       this.pose.pitch = -0.12 * (this.meleeT / T.windup);

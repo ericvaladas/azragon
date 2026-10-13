@@ -5,6 +5,7 @@ import type { BodyFrame, MonsterBody, MonsterKind } from '../monsters/types';
 import { INSECT } from '../monsters/insect/kind';
 import { CONFIG } from '../config';
 import { STRIKE_TIMES } from './strike';
+import { SWAT_TIMES, swatTiming } from './tailSwat';
 
 function stubBody(): MonsterBody & { frames: number; last: BodyFrame | null } {
   const root = new THREE.Group();
@@ -133,4 +134,107 @@ describe('INSECT kind', () => {
     expect(s.headHeight).toBe(CONFIG.passives.swat.headHeight);
     expect([INSECT.melee.kind, INSECT.ranged, INSECT.antiAir]).toEqual(['point', 'spikes', 'tail']);
   });
+
+  it('times its anti-air strike by its kind (the shared timeline unless the kind has its own)', () => {
+    const impactAt = (k: MonsterKind) => {
+      const m = new Monster(new THREE.Scene(), k);
+      let hit = -1;
+      let t = 0;
+      m.onSwatImpact = () => { hit = t; };
+      m.startSwat(new THREE.Vector3(0, 300, 300));
+      for (let i = 0; i < 200 && m.swatting; i++) { m.tick(0.01); t += 0.01; }
+      return { hit, end: t };
+    };
+    const shared = impactAt(kind());
+    expect(shared.hit).toBeCloseTo(SWAT_TIMES.impact, 1);
+    expect(shared.end).toBeCloseTo(SWAT_TIMES.total, 1);
+    const own = swatTiming(0.2, 0.1, 0.1, 0.4);
+    const slow = impactAt({ ...kind(), swatTiming: own });
+    expect(slow.hit).toBeCloseTo(own.impact, 1);
+    expect(slow.end).toBeCloseTo(own.total, 1);
+  });
+
+  it('times a melee strike by its kind, unless the strike brings its own timeline (the Wendigo backhand)', () => {
+    const impactAt = (timing?: { windup: number; impact: number; end: number }) => {
+      const m = new Monster(new THREE.Scene(), kind());
+      let hit = -1;
+      let t = 0;
+      m.onMeleeImpact = () => { hit = t; };
+      m.startMelee(1, 0, { x: 0, z: 200 }, timing);
+      let end = -1;
+      for (let i = 0; i < 300; i++) {
+        m.tick(0.01);
+        t += 0.01;
+        if (end < 0 && (m as unknown as { meleeT: number }).meleeT < 0) end = t;
+      }
+      return { hit, end };
+    };
+    const T = INSECT.stats.meleeTiming;
+    const own = impactAt();
+    expect(own.hit).toBeCloseTo(T.impact, 1);
+    expect(own.end).toBeCloseTo(T.end, 1);
+    const slow = impactAt({ windup: 0.4, impact: 0.6, end: 1.2 });
+    expect(slow.hit).toBeCloseTo(0.6, 1);
+    expect(slow.end).toBeCloseTo(1.2, 1);
+  });
+  it('leaves the Insect, Kaiju and Kraken melee timelines as they were', () => {
+    expect(INSECT.stats.meleeTiming).toEqual({ windup: 0.3, impact: 0.3 + STRIKE_TIMES.strike, end: 0.3 + STRIKE_TIMES.recover });
+    expect(CONFIG.kaiju.stats.meleeTiming).toEqual({ windup: 0.25, impact: 0.4, end: 0.8 });
+    expect(CONFIG.kraken.stats.meleeTiming).toEqual({ windup: 0.3, impact: 0.45, end: 0.85 });
+  });
+
+  it('crouches on the ground before a leap when its kind asks, still landing on time and on the spot', () => {
+    const L = CONFIG.abilities.leap;
+    const m = new Monster(new THREE.Scene(), { ...kind(), leapCrouch: 0.2 });
+    let landed = -1;
+    let t = 0;
+    m.onLeapLand = () => { landed = t; };
+    m.startLeap({ x: 0, z: 800 });
+    for (let i = 0; i < 25; i++) { m.tick(0.01); t += 0.01; }
+    expect(m.airborne).toBe(false);
+    expect(m.position.y).toBe(0);
+    expect(m.position.z).toBeCloseTo(0);
+    for (let i = 0; i < 300 && landed < 0; i++) { m.tick(0.01); t += 0.01; if (t > 0.35 && t < 0.4) expect(m.airborne).toBe(true); }
+    expect(landed).toBeCloseTo(L.duration, 1);
+    expect(m.position.z).toBeCloseTo(800);
+  });
+  it('dashes the same distance more slowly when its kind sets a dash speed', () => {
+    const D = CONFIG.abilities.dash;
+    const run = (k: MonsterKind) => {
+      const m = new Monster(new THREE.Scene(), k);
+      m.startDash({ x: 0, z: D.range });
+      let t = 0;
+      while (m.dashing && t < 5) { m.tick(0.01); t += 0.01; }
+      return { t, z: m.position.z };
+    };
+    const base = run(kind());
+    const slow = run({ ...kind(), dashSpeed: 0.7 });
+    expect(base.t).toBeCloseTo(D.duration, 1);
+    expect(slow.t).toBeCloseTo(D.duration / 0.7, 1);
+    expect(slow.z).toBeCloseTo(D.range);
+  });
+  it('tells its body where it is in the leap', () => {
+    const body = stubBody();
+    const m = new Monster(new THREE.Scene(), { ...kind(), leapCrouch: 0.2, createBody: () => body });
+    m.startLeap({ x: 0, z: 800 });
+    m.tick(0.1);
+    m.animate(0.016, 0);
+    expect(body.last!.leap).toEqual({ t: expect.closeTo(0.1, 5), duration: CONFIG.abilities.leap.duration, crouch: 0.2 });
+  });
+
+  it("tells its body the strike's kind when the strike was started with one (none for kinds that don't use it)", () => {
+    const body = stubBody();
+    const m = new Monster(new THREE.Scene(), { ...kind(), createBody: () => body });
+    m.startMelee(1, 0, { x: 0, z: 200 }, undefined, 'backhand');
+    m.tick(0.05);
+    m.animate(0.016, 0);
+    expect(body.last!.melee!.kind).toBe('backhand');
+    const body2 = stubBody();
+    const m2 = new Monster(new THREE.Scene(), { ...kind(), createBody: () => body2 });
+    m2.startMelee(1, 0, { x: 0, z: 200 });
+    m2.tick(0.05);
+    m2.animate(0.016, 0);
+    expect(body2.last!.melee!.kind).toBeUndefined();
+  });
 });
+

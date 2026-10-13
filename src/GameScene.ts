@@ -22,7 +22,7 @@ import { BreathBeam } from './systems/BreathBeam';
 import { arcTargets, inArc, linePoints, lineTargets } from './systems/sweep';
 import { canAim } from './monsters/kaiju/neck';
 import { tailSide, tailSweepTarget } from './monsters/kaiju/tailSweep';
-import { Projectiles, type Hit } from './systems/Projectiles';
+import { Projectiles, type Hit, type ShotKind } from './systems/Projectiles';
 import { spikeTargets } from './systems/projectileMath';
 import { EnemyRegistry } from './enemies/EnemyRegistry';
 import { difficulty } from './enemies/spawnTable';
@@ -45,7 +45,7 @@ import { LevelUpAura } from './systems/LevelUpAura';
 import { ShieldFx } from './systems/ShieldFx';
 import { shieldHitPoint } from './systems/shieldHit';
 import { dashTarget, leapTarget } from './monster/leap';
-import { footTargets, strikePlan } from './monster/strike';
+import { FRONT_LEFT, footTargets, strikePlan } from './monster/strike';
 import { mortarTargets, nearestWithin } from './systems/targeting';
 import { Passives } from './systems/Passives';
 import { AcidPools } from './systems/AcidPools';
@@ -54,6 +54,12 @@ import { decide, nearestInRange, type BrainOrder, type BrainTarget } from './mon
 import { assignStrikes } from './monsters/kraken/strikes';
 import type { ArmStrike } from './monsters/kraken/TentacleArms';
 import { INSECT } from './monsters/insect/kind';
+import { backhandYaw, bearingTo, fistKind, type FistKind } from './monsters/golem/fist';
+import { auraOn, coolHeat, coreDamageMult, heatAfterHit } from './monsters/golem/heat';
+import { ShadowHands } from './monsters/golem/ShadowHands';
+import { WitherAura } from './monsters/golem/WitherAura';
+import { RotRing } from './monsters/golem/RotRing';
+import { burnIntensity, GAZE, gazing } from './monsters/golem/gaze';
 import { KINDS, ROSTER_ORDER, isMonsterId, rosterEntries } from './monsters/roster';
 import { loadPick, savePick, type PickStore } from './monsters/pick';
 import type { MonsterKind } from './monsters/types';
@@ -102,6 +108,8 @@ export class GameScene {
   private hudT = 0;
   private stateBeforePause: GameState = 'playing';
   private debug: DebugOverlay | null = null;
+  /** Pending levels granted by the Konami cheat; each one's offer lists every choice. */
+  private cheatLevels = 0;
   private chevrons: Chevrons;
   private abilities = new Abilities();
   private shockwave: Shockwave;
@@ -114,6 +122,17 @@ export class GameScene {
   private jaws = new THREE.Vector3();
   private swatCd = 0;
   private tailCd = 0;
+  /** Ravenous Hunger heat 0..1 (Wendigo); always 0 when the passive isn't taken. */
+  private heat = 0;
+  /** Wendigo: Shadow Hands (anti-air) and Ravenous Hunger's withering aura. */
+  private hands: ShadowHands;
+  private wither: WitherAura;
+  private rotRing: RotRing;
+  /** Dread Gaze and Evil Eye: targets burning with black fire until it flares. */
+  private gazes: { target: Target; at: THREE.Vector3; t: number; dur: number; damage: number; eye: boolean; lit: boolean; flared: boolean }[] = [];
+  /** Rending Claws in flight: its kind and side (+1 left/+X, −1 right), both latched when the strike starts. */
+  private fistStrike: FistKind = 'slam';
+  private fistSide = 1;
   private shieldFx: ShieldFx;
   private passives: Passives;
   private acid: AcidPools;
@@ -144,7 +163,10 @@ export class GameScene {
     this.brood = new BroodDrones(this.scene);
     this.projectiles = new Projectiles(this.scene);
     this.breath = new BreathBeam(this.scene);
-    this.projectiles.onTrail = (p) => this.particles.emit('smoke', p, 1, 0.2);
+    this.hands = new ShadowHands(this.scene);
+    this.wither = new WitherAura(this.scene);
+    this.rotRing = new RotRing(this.scene);
+    this.projectiles.onTrail = this.onShotTrail;
     this.projectiles.onHit = this.onProjectileHit;
     this.enemies = new EnemyRegistry(this.rng);
     this.enemies.add(new TankFleet(this.scene));
@@ -163,6 +185,11 @@ export class GameScene {
     };
     this.monster.onFootLand = (p) => {
       this.particles.ring('dust', p, 60, 7);
+      if (this.monster.kind.id === 'golem') {
+        // Dark dust and crumbs of rot kicked up from under the claws and hooves.
+        this.particles.emit('shade', this.tmpV.copy(p).setY(10), 3, 0.9);
+        this.particles.emit('rot', this.tmpV.copy(p).setY(10), 3, 0.8);
+      }
       this.rig.addTrauma(0.06);
       this.footCrush(p);
       const pool = this.passives.acidPool();
@@ -203,6 +230,7 @@ export class GameScene {
         this.pressAbility(id);
         return true;
       },
+      konami: this.cheatLevelUp,
     });
 
     this.lighting.follow(new THREE.Vector3());
@@ -228,6 +256,7 @@ export class GameScene {
   /** Called by the React level-up cards. */
   chooseUpgrade(id: string, seq: number): void {
     if (this.state !== 'levelup' || !this.progression.choose(id, seq)) return;
+    if (this.cheatLevels > 0) this.cheatLevels--;
     if (id === 'dash' || id === 'roar') this.abilities.setRank(id, this.progression.ranks[id]);
     const s = this.progression.stats;
     const m = this.monster;
@@ -257,6 +286,7 @@ export class GameScene {
     this.particles.clear();
     this.monster.reset();
     this.progression.reset();
+    this.cheatLevels = 0;
     this.enemies.clear();
     this.rig.reset();
     this.order = null;
@@ -267,6 +297,12 @@ export class GameScene {
     this.abilities.reset();
     this.swatCd = 0;
     this.tailCd = 0;
+    this.heat = 0;
+    this.monster.heat = 0;
+    this.hands.clear();
+    this.wither.clear();
+    this.rotRing.clear();
+    this.gazes = [];
     this.shieldFx.clear();
     this.moment.reset();
     this.aura.clear();
@@ -349,15 +385,19 @@ export class GameScene {
     this.monster.setKind(kind);
     this.progression.setPool(kind);
     this.projectiles.setTheme(kind.fx.spike, kind.fx.glob);
-    this.acid.setColor(kind.fx.pool);
+    this.acid.setColor(kind.fx.pool, kind.fx.poolOpacity, kind.fx.poolLift);
     this.novaWave.setColor(kind.fx.nova);
+    // The Roar shockwave: the Wendigo's is a ring of shadow; every other monster keeps the stinger yellow.
+    this.shockwave.setColor(kind.id === 'golem' ? CONFIG.golem.colors.shade : CONFIG.palette.stinger);
     this.breath.clear();
   }
 
-  /** All of the monster's damage: upgrades × the creature's own multiplier × Meltdown. */
+  /** All of the monster's damage: upgrades × the creature's own multiplier × Meltdown × Ravenous Hunger heat. */
   private dmgMult(): number {
     const m = this.monster;
-    return this.progression.stats.damageMult * m.kind.stats.damageMult * this.passives.meltdown(m.hp / m.maxHp).damage;
+    const core = this.passives.core();
+    const heat = core ? coreDamageMult(this.heat, core.bonus) : 1;
+    return this.progression.stats.damageMult * m.kind.stats.damageMult * this.passives.meltdown(m.hp / m.maxHp).damage * heat;
   }
 
   /** Ranged recharge: upgrades × Meltdown. */
@@ -401,8 +441,9 @@ export class GameScene {
   }
 
   private emitOffer(): void {
-    const offers = this.progression.offer();
-    this.events.emit('levelUpOffer', { seq: this.progression.offerSeq, offers });
+    const all = this.cheatLevels > 0;
+    const offers = this.progression.offer(all);
+    this.events.emit('levelUpOffer', { seq: this.progression.offerSeq, offers, all });
   }
 
     private emitThreats(): void {
@@ -495,6 +536,7 @@ export class GameScene {
         if (fire.intercepts > 0) this.passives.spendIntercepts(this.spineShield(fire.intercepts));
         this.tailSwat(dt);
         this.tailSweep(dt);
+        this.updateCore(dt);
         const shields = this.passives.tryShields(this.threatImminent());
         if (shields.bubble || shields.reflect) this.rig.addTrauma(0.1);
         if (this.passives.reflectActive()) this.reflectProjectiles();
@@ -508,7 +550,7 @@ export class GameScene {
         this.tentacleSlams();
         this.monster.body.arms?.update(dt, CONFIG.kraken.arms.spinTime, this.onArmImpact);
         // The head turns to the breath's aim; the breath fires once the head is on target.
-        this.monster.lookAt = this.breath.busy ? this.breath.aimPoint : null;
+        this.monster.lookAt = this.breath.busy ? this.breath.aimPoint : this.gazeLook();
         const headOnTarget = this.monster.aimError() < CONFIG.kaiju.neck.aimTolerance;
         this.breath.update(dt, this.monster.rangedOrigin(this.jaws), this.monster.position, this.ms.rangedRange, headOnTarget, this.onBreathFire);
         const melting = this.passives.meltdown(this.monster.hp / this.monster.maxHp).active;
@@ -530,15 +572,24 @@ export class GameScene {
       }
       this.enemies.update(dt, this.ctx, this.state === 'playing');
       this.projectiles.update(dt);
+      this.updateGazes(dt);
       this.city.update(dt, this.monster.position);
       this.monster.animate(dt, this.elapsed);
+      this.hands.update(dt, this.particles);
       this.particles.update(dt);
       this.shockwave.update(dt);
       this.novaWave.update(dt);
+      this.rotRing.update(dt);
       this.shieldFx.update(dt, this.monster.position, this.passives.bubbleActive());
       if (this.moment.update(realDt) && this.state === 'playing' && this.progression.pendingLevels > 0) this.enterLevelUp();
       const dm = this.dmgMult();
       this.acid.update(dt, this.enemyTargets(), dm);
+      // The Wendigo's patches of black fire keep burning.
+      if (this.monster.kind.id === 'golem') {
+        for (let n = Math.floor(dt * Math.min(70, this.acid.count * 22) + Math.random()); n > 0 && this.acid.randomPoint(this.tmpV); n--) {
+          this.particles.emit(Math.random() < 0.2 ? 'hexember' : Math.random() < 0.15 ? 'shade' : 'hexfire', this.tmpV, 1, 0.25);
+        }
+      }
       this.brood.update(dt, this.enemyTargets(), dm);
       this.markers.update(dt);
 
@@ -643,6 +694,10 @@ export class GameScene {
       this.particles.ring('dust', p, L.landRadius, 26);
       this.particles.emit('debris', p.clone().setY(20), 16, 1.6);
       this.rig.addTrauma(0.55);
+      if (this.monster.kind.id === 'golem') {
+        this.particles.ring('rot', p, 220, 18);
+        this.particles.ring('shade', p, 260, 14);
+      }
     }
 
     private roar(): void {
@@ -660,6 +715,13 @@ export class GameScene {
       }
       this.particles.ring('dust', p, R.radius * 0.5, 30);
       this.rig.addTrauma(0.7);
+      if (this.monster.kind.id === 'golem') {
+        // A black miasma bursts off its back and rolls out with the shockwave.
+        for (let i = 0; i < 3; i++) this.particles.emit('shade', this.monster.launchOrigin(this.tmpV), 8, 1.4);
+        this.particles.emit('shade', this.bodyPoint(560), 16, 1.8);
+        this.particles.ring('shade', p, R.radius * 0.5, 30);
+        this.rotRing.start(p, R.radius * 0.8);
+      }
     }
 
     /** Spike Storm: one homing spike at each of the n nearest enemies in range (repeating if fewer). */
@@ -673,6 +735,12 @@ export class GameScene {
       for (let i = 0; i < n; i++) {
         // Each bolt asks for its own launch point (the Kaiju cycles through its back vents).
         const from = m.launchOrigin(new THREE.Vector3());
+        if (m.kind.fx.stormShot === 'wisp') {
+          // Hungry Ghosts peel off the body in a puff of shadow.
+          this.projectiles.fireWisp(from, inRange[i % inRange.length]!, dmg, (i - (n - 1) / 2) * 0.25);
+          this.particles.emit('shade', from, 2, 0.6);
+          continue;
+        }
         this.projectiles.fireSpike(from, inRange[i % inRange.length]!, dmg, (i - (n - 1) / 2) * 0.25);
         this.particles.emit('spark', from, 3, 1.2);
       }
@@ -708,6 +776,39 @@ export class GameScene {
     m.startTailSweep(tailSide(from, m.yaw, aim), TS.timing);
   }
 
+  /**
+   * Ravenous Hunger: heat (hunger) cools; a dark miasma of smoke gathers about the body, thicker the hungrier it is;
+   * above the threshold a withering aura blackens the ground around it and hurts ground enemies close by.
+   */
+  private updateCore(dt: number): void {
+    const core = this.passives.core();
+    const K = CONFIG.passives.core;
+    this.heat = core ? coolHeat(this.heat, dt, K.cool) : 0;
+    this.monster.heat = this.heat;
+    const p = this.monster.position;
+    const on = core !== null && auraOn(this.heat, K.auraAt);
+    this.wither.update(dt, p, on && core ? core.radius : 0);
+    if (!core) return;
+    const sc = CONFIG.monster.scale;
+    for (let n = Math.floor(dt * 60 * this.heat * this.heat + Math.random()); n > 0; n--) {
+      const a = Math.random() * Math.PI * 2;
+      const r = (40 + Math.random() * 220) * sc;
+      const y = (60 + Math.random() * 460) * sc;
+      this.particles.emit('shade', this.tmpV.set(p.x + Math.sin(a) * r, p.y + y, p.z + Math.cos(a) * r), 1, 0.3);
+    }
+    if (this.heat > 0.85 && Math.random() < dt * 6) this.particles.emit('mist', this.bodyPoint(380), 1, 0.4);
+    if (!on) return;
+    const dmg = core.dps * dt * this.dmgMult();
+    for (const t of footTargets({ x: p.x, z: p.z }, core.radius, this.enemyTargets())) t.applyDamage(dmg);
+    if (Math.random() < dt * 14) {
+      // Rot creeps along the rim and smoke rises off the dead ground.
+      const a = Math.random() * Math.PI * 2;
+      const rim = Math.random() < 0.6;
+      const r = rim ? core.radius * (0.85 + Math.random() * 0.15) : Math.random() * core.radius;
+      this.particles.emit(rim ? 'rot' : 'shade', this.tmpV.set(p.x + Math.sin(a) * r, 8, p.z + Math.cos(a) * r), 1, 0.35);
+    }
+  }
+
   /** Head-height point the tail swats around and spines fire from (world space). */
   private bodyPoint(height: number): THREE.Vector3 {
     return this.monster.position.clone().setY(this.monster.position.y + height * CONFIG.monster.scale);
@@ -724,11 +825,19 @@ export class GameScene {
     if (hits.length === 0) return;
     this.swatCd = sw.cooldown;
     const dmg = sw.damage * this.dmgMult();
+    const hands = this.monster.kind.antiAir === 'hands';
+    // Shadow Hands: one hand per flyer, rising from the ground to arrive on the shared impact.
+    if (hands) for (const t of hits) this.hands.grab(t, this.monster.position);
     // Damage lands when the tail tip arrives at the first target (it follows that target as it moves).
     this.monster.onSwatImpact = () => {
       for (const t of hits) {
         if (!t.isAlive()) continue;
         t.applyDamage(dmg);
+        if (hands) {
+          this.particles.emit('shade', t.position, 10, 0.9);
+          this.particles.emit('mist', t.position, 5, 0.8);
+          continue;
+        }
         this.particles.emit('spark', t.position, 12, 1.3);
         this.particles.emit('fire', t.position, 4, 0.6);
       }
@@ -813,12 +922,18 @@ export class GameScene {
         .map((t) => ({ pos: t.position, kill: () => t.applyDamage(1e9) })),
     ];
     const picks = nearestWithin(center, r, threats, budget, (t) => t.pos);
+    const shards = this.monster.kind.fx.shards;
     for (const t of picks) {
       this.particles.emit(this.monster.kind.fx.intercept, t.pos, 8, 0.6);
       this.particles.emit('smoke', t.pos, 1, 0.3);
+      // Bone Ward: a little volley of bone shards flies from the body to the stopped shot.
+      if (shards !== undefined) {
+        const from = this.monster.launchOrigin(new THREE.Vector3());
+        for (let j = 0; j < 3; j++) this.projectiles.fireShard(from, t.pos.clone().add(this.tmpV.set(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).multiplyScalar(60)));
+      }
       t.kill();
     }
-    if (picks.length > 0) this.particles.emit('spark', this.monster.launchOrigin(this.tmpV), 3, 0.4);
+    if (picks.length > 0) this.particles.emit(shards !== undefined ? 'bone' : 'spark', this.monster.launchOrigin(this.tmpV), 3, 0.4);
     return picks.length;
   }
 
@@ -831,8 +946,17 @@ export class GameScene {
     this.city.forEachStandingInRadius({ x: p.x, z: p.z }, radius, (t) => t.applyDamage(dmg));
     for (const t of footTargets({ x: p.x, z: p.z }, radius, this.enemyTargets())) t.applyDamage(dmg);
     this.particles.ring(this.monster.kind.fx.particle, p, radius * 0.6, 24);
+    // Withering Ring: black smoke and rot roll out across the ground in widening bands.
+    if (this.monster.kind.id === 'golem') {
+      this.rotRing.start(p, radius);
+      for (const k of [0.25, 0.55, 0.85]) {
+        this.particles.ring('shade', p, radius * k, 22);
+        this.particles.ring('rot', p, radius * k * 1.1, 14);
+      }
+    }
     this.rig.addTrauma(0.25);
     this.monster.body.arms?.spin();
+    this.monster.body.nova?.();
   }
 
   /** Acid Mortar: lob globs at priority ground threats (artillery, SAMs, trucks, then tanks). */
@@ -842,6 +966,11 @@ export class GameScene {
     if (targets.length === 0) return;
     const dmg = M.damage * this.dmgMult();
     for (const t of targets) {
+      // Evil Eye: a glance, and the target catches black fire (the glob's flight time later it flares).
+      if (this.monster.kind.fx.mortarGaze) {
+        this.curse(t, M.flightTime, dmg, true);
+        continue;
+      }
       const from = this.monster.launchOrigin(new THREE.Vector3());
       this.projectiles.fireGlob(from, t.position.clone().setY(0), dmg);
       this.particles.emit(this.monster.kind.fx.particle, from, 3, 0.6);
@@ -904,6 +1033,7 @@ export class GameScene {
     if (r.damage <= 0) return;
     m.hp = Math.max(0, m.hp - r.damage);
     m.flash();
+    if (this.passives.core()) this.heat = heatAfterHit(this.heat, r.damage, m.maxHp, CONFIG.passives.core.gain);
     this.rig.addTrauma(Math.min(0.4, 0.03 + r.damage * 0.004));
     if (m.hp <= 0) this.startDying();
   }
@@ -950,8 +1080,8 @@ export class GameScene {
       return;
     }
     let target = this.pickTarget(x, y);
-    // A hurler cannot hit flyers, so a tap on one is a plain move tap.
-    if (target?.airborne && this.monster.kind.ranged === 'hurl') target = null;
+    // A hurler or lobber cannot hit flyers, so a tap on one is a plain move tap.
+    if (target?.airborne && (this.monster.kind.ranged === 'hurl' || this.monster.kind.ranged === 'gaze')) target = null;
     if (target) {
       this.order = { kind: 'attack', target };
       this.markers.setTarget(target);
@@ -1012,8 +1142,52 @@ export class GameScene {
     this.rig.addTrauma(0.3);
   }
 
+  /**
+   * Rending Claws lands at `p` (the clamped strike point), as the kind latched at the strike's start. Slam: splashes
+   * ground enemies and buildings around the fist. Backhand: sweeps everything in an arc on the striking side, within reach.
+   */
+  private fistImpact(p: THREE.Vector3): void {
+    const m = this.monster;
+    const F = CONFIG.golem.fist;
+    const s = this.progression.stats;
+    const from = { x: m.position.x, z: m.position.z };
+    const dmg = this.ms.meleeDamage * this.dmgMult();
+    if (this.fistStrike === 'slam') {
+      const r = this.ms.meleeRadius * s.stompRadiusMult;
+      const at = { x: p.x, z: p.z };
+      this.city.forEachStandingInRadius(at, r, (t) => t.applyDamage(dmg * F.buildingMult));
+      for (const t of footTargets(at, r, this.enemyTargets())) t.applyDamage(dmg);
+      this.particles.ring('dust', p, r, 16);
+      // Rending Claws: a spray of dark blood mist and clots of rot.
+      this.particles.emit('mist', this.tmpV.copy(p).setY(20), 9, 1.1);
+      this.particles.emit('rot', this.tmpV.copy(p).setY(20), 10, 1.1);
+      this.particles.emit('debris', this.tmpV.copy(p).setY(10), 8, 1.1);
+      this.rig.addTrauma(0.35);
+      return;
+    }
+    const reach = this.ms.meleeRange * s.stompRadiusMult;
+    const yaw = backhandYaw(m.yaw, this.fistSide, F.backhandCenter);
+    for (const t of arcTargets(from, yaw, reach, F.backhandHalf, this.enemyTargets())) t.applyDamage(dmg);
+    const buildings: Target[] = [];
+    this.city.forEachStandingInRadius(from, reach, (t) => buildings.push(t));
+    for (const t of arcTargets(from, yaw, reach, F.backhandHalf, buildings)) t.applyDamage(dmg * F.buildingMult);
+    for (let i = -2; i <= 2; i++) {
+      const a = yaw + (i / 2) * F.backhandHalf;
+      this.tmpV.set(from.x + Math.sin(a) * reach * 0.7, 0, from.z + Math.cos(a) * reach * 0.7);
+      this.particles.ring('dust', this.tmpV, 60, 6);
+      this.particles.emit('mist', this.tmpV.setY(20), 2, 0.8);
+      this.particles.emit('rot', this.tmpV, 2, 0.8);
+      this.particles.emit('debris', this.tmpV.setY(15), 3, 1);
+    }
+    this.rig.addTrauma(0.3);
+  }
+
   private meleeImpact(p: THREE.Vector3): void {
     const shape = this.monster.kind.melee;
+    if (shape.kind === 'fist') {
+      this.fistImpact(p);
+      return;
+    }
     if (shape.kind === 'arc') {
       this.clawRake(shape.halfAngle);
       return;
@@ -1038,13 +1212,14 @@ export class GameScene {
     if (!m.busy) {
       // A breather only picks targets its neck can reach, so the body never has to turn away from its path.
       const reach = this.ms.meleeRange * 0.8;
+      const groundOnly = m.kind.ranged === 'hurl' || m.kind.ranged === 'gaze';
       const rangedPool =
         m.kind.ranged === 'breath' ? this.enemyTargets().filter((t) => this.canBreatheAt(t))
-        : m.kind.ranged === 'hurl' ? this.enemyTargets().filter((t) => !t.airborne && Math.hypot(t.position.x - pos.x, t.position.z - pos.z) > reach)
+        : groundOnly ? this.enemyTargets().filter((t) => !t.airborne && Math.hypot(t.position.x - pos.x, t.position.z - pos.z) > reach)
         : this.enemyTargets();
       const auto = nearestInRange(pos, rangedPool, this.ms.rangedRange);
       const autoMelee = nearestInRange(pos, this.enemyTargets().filter((t) => !t.airborne), this.ms.meleeRange);
-      if (this.order?.kind === 'attack' && this.order.target.airborne && m.kind.ranged === 'hurl') {
+      if (this.order?.kind === 'attack' && this.order.target.airborne && groundOnly) {
         this.order = null;
         this.markers.setTarget(null);
       }
@@ -1074,7 +1249,14 @@ export class GameScene {
       if (outsideArc && !d.moveTo && !d.face && d.meleeAt) m.faceToward(d.meleeAt, dt);
       if (d.attack === 'melee' && d.meleeAt && !outsideArc) {
         const plan = strikePlan(pos, m.yaw, d.meleeAt, this.ms.meleeRange);
-        m.startMelee(s.cooldownMult, plan.leg, plan.point);
+        // Rending Claws: slam or backhand is decided once, here at the start, and the body is told it (so the pose
+        // is the strike the damage uses); the backhand swings on its own slower timeline.
+        if (shape.kind === 'fist') {
+          this.fistStrike = fistKind(bearingTo(pos, m.yaw, plan.point), CONFIG.golem.fist.frontHalf);
+          this.fistSide = plan.leg === FRONT_LEFT ? 1 : -1;
+        }
+        if (shape.kind === 'fist') m.startMelee(s.cooldownMult, plan.leg, plan.point, this.fistStrike === 'backhand' ? CONFIG.golem.fist.backhandTiming : undefined, this.fistStrike);
+        else m.startMelee(s.cooldownMult, plan.leg, plan.point);
       }
       if (d.attack === 'ranged') this.fireRanged(d.attackOn === 'order' && this.order?.kind === 'attack' ? this.order.target : auto);
     }
@@ -1087,6 +1269,7 @@ export class GameScene {
   private fireRanged(target: Target | null): void {
     if (this.monster.kind.ranged === 'breath') this.breathAt(target);
     else if (this.monster.kind.ranged === 'hurl') this.hurlAt(target);
+    else if (this.monster.kind.ranged === 'gaze') this.gazeAt(target);
     else this.fireSpikes(target);
   }
 
@@ -1109,6 +1292,78 @@ export class GameScene {
     for (const { arm, target } of assignStrikes(free, m.yaw, from, cands, this.ms.meleeRange)) {
       arms.start(arm, 'slam', target.position, target, cd, this.ms.meleeTiming);
     }
+  }
+
+  /**
+   * Dread Gaze: the Wendigo looks at the target and its nearest ground neighbours (1 + extra-projectile upgrades);
+   * each one bursts into black fire, which flares and does the damage after CONFIG.golem.gaze.delay. Nothing travels.
+   */
+  private gazeAt(target: Target | null): void {
+    if (!target || target.airborne) return;
+    const m = this.monster;
+    const from = { x: m.position.x, z: m.position.z };
+    const count = 1 + this.progression.stats.extraSpikes;
+    const others = this.enemyTargets()
+      .filter((t) => t.isAlive() && !t.airborne && Math.hypot(t.position.x - from.x, t.position.z - from.z) <= this.ms.rangedRange)
+      .sort((a, b) => a.position.distanceToSquared(target.position) - b.position.distanceToSquared(target.position));
+    const dmg = this.ms.rangedDamage * this.dmgMult();
+    for (const t of spikeTargets(target, others, count)) this.curse(t, CONFIG.golem.gaze.delay, dmg, false);
+    m.consumeRanged(this.rangedCdMult());
+  }
+
+  /** Starts a black-fire gaze on `t` that flares for `damage` after `dur` s (Evil Eye: the mortar's splash, no fire patch). */
+  private curse(t: Target, dur: number, damage: number, eye: boolean): void {
+    this.gazes.push({ target: t, at: t.position.clone(), t: 0, dur, damage, eye, lit: false, flared: false });
+  }
+
+  /** Black fire hugs each cursed target, building until it flares (the damage), then the skull looks away. */
+  private updateGazes(dt: number): void {
+    for (let i = this.gazes.length - 1; i >= 0; i--) {
+      const g = this.gazes[i]!;
+      g.t += dt;
+      if (g.target.isAlive()) g.at.copy(g.target.position);
+      const r = Math.max(40, g.target.radius * 1.5);
+      if (!g.lit && g.t >= GAZE.ignite) {
+        g.lit = true;
+        this.particles.emit('hexfire', this.tmpV.copy(g.at).setY(g.at.y + 10), 10, 0.7);
+        this.particles.emit('hexember', this.tmpV, 5, 0.6);
+      }
+      const k = burnIntensity(g.t, g.dur);
+      for (let n = Math.floor(k * 110 * dt + Math.random()); n > 0; n--) {
+        const a = Math.random() * Math.PI * 2;
+        const d = Math.sqrt(Math.random()) * r;
+        this.tmpV.set(g.at.x + Math.cos(a) * d, g.at.y + 4 + Math.random() * r * 0.6, g.at.z + Math.sin(a) * d);
+        this.particles.emit(Math.random() < 0.25 ? 'hexember' : 'hexfire', this.tmpV, 1, 0.3);
+        if (Math.random() < 0.12) this.particles.emit('shade', this.tmpV.setY(g.at.y + r * 1.6), 1, 0.2);
+      }
+      if (!g.flared && g.t >= g.dur) {
+        g.flared = true;
+        this.blackFlare(g.at.clone().setY(0), g.eye ? this.passives.mortarSplash() : CONFIG.golem.gaze.splash, g.damage, !g.eye);
+      }
+      if (!gazing(g.t, g.dur)) this.gazes.splice(i, 1);
+    }
+  }
+
+  /** The skull stares at the newest cursed target, or null when nothing is being gazed at. */
+  private gazeLook(): THREE.Vector3 | null {
+    return this.gazes.length > 0 ? this.gazes[this.gazes.length - 1]!.at : null;
+  }
+
+  /** Black fire flares at `p`: it damages ground enemies and buildings within `r`, leaps onto them, and (gaze) leaves a burning patch. */
+  private blackFlare(p: THREE.Vector3, r: number, damage: number, patch: boolean): void {
+    const at = { x: p.x, z: p.z };
+    const caught = footTargets(at, r, this.enemyTargets());
+    this.city.forEachStandingInRadius(at, r, (t) => t.applyDamage(damage));
+    for (const t of caught) {
+      this.particles.emit('hexfire', t.position, 4, 0.5);
+      t.applyDamage(damage);
+    }
+    if (patch && this.state === 'playing') this.acid.add(p, CONFIG.golem.gaze.poolRadius, CONFIG.golem.gaze.poolLife);
+    this.particles.ring('hexfire', p, r, 16);
+    this.particles.emit('hexfire', this.tmpV.copy(p).setY(15), 12, 1);
+    this.particles.emit('hexember', this.tmpV, 8, 1);
+    this.particles.emit('shade', this.tmpV.setY(40), 6, 0.8);
+    this.rig.addTrauma(0.12);
   }
 
   /** Hurl: free arms (1 + extra-projectile upgrades) throw rubble at the target and its nearest neighbours. */
@@ -1207,6 +1462,16 @@ export class GameScene {
   }
 
   private onProjectileHit = (h: Hit): void => {
+    if (h.kind === 'shard') {
+      this.particles.emit('bone', h.point, 5, 0.8);
+      return;
+    }
+    if (h.kind === 'wisp') {
+      h.target?.applyDamage(h.damage);
+      this.particles.emit('wisp', h.point, 6, 1);
+      this.particles.emit('shade', h.point, 3, 0.6);
+      return;
+    }
     if (h.kind === 'chunk') {
       const r = CONFIG.kraken.arms.hurl.splash;
       const at = { x: h.point.x, z: h.point.z };
@@ -1233,6 +1498,26 @@ export class GameScene {
     }
     this.particles.explosion(h.point, 0.6);
     this.damageMonster(h.damage, h.kind === 'shell' ? 'shell' : 'rocket');
+  };
+
+  /** Shots in flight leave smoke puffs; Hungry Ghosts trail dark smoke and pale motes instead. */
+  private onShotTrail = (p: THREE.Vector3, kind: ShotKind): void => {
+    if (kind === 'wisp') {
+      this.particles.emit('wraith', p, 1, 0.2);
+      if (Math.random() < 0.5) this.particles.emit('wisp', p, 1, 0.3);
+      return;
+    }
+    this.particles.emit('smoke', p, 1, 0.2);
+  };
+
+  /** Konami-code cheat: grants exactly the EXP still needed for the next level; that level's offer lists every choice. */
+  private cheatLevelUp = (): void => {
+    if (this.state !== 'playing' || !this.monster.alive) return;
+    const exp = expToNext(this.progression.level) - this.progression.exp;
+    this.progression.addExp(exp);
+    this.cheatLevels++;
+    this.events.emit('expGain', exp);
+    this.startLevelUpMoment();
   };
 
   private onTargetDestroyed = (target: Target, exp: number): void => {

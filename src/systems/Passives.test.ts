@@ -4,7 +4,7 @@ import type { AbilityId } from './Progression';
 import { CONFIG } from '../config';
 
 const P = CONFIG.passives;
-const ranks = (r: Partial<Record<AbilityId, number>>) => () => ({ dash: 0, roar: 0, acid: 0, storm: 0, chitin: 0, frenzy: 0, brood: 0, overload: 0, spines: 0, swat: 0, nova: 0, mortar: 0, bubble: 0, reflect: 0, meltdown: 0, grip: 0, ...r });
+const ranks = (r: Partial<Record<AbilityId, number>>) => () => ({ dash: 0, roar: 0, acid: 0, storm: 0, chitin: 0, frenzy: 0, brood: 0, overload: 0, spines: 0, swat: 0, nova: 0, mortar: 0, bubble: 0, reflect: 0, meltdown: 0, grip: 0, core: 0, ...r });
 
 describe('Passives', () => {
   it('has no effect at rank 0', () => {
@@ -130,5 +130,17 @@ describe('grip', () => {
     expect(g1).toEqual({ radius: CONFIG.passives.grip.radius[1], damage: CONFIG.passives.grip.damage[1] });
     expect(g3.radius).toBeGreaterThan(g1.radius);
     expect(g3.damage).toBeGreaterThan(g1.damage);
+  });
+});
+
+describe('core', () => {
+  it('Ravenous Hunger: off at rank 0, then a growing damage bonus, aura radius and wither per rank', () => {
+    expect(new Passives(ranks({})).core()).toBeNull();
+    const c1 = new Passives(ranks({ core: 1 })).core()!;
+    const c3 = new Passives(ranks({ core: 3 })).core()!;
+    expect(c1).toEqual({ bonus: P.core.bonus[1], radius: P.core.radius[1], dps: P.core.dps[1] });
+    expect(c3.bonus).toBeGreaterThan(c1.bonus);
+    expect(c3.radius).toBeGreaterThan(c1.radius);
+    expect(c3.dps).toBeGreaterThan(c1.dps);
   });
 });

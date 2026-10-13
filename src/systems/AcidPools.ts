@@ -10,7 +10,7 @@ const _s = new THREE.Vector3();
 
 type Pool = { x: number; z: number; r: number; life: number; age: number };
 
-/** Glowing acid puddles from footsteps; burn ground enemies standing in them. */
+/** Damaging ground pools from footsteps and landings (acid, plasma, ink, blight per monster); they hurt ground enemies standing in them. */
 export class AcidPools {
   private pools: Pool[] = [];
   private mesh: THREE.InstancedMesh;
@@ -27,8 +27,28 @@ export class AcidPools {
     scene.add(this.mesh);
   }
 
-  setColor(c: number): void {
-    (this.mesh.material as THREE.MeshBasicMaterial).color.setHex(c);
+  /** `lift` polygon-offsets the pools toward the camera so they also show over the (offset) crater decal. */
+  setColor(c: number, opacity = 0.55, lift = false): void {
+    const mat = this.mesh.material as THREE.MeshBasicMaterial;
+    mat.color.setHex(c);
+    mat.opacity = opacity;
+    mat.polygonOffset = lift;
+    mat.polygonOffsetFactor = lift ? -4 : 0;
+    mat.polygonOffsetUnits = lift ? -4 : 0;
+    mat.needsUpdate = true;
+  }
+
+  get count(): number {
+    return this.pools.length;
+  }
+
+  /** A random point inside a random live pool (written to `out`), or null when there are none. */
+  randomPoint(out: THREE.Vector3): THREE.Vector3 | null {
+    const p = this.pools[Math.floor(Math.random() * this.pools.length)];
+    if (!p) return null;
+    const a = Math.random() * Math.PI * 2;
+    const r = Math.sqrt(Math.random()) * p.r * 0.8;
+    return out.set(p.x + Math.cos(a) * r, 4, p.z + Math.sin(a) * r);
   }
 
   add(p: THREE.Vector3, radius: number, life: number): void {

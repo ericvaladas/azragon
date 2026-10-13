@@ -218,6 +218,86 @@ export const CONFIG = {
       chunk: 0x8a8378,
     },
   },
+  /** The Wendigo (id `golem`). Stats feed its MonsterKind; fist and lob tune its attacks; colours its body and effects. */
+  golem: {
+    /** The Wendigo's size: its body is drawn at this scale (inside the monster scale), and its body-size stats match. */
+    scale: 0.9,
+    stats: {
+      maxHp: 1450,
+      moveSpeed: 110,
+      turnRate: 1.6,
+      damageMult: 1.2,
+      /** One knuckle-walk cycle (all four limbs) covers this many model units. */
+      strideLength: 306,
+      bodyRadius: 153 * MONSTER_SCALE,
+      footRadius: 67.5,
+      footDamage: 160,
+      /** Fist reach (world m) — also the brain's melee range for attack orders. */
+      meleeRange: 324,
+      meleeRadius: 110,
+      meleeDamage: 95,
+      meleeCooldown: 1.2,
+      meleeTiming: { windup: 0.3, impact: 0.45, end: 0.85 },
+      rangedRange: 1400,
+      rangedDamage: 90,
+      rangedCooldown: 2.0,
+      headHeight: 432,
+      /** Measured standing bounding box (world m). */
+      size: { width: 425, length: 408, height: 371 },
+    },
+    /**
+     * Rending Claws: targets within `frontHalf` (rad) of dead ahead take a slam; others a backhand whose hit arc
+     * is centred `backhandCenter` rad off the nose on the target's side, ±`backhandHalf`. Buildings take buildingMult×.
+     */
+    fist: {
+      frontHalf: 0.75,
+      backhandCenter: 1.95,
+      backhandHalf: 1.25,
+      buildingMult: 2,
+      /** The backhand's own timeline (s): a slower, heavier coil, sweep and follow-through than the slam's meleeTiming. */
+      backhandTiming: { windup: 0.36, impact: 0.57, end: 1.15 },
+    },
+    /**
+     * Dread Gaze: the target burns `delay` s after the Wendigo looks at it, then the black fire flares over `splash` m;
+     * it leaves a patch of black fire (radius m, life s).
+     */
+    gaze: { splash: 120, delay: 1.4, poolRadius: 110, poolLife: 3 },
+    colors: {
+      /** Tight, starved olive-grey skin (base, ridge highlight over the ribs and bones, shadowed underside) and the black sinew. */
+      skin: 0x4c5142,
+      skinLight: 0x676c57,
+      skinDark: 0x34372d,
+      sinew: 0x1b1a16,
+      /** Matted fur: the dark mane, its umber body, the lighter weathered tips that catch the light; moss on the antlers. */
+      furDark: 0x17130f,
+      fur: 0x2c231c,
+      furTip: 0x5e5244,
+      moss: 0x2d3222,
+      /** Weathered bone-grey skull, its shade (jaw, ridges, teeth) and the dark gnarled antlers with paler worn tips. */
+      bone: 0xb9b3a5,
+      boneShade: 0x8a8476,
+      antler: 0x5f5548,
+      antlerTip: 0x8c8172,
+      /** Hooves and claws; the empty sockets, nasal cavity and mouth. */
+      horn: 0x121010,
+      socket: 0x090707,
+      /**
+       * Death-and-decay FX, not on the body: black fire (near-black flame tongues, a deep violet heart) and the patches it
+       * leaves, rotting black-green ground, rot clumps, black-purple shade smoke, dark blood mist, bone-white shards,
+       * the pale Hungry Ghosts and Shadow Hands.
+       */
+      hexfire: 0x0c0710,
+      hexember: 0x3d1a52,
+      hexPool: 0x120a17,
+      blight: 0x1a2312,
+      rot: 0x2a3319,
+      shade: 0x150e19,
+      mist: 0x4a0e14,
+      boneShard: 0xdcd4c0,
+      ghost: 0xd6d3dc,
+      handSmoke: 0x2b1d33,
+    },
+  },
   artillery: {
     hp: 120, exp: 20, size: 40, guns: 3, gunSpacing: 70, distMin: 2500, distMax: 3500,
     salvoEvery: 6, fillTime: 3.2, shellFlight: 1.8, shellArc: 750, radius: 90, damage: 60, buildingDamage: 200, spread: 260,
@@ -242,6 +322,11 @@ export const CONFIG = {
     meltdown: { threshold: [0, 0.3, 0.4, 0.5], damageMult: 1.5, cooldownMult: 0.5 },
     /** Sucker Grip (Kraken): each plant crushes the nearest ground enemy within radius[rank] of the tip. */
     grip: { radius: [0, 140, 180, 220], damage: [0, 90, 140, 200] },
+    /**
+     * Ravenous Hunger (Wendigo): heat 0..1 rises by (damage taken / max HP) × gain and cools by `cool` per second.
+     * Damage × (1 + heat × bonus[rank]); at heat ≥ auraAt a withering aura of radius[rank] deals dps[rank] to ground enemies.
+     */
+    core: { gain: 4, cool: 0.12, auraAt: 0.5, bonus: [0, 0.3, 0.45, 0.6], radius: [0, 260, 320, 380], dps: [0, 40, 60, 85] },
     /** Auto-shields trigger only when something is about to hit: projectiles or blimps within this range. */
     threatRange: 700,
     earlyAbilityPicks: 3,

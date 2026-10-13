@@ -34,7 +34,7 @@ export const UPGRADES: Record<UpgradeId, { title: string; desc: string; icon: st
   moveSpeed: { title: 'Long Strides', desc: '+15% move speed', icon: '🦿', apply: (s) => ({ ...s, moveSpeedMult: s.moveSpeedMult * 1.15 }) },
 };
 
-export type AbilityId = 'dash' | 'roar' | 'acid' | 'storm' | 'chitin' | 'frenzy' | 'brood' | 'overload' | 'spines' | 'swat' | 'nova' | 'mortar' | 'bubble' | 'reflect' | 'meltdown' | 'grip';
+export type AbilityId = 'dash' | 'roar' | 'acid' | 'storm' | 'chitin' | 'frenzy' | 'brood' | 'overload' | 'spines' | 'swat' | 'nova' | 'mortar' | 'bubble' | 'reflect' | 'meltdown' | 'grip' | 'core';
 export const MAX_RANK = 3;
 const ROMAN = ['', 'I', 'II', 'III'];
 
@@ -69,12 +69,13 @@ export const ABILITIES: Record<AbilityId, { title: string; icon: string; desc(ra
   mortar: { title: 'Acid Mortar', icon: '☄️', desc: (r) => (r === 1 ? 'Lobs acid at artillery, SAMs, trucks' : 'More globs, bigger splash') },
   bubble: { title: 'Shield Bubble', icon: '🫧', desc: (r) => (r === 1 ? 'Auto: 3s invincibility when hit is coming' : 'Longer bubble, shorter cooldown') },
   grip: { title: 'Sucker Grip', icon: '🐙', desc: (r) => (r === 1 ? 'Planted arms crush an enemy beside them' : 'Wider, harder grip') },
+  core: { title: 'Ravenous Hunger', icon: '🫀', desc: (r) => (r === 1 ? 'Wounds feed its hunger: more damage, and a withering aura when starved' : 'Deeper hunger: more damage, wider aura') },
   meltdown: { title: 'Meltdown', icon: '🌋', desc: (r) => (r === 1 ? 'Below 30% HP: +50% damage, ranged recharges 2x' : 'Meltdown kicks in at higher HP') },
   reflect: { title: 'Reflect Shield', icon: '🔮', desc: (r) => (r === 1 ? 'Auto: bounce projectiles back at enemies' : 'Longer reflect, shorter cooldown') },
   overload: { title: 'Overload', icon: '⚡', desc: (r) => (r === 1 ? 'Absorb a laser hit and fire it back' : 'Overload recharges faster') },
 };
 
-const emptyRanks = (): Record<AbilityId, number> => ({ dash: 0, roar: 0, acid: 0, storm: 0, chitin: 0, frenzy: 0, brood: 0, overload: 0, spines: 0, swat: 0, nova: 0, mortar: 0, bubble: 0, reflect: 0, meltdown: 0, grip: 0 });
+const emptyRanks = (): Record<AbilityId, number> => ({ dash: 0, roar: 0, acid: 0, storm: 0, chitin: 0, frenzy: 0, brood: 0, overload: 0, spines: 0, swat: 0, nova: 0, mortar: 0, bubble: 0, reflect: 0, meltdown: 0, grip: 0, core: 0 });
 
 export function expToNext(level: number): number {
   return Math.round(CONFIG.progression.expBase * Math.pow(level, CONFIG.progression.expExponent));
@@ -125,13 +126,14 @@ export class Progression {
     return gained;
   }
 
-    offer(): UpgradeOffer[] {
+    /** A random `offerCount` choices, or with `all`, every available choice (upgrades, then abilities, in definition order). */
+    offer(all = false): UpgradeOffer[] {
       this.offerSeq++;
       const abilities = this.poolAbilities().filter((id) => this.ranks[id] < MAX_RANK);
       const pool: string[] = [...(Object.keys(UPGRADES) as UpgradeId[]), ...abilities];
-      const ids = shuffle(pool, this.rng).slice(0, CONFIG.progression.offerCount);
+      const ids = all ? pool : shuffle(pool, this.rng).slice(0, CONFIG.progression.offerCount);
       const early = this.picks < CONFIG.passives.earlyAbilityPicks;
-      if (early && abilities.length > 0 && !ids.some((id) => id in ABILITIES)) {
+      if (!all && early && abilities.length > 0 && !ids.some((id) => id in ABILITIES)) {
         const choices = abilities.filter((a) => !ids.includes(a));
         ids[ids.length - 1] = choices[Math.floor(this.rng() * choices.length)]!;
       }

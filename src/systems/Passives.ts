@@ -59,6 +59,12 @@ export class Passives {
     return r > 0 ? { radius: P.grip.radius[r]!, damage: P.grip.damage[r]! } : null;
   }
 
+  /** Ravenous Hunger (Wendigo): max damage bonus at full heat, withering-aura radius and damage per second, or null if not taken. */
+  core(): { bonus: number; radius: number; dps: number } | null {
+    const r = this.ranks().core;
+    return r > 0 ? { bonus: P.core.bonus[r]!, radius: P.core.radius[r]!, dps: P.core.dps[r]! } : null;
+  }
+
   mortarSplash(): number {
     return P.mortar.splash[this.ranks().mortar]!;
   }
