@@ -54,6 +54,8 @@ import { decide, nearestInRange, type BrainOrder, type BrainTarget } from './mon
 import { assignStrikes } from './monsters/kraken/strikes';
 import type { ArmStrike } from './monsters/kraken/TentacleArms';
 import { INSECT } from './monsters/insect/kind';
+import { backhandYaw, bearingTo, fistKind } from './monsters/golem/fist';
+import { auraOn, coolHeat, coreDamageMult, heatAfterHit } from './monsters/golem/heat';
 import { KINDS, ROSTER_ORDER, isMonsterId, rosterEntries } from './monsters/roster';
 import { loadPick, savePick, type PickStore } from './monsters/pick';
 import type { MonsterKind } from './monsters/types';
@@ -116,6 +118,8 @@ export class GameScene {
   private jaws = new THREE.Vector3();
   private swatCd = 0;
   private tailCd = 0;
+  /** Molten Core heat 0..1 (Golem); always 0 when the passive isn't taken. */
+  private heat = 0;
   private shieldFx: ShieldFx;
   private passives: Passives;
   private acid: AcidPools;
@@ -272,6 +276,8 @@ export class GameScene {
     this.abilities.reset();
     this.swatCd = 0;
     this.tailCd = 0;
+    this.heat = 0;
+    this.monster.heat = 0;
     this.shieldFx.clear();
     this.moment.reset();
     this.aura.clear();
@@ -359,10 +365,12 @@ export class GameScene {
     this.breath.clear();
   }
 
-  /** All of the monster's damage: upgrades × the creature's own multiplier × Meltdown. */
+  /** All of the monster's damage: upgrades × the creature's own multiplier × Meltdown × Molten Core heat. */
   private dmgMult(): number {
     const m = this.monster;
-    return this.progression.stats.damageMult * m.kind.stats.damageMult * this.passives.meltdown(m.hp / m.maxHp).damage;
+    const core = this.passives.core();
+    const heat = core ? coreDamageMult(this.heat, core.bonus) : 1;
+    return this.progression.stats.damageMult * m.kind.stats.damageMult * this.passives.meltdown(m.hp / m.maxHp).damage * heat;
   }
 
   /** Ranged recharge: upgrades × Meltdown. */
@@ -501,6 +509,7 @@ export class GameScene {
         if (fire.intercepts > 0) this.passives.spendIntercepts(this.spineShield(fire.intercepts));
         this.tailSwat(dt);
         this.tailSweep(dt);
+        this.updateCore(dt);
         const shields = this.passives.tryShields(this.threatImminent());
         if (shields.bubble || shields.reflect) this.rig.addTrauma(0.1);
         if (this.passives.reflectActive()) this.reflectProjectiles();
@@ -649,6 +658,7 @@ export class GameScene {
       this.particles.ring('dust', p, L.landRadius, 26);
       this.particles.emit('debris', p.clone().setY(20), 16, 1.6);
       this.rig.addTrauma(0.55);
+      if (this.monster.kind.id === 'golem') this.particles.ring('magma', p, 220, 18);
     }
 
     private roar(): void {
@@ -666,6 +676,7 @@ export class GameScene {
       }
       this.particles.ring('dust', p, R.radius * 0.5, 30);
       this.rig.addTrauma(0.7);
+      if (this.monster.kind.id === 'golem') for (let i = 0; i < 3; i++) this.particles.emit('magma', this.monster.launchOrigin(this.tmpV), 8, 1.2);
     }
 
     /** Spike Storm: one homing spike at each of the n nearest enemies in range (repeating if fewer). */
@@ -715,6 +726,24 @@ export class GameScene {
   }
 
   /** Head-height point the tail swats around and spines fire from (world space). */
+  /** Molten Core: heat cools; while hot it burns ground enemies close by. The body's glow follows the heat. */
+  private updateCore(dt: number): void {
+    const core = this.passives.core();
+    const K = CONFIG.passives.core;
+    this.heat = core ? coolHeat(this.heat, dt, K.cool) : 0;
+    this.monster.heat = this.heat;
+    if (!core || !auraOn(this.heat, K.auraAt)) return;
+    const p = this.monster.position;
+    const dmg = core.dps * dt * this.dmgMult();
+    for (const t of footTargets({ x: p.x, z: p.z }, core.radius, this.enemyTargets())) t.applyDamage(dmg);
+    if (Math.random() < dt * 10) {
+      const a = Math.random() * Math.PI * 2;
+      const r = Math.random() * core.radius;
+      this.particles.emit('magma', this.tmpV.set(p.x + Math.sin(a) * r, 10, p.z + Math.cos(a) * r), 2, 0.5);
+    }
+    if (this.heat > 0.9 && Math.random() < dt * 12) this.particles.emit('fire', this.bodyPoint(520), 1, 0.5);
+  }
+
   private bodyPoint(height: number): THREE.Vector3 {
     return this.monster.position.clone().setY(this.monster.position.y + height * CONFIG.monster.scale);
   }
@@ -839,6 +868,7 @@ export class GameScene {
     this.particles.ring(this.monster.kind.fx.particle, p, radius * 0.6, 24);
     this.rig.addTrauma(0.25);
     this.monster.body.arms?.spin();
+    this.monster.body.nova?.();
   }
 
   /** Acid Mortar: lob globs at priority ground threats (artillery, SAMs, trucks, then tanks). */
@@ -910,6 +940,7 @@ export class GameScene {
     if (r.damage <= 0) return;
     m.hp = Math.max(0, m.hp - r.damage);
     m.flash();
+    if (this.passives.core()) this.heat = heatAfterHit(this.heat, r.damage, m.maxHp, CONFIG.passives.core.gain);
     this.rig.addTrauma(Math.min(0.4, 0.03 + r.damage * 0.004));
     if (m.hp <= 0) this.startDying();
   }
@@ -956,8 +987,8 @@ export class GameScene {
       return;
     }
     let target = this.pickTarget(x, y);
-    // A hurler cannot hit flyers, so a tap on one is a plain move tap.
-    if (target?.airborne && this.monster.kind.ranged === 'hurl') target = null;
+    // A hurler or lobber cannot hit flyers, so a tap on one is a plain move tap.
+    if (target?.airborne && (this.monster.kind.ranged === 'hurl' || this.monster.kind.ranged === 'lob')) target = null;
     if (target) {
       this.order = { kind: 'attack', target };
       this.markers.setTarget(target);
@@ -1018,8 +1049,49 @@ export class GameScene {
     this.rig.addTrauma(0.3);
   }
 
+  /**
+   * Molten Fist lands at `p` (the clamped strike point). Ahead: a slam splashes ground enemies and buildings
+   * around the fist. Beside or behind: a backhand sweeps everything in an arc on that side, within reach.
+   */
+  private fistImpact(p: THREE.Vector3): void {
+    const m = this.monster;
+    const F = CONFIG.golem.fist;
+    const s = this.progression.stats;
+    const from = { x: m.position.x, z: m.position.z };
+    const dmg = this.ms.meleeDamage * this.dmgMult();
+    const bearing = bearingTo(from, m.yaw, p);
+    if (fistKind(bearing, F.frontHalf) === 'slam') {
+      const r = this.ms.meleeRadius * s.stompRadiusMult;
+      const at = { x: p.x, z: p.z };
+      this.city.forEachStandingInRadius(at, r, (t) => t.applyDamage(dmg * F.buildingMult));
+      for (const t of footTargets(at, r, this.enemyTargets())) t.applyDamage(dmg);
+      this.particles.ring('dust', p, r, 16);
+      this.particles.emit('magma', this.tmpV.copy(p).setY(20), 12, 1.2);
+      this.particles.emit('debris', this.tmpV.copy(p).setY(10), 8, 1.1);
+      this.rig.addTrauma(0.35);
+      return;
+    }
+    const reach = this.ms.meleeRange * s.stompRadiusMult;
+    const yaw = backhandYaw(m.yaw, bearing, F.backhandCenter);
+    for (const t of arcTargets(from, yaw, reach, F.backhandHalf, this.enemyTargets())) t.applyDamage(dmg);
+    const buildings: Target[] = [];
+    this.city.forEachStandingInRadius(from, reach, (t) => buildings.push(t));
+    for (const t of arcTargets(from, yaw, reach, F.backhandHalf, buildings)) t.applyDamage(dmg * F.buildingMult);
+    for (let i = -2; i <= 2; i++) {
+      const a = yaw + (i / 2) * F.backhandHalf;
+      this.tmpV.set(from.x + Math.sin(a) * reach * 0.7, 0, from.z + Math.cos(a) * reach * 0.7);
+      this.particles.ring('dust', this.tmpV, 60, 6);
+      this.particles.emit('debris', this.tmpV.setY(15), 3, 1);
+    }
+    this.rig.addTrauma(0.3);
+  }
+
   private meleeImpact(p: THREE.Vector3): void {
     const shape = this.monster.kind.melee;
+    if (shape.kind === 'fist') {
+      this.fistImpact(p);
+      return;
+    }
     if (shape.kind === 'arc') {
       this.clawRake(shape.halfAngle);
       return;
@@ -1044,13 +1116,14 @@ export class GameScene {
     if (!m.busy) {
       // A breather only picks targets its neck can reach, so the body never has to turn away from its path.
       const reach = this.ms.meleeRange * 0.8;
+      const groundOnly = m.kind.ranged === 'hurl' || m.kind.ranged === 'lob';
       const rangedPool =
         m.kind.ranged === 'breath' ? this.enemyTargets().filter((t) => this.canBreatheAt(t))
-        : m.kind.ranged === 'hurl' ? this.enemyTargets().filter((t) => !t.airborne && Math.hypot(t.position.x - pos.x, t.position.z - pos.z) > reach)
+        : groundOnly ? this.enemyTargets().filter((t) => !t.airborne && Math.hypot(t.position.x - pos.x, t.position.z - pos.z) > reach)
         : this.enemyTargets();
       const auto = nearestInRange(pos, rangedPool, this.ms.rangedRange);
       const autoMelee = nearestInRange(pos, this.enemyTargets().filter((t) => !t.airborne), this.ms.meleeRange);
-      if (this.order?.kind === 'attack' && this.order.target.airborne && m.kind.ranged === 'hurl') {
+      if (this.order?.kind === 'attack' && this.order.target.airborne && groundOnly) {
         this.order = null;
         this.markers.setTarget(null);
       }
@@ -1093,6 +1166,7 @@ export class GameScene {
   private fireRanged(target: Target | null): void {
     if (this.monster.kind.ranged === 'breath') this.breathAt(target);
     else if (this.monster.kind.ranged === 'hurl') this.hurlAt(target);
+    else if (this.monster.kind.ranged === 'lob') this.lobAt(target);
     else this.fireSpikes(target);
   }
 
@@ -1115,6 +1189,25 @@ export class GameScene {
     for (const { arm, target } of assignStrikes(free, m.yaw, from, cands, this.ms.meleeRange)) {
       arms.start(arm, 'slam', target.position, target, cd, this.ms.meleeTiming);
     }
+  }
+
+  /** Magma Lob: back vents (1 + extra-projectile upgrades) lob bombs at the target and its nearest ground neighbours. */
+  private lobAt(target: Target | null): void {
+    if (!target || target.airborne) return;
+    const m = this.monster;
+    const from = { x: m.position.x, z: m.position.z };
+    const count = 1 + this.progression.stats.extraSpikes;
+    const others = this.enemyTargets()
+      .filter((t) => t.isAlive() && !t.airborne && Math.hypot(t.position.x - from.x, t.position.z - from.z) <= this.ms.rangedRange)
+      .sort((a, b) => a.position.distanceToSquared(target.position) - b.position.distanceToSquared(target.position));
+    const dmg = this.ms.rangedDamage * this.dmgMult();
+    for (const t of spikeTargets(target, others, count)) {
+      const vent = m.launchOrigin(new THREE.Vector3());
+      this.projectiles.fireBomb(vent, t.position.clone().setY(0), dmg);
+      this.particles.emit('magma', vent, 5, 0.7);
+      this.particles.emit('smoke', vent, 2, 0.4);
+    }
+    m.consumeRanged(this.rangedCdMult());
   }
 
   /** Hurl: free arms (1 + extra-projectile upgrades) throw rubble at the target and its nearest neighbours. */
@@ -1213,6 +1306,18 @@ export class GameScene {
   }
 
   private onProjectileHit = (h: Hit): void => {
+    if (h.kind === 'bomb') {
+      const L = CONFIG.golem.lob;
+      const at = { x: h.point.x, z: h.point.z };
+      this.city.forEachStandingInRadius(at, L.splash, (t) => t.applyDamage(h.damage));
+      for (const t of footTargets(at, L.splash, this.enemyTargets())) t.applyDamage(h.damage);
+      if (this.state === 'playing') this.acid.add(h.point.clone().setY(0), L.poolRadius, L.poolLife);
+      this.particles.ring('magma', h.point, L.splash, 12);
+      this.particles.emit('magma', h.point, 10, 1.2);
+      this.particles.emit('smoke', h.point, 3, 0.6);
+      this.rig.addTrauma(0.15);
+      return;
+    }
     if (h.kind === 'chunk') {
       const r = CONFIG.kraken.arms.hurl.splash;
       const at = { x: h.point.x, z: h.point.z };
