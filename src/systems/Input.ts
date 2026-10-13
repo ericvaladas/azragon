@@ -1,3 +1,4 @@
+import { KonamiTracker } from './konami';
 import { abilityKey, canTap, classifyGesture, isSkipKey, menuKey, pinchToWheel } from './tap';
 
 export type InputHandlers = {
@@ -11,6 +12,8 @@ export type InputHandlers = {
   skipKey(): boolean;
   /** Select-screen browse/confirm key; return true when the menu used it. */
   menuKey(k: 'left' | 'right' | 'confirm'): boolean;
+  /** The Konami code was just completed. */
+  konami(): void;
   };
 
 /**
@@ -31,6 +34,7 @@ export class Input {
   /** Set once a second finger lands; cleared only when all fingers lift, so a pinch never ends in a tap or drag. */
   private pinching = false;
   private pinchDist = 0;
+  private konami = new KonamiTracker();
 
   constructor(
     private el: HTMLElement,
@@ -128,6 +132,7 @@ export class Input {
   private onContextMenu = (e: Event) => e.preventDefault();
 
   private onKey = (e: KeyboardEvent) => {
+    if (!e.metaKey && !e.ctrlKey && !e.altKey && this.konami.push(e)) this.h.konami();
     const mk = menuKey(e);
     if (mk && this.h.menuKey(mk)) {
       e.preventDefault();

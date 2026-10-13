@@ -232,6 +232,15 @@ body {
   .cards { flex-direction: row; max-width: 720px; }
   .card { flex: 1; }
 }
+/* Every choice at once (Konami cheat): a scrolling grid, one column on phones, more as width allows. */
+.cards.cards-all {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  max-width: 720px;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
 .card {
   display: grid;
   grid-template-columns: 44px 1fr;

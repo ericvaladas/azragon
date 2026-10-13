@@ -102,6 +102,8 @@ export class GameScene {
   private hudT = 0;
   private stateBeforePause: GameState = 'playing';
   private debug: DebugOverlay | null = null;
+  /** Pending levels granted by the Konami cheat; each one's offer lists every choice. */
+  private cheatLevels = 0;
   private chevrons: Chevrons;
   private abilities = new Abilities();
   private shockwave: Shockwave;
@@ -203,6 +205,7 @@ export class GameScene {
         this.pressAbility(id);
         return true;
       },
+      konami: this.cheatLevelUp,
     });
 
     this.lighting.follow(new THREE.Vector3());
@@ -228,6 +231,7 @@ export class GameScene {
   /** Called by the React level-up cards. */
   chooseUpgrade(id: string, seq: number): void {
     if (this.state !== 'levelup' || !this.progression.choose(id, seq)) return;
+    if (this.cheatLevels > 0) this.cheatLevels--;
     if (id === 'dash' || id === 'roar') this.abilities.setRank(id, this.progression.ranks[id]);
     const s = this.progression.stats;
     const m = this.monster;
@@ -257,6 +261,7 @@ export class GameScene {
     this.particles.clear();
     this.monster.reset();
     this.progression.reset();
+    this.cheatLevels = 0;
     this.enemies.clear();
     this.rig.reset();
     this.order = null;
@@ -401,8 +406,9 @@ export class GameScene {
   }
 
   private emitOffer(): void {
-    const offers = this.progression.offer();
-    this.events.emit('levelUpOffer', { seq: this.progression.offerSeq, offers });
+    const all = this.cheatLevels > 0;
+    const offers = this.progression.offer(all);
+    this.events.emit('levelUpOffer', { seq: this.progression.offerSeq, offers, all });
   }
 
     private emitThreats(): void {
@@ -1233,6 +1239,16 @@ export class GameScene {
     }
     this.particles.explosion(h.point, 0.6);
     this.damageMonster(h.damage, h.kind === 'shell' ? 'shell' : 'rocket');
+  };
+
+  /** Konami-code cheat: grants exactly the EXP still needed for the next level; that level's offer lists every choice. */
+  private cheatLevelUp = (): void => {
+    if (this.state !== 'playing' || !this.monster.alive) return;
+    const exp = expToNext(this.progression.level) - this.progression.exp;
+    this.progression.addExp(exp);
+    this.cheatLevels++;
+    this.events.emit('expGain', exp);
+    this.startLevelUpMoment();
   };
 
   private onTargetDestroyed = (target: Target, exp: number): void => {

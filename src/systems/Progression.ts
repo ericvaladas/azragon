@@ -125,13 +125,14 @@ export class Progression {
     return gained;
   }
 
-    offer(): UpgradeOffer[] {
+    /** A random `offerCount` choices, or with `all`, every available choice (upgrades, then abilities, in definition order). */
+    offer(all = false): UpgradeOffer[] {
       this.offerSeq++;
       const abilities = this.poolAbilities().filter((id) => this.ranks[id] < MAX_RANK);
       const pool: string[] = [...(Object.keys(UPGRADES) as UpgradeId[]), ...abilities];
-      const ids = shuffle(pool, this.rng).slice(0, CONFIG.progression.offerCount);
+      const ids = all ? pool : shuffle(pool, this.rng).slice(0, CONFIG.progression.offerCount);
       const early = this.picks < CONFIG.passives.earlyAbilityPicks;
-      if (early && abilities.length > 0 && !ids.some((id) => id in ABILITIES)) {
+      if (!all && early && abilities.length > 0 && !ids.some((id) => id in ABILITIES)) {
         const choices = abilities.filter((a) => !ids.includes(a));
         ids[ids.length - 1] = choices[Math.floor(this.rng() * choices.length)]!;
       }

@@ -25,7 +25,8 @@ export type GameEventMap = {
   stateChange: GameState;
   hud: HudSnapshot;
   expGain: number;
-  levelUpOffer: { seq: number; offers: UpgradeOffer[] };
+  /** `all`: every available choice is listed (Konami-code levels), not the usual few. */
+  levelUpOffer: { seq: number; offers: UpgradeOffer[]; all: boolean };
   gameOver: RunStats;
   threats: ThreatArrow[];
   abilities: AbilityView[];

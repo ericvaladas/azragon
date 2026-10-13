@@ -44,7 +44,7 @@ function App() {
   const gameRef = useRef<GameScene | null>(null);
   const [state, setState] = useState<GameState>('loading');
   const [hud, setHud] = useState<HudSnapshot>(EMPTY_HUD);
-  const [offer, setOffer] = useState<{ seq: number; offers: UpgradeOffer[] } | null>(null);
+  const [offer, setOffer] = useState<{ seq: number; offers: UpgradeOffer[]; all: boolean } | null>(null);
   const [stats, setStats] = useState<RunStats | null>(null);
   const [threats, setThreats] = useState<ThreatArrow[]>([]);
   const [abilities, setAbilities] = useState<AbilityView[]>([]);
@@ -105,7 +105,7 @@ function App() {
         {hud.levelingUp && <div className="level-up-banner">Level Up!</div>}
         {state === 'playing' && <AbilityButtons views={abilities} onPress={press} />}
         {state === 'levelup' && offer && (
-          <LevelUpCards key={offer.seq} offers={offer.offers} onPick={(id) => pick(id, offer.seq)} />
+          <LevelUpCards key={offer.seq} offers={offer.offers} all={offer.all} onPick={(id) => pick(id, offer.seq)} />
         )}
         {state === 'gameover' && stats && <GameOver stats={stats} onRestart={restart} onChangeMonster={changeMonster} />}
       </div>
