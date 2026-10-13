@@ -86,6 +86,20 @@ describe('generateChunk', () => {
     for (const s of found) expect(Math.hypot(s.x, s.z) - Math.max(s.w, s.d) / 2).toBeGreaterThanOrEqual(2 * CRATER_RADIUS);
   });
 
+  it('spreads signs evenly: every block column and row with buildings has a signed one', () => {
+    const chunks = [generateChunk(TOKYO, 1337, 0, 2), generateChunk(ALL_NEON, 1337, 10, 7), generateChunk(ALL_NEON, 1337, 12, 7)];
+    for (const c of chunks) {
+      const signed = c.buildings.filter((b) => b.signs.length > 0).length;
+      expect(signed / c.buildings.length).toBeGreaterThanOrEqual(0.5);
+      if (c === chunks[0]) continue; // Shibuya mixes in unsigned residential blocks; evenness is pinned on the all-neon chunks
+      for (const axis of ['x', 'z'] as const) {
+        const groups = new Map<number, number>();
+        for (const b of c.buildings) groups.set(blockCell(b[axis]), (groups.get(blockCell(b[axis])) ?? 0) + (b.signs.length > 0 ? 1 : 0));
+        for (const n of groups.values()) expect(n).toBeGreaterThan(0);
+      }
+    }
+  });
+
   it('keeps every sign on its building: beside a face or on the roof, within its height', () => {
     for (const [cx, cz] of [[0, 2], [-2, 3], [-1, 4]] as const) {
       for (const b of generateChunk(TOKYO, 1337, cx, cz).buildings) {

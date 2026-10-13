@@ -98,7 +98,7 @@ export const CONFIG = {
     maxBuildings: 12000,
     maxTrees: 5000,
     /** Pool size for neon sign boxes across all loaded chunks. */
-    maxSigns: 6000,
+    maxSigns: 12000,
     /** Pool size for animated video-screen signs across all loaded chunks. */
     maxScreens: 60,
     /** Pool size for park ground pads across all loaded chunks. */

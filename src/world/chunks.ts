@@ -182,11 +182,17 @@ export function generateChunk(style: CityStyle, seed: number, cx: number, cz: nu
     kept = order.map((k) => buildings[k]!);
   }
   const out = [...specials, ...kept];
-  let signs = 0;
-  for (const b of out) {
-    const allowed = Math.max(0, SIGNS_PER_CHUNK - signs);
-    if (b.signs.length > allowed) b.signs.length = allowed;
-    signs += b.signs.length;
+  // Special-lot signs always stay; the rest of the budget is spread over random buildings by dropping signs at random.
+  const budget = Math.max(0, SIGNS_PER_CHUNK - specials.reduce((n, s) => n + s.signs.length, 0));
+  const pairs: { b: BuildingSpec; k: number; r: number }[] = [];
+  for (const b of kept) b.signs.forEach((_, k) => pairs.push({ b, k, r: rng() }));
+  if (pairs.length > budget) {
+    const drop = new Map<BuildingSpec, Set<number>>();
+    for (const p of pairs.sort((x, y) => x.r - y.r).slice(budget)) {
+      if (!drop.has(p.b)) drop.set(p.b, new Set());
+      drop.get(p.b)!.add(p.k);
+    }
+    for (const [b, ks] of drop) b.signs = b.signs.filter((_, k) => !ks.has(k));
   }
   return { buildings: out, trees, parks, landmarks };
 }
