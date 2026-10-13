@@ -3,7 +3,7 @@ import { CONFIG } from '../config';
 import { angleDelta, dist2, yawTo, type Vec2 } from '../util/math';
 import { leapPosition } from './leap';
 import { SWAT_TIMES, swatWeight, type SwatTiming } from './tailSwat';
-import type { BodyFrame, MonsterBody, MonsterKind, MonsterStats } from '../monsters/types';
+import type { BodyFrame, MonsterBody, MonsterKind, MonsterStats, StrikeKind } from '../monsters/types';
 
 type MeleeTiming = MonsterStats['meleeTiming'];
 
@@ -71,7 +71,9 @@ export class Monster {
     dt: 0, time: 0, cycle: 0, prevCycle: 0, motion: 0, pose: this.pose,
     melee: null, antiAir: null, roaring: false, airborne: false, dashing: false, tailSweep: null, lookAt: null, charge: 0, heat: 0, flash: false, glow: 0,
   };
-  private meleeFrame = { t: 0, side: 0, target: this.strikePoint };
+  private meleeFrame: { t: number; side: number; target: THREE.Vector3; kind?: StrikeKind } = { t: 0, side: 0, target: this.strikePoint };
+  /** The running strike's kind, when its starter decided one (the Wendigo's slam or backhand). */
+  private meleeKind: StrikeKind | undefined = undefined;
   private antiAirFrame = { t: 0, weight: 0, target: new THREE.Vector3() };
   private leapFrame = { t: 0, duration: 0, crouch: 0 };
 
@@ -257,9 +259,11 @@ export class Monster {
 
   /**
    * Melee strike on `side` (0 = left/+X, 1 = right) at `point` (world XZ, already clamped to reach), on the kind's
-   * meleeTiming unless the strike brings its own `timing` (the Wendigo's backhand).
+   * meleeTiming unless the strike brings its own `timing` (the Wendigo's backhand). `kind` (the Wendigo's slam or
+   * backhand, decided by the game) is passed on to the body, so the pose is the strike the damage uses.
    */
-  startMelee(cooldownMult: number, side: number, point: Vec2, timing?: MeleeTiming): void {
+  startMelee(cooldownMult: number, side: number, point: Vec2, timing?: MeleeTiming, kind?: StrikeKind): void {
+    this.meleeKind = kind;
     this.meleeTiming = timing ?? this.kind.stats.meleeTiming;
     this.meleeCd = this.kind.stats.meleeCooldown * cooldownMult;
     this.meleeT = 0;
@@ -289,6 +293,7 @@ export class Monster {
     if (this.meleeT >= 0) {
       this.meleeFrame.t = this.meleeT;
       this.meleeFrame.side = this.meleeSide;
+      this.meleeFrame.kind = this.meleeKind;
       f.melee = this.meleeFrame;
     } else f.melee = null;
     if (this.swatT >= 0 && this.swatTarget) {

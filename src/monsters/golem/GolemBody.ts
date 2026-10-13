@@ -959,7 +959,8 @@ export class GolemBody implements MonsterBody {
       this.root.updateMatrixWorld();
       this.frame.worldToLocal(_aim.copy(f.melee.target));
       _aim.y = FIST_R;
-      if (strikeStarted(this.meleePrevT, f.melee.t)) this.strikeKind = fistKind(Math.atan2(_aim.x, _aim.z), G.fist.frontHalf);
+      // The kind the game decided (and deals damage as); only a frame without one falls back to the same rule here.
+      if (strikeStarted(this.meleePrevT, f.melee.t)) this.strikeKind = f.melee.kind ?? fistKind(Math.atan2(_aim.x, _aim.z), G.fist.frontHalf);
       this.meleePrevT = f.melee.t;
       T = this.strikeTiming();
       hold = this.strikeHold();

@@ -1249,13 +1249,14 @@ export class GameScene {
       if (outsideArc && !d.moveTo && !d.face && d.meleeAt) m.faceToward(d.meleeAt, dt);
       if (d.attack === 'melee' && d.meleeAt && !outsideArc) {
         const plan = strikePlan(pos, m.yaw, d.meleeAt, this.ms.meleeRange);
-        // Rending Claws: slam or backhand is decided once, at the start (the body latches the same rule); the
-        // backhand swings on its own slower timeline.
+        // Rending Claws: slam or backhand is decided once, here at the start, and the body is told it (so the pose
+        // is the strike the damage uses); the backhand swings on its own slower timeline.
         if (shape.kind === 'fist') {
           this.fistStrike = fistKind(bearingTo(pos, m.yaw, plan.point), CONFIG.golem.fist.frontHalf);
           this.fistSide = plan.leg === FRONT_LEFT ? 1 : -1;
         }
-        m.startMelee(s.cooldownMult, plan.leg, plan.point, shape.kind === 'fist' && this.fistStrike === 'backhand' ? CONFIG.golem.fist.backhandTiming : undefined);
+        if (shape.kind === 'fist') m.startMelee(s.cooldownMult, plan.leg, plan.point, this.fistStrike === 'backhand' ? CONFIG.golem.fist.backhandTiming : undefined, this.fistStrike);
+        else m.startMelee(s.cooldownMult, plan.leg, plan.point);
       }
       if (d.attack === 'ranged') this.fireRanged(d.attackOn === 'order' && this.order?.kind === 'attack' ? this.order.target : auto);
     }

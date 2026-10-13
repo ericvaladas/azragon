@@ -60,6 +60,9 @@ export type FxTheme = {
   shards?: number;
 };
 
+/** A Rending Claws strike's kind (Wendigo), decided once by the game as it starts; the body poses that one. */
+export type StrikeKind = 'slam' | 'backhand';
+
 /** One frame of pose input for a body; positions are world space. */
 export type BodyFrame = {
   dt: number;
@@ -70,7 +73,7 @@ export type BodyFrame = {
   motion: number;
   pose: { dip: number; pitch: number; collapse: number };
   /** Active melee strike: seconds since start, which side (0 = left/+X, 1 = right), world target. */
-  melee: { t: number; side: number; target: THREE.Vector3 } | null;
+  melee: { t: number; side: number; target: THREE.Vector3; kind?: StrikeKind } | null;
   /** Active leap: seconds since it started, its duration, and the fraction of it crouched before liftoff. */
   leap?: { t: number; duration: number; crouch: number } | null;
   /** Active anti-air strike: seconds since it started, reach weight (swatWeight curve) toward the world target. */

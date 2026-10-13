@@ -221,5 +221,20 @@ describe('INSECT kind', () => {
     m.animate(0.016, 0);
     expect(body.last!.leap).toEqual({ t: expect.closeTo(0.1, 5), duration: CONFIG.abilities.leap.duration, crouch: 0.2 });
   });
+
+  it("tells its body the strike's kind when the strike was started with one (none for kinds that don't use it)", () => {
+    const body = stubBody();
+    const m = new Monster(new THREE.Scene(), { ...kind(), createBody: () => body });
+    m.startMelee(1, 0, { x: 0, z: 200 }, undefined, 'backhand');
+    m.tick(0.05);
+    m.animate(0.016, 0);
+    expect(body.last!.melee!.kind).toBe('backhand');
+    const body2 = stubBody();
+    const m2 = new Monster(new THREE.Scene(), { ...kind(), createBody: () => body2 });
+    m2.startMelee(1, 0, { x: 0, z: 200 });
+    m2.tick(0.05);
+    m2.animate(0.016, 0);
+    expect(body2.last!.melee!.kind).toBeUndefined();
+  });
 });
 
