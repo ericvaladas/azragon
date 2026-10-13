@@ -180,7 +180,7 @@ export class ShadowHands {
       else {
         const from = h.released ? h.target.position : h.held;
         _a.copy(from).lerp(_c.copy(h.base).setY(-30), ph.drag);
-        if (h.t < HAND_T.hold) _a.x += Math.sin(h.t * 90) * 3;
+        if (h.t < HAND_T.hold) _a.x += Math.sin(h.t * 65) * 3;
         // The wreck goes down with the hand (purely visual: the flyer is already destroyed).
         if (!h.released && !h.target.isAlive() && ph.drag < 1) h.target.position.copy(_a);
       }
@@ -240,7 +240,7 @@ export class ShadowHands {
         _p.copy(_w).addScaledVector(_f, PALM.len * HS).addScaledVector(_s, off * PALM.width * 0.42 * HS);
         const spread = (0.55 - 0.42 * g) * off;
         _fd.copy(_f).multiplyScalar(Math.cos(spread)).addScaledVector(_s, Math.sin(spread));
-        const curl = -0.3 + 1.45 * g + 0.08 * Math.sin(h.t * 17 + fi * 2.1 + h.seed);
+        const curl = -0.3 + 1.45 * g + 0.08 * Math.sin(h.t * 12.5 + fi * 2.1 + h.seed);
         let th = 0;
         for (let j = 0; j < 3; j++) {
           th += curl * (j === 0 ? 0.75 : 1);
@@ -267,7 +267,7 @@ export class ShadowHands {
       // Shadow pool: two ragged discs turning against each other.
       const pr = (70 + 5 * Math.sin(h.t * 6 + h.seed)) * ph.pool;
       this.disc(np++, h.base, pr, h.t * 0.9 + h.seed, 3, POOL_OUTER);
-      this.disc(np++, h.base, pr * 0.62, -h.t * 1.4, 4, POOL_INNER);
+      this.disc(np++, h.base, pr * 0.62, -h.t * 1.05, 4, POOL_INNER);
 
       // Smoke: a column boiling up as the arm rises, wisps off the bones, and a burst as it all dissolves.
       if (h.t < HAND_T.emerge && Math.random() < 0.5) particles.emit('shade', _p.copy(h.base).setY(10), 1, 0.5);

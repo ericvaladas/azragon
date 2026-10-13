@@ -10,8 +10,27 @@ describe('handPhase', () => {
     expect(handPhase(0).rise).toBe(0);
     expect(handPhase(HAND_T.emerge).rise).toBeCloseTo(0.25);
     expect(handPhase(HAND_T.impact).rise).toBeCloseTo(1);
-    expect(handPhase(HAND_T.impact - 0.05).grip).toBe(0);
-    expect(handPhase(HAND_T.impact + 0.08).grip).toBeCloseTo(1);
+    expect(handPhase(HAND_T.impact - 0.07).grip).toBe(0);
+    expect(handPhase(HAND_T.impact).grip).toBeGreaterThan(0.2);
+    expect(handPhase(HAND_T.impact).grip).toBeLessThan(0.6);
+    expect(handPhase(HAND_T.impact + 0.12).grip).toBeCloseTo(1);
+  });
+  it('plays every phase about a third slower than the original grab, one heavy motion with the claw swat', () => {
+    // Original phases (s): emerge 0.12, lunge 0.10, crush 0.14, drag 0.60, dissolve 0.45; fingers closed in 0.12.
+    const ratio = (now: number, was: number) => now / was;
+    for (const [now, was] of [
+      [HAND_T.emerge, 0.12],
+      [HAND_T.impact - HAND_T.emerge, 0.1],
+      [HAND_T.hold - HAND_T.impact, 0.14],
+      [HAND_T.drag - HAND_T.hold, 0.6],
+      [HAND_T.total - HAND_T.drag, 0.45],
+      [HAND_T.close, 0.12],
+    ] as const) {
+      expect(ratio(now, was)).toBeGreaterThanOrEqual(1.29);
+      expect(ratio(now, was)).toBeLessThanOrEqual(1.41);
+    }
+    // The fingers take HAND_T.close to shut: barely started before, shut after.
+    expect(handPhase(HAND_T.impact + HAND_T.close * 0.6).grip).toBeLessThan(1);
   });
   it('rises monotonically, drags only after the hold, then fades out by the end', () => {
     let prev = -1;

@@ -8,16 +8,17 @@ import { swatTiming } from '../../monster/tailSwat';
 export const WENDIGO_SWAT = swatTiming(0.16, 0.13, 0.11, 0.31);
 
 /**
- * Shadow Hands timeline (s from the grab's start), on the Wendigo's anti-air clock: the hand bursts out of its pool
- * by EMERGE, lunges onto the flyer by IMPACT (when the anti-air damage lands), crushes until HOLD, drags the wreck
- * down to the pool by DRAG, then dissolves into smoke by TOTAL.
+ * Shadow Hands timeline (s from the grab's start), on the Wendigo's anti-air clock and as slow and heavy as its claw
+ * swat: the hand bursts out of its pool by EMERGE, lunges onto the flyer by IMPACT (when the anti-air damage lands),
+ * crushes until HOLD, drags the wreck down to the pool by DRAG, then dissolves into smoke by TOTAL. Its fingers take
+ * CLOSE s to shut, starting just before IMPACT.
  */
 export const HAND_T = (() => {
   const emerge = WENDIGO_SWAT.windup;
   const impact = WENDIGO_SWAT.impact;
-  const hold = impact + 0.14;
-  const drag = hold + 0.6;
-  return { emerge, impact, hold, drag, total: drag + 0.45 };
+  const hold = impact + 0.19;
+  const drag = hold + 0.8;
+  return { emerge, impact, hold, drag, total: drag + 0.6, close: 0.16 };
 })();
 
 export type HandPhase = {
@@ -59,12 +60,12 @@ export function handPhase(t: number, released = false): HandPhase {
     const u = clamp01((t - T.emerge) / (T.impact - T.emerge));
     rise = 0.25 + 0.75 * (1 - (1 - u) * (1 - u));
   }
-  // Clawed as it surfaces, spread wide during the lunge, snapping shut just as it arrives.
+  // Clawed as it surfaces, spread wide during the lunge, closing hard as it arrives.
   let grip: number;
   if (t < T.emerge) grip = 0.35 * (1 - t / T.emerge);
-  else if (t < T.impact - 0.04) grip = 0;
-  else grip = smooth(clamp01((t - (T.impact - 0.04)) / 0.12));
-  if (released && t > T.hold) grip *= 1 - clamp01((t - T.hold) / 0.2);
+  else if (t < T.impact - 0.06) grip = 0;
+  else grip = smooth(clamp01((t - (T.impact - 0.06)) / T.close));
+  if (released && t > T.hold) grip *= 1 - clamp01((t - T.hold) / 0.27);
   // The drag accelerates (ease-in): a slow first pull, then a yank into the ground.
   const d = clamp01((t - T.hold) / (T.drag - T.hold));
   const drag = d * d * d;
