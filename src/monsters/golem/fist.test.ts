@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { backhandYaw, bearingTo, fistKind, lungeAmount, lungeWeight, strikeReturn, strikeStarted } from './fist';
+import { backhandSweep, backhandYaw, bearingTo, fistKind, lungeAmount, lungeWeight, strikeReturn, strikeStarted } from './fist';
 
 describe('Rending Claws', () => {
   it('measures bearing from the nose, positive toward the left (+X)', () => {
@@ -60,4 +60,31 @@ describe('Rending Claws', () => {
     expect(lungeAmount(450, 380, 150)).toBeCloseTo(70);
     expect(lungeAmount(600, 380, 150)).toBe(150);
   });
+
+  it('sweeps the backhand from the cock to contact at impact, still moving, then carries through and stops', () => {
+    const T = { windup: 0.36, impact: 0.57, end: 1.15 };
+    const hold = 0.14;
+    expect(backhandSweep(0, T, hold)).toBe(0);
+    expect(backhandSweep(T.windup, T, hold)).toBe(0);
+    expect(backhandSweep(T.impact, T, hold)).toBeCloseTo(1);
+    const peak = backhandSweep(T.impact + hold, T, hold);
+    expect(peak).toBeGreaterThan(1.05);
+    expect(peak).toBeLessThan(1.25);
+    expect(backhandSweep(T.end, T, hold)).toBeCloseTo(peak);
+    // Eases out of the cock (no jump), still fast at contact, slowing through the follow-through.
+    const dt = 0.005;
+    const v = (t: number) => (backhandSweep(t + dt, T, hold) - backhandSweep(t, T, hold)) / dt;
+    expect(v(T.windup)).toBeLessThan(1);
+    expect(v(T.impact - dt)).toBeGreaterThan(4);
+    expect(v(T.impact)).toBeLessThan(v(T.impact - dt));
+    expect(v(T.impact + hold - dt)).toBeLessThan(0.5);
+    let prev = 0;
+    for (let t = 0; t <= T.end; t += dt) {
+      const u = backhandSweep(t, T, hold);
+      expect(u).toBeGreaterThanOrEqual(prev - 1e-12);
+      expect(u - prev).toBeLessThan(0.06);
+      prev = u;
+    }
+  });
 });
+

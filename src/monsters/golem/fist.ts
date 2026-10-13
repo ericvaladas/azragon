@@ -37,6 +37,21 @@ export function strikeReturn(t: number, T: { impact: number; end: number }, hold
   return u <= 0 ? 0 : u >= 1 ? 1 : smooth(u);
 }
 
+/** How far past the contact point (fraction of the sweep) the backhand carries through before it stops. */
+const CARRY = 0.14;
+
+/**
+ * Backhand sweep progress at `t` on timeline T: 0 at the cock (end of the windup), easing out of it, 1 at contact at
+ * the impact (still moving fast), then carrying on to 1 + CARRY, decelerating to a stop over `hold` s; it rests there
+ * while the hand eases home.
+ */
+export function backhandSweep(t: number, T: { windup: number; impact: number }, hold: number): number {
+  if (t <= T.windup) return 0;
+  if (t < T.impact) return Math.pow((t - T.windup) / (T.impact - T.windup), 1.6);
+  const s = Math.min(1, (t - T.impact) / hold);
+  return 1 + CARRY * (1 - (1 - s) * (1 - s));
+}
+
 /** How far the body lunges toward a target `dist` away: nothing within `from`, then the shortfall, capped at `max`. */
 export function lungeAmount(dist: number, from: number, max: number): number {
   return Math.min(max, Math.max(0, dist - from));

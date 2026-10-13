@@ -3,7 +3,9 @@ import { CONFIG } from '../config';
 import { angleDelta, dist2, yawTo, type Vec2 } from '../util/math';
 import { leapPosition } from './leap';
 import { SWAT_TIMES, swatWeight, type SwatTiming } from './tailSwat';
-import type { BodyFrame, MonsterBody, MonsterKind } from '../monsters/types';
+import type { BodyFrame, MonsterBody, MonsterKind, MonsterStats } from '../monsters/types';
+
+type MeleeTiming = MonsterStats['meleeTiming'];
 
 const FACE_BEFORE_WALK = 1.0; // radians of yaw error allowed while walking
 
@@ -60,6 +62,8 @@ export class Monster {
   private meleeCd = 0;
   private rangedCd = 0;
   private meleeT = -1;
+  /** The running strike's timeline. */
+  private meleeTiming: MeleeTiming = { windup: 0, impact: 0, end: 0 };
   private impactDone = false;
   private meleeSide = 0;
   private strikePoint = new THREE.Vector3();
@@ -249,8 +253,12 @@ export class Monster {
     return this.alive && this.rangedCd <= 0;
   }
 
-  /** Melee strike on `side` (0 = left/+X, 1 = right) at `point` (world XZ, already clamped to reach). */
-  startMelee(cooldownMult: number, side: number, point: Vec2): void {
+  /**
+   * Melee strike on `side` (0 = left/+X, 1 = right) at `point` (world XZ, already clamped to reach), on the kind's
+   * meleeTiming unless the strike brings its own `timing` (the Wendigo's backhand).
+   */
+  startMelee(cooldownMult: number, side: number, point: Vec2, timing?: MeleeTiming): void {
+    this.meleeTiming = timing ?? this.kind.stats.meleeTiming;
     this.meleeCd = this.kind.stats.meleeCooldown * cooldownMult;
     this.meleeT = 0;
     this.impactDone = false;
@@ -362,7 +370,7 @@ export class Monster {
       return;
     }
     this.meleeT += dt;
-    const T = this.kind.stats.meleeTiming;
+    const T = this.meleeTiming;
     if (this.meleeT < T.windup) {
       // Rear back slightly while the strike cocks.
       this.pose.pitch = -0.12 * (this.meleeT / T.windup);

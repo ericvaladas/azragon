@@ -247,7 +247,14 @@ export const CONFIG = {
      * Rending Claws: targets within `frontHalf` (rad) of dead ahead take a slam; others a backhand whose hit arc
      * is centred `backhandCenter` rad off the nose on the target's side, ±`backhandHalf`. Buildings take buildingMult×.
      */
-    fist: { frontHalf: 0.75, backhandCenter: 1.95, backhandHalf: 1.25, buildingMult: 2 },
+    fist: {
+      frontHalf: 0.75,
+      backhandCenter: 1.95,
+      backhandHalf: 1.25,
+      buildingMult: 2,
+      /** The backhand's own timeline (s): a slower, heavier coil, sweep and follow-through than the slam's meleeTiming. */
+      backhandTiming: { windup: 0.36, impact: 0.57, end: 1.15 },
+    },
     /**
      * Dread Gaze: the target burns `delay` s after the Wendigo looks at it, then the black fire flares over `splash` m;
      * it leaves a patch of black fire (radius m, life s).

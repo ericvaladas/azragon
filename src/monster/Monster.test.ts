@@ -153,4 +153,34 @@ describe('INSECT kind', () => {
     expect(slow.hit).toBeCloseTo(own.impact, 1);
     expect(slow.end).toBeCloseTo(own.total, 1);
   });
+
+  it('times a melee strike by its kind, unless the strike brings its own timeline (the Wendigo backhand)', () => {
+    const impactAt = (timing?: { windup: number; impact: number; end: number }) => {
+      const m = new Monster(new THREE.Scene(), kind());
+      let hit = -1;
+      let t = 0;
+      m.onMeleeImpact = () => { hit = t; };
+      m.startMelee(1, 0, { x: 0, z: 200 }, timing);
+      let end = -1;
+      for (let i = 0; i < 300; i++) {
+        m.tick(0.01);
+        t += 0.01;
+        if (end < 0 && (m as unknown as { meleeT: number }).meleeT < 0) end = t;
+      }
+      return { hit, end };
+    };
+    const T = INSECT.stats.meleeTiming;
+    const own = impactAt();
+    expect(own.hit).toBeCloseTo(T.impact, 1);
+    expect(own.end).toBeCloseTo(T.end, 1);
+    const slow = impactAt({ windup: 0.4, impact: 0.6, end: 1.2 });
+    expect(slow.hit).toBeCloseTo(0.6, 1);
+    expect(slow.end).toBeCloseTo(1.2, 1);
+  });
+  it('leaves the Insect, Kaiju and Kraken melee timelines as they were', () => {
+    expect(INSECT.stats.meleeTiming).toEqual({ windup: 0.3, impact: 0.3 + STRIKE_TIMES.strike, end: 0.3 + STRIKE_TIMES.recover });
+    expect(CONFIG.kaiju.stats.meleeTiming).toEqual({ windup: 0.25, impact: 0.4, end: 0.8 });
+    expect(CONFIG.kraken.stats.meleeTiming).toEqual({ windup: 0.3, impact: 0.45, end: 0.85 });
+  });
 });
+

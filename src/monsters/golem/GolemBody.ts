@@ -3,7 +3,7 @@ import { CONFIG } from '../../config';
 import { faceted, toonMat } from '../../render/toon';
 import { solveTwoBone } from '../../monster/ik';
 import type { BodyFrame, MonsterBody } from '../types';
-import { fistKind, lungeAmount, lungeWeight, strikeReturn, strikeStarted, type FistKind } from './fist';
+import { backhandSweep, fistKind, lungeAmount, lungeWeight, strikeReturn, strikeStarted, type FistKind } from './fist';
 import { merge, piece, rng, SHAPES, type V3 } from './golemParts';
 import { clawRaise } from './handMath';
 import { SWING, limbPlanted, limbSwing } from './knuckleGait';
@@ -44,6 +44,8 @@ const ARM_REACH = UPPER + FORE - 30;
  */
 const PLANTED_REACH = UPPER + FORE - 10;
 const POSED_REACH = UPPER + FORE - 12;
+/** The lowest a posed hand's palm goes (its claws reach FIST_R below it): a sweep never drives them into the ground. */
+const HAND_FLOOR = FIST_R - 10;
 /**
  * Rending Claws lunge: for a target farther than the hand reaches standing (LUNGE_FROM for a slam, BACKHAND_R for a
  * backhand), the torso shifts toward the strike by the shortfall (up to LUNGE_MAX), sinks up to LUNGE_DROP and leans
@@ -53,8 +55,12 @@ const LUNGE_FROM = 380;
 const LUNGE_MAX = 200;
 const LUNGE_DROP = 60;
 const LUNGE_LEAN = 0.25;
-/** Rending Claws: seconds the hand stays on its target after impact before it eases home. */
+/**
+ * Rending Claws: seconds the hand stays on its target after a slam's impact before it eases home; a backhand's
+ * hand carries through for BACKHAND_HOLD instead (on its own, slower timeline, CONFIG.golem.fist.backhandTiming).
+ */
 const STRIKE_HOLD = 0.1;
+const BACKHAND_HOLD = 0.14;
 /** Withering Ring: seconds for both hands to rise and slam. */
 const NOVA_TIME = 0.6;
 /**
@@ -771,7 +777,8 @@ export class GolemBody implements MonsterBody {
   animate(f: BodyFrame, onFootLand: (p: THREE.Vector3) => void): void {
     const m = f.motion;
     const S = G.stats.strideLength;
-    const T = G.stats.meleeTiming;
+    let T: { windup: number; impact: number; end: number } = G.stats.meleeTiming;
+    let hold = STRIKE_HOLD;
     // Half the distance a planted limb slides back during stance, so it stays still on the ground.
     const A = ((1 - SWING) * S) / 2;
     if (this.novaT >= 0) {
@@ -790,9 +797,11 @@ export class GolemBody implements MonsterBody {
       _aim.y = FIST_R;
       if (strikeStarted(this.meleePrevT, f.melee.t)) this.strikeKind = fistKind(Math.atan2(_aim.x, _aim.z), G.fist.frontHalf);
       this.meleePrevT = f.melee.t;
+      T = this.strikeTiming();
+      hold = this.strikeHold();
       // A slam lunges at the target; a backhand toward the end of its sweep, so the sweep ends at the target's distance.
       const from = this.strikeKind === 'slam' ? LUNGE_FROM : BACKHAND_R;
-      const k = (lungeAmount(Math.hypot(_aim.x, _aim.z), from, LUNGE_MAX) / LUNGE_MAX) * lungeWeight(f.melee.t, T, STRIKE_HOLD);
+      const k = (lungeAmount(Math.hypot(_aim.x, _aim.z), from, LUNGE_MAX) / LUNGE_MAX) * lungeWeight(f.melee.t, T, hold);
       leanA = this.strikeKind === 'slam' ? Math.atan2(_aim.x, _aim.z) : (f.melee.side === 0 ? 1 : -1) * G.fist.backhandCenter;
       _lunge.set(Math.sin(leanA) * LUNGE_MAX * k, -LUNGE_DROP * k, Math.cos(leanA) * LUNGE_MAX * k);
       lean = LUNGE_LEAN * k;
@@ -819,7 +828,7 @@ export class GolemBody implements MonsterBody {
       if (striking) {
         const t = f.melee!.t;
         this.strikePose(t, sx, gait, want);
-        if (this.strikeKind === 'backhand') this.extend[side] = t < T.windup ? 0 : t < T.impact ? smooth(T.windup, T.impact, t) : 1 - strikeReturn(t, T, STRIKE_HOLD);
+        if (this.strikeKind === 'backhand') this.extend[side] = t < T.windup ? 0 : t < T.impact ? smooth(T.windup, T.impact, t) : 1 - strikeReturn(t, T, hold);
       }
       if (nova >= 0) {
         // Rise, slam down by 0.65, then ease back to the gait pose.
@@ -861,7 +870,7 @@ export class GolemBody implements MonsterBody {
       this.strikePose(Math.min(T.end, t + RECRUIT_LEAD), sx, this.gaitAt[side]!, _lead);
       twistT += sx * reachTwist(this.outBearing(_lead, sx), SWEEP_LO, SWEEP_HI, TWIST_MAX);
       // 0 → 1 through the windup, held to impact and the hold, then back to 0 by the end.
-      const env = t < T.windup ? smooth(0, 1, t / T.windup) : 1 - strikeReturn(t, T, STRIKE_HOLD);
+      const env = t < T.windup ? smooth(0, 1, t / T.windup) : 1 - strikeReturn(t, T, hold);
       const u = Math.min(1, Math.max(0, (t - T.windup) / (T.impact - T.windup)));
       if (this.strikeKind === 'slam') {
         // Turn into the target; rear back as the claw rises, then drive the shoulders down onto it.
@@ -943,18 +952,32 @@ export class GolemBody implements MonsterBody {
       const len = Math.min(planted ? PLANTED_REACH : POSED_REACH, _tmp.length());
       if (!planted) this.holdToShoulder(_tmp, sx);
       _fist.copy(_sh).add(_tmp.setLength(len));
+      if (!planted && _fist.y < HAND_FLOOR) {
+        // Keep the claws out of the ground: lift the hand to the floor, pulling it in to keep the arm's length.
+        const dy = HAND_FLOOR - _sh.y;
+        const h = Math.hypot(_fist.x - _sh.x, _fist.z - _sh.z);
+        const k = h > 1e-6 ? Math.sqrt(Math.max(0, len * len - dy * dy)) / h : 0;
+        _fist.set(_sh.x + (_fist.x - _sh.x) * k, HAND_FLOOR, _sh.z + (_fist.z - _sh.z) * k);
+      }
       // Elbows out and back (torso space), so they turn with the body; outside the arm's range, so never inverts.
       _ref.set(sx * 260, -40, -260).applyQuaternion(this.body.quaternion);
       _pole.copy(_sh).add(_ref);
       solveTwoBone(_sh, _fist, UPPER, FORE, _pole, _elbow);
       if (!planted) {
-        // The elbow's bend can carry the upper arm past the range: turn the whole arm back about the shoulder.
-        _tmp.subVectors(_elbow, _sh).normalize();
-        _clamp.copy(_tmp);
-        if (this.holdToShoulder(_clamp, sx) > 0) {
-          _q.setFromUnitVectors(_tmp, _clamp);
-          _elbow.sub(_sh).applyQuaternion(_q).add(_sh);
-          _fist.sub(_sh).applyQuaternion(_q).add(_sh);
+        // The elbow's bend can carry the upper arm past the range, and turning it back can drop the claws into the
+        // ground: turn the whole arm about the shoulder for each in turn, the shoulder's range last (it wins).
+        for (let pass = 0; pass < 3; pass++) {
+          _tmp.subVectors(_elbow, _sh).normalize();
+          _clamp.copy(_tmp);
+          if (this.holdToShoulder(_clamp, sx) > 0) this.turnArm(_q.setFromUnitVectors(_tmp, _clamp));
+          if (pass === 2 || _fist.y >= HAND_FLOOR) break;
+          _tmp.subVectors(_fist, _sh);
+          const l = _tmp.length();
+          const dy = Math.max(-l, HAND_FLOOR - _sh.y);
+          const h = Math.hypot(_tmp.x, _tmp.z);
+          const k = h > 1e-6 ? Math.sqrt(Math.max(0, l * l - dy * dy)) / h : 0;
+          _clamp.set(_tmp.x * k, dy, _tmp.z * k).normalize();
+          this.turnArm(_q.setFromUnitVectors(_tmp.normalize(), _clamp));
         }
       }
       placeLimb(arm.upper, _sh, _elbow, _ref);
@@ -1030,6 +1053,12 @@ export class GolemBody implements MonsterBody {
     _rel.multiplyMatrices(this.body.matrix, this.shell.matrix);
   }
 
+  /** Turn the arm being posed (`_elbow`, `_fist`) by q about its shoulder `_sh`. */
+  private turnArm(q: THREE.Quaternion): void {
+    _elbow.sub(_sh).applyQuaternion(q).add(_sh);
+    _fist.sub(_sh).applyQuaternion(q).add(_sh);
+  }
+
   /** How far (units) the worst planted limb is beyond its reach in the current body pose (≤ 0 when all reach). */
   private overstretch(): number {
     let worst = -Infinity;
@@ -1065,34 +1094,46 @@ export class GolemBody implements MonsterBody {
   /**
    * Rending Claws (root space; `_aim` holds the target and `_lunge` the body's lunge). Slam: rise, then drop onto the
    * target. Backhand: cock across the chest, then sweep out around the side in a wide arc toward the target's bearing
-   * (as far round as BACKHAND_END_MAX; the torso's turn carries it the rest). Both hold on the target for
-   * STRIKE_HOLD, then ease back to the gait position. The kind is the one latched at the strike's start.
+   * (as far round as BACKHAND_END_MAX; the torso's turn carries it the rest), carrying through past contact. A slam
+   * holds on the target for STRIKE_HOLD; then both ease back to the gait position. The kind (and so the timeline) is
+   * the one latched at the strike's start.
    */
   private strikePose(t: number, sx: number, gait: THREE.Vector3, out: THREE.Vector3): void {
-    const T = G.stats.meleeTiming;
+    const T = this.strikeTiming();
+    const hold = this.strikeHold();
     if (this.strikeKind === 'slam') {
       mirror(SLAM_RAISE, sx, _raise);
       if (t < T.windup) out.lerpVectors(gait, _raise, smooth(0, 1, t / T.windup));
       else if (t < T.impact) {
         const u = (t - T.windup) / (T.impact - T.windup);
         out.lerpVectors(_raise, _aim, u * u);
-      } else out.lerpVectors(_aim, gait, strikeReturn(t, T, STRIKE_HOLD));
+      } else out.lerpVectors(_aim, gait, strikeReturn(t, T, hold));
       return;
     }
     mirror(BACKHAND_COCK, sx, _raise);
     const a0 = Math.atan2(_raise.x, _raise.z);
     const r0 = Math.hypot(_raise.x, _raise.z);
     const a1 = sx * Math.max(BACKHAND_END_MIN, Math.min(BACKHAND_END_MAX, Math.abs(Math.atan2(_aim.x, _aim.z))));
-    _end.set(Math.sin(a1) * BACKHAND_SWEEP_R + _lunge.x, FIST_R + 30, Math.cos(a1) * BACKHAND_SWEEP_R + _lunge.z);
-    if (t < T.windup) out.lerpVectors(gait, _raise, smooth(0, 1, t / T.windup));
-    else if (t < T.impact) {
-      // Accelerating through the sweep: fastest at impact.
-      const v = (t - T.windup) / (T.impact - T.windup);
-      const u = 0.4 * v + 0.6 * v * v;
+    // Along the sweep at progress u (backhandSweep: 1 is contact, past 1 the carry-through), round the body.
+    const at = (u: number, o: THREE.Vector3) => {
       const a = a0 + (a1 - a0) * u;
-      const r = r0 + (BACKHAND_SWEEP_R - r0) * u;
-      out.set(Math.sin(a) * r + _lunge.x, _raise.y + (_end.y - _raise.y) * u, Math.cos(a) * r + _lunge.z);
-    } else out.lerpVectors(_end, gait, strikeReturn(t, T, STRIKE_HOLD));
+      const k = Math.min(1, u);
+      const r = r0 + (BACKHAND_SWEEP_R - r0) * k;
+      return o.set(Math.sin(a) * r + _lunge.x, _raise.y + (FIST_R + 30 - _raise.y) * k, Math.cos(a) * r + _lunge.z);
+    };
+    if (t < T.windup) out.lerpVectors(gait, _raise, smooth(0, 1, t / T.windup));
+    else if (t < T.impact + hold) at(backhandSweep(t, T, hold), out);
+    else out.lerpVectors(at(backhandSweep(T.end, T, hold), _end), gait, strikeReturn(t, T, hold));
+  }
+
+  /** The latched strike's timeline: the backhand's own, slower one, or the kind's meleeTiming for a slam. */
+  private strikeTiming(): { windup: number; impact: number; end: number } {
+    return this.strikeKind === 'backhand' ? G.fist.backhandTiming : G.stats.meleeTiming;
+  }
+
+  /** Seconds the latched strike's hand holds (slam) or carries through (backhand) after impact. */
+  private strikeHold(): number {
+    return this.strikeKind === 'backhand' ? BACKHAND_HOLD : STRIKE_HOLD;
   }
 
   /** Shots leave from the launch points on the back in turn. */

@@ -42,4 +42,19 @@ describe('GOLEM kind (the Wendigo)', () => {
     ];
     for (const t of texts) expect(t).not.toMatch(/magma|lava|(?<!black )fire|vent|ember|molten|heat|burn/i);
   });
+
+  it('swings its backhand on its own slower, heavier timeline; slams keep the kind\'s', () => {
+    const S = CONFIG.golem.stats.meleeTiming;
+    const B = CONFIG.golem.fist.backhandTiming;
+    expect(S).toEqual({ windup: 0.3, impact: 0.45, end: 0.85 });
+    // Old backhand (the shared timeline): coil 0.30, sweep 0.15, follow-through and settle 0.40, 0.85 in all.
+    expect(B.windup / S.windup).toBeGreaterThanOrEqual(1.15);
+    expect((B.impact - B.windup) / (S.impact - S.windup)).toBeGreaterThanOrEqual(1.35);
+    expect((B.impact - B.windup) / (S.impact - S.windup)).toBeLessThanOrEqual(1.45);
+    expect((B.end - B.impact) / (S.end - S.impact)).toBeGreaterThanOrEqual(1.35);
+    expect(B.end / S.end).toBeGreaterThanOrEqual(1.33);
+    expect(B.end / S.end).toBeLessThanOrEqual(1.42);
+    expect(B.impact - S.impact).toBeLessThanOrEqual(0.13);
+  });
 });
+
