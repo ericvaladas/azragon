@@ -1038,7 +1038,7 @@ export class GameScene {
       const reach = this.ms.meleeRange * 0.8;
       const rangedPool =
         m.kind.ranged === 'breath' ? this.enemyTargets().filter((t) => this.canBreatheAt(t))
-        : m.kind.ranged === 'hurl' ? this.enemyTargets().filter((t) => Math.hypot(t.position.x - pos.x, t.position.z - pos.z) > reach)
+        : m.kind.ranged === 'hurl' ? this.enemyTargets().filter((t) => !t.airborne && Math.hypot(t.position.x - pos.x, t.position.z - pos.z) > reach)
         : this.enemyTargets();
       const auto = nearestInRange(pos, rangedPool, this.ms.rangedRange);
       const autoMelee = nearestInRange(pos, this.enemyTargets().filter((t) => !t.airborne), this.ms.meleeRange);
@@ -1109,23 +1109,25 @@ export class GameScene {
   private hurlAt(target: Target | null): void {
     const m = this.monster;
     const arms = m.body.arms;
-    if (!target || !arms) return;
+    if (!target || !arms || target.airborne) return;
     const free = arms.freeArms();
     if (free.length === 0) return;
     const from = { x: m.position.x, z: m.position.z };
     const count = Math.min(free.length, 1 + this.progression.stats.extraSpikes);
     const others = this.enemyTargets()
-      .filter((t) => t.isAlive() && Math.hypot(t.position.x - from.x, t.position.z - from.z) <= this.ms.rangedRange)
+      .filter((t) => t.isAlive() && !t.airborne && Math.hypot(t.position.x - from.x, t.position.z - from.z) <= this.ms.rangedRange)
       .sort((a, b) => a.position.distanceToSquared(target.position) - b.position.distanceToSquared(target.position));
     const H = CONFIG.kraken.arms.hurl;
     let left = free;
+    let started = false;
     for (const t of spikeTargets(target, others, count)) {
       const pick = assignStrikes(left, m.yaw, from, [t], Infinity)[0];
       if (!pick) break;
       arms.start(pick.arm, 'hurl', t.position, t, 0, H.timing);
       left = left.filter((a) => a !== pick.arm);
+      started = true;
     }
-    m.consumeRanged(this.rangedCdMult());
+    if (started) m.consumeRanged(this.rangedCdMult());
   }
 
   /** An arm's strike lands: a slam hits around its tip; a hurl releases its chunk from the tip. */
