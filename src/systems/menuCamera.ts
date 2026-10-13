@@ -26,3 +26,8 @@ export function selectPose(t: number, monsterHeight: number, aspect: number, out
   out.look.set(0, monsterHeight * (portrait ? 0.25 : 0.45), 0);
   return out;
 }
+
+/** The height the select camera frames a monster by: its height, or 55% of its width for wide, low creatures. */
+export function frameHeight(size: { width: number; length: number; height: number }): number {
+  return Math.max(size.height, size.width * 0.55);
+}

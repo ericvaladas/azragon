@@ -200,8 +200,8 @@ export const CONFIG = {
       rangedDamage: 85,
       rangedCooldown: 1.8,
       headHeight: 420,
-      /** Measured standing bounding box (world m) — re-measure in Task 3 after the model exists. */
-      size: { width: 760, length: 760, height: 300 },
+      /** Measured standing bounding box (world m), resting arms included. */
+      size: { width: 576, length: 551, height: 356 },
     },
     arms: {
       /** Hurl: seconds to grab, release (throw), end; chunk splash radius (m), flight time (s), arc height (m). */

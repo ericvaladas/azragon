@@ -56,7 +56,7 @@ import { KINDS, ROSTER_ORDER, isMonsterId, rosterEntries } from './monsters/rost
 import { loadPick, savePick, type PickStore } from './monsters/pick';
 import type { MonsterKind } from './monsters/types';
 import { flowNext } from './menuFlow';
-import { selectPose, titlePose } from './systems/menuCamera';
+import { frameHeight, selectPose, titlePose } from './systems/menuCamera';
 
 type Order = { kind: 'move'; to: Vec2 } | { kind: 'attack'; target: Target } | null;
 
@@ -547,7 +547,7 @@ export class GameScene {
     if (shown === 'title' || shown === 'select') {
       if (!frozen) this.menuT += realDt;
       if (shown === 'title') titlePose(this.menuT, this.menuPose);
-      else selectPose(this.menuT, this.ms.size.height, this.camera.aspect, this.menuPose);
+      else selectPose(this.menuT, frameHeight(this.ms.size), this.camera.aspect, this.menuPose);
       this.camera.position.copy(this.menuPose.pos);
       this.camera.lookAt(this.menuPose.look);
     } else if (!this.intro.active) {

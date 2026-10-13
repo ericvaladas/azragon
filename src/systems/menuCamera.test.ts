@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import { CONFIG } from '../config';
-import { selectPose, titlePose } from './menuCamera';
+import { frameHeight, selectPose, titlePose } from './menuCamera';
 
 const pose = () => ({ pos: new THREE.Vector3(), look: new THREE.Vector3() });
 
@@ -31,5 +31,13 @@ describe('menu camera', () => {
     expect(Math.hypot(wide.pos.x, wide.pos.z)).toBeCloseTo(300 * S.distance + S.pad);
     expect(Math.hypot(tall.pos.x, tall.pos.z)).toBeGreaterThan(Math.hypot(wide.pos.x, wide.pos.z) * 1.5);
     expect(tall.look.y).toBeLessThan(wide.look.y);
+  });
+});
+
+describe('frameHeight', () => {
+  it('frames tall monsters by height and wide, low ones by their width', () => {
+    expect(frameHeight({ width: 484, length: 451, height: 344 })).toBe(344);
+    expect(frameHeight({ width: 180, length: 617, height: 385 })).toBe(385);
+    expect(frameHeight({ width: 760, length: 760, height: 300 })).toBeCloseTo(760 * 0.55);
   });
 });
