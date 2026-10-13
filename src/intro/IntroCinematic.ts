@@ -8,7 +8,7 @@ import { faceted, toonMat } from '../render/toon';
 import { PodModel } from './PodModel';
 import { SpaceScene } from './SpaceScene';
 import { heatColor } from './spaceMath';
-import { CUT_TIME, EMERGE_TIME, FALL_PITCH, IMPACT_TIME, INTRO_LENGTH, blackAt, cameraPath, flashAt, introFog, monsterCrouch, podLengthFor, podPath, podSpin, shakeAt } from './timeline';
+import { CUT_TIME, EMERGE_TIME, FALL_PITCH, IMPACT_TIME, INTRO_LENGTH, blackAt, cameraPath, flashAt, silhouetteAt, introFog, monsterCrouch, podLengthFor, podPath, podSpin, shakeAt } from './timeline';
 
 export type IntroHost = {
   scene: THREE.Scene;
@@ -161,6 +161,7 @@ export class IntroCinematic {
       this.updateFragments(t, dt);
     } else {
       h.monster.pose.dip = I.crouchDip * monsterCrouch(t);
+      h.monster.setSilhouette(silhouetteAt(t));
       this.updateFragments(t, dt);
     }
 
@@ -230,6 +231,15 @@ export class IntroCinematic {
     }
     h.particles.emit('acid', _p.set(0, this.podLength * 0.3, 0), 60, 3);
     h.particles.ring('dust', ORIGIN, CRATER_RADIUS * 0.6, 24);
+    // The monster stands up in a cloud of smoke as a black silhouette, coming into colour as the smoke thins.
+    const L = this.podLength;
+    // A ring of it around (not over) the monster, low, so the dark shape shows through the gaps before it thins away.
+    for (let i = 0; i < I.reveal.veil; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const d = L * (0.35 + Math.random() * 0.35);
+      h.particles.emit('veil', _p.set(Math.cos(a) * d, Math.random() * L * 0.3, Math.sin(a) * d), 1);
+    }
+    h.monster.setSilhouette(1);
     h.monster.visible = true;
   }
 
@@ -283,6 +293,7 @@ export class IntroCinematic {
     const m = this.host.monster;
     m.position.set(0, 0, 0);
     m.pose.dip = 0;
+    m.setSilhouette(0);
     m.visible = true;
   }
 

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { CONFIG } from '../config';
 import { angleDelta, dist2, yawTo, type Vec2 } from '../util/math';
+import { addSilhouette } from '../render/silhouette';
 import { leapPeak, leapPosition } from './leap';
 import { SWAT_TIMES, swatWeight, type SwatTiming } from './tailSwat';
 import type { BodyFrame, MonsterBody, MonsterKind, MonsterStats, StrikeKind } from '../monsters/types';
@@ -44,6 +45,8 @@ export class Monster {
   private lastCycle = 0;
   private motion = 0;
   private flashT = 0;
+  /** Shared by every material of the body: how black it is drawn (see setSilhouette). */
+  private silhouette = { value: 0 };
   private leapT = -1;
   private dashT = -1;
   private dashFrom = { x: 0, z: 0 };
@@ -90,9 +93,15 @@ export class Monster {
 
   private mount(kind: MonsterKind): MonsterBody {
     const b = kind.createBody();
+    addSilhouette(b.root, this.silhouette);
     b.root.scale.setScalar(CONFIG.monster.scale);
     this.scene.add(b.root);
     return b;
+  }
+
+  /** Draw the whole body darkened toward a solid black silhouette: 0 = normal, 1 = black (the intro reveal). */
+  setSilhouette(k: number): void {
+    this.silhouette.value = k;
   }
 
   /** Become another creature (select screen): new body and stats, fresh state, same visibility. */

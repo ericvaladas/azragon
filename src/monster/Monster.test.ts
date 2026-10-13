@@ -198,6 +198,26 @@ describe('INSECT kind', () => {
     expect(landed).toBeCloseTo(L.duration, 1);
     expect(m.position.z).toBeCloseTo(800);
   });
+  it('can be drawn as a black silhouette (the intro reveal), on every material of its body, also after a change of kind', () => {
+    const uSil = (m: Monster) => {
+      let mat: THREE.Material | undefined;
+      m['body'].root.traverse((o) => { if (!mat && (o as THREE.Mesh).isMesh) mat = (o as THREE.Mesh).material as THREE.Material; });
+      const sh = { vertexShader: '', fragmentShader: '#include <fog_fragment>', uniforms: {} as Record<string, THREE.IUniform> };
+      mat!.onBeforeCompile(sh as unknown as THREE.WebGLProgramParametersWithUniforms, {} as THREE.WebGLRenderer);
+      return sh.uniforms['uSilhouette']!;
+    };
+    const meshy = (): MonsterKind => ({ ...kind(), createBody: () => {
+      const b = stubBody();
+      b.root.add(new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshToonMaterial()));
+      return b;
+    } });
+    const m = new Monster(new THREE.Scene(), meshy());
+    m.setSilhouette(1);
+    expect(uSil(m).value).toBe(1);
+    m.setKind(meshy());
+    m.setSilhouette(0.4);
+    expect(uSil(m).value).toBe(0.4);
+  });
   it('leaps lower over a short distance than a long one', () => {
     const L = CONFIG.abilities.leap;
     const top = (dist: number) => {

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
-import { CUT_TIME, EMERGE_TIME, FALL_PITCH, IMPACT_TIME, INTRO_LENGTH, blackAt, cameraPath, flashAt, gameplayPose, introFog, monsterCrouch, phaseAt, podLengthFor, podPath, podSpin, shakeAt } from './timeline';
+import { CUT_TIME, EMERGE_TIME, FALL_PITCH, IMPACT_TIME, INTRO_LENGTH, blackAt, cameraPath, silhouetteAt, flashAt, gameplayPose, introFog, monsterCrouch, phaseAt, podLengthFor, podPath, podSpin, shakeAt } from './timeline';
 import { spaceCamera } from './spaceMath';
 import { CONFIG } from '../config';
 
@@ -175,6 +175,20 @@ describe('shakeAt', () => {
     expect(shakeAt(IMPACT_TIME + 0.1)).toBe(1);
     expect(shakeAt(CUT_TIME - 0.1)).toBeGreaterThan(shakeAt(CONFIG.intro.starts.reentry + 0.2));
     expect(shakeAt(INTRO_LENGTH - 0.01)).toBe(0);
+  });
+});
+
+describe('silhouetteAt', () => {
+  const R = CONFIG.intro.reveal;
+  it('shows the monster as a black silhouette when the cocoon splits, holds, then fades to full colour before play starts', () => {
+    expect(silhouetteAt(EMERGE_TIME)).toBe(1);
+    expect(silhouetteAt(EMERGE_TIME + R.hold - 0.01)).toBe(1);
+    const mid = silhouetteAt(EMERGE_TIME + R.hold + R.fade / 2);
+    expect(mid).toBeGreaterThan(0);
+    expect(mid).toBeLessThan(1);
+    expect(silhouetteAt(EMERGE_TIME + R.hold + R.fade)).toBe(0);
+    expect(EMERGE_TIME + R.hold + R.fade).toBeLessThanOrEqual(INTRO_LENGTH);
+    expect(silhouetteAt(INTRO_LENGTH)).toBe(0);
   });
 });
 

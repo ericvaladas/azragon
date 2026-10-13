@@ -157,6 +157,13 @@ export function shakeAt(t: number): number {
   }
 }
 
+/** How black the monster is, 1..0: a solid silhouette when the cocoon splits, holding, then fading to full colour. */
+export function silhouetteAt(t: number): number {
+  const R = I.reveal;
+  const u = clamp01((t - EMERGE_TIME - R.hold) / R.fade);
+  return 1 - u * u * (3 - 2 * u);
+}
+
 /** How curled up the monster is, 1..0: fully crouched inside the cocoon, straightening (eased out) over riseTime after the split. */
 export function monsterCrouch(t: number): number {
   const u = clamp01((t - EMERGE_TIME) / I.riseTime);

@@ -416,6 +416,11 @@ export const CONFIG = {
      * holds through the cut and after the crash.
      */
     chase: { back: 3.2, lift: 1.7, side: 0.45, ahead: 4, dip: 0.9 },
+    /**
+     * The reveal: when the cocoon splits the monster is a black silhouette in a cloud of smoke; it holds `hold` s, then
+     * fades to full colour over `fade` s as the smoke (`veil` puffs) thins.
+     */
+    reveal: { hold: 1.2, fade: 0.7, veil: 36 },
     /** Inside the cocoon the monster stands curled down by crouchDip (model units of body drop); it straightens over riseTime s after the split. */
     crouchDip: 170,
     riseTime: 1.4,

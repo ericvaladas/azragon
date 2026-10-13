@@ -3,6 +3,14 @@ import { CONFIG } from '../config';
 import { CRATER_RADIUS } from '../world/City';
 import { PRESETS } from './Particles';
 
+describe('veil (the reveal smoke)', () => {
+  it('outlasts the silhouette hold but is gone by the time play starts', () => {
+    const R = CONFIG.intro.reveal;
+    expect(PRESETS.veil.life).toBeGreaterThan(R.hold + R.fade * 0.5);
+    expect(CONFIG.intro.starts.emerge + PRESETS.veil.life).toBeLessThanOrEqual(CONFIG.intro.starts.done);
+  });
+});
+
 describe('billow (the pod crash dust cloud)', () => {
   it('is big enough to read from the cutscene camera ~2 km up and lingers well past the impact flash', () => {
     const b = PRESETS.billow;

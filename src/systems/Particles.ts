@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { CONFIG } from '../config';
 import { faceted } from '../render/toon';
 
-export type ParticleKind = 'dust' | 'debris' | 'fire' | 'smoke' | 'spark' | 'acid' | 'plasma' | 'trail' | 'ink' | 'rot' | 'shade' | 'mist' | 'bone' | 'wisp' | 'hexfire' | 'hexember' | 'wraith' | 'billow';
+export type ParticleKind = 'dust' | 'debris' | 'fire' | 'smoke' | 'spark' | 'acid' | 'plasma' | 'trail' | 'ink' | 'rot' | 'shade' | 'mist' | 'bone' | 'wisp' | 'hexfire' | 'hexember' | 'wraith' | 'billow' | 'veil';
 
 /** `stretch`: drawn upright and this many times taller than wide, flickering (flame tongues) instead of tumbling. */
 type Preset = { color: number; life: number; size0: number; size1: number; speed: number; up: number; gravity: number; drag: number; stretch?: number };
@@ -37,6 +37,8 @@ export const PRESETS: Record<ParticleKind, Preset> = {
   spark: { color: P.eye, life: 0.3, size0: 10, size1: 2, speed: 260, up: 80, gravity: 200, drag: 0.5 },
   /** The pod crash's dust cloud: huge, slow billows that roll out across the city and hang (readable from high up). */
   billow: { color: 0x9c8a70, life: 2.3, size0: 200, size1: 520, speed: 280, up: 240, gravity: -10, drag: 1.3 },
+  /** The reveal's smoke: pale, slow, swelling puffs the monster stands in as a silhouette, thinning away. */
+  veil: { color: 0xb5a588, life: 1.8, size0: 150, size1: 300, speed: 60, up: 30, gravity: -12, drag: 1.6 },
   ink: { color: CONFIG.kraken.colors.ink, life: 1.1, size0: 30, size1: 70, speed: 120, up: 50, gravity: -10, drag: 2 },
 };
 
@@ -51,7 +53,7 @@ const HIDDEN = new THREE.Matrix4().makeScale(0, 0, 0);
 /** `murk`: the Wendigo's dark smoke and mist, dense enough to read as dark over light ground. */
 const LAYER_OPACITY = { solid: 1, dust: 0.65, smoke: 0.35, murk: 0.85 } as const;
 type LayerName = keyof typeof LAYER_OPACITY;
-const LAYER_OF: Record<ParticleKind, LayerName> = { dust: 'dust', smoke: 'smoke', debris: 'solid', fire: 'solid', spark: 'solid', acid: 'solid', plasma: 'solid', trail: 'dust', ink: 'smoke', rot: 'solid', shade: 'murk', mist: 'murk', bone: 'solid', wisp: 'dust', hexfire: 'solid', hexember: 'solid', wraith: 'murk', billow: 'dust' };
+const LAYER_OF: Record<ParticleKind, LayerName> = { dust: 'dust', smoke: 'smoke', debris: 'solid', fire: 'solid', spark: 'solid', acid: 'solid', plasma: 'solid', trail: 'dust', ink: 'smoke', rot: 'solid', shade: 'murk', mist: 'murk', bone: 'solid', wisp: 'dust', hexfire: 'solid', hexember: 'solid', wraith: 'murk', billow: 'dust', veil: 'dust' };
 const LAYER_MAX: Record<LayerName, number> = { solid: 500, dust: 400, smoke: 500, murk: 400 };
 
 /** One pooled InstancedMesh: swap-remove on death, no per-frame allocation. */
