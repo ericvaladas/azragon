@@ -396,9 +396,9 @@ export const CONFIG = {
      * scene was trimmed to nothing, so the game world opens straight on the descent.
      */
     starts: { space: 0, reentry: 3.5, clouds: 5.5, descent: 5.5, impact: 7.5, settle: 8, emerge: 10, done: 12 },
-    /** The full pod drop: a straight, nose-first line from this high and this far behind (-Z), landing at the origin. */
+    /** The full pod drop: a straight, nose-first line from this high and this far behind (-Z), landing at the origin (a 45° dive). */
     dropHeight: 4200,
-    dropBack: 1400,
+    dropBack: 4200,
     /** Fraction of the full drop already fallen at the cut: the game world joins the fall part-way (3 s of a 5 s fall). */
     dropJoin: 0.6,
     /** The cocoon's spin about its long axis (rad/s); it freezes where it was at impact. */

@@ -46,8 +46,9 @@ describe('podPath', () => {
       const p = podPath(t, new THREE.Vector3());
       expect(Math.atan2(p.y, -p.z)).toBeCloseTo(FALL_PITCH);
     }
-    expect(FALL_PITCH).toBeGreaterThan(1.1);
-    expect(FALL_PITCH).toBeLessThan(1.45);
+    // A shallow dive, not a plummet: between 35 and 50 degrees below horizontal.
+    expect(FALL_PITCH).toBeGreaterThan((35 * Math.PI) / 180);
+    expect(FALL_PITCH).toBeLessThan((50 * Math.PI) / 180);
   });
   it('falls at the same pace as before the trim (no squashed, rushed drop)', () => {
     const v = (t: number) => (podPath(t, new THREE.Vector3()).y - podPath(t + 0.01, new THREE.Vector3()).y) / 0.01;
@@ -116,10 +117,10 @@ describe('cameraPath', () => {
       expect(c.up.clone().applyQuaternion(unpitch).distanceTo(new THREE.Vector3(0, 1, 0))).toBeLessThan(1e-6);
     }
   });
-  it('looks steeply down at the city during the fall', () => {
+  it('looks down at the city ahead during the fall (not out at the horizon)', () => {
     const c = cam(CUT_TIME + 0.5);
     const dir = c.look.clone().sub(c.pos).normalize();
-    expect(dir.y).toBeLessThan(-0.9);
+    expect(dir.y).toBeLessThan(-0.75);
   });
   it('hands back an upright camera at the end', () => {
     expect(cam(INTRO_LENGTH).up.distanceTo(new THREE.Vector3(0, 1, 0))).toBeCloseTo(0);
