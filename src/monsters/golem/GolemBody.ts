@@ -9,6 +9,7 @@ import { BECKON_T, beckonLift, beckonPull, beckonResume } from './handMath';
 import { SWING, limbPlanted, limbSwing } from './knuckleGait';
 import { clampShoulder, reachTwist, softCap, springStep, type ShoulderLimits } from './shoulder';
 import { bendAngleAt, bendPoint, outwardBearing, pivotStep, stepToward } from './spine';
+import { LEAP_RECOVER, leapPhase, type LeapPose } from './leapPose';
 
 const G = CONFIG.golem;
 const C = G.colors;
@@ -134,6 +135,8 @@ const PROTRACT = 26;
 const BACKHAND_END_MIN = 1.35;
 const BACKHAND_END_MAX = Math.PI - 0.05;
 const BACKHAND_SWEEP_R = 580;
+/** Leap: how deep (units) the body sinks in its crouches (leapPose sink 1). */
+const LEAP_SINK = 120;
 /** Shadow Hands: how far from the shoulder the lifted claw reaches toward the flyer, and when its gesture is over. */
 const BECKON_REACH = 400;
 const BECKON_END = BECKON_T.end;
@@ -451,6 +454,15 @@ export class GolemBody implements MonsterBody {
    */
   private beckons = [0, 1].map(() => ({ lift: -1, grab: -1, at: new THREE.Vector3(), dir: new THREE.Vector3(), aimed: false }));
   private airPrevT = -1;
+  /**
+   * Leap (with its crouch before liftoff and the landing recovery after): its clock (s, −1 when none), duration and
+   * crouch fraction, and where each hand and hoof (0, 1 hands; 2, 3 hooves) left the ground at liftoff (world).
+   */
+  private leapT = -1;
+  private leapD = 1;
+  private leapC = 0;
+  private leapPlant = [0, 1, 2, 3].map(() => new THREE.Vector3());
+  private leapPlanted = false;
   /** Per side: the hand is posed (striking, slamming, reaching), not walking. */
   private handPosed = [false, false];
   /** Per side: 0..1, how far a sweeping hand reaches out horizontally (at its height) toward the arm's full length. */
@@ -889,6 +901,35 @@ export class GolemBody implements MonsterBody {
     }
     const nova = this.novaT >= 0 ? this.novaT / NOVA_TIME : -1;
 
+    // Leap: crouch on the ground, spring, reach and tuck in the air, land claws first, then rise out of the crouch.
+    if (f.leap) {
+      if (this.leapT < 0 || f.leap.t < this.leapT) this.leapPlanted = false;
+      this.leapT = f.leap.t;
+      this.leapD = f.leap.duration;
+      this.leapC = f.leap.crouch;
+    } else if (this.leapT >= 0) {
+      this.leapT = Math.max(this.leapT, this.leapD) + f.dt;
+      if (this.leapT > this.leapD + LEAP_RECOVER) this.leapT = -1;
+    }
+    const leap: LeapPose | null = this.leapT >= 0 && f.pose.collapse === 0 ? leapPhase(this.leapT, this.leapD, this.leapC) : null;
+    // Off the ground (or pushing off it): from liftoff to touchdown.
+    const flying = leap !== null && this.leapT >= this.leapC * this.leapD && this.leapT <= this.leapD;
+    if (flying && !this.leapPlanted) {
+      // Liftoff: remember where the limbs leave the ground from, so they push off it as the body springs up.
+      this.root.updateMatrixWorld();
+      for (let side = 0; side < 2; side++) {
+        this.frame.localToWorld(this.leapPlant[side]!.copy(this.handAt[side]!));
+        this.frame.localToWorld(this.leapPlant[2 + side]!.copy(this.footAt[side]!));
+      }
+      this.leapPlanted = true;
+    }
+    // The ground's height in the frame (the root rises off it in the air).
+    this.root.updateMatrixWorld();
+    this.frame.getWorldPosition(_look);
+    const groundY = this.frame.worldToLocal(_look.setY(0)).y;
+    // Up to touchdown the walk is frozen and every limb on the ground stays down (no gait lift).
+    const leaping = leap !== null && this.leapT <= this.leapD;
+
     // Rending Claws: slam or backhand is decided once, as the strike starts; the body lunges toward the strike.
     let lean = 0;
     let leanA = 0;
@@ -947,7 +988,8 @@ export class GolemBody implements MonsterBody {
     for (let side = 0; side < 2; side++) {
       const sx = side === 0 ? 1 : -1;
       const g = limbSwing(f.cycle, side === 0 ? 0 : 2);
-      const gait = this.gaitAt[side]!.set(FIST_AT.x * sx, FIST_AT.y + g.lift * FIST_LIFT * m, FIST_AT.z + g.stride * A * m);
+      const ml = leaping ? 0 : m;
+      const gait = this.gaitAt[side]!.set(FIST_AT.x * sx, FIST_AT.y + g.lift * FIST_LIFT * ml, FIST_AT.z + g.stride * A * m);
       const want = this.handAt[side]!.copy(gait);
       const striking = f.melee !== null && f.melee.side === side;
       this.extend[side] = 0;
@@ -982,8 +1024,14 @@ export class GolemBody implements MonsterBody {
         want.lerp(_raise, lift);
       }
       if (f.roaring) want.set(sx * 90, 430 + Math.sin(f.time * 14 + side * Math.PI) * 45, 250);
-      if (f.airborne) want.set(sx * 230, -30, 260);
-      const posed = striking || nova >= 0 || beckoning || f.roaring || f.airborne;
+      if (flying) {
+        // Push off where it left the ground, trail, reach forward, then come down claws first onto its walking plant.
+        this.frame.worldToLocal(_end.copy(this.leapPlant[side]!));
+        _raise.set(sx * 230, 40, 120).lerp(_tmp.set(sx * 190, 170, 480), leap!.reach);
+        _raise.lerp(_ref.copy(gait).setY(groundY + gait.y), leap!.land);
+        want.copy(_raise).lerp(_end, leap!.push);
+      } else if (f.airborne) want.set(sx * 230, -30, 260);
+      const posed = striking || nova >= 0 || beckoning || f.roaring || flying || (f.airborne && !leap);
       this.handPosed[side] = posed;
       this.handPlanted[side] = !posed && g.lift * m < 1e-3;
     }
@@ -991,8 +1039,15 @@ export class GolemBody implements MonsterBody {
       const sx = side === 0 ? 1 : -1;
       const g = limbSwing(f.cycle, side === 0 ? 3 : 1);
       const foot = this.footAt[side]!.set(FOOT_AT.x * sx, g.lift * FOOT_LIFT * m, FOOT_AT.z + g.stride * A * m);
-      if (f.airborne) foot.set(sx * 150, 60, -60);
-      this.footPlanted[side] = !f.airborne && g.lift * m < 1e-3;
+      if (leaping) foot.y = 0;
+      if (flying) {
+        // Kick off where it left the ground, trail, tuck up under the body, and come down after the claws.
+        this.frame.worldToLocal(_end.copy(this.leapPlant[2 + side]!));
+        _raise.set(sx * 150, 60, -280).lerp(_tmp.set(sx * 150, 150, -30), leap!.tuck);
+        _raise.lerp(_ref.copy(foot).setY(groundY), smooth(0.4, 1, leap!.land));
+        foot.copy(_raise).lerp(_end, leap!.push);
+      } else if (f.airborne && !leap) foot.set(sx * 150, 60, -60);
+      this.footPlanted[side] = !flying && !(f.airborne && !leap) && (leaping || g.lift * m < 1e-3);
     }
 
     // The body drives the reach: the torso turns (and rolls the shoulder down) toward a hand beyond the shoulder's
@@ -1058,9 +1113,9 @@ export class GolemBody implements MonsterBody {
     const bob = Math.cos(f.cycle * Math.PI * 4) * 10 * m + Math.sin(f.time * 1.1) * 6;
     const novaY = nova < 0 ? 0 : nova < 0.5 ? 15 * smooth(0, 0.5, nova) : nova < 0.65 ? 15 - 65 * ((nova - 0.5) / 0.15) ** 2 : -50 * (1 - smooth(0.65, 1, nova));
     const base = {
-      y: PIVOT.y + bob - f.pose.dip + novaY - f.pose.collapse * 230,
+      y: PIVOT.y + bob - (leap ? LEAP_SINK * leap.sink : f.pose.dip) + novaY - f.pose.collapse * 230,
       // Leaning toward bearing leanA: +X rotation tips the shoulders forward (+Z), −Z rotation toward the left (+X).
-      pitch: f.pose.pitch + (f.roaring ? -0.55 : 0) + (f.dashing ? 0.25 : 0) + f.pose.collapse * 0.4 + Math.cos(leanA) * lean,
+      pitch: (leap ? leap.pitch : f.pose.pitch) + (f.roaring ? -0.55 : 0) + (f.dashing ? 0.25 : 0) + f.pose.collapse * 0.4 + Math.cos(leanA) * lean,
       roll: roll - f.pose.collapse * 0.15 - Math.sin(leanA) * lean,
     };
     let k = 1;
@@ -1186,7 +1241,7 @@ export class GolemBody implements MonsterBody {
     this.headYaw += (yaw - this.headYaw) * kh;
     this.headPitch += (pitch - this.headPitch) * kh;
     this.headPivot.rotation.set(
-      Math.max(-GAZE_UP, Math.min(GAZE_DOWN, this.headPitch + counterPitch)),
+      Math.max(-GAZE_UP, Math.min(GAZE_DOWN, this.headPitch + counterPitch + (leap ? 0.3 * Math.max(0, leap.sink) : 0))),
       this.bend + Math.max(-GAZE_YAW, Math.min(GAZE_YAW, this.headYaw - frontYaw)),
       0,
       'YXZ',

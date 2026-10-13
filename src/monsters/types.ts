@@ -71,6 +71,8 @@ export type BodyFrame = {
   pose: { dip: number; pitch: number; collapse: number };
   /** Active melee strike: seconds since start, which side (0 = left/+X, 1 = right), world target. */
   melee: { t: number; side: number; target: THREE.Vector3 } | null;
+  /** Active leap: seconds since it started, its duration, and the fraction of it crouched before liftoff. */
+  leap?: { t: number; duration: number; crouch: number } | null;
   /** Active anti-air strike: seconds since it started, reach weight (swatWeight curve) toward the world target. */
   antiAir: { t: number; weight: number; target: THREE.Vector3 } | null;
   roaring: boolean;
@@ -119,6 +121,8 @@ export type MonsterKind = PoolSpec & {
   ranged: 'spikes' | 'breath' | 'hurl' | 'gaze';
   /** `hands`: Shadow Hands (Wendigo), spectral arms rising from the ground under the flyer. */
   antiAir: 'tail' | 'bite' | 'lash' | 'hands';
+  /** Fraction of a leap this kind spends crouched on the ground before liftoff (lands at the same moment); 0 when absent. */
+  leapCrouch?: number;
   /** This kind's own anti-air timeline (impact, end); the shared SWAT_TIMES when absent. */
   swatTiming?: SwatTiming;
   /** Has the auto Tail Sweep melee (CONFIG.kaiju.tail). */

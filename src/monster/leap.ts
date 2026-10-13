@@ -9,9 +9,14 @@ export function leapTarget(from: Vec2, to: Vec2, maxRange: number): Vec2 {
   return { x: from.x + (dx / d) * maxRange, z: from.z + (dz / d) * maxRange };
 }
 
-/** Parabolic arc: ground at both ends, `peak` at the midpoint; t is clamped to [0, duration]. */
-export function leapPosition(from: Vec2, to: Vec2, t: number, duration: number, peak: number): { x: number; y: number; z: number } {
-  const k = Math.min(1, Math.max(0, t / duration));
+/**
+ * Parabolic arc: ground at both ends, `peak` at the midpoint; t is clamped to [0, duration]. With a `crouch` (a
+ * fraction of the duration) it waits on the ground at `from` that long first, then flies the arc in the time left,
+ * landing at the same moment.
+ */
+export function leapPosition(from: Vec2, to: Vec2, t: number, duration: number, peak: number, crouch = 0): { x: number; y: number; z: number } {
+  const L0 = crouch * duration;
+  const k = Math.min(1, Math.max(0, (t - L0) / (duration - L0)));
   return { x: from.x + (to.x - from.x) * k, y: peak * 4 * k * (1 - k), z: from.z + (to.z - from.z) * k };
 }
 

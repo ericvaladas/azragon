@@ -73,6 +73,7 @@ export class Monster {
   };
   private meleeFrame = { t: 0, side: 0, target: this.strikePoint };
   private antiAirFrame = { t: 0, weight: 0, target: new THREE.Vector3() };
+  private leapFrame = { t: 0, duration: 0, crouch: 0 };
 
   constructor(
     private scene: THREE.Scene,
@@ -125,8 +126,9 @@ export class Monster {
     return this.body.rangedOrigin(out);
   }
 
+  /** Off the ground: leaping, once past any crouch before liftoff. */
   get airborne(): boolean {
-    return this.leapT >= 0;
+    return this.leapT >= (this.kind.leapCrouch ?? 0) * CONFIG.abilities.leap.duration;
   }
 
   /** Leaping, roaring or dashing: the brain must not move or attack. */
@@ -295,6 +297,12 @@ export class Monster {
       this.antiAirFrame.target.copy(this.swatTarget);
       f.antiAir = this.antiAirFrame;
     } else f.antiAir = null;
+    if (this.leapT >= 0) {
+      this.leapFrame.t = this.leapT;
+      this.leapFrame.duration = CONFIG.abilities.leap.duration;
+      this.leapFrame.crouch = this.kind.leapCrouch ?? 0;
+      f.leap = this.leapFrame;
+    } else f.leap = null;
     f.roaring = this.roarT >= 0;
     f.airborne = this.airborne;
     f.dashing = this.dashing;
@@ -316,9 +324,11 @@ export class Monster {
     const L = CONFIG.abilities.leap;
     if (this.leapT >= 0) {
       this.leapT += dt;
-      const p = leapPosition(this.leapFrom, this.leapTo, this.leapT, L.duration, L.peak);
+      const c = this.kind.leapCrouch ?? 0;
+      const p = leapPosition(this.leapFrom, this.leapTo, this.leapT, L.duration, L.peak, c);
       this.position.set(p.x, p.y, p.z);
-      this.pose.pitch = 0.25 * Math.sin(Math.PI * Math.min(1, this.leapT / L.duration)) - 0.1;
+      const k = Math.max(0, this.leapT - c * L.duration) / (L.duration * (1 - c));
+      this.pose.pitch = 0.25 * Math.sin(Math.PI * Math.min(1, k)) - 0.1;
       if (this.leapT >= L.duration) {
         this.leapT = -1;
         this.position.y = 0;

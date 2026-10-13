@@ -182,5 +182,29 @@ describe('INSECT kind', () => {
     expect(CONFIG.kaiju.stats.meleeTiming).toEqual({ windup: 0.25, impact: 0.4, end: 0.8 });
     expect(CONFIG.kraken.stats.meleeTiming).toEqual({ windup: 0.3, impact: 0.45, end: 0.85 });
   });
+
+  it('crouches on the ground before a leap when its kind asks, still landing on time and on the spot', () => {
+    const L = CONFIG.abilities.leap;
+    const m = new Monster(new THREE.Scene(), { ...kind(), leapCrouch: 0.2 });
+    let landed = -1;
+    let t = 0;
+    m.onLeapLand = () => { landed = t; };
+    m.startLeap({ x: 0, z: 800 });
+    for (let i = 0; i < 25; i++) { m.tick(0.01); t += 0.01; }
+    expect(m.airborne).toBe(false);
+    expect(m.position.y).toBe(0);
+    expect(m.position.z).toBeCloseTo(0);
+    for (let i = 0; i < 300 && landed < 0; i++) { m.tick(0.01); t += 0.01; if (t > 0.35 && t < 0.4) expect(m.airborne).toBe(true); }
+    expect(landed).toBeCloseTo(L.duration, 1);
+    expect(m.position.z).toBeCloseTo(800);
+  });
+  it('tells its body where it is in the leap', () => {
+    const body = stubBody();
+    const m = new Monster(new THREE.Scene(), { ...kind(), leapCrouch: 0.2, createBody: () => body });
+    m.startLeap({ x: 0, z: 800 });
+    m.tick(0.1);
+    m.animate(0.016, 0);
+    expect(body.last!.leap).toEqual({ t: expect.closeTo(0.1, 5), duration: CONFIG.abilities.leap.duration, crouch: 0.2 });
+  });
 });
 
