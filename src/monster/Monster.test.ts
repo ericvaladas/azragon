@@ -198,6 +198,21 @@ describe('INSECT kind', () => {
     expect(landed).toBeCloseTo(L.duration, 1);
     expect(m.position.z).toBeCloseTo(800);
   });
+  it('dashes the same distance more slowly when its kind sets a dash speed', () => {
+    const D = CONFIG.abilities.dash;
+    const run = (k: MonsterKind) => {
+      const m = new Monster(new THREE.Scene(), k);
+      m.startDash({ x: 0, z: D.range });
+      let t = 0;
+      while (m.dashing && t < 5) { m.tick(0.01); t += 0.01; }
+      return { t, z: m.position.z };
+    };
+    const base = run(kind());
+    const slow = run({ ...kind(), dashSpeed: 0.7 });
+    expect(base.t).toBeCloseTo(D.duration, 1);
+    expect(slow.t).toBeCloseTo(D.duration / 0.7, 1);
+    expect(slow.z).toBeCloseTo(D.range);
+  });
   it('tells its body where it is in the leap', () => {
     const body = stubBody();
     const m = new Monster(new THREE.Scene(), { ...kind(), leapCrouch: 0.2, createBody: () => body });

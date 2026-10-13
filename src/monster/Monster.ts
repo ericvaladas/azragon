@@ -337,15 +337,16 @@ export class Monster {
       }
     }
     if (this.dashT >= 0) {
-      const D = CONFIG.abilities.dash;
+      // A slower kind covers the same range over a longer charge.
+      const duration = CONFIG.abilities.dash.duration / (this.kind.dashSpeed ?? 1);
       this.dashT += dt;
-      const p = leapPosition(this.dashFrom, this.dashTo, this.dashT, D.duration, 0);
+      const p = leapPosition(this.dashFrom, this.dashTo, this.dashT, duration, 0);
       const step = Math.hypot(p.x - this.position.x, p.z - this.position.z);
       this.position.set(p.x, 0, p.z);
       this.cycle += step / (this.kind.stats.strideLength * CONFIG.monster.scale);
       this.motion = 1;
       this.pose.pitch = 0.18;
-      if (this.dashT >= D.duration) this.dashT = -1;
+      if (this.dashT >= duration) this.dashT = -1;
     }
     if (this.swatT >= 0) {
       this.swatT += dt;

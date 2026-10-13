@@ -123,6 +123,8 @@ export type MonsterKind = PoolSpec & {
   antiAir: 'tail' | 'bite' | 'lash' | 'hands';
   /** Fraction of a leap this kind spends crouched on the ground before liftoff (lands at the same moment); 0 when absent. */
   leapCrouch?: number;
+  /** Dash speed multiplier: the same range, covered over CONFIG.abilities.dash.duration / dashSpeed; 1 when absent. */
+  dashSpeed?: number;
   /** This kind's own anti-air timeline (impact, end); the shared SWAT_TIMES when absent. */
   swatTiming?: SwatTiming;
   /** Has the auto Tail Sweep melee (CONFIG.kaiju.tail). */

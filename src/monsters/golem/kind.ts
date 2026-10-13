@@ -22,6 +22,7 @@ export const GOLEM: MonsterKind = {
   antiAir: 'hands',
   swatTiming: WENDIGO_SWAT,
   leapCrouch: 0.2,
+  dashSpeed: 0.7,
   tailSweep: false,
   signatures: ['acid', 'storm', 'chitin', 'frenzy', 'spines', 'swat', 'nova', 'mortar', 'core'],
   abilityText: {
