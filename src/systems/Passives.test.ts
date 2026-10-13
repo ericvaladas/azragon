@@ -4,7 +4,7 @@ import type { AbilityId } from './Progression';
 import { CONFIG } from '../config';
 
 const P = CONFIG.passives;
-const ranks = (r: Partial<Record<AbilityId, number>>) => () => ({ dash: 0, roar: 0, acid: 0, storm: 0, chitin: 0, frenzy: 0, brood: 0, overload: 0, spines: 0, swat: 0, nova: 0, mortar: 0, bubble: 0, reflect: 0, meltdown: 0, ...r });
+const ranks = (r: Partial<Record<AbilityId, number>>) => () => ({ dash: 0, roar: 0, acid: 0, storm: 0, chitin: 0, frenzy: 0, brood: 0, overload: 0, spines: 0, swat: 0, nova: 0, mortar: 0, bubble: 0, reflect: 0, meltdown: 0, grip: 0, ...r });
 
 describe('Passives', () => {
   it('has no effect at rank 0', () => {
@@ -119,5 +119,16 @@ describe('meltdown', () => {
     expect(r1.meltdown(0).active).toBe(false);
     expect(new Passives(ranks({})).meltdown(0.1)).toEqual({ active: false, damage: 1, cooldown: 1 });
     expect(new Passives(ranks({ meltdown: 3 })).meltdown(0.45).active).toBe(true);
+  });
+});
+
+describe('grip', () => {
+  it('Sucker Grip: off at rank 0, then a growing radius and damage per rank', () => {
+    expect(new Passives(ranks({})).grip()).toBeNull();
+    const g1 = new Passives(ranks({ grip: 1 })).grip()!;
+    const g3 = new Passives(ranks({ grip: 3 })).grip()!;
+    expect(g1).toEqual({ radius: CONFIG.passives.grip.radius[1], damage: CONFIG.passives.grip.damage[1] });
+    expect(g3.radius).toBeGreaterThan(g1.radius);
+    expect(g3.damage).toBeGreaterThan(g1.damage);
   });
 });

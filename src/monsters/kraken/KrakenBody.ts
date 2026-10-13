@@ -223,8 +223,14 @@ export class KrakenBody implements MonsterBody {
         _tip.set(Math.sin(sa) * PLANT_R * 1.1, 40 + Math.sin(Math.PI * k) * 120, Math.cos(sa) * PLANT_R * 1.1);
         arch = 60;
       }
-      if (f.roaring) _tip.copy(_dir).multiplyScalar(REST_R * 1.05).setY(260);
-      if (f.dashing) _tip.copy(_dir).multiplyScalar(REST_R * 0.7).addScaledVector(_fwd, -300).setY(40);
+      if (f.roaring) {
+        _tip.copy(_dir).multiplyScalar(REST_R * 1.05).setY(260);
+        arch = 200;
+      }
+      if (f.dashing) {
+        _tip.copy(_dir).multiplyScalar(REST_R * 0.7).addScaledVector(_fwd, -300).setY(40);
+        arch = 60;
+      }
       if (f.airborne) _tip.copy(_dir).multiplyScalar(REST_R * 0.6).setY(-120);
       if (i === lashArm && f.antiAir) {
         this.root.worldToLocal(_b.copy(f.antiAir.target));

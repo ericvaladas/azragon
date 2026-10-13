@@ -19,7 +19,7 @@ export const KRAKEN: MonsterKind = {
   ranged: 'hurl',
   antiAir: 'lash',
   tailSweep: false,
-  signatures: ['acid', 'storm', 'chitin', 'frenzy', 'spines', 'swat', 'nova', 'mortar'],
+  signatures: ['acid', 'storm', 'chitin', 'frenzy', 'spines', 'swat', 'nova', 'mortar', 'grip'],
   abilityText: {
     acid: { title: 'Ink Trail', icon: '🖤', desc: (r) => (r === 1 ? 'Planted arms leave corrosive ink slicks' : 'Bigger, longer-lasting slicks') },
     storm: { title: 'Barrage', icon: '🪨', desc: (r) => (r === 1 ? 'Every free arm hurls debris every 6s' : '+3 chunks, throws faster') },
@@ -29,6 +29,7 @@ export const KRAKEN: MonsterKind = {
     swat: { title: 'Lash+', icon: '🪢', desc: () => 'Lashes flyers faster, harder, more at once' },
     nova: { title: 'Whirlpool', icon: '🌀', desc: (r) => (r === 1 ? 'All arms spin out every 7s, hitting everything near' : 'Wider, stronger, more often') },
     mortar: { title: 'Deep Throw', icon: '☄️', desc: (r) => (r === 1 ? 'Lobs chunks at artillery, SAMs, trucks' : 'More chunks, bigger splash') },
+    grip: { title: 'Sucker Grip', icon: '🐙', desc: (r) => (r === 1 ? 'Planted arms crush an enemy beside them' : 'Wider, harder grip') },
   },
   upgradeText: {
     damage: { title: 'Crushing Coils' },

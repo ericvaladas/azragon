@@ -16,6 +16,8 @@ describe('KRAKEN kind', () => {
     expect(KRAKEN.signatures).not.toContain('brood');
     expect(KRAKEN.signatures).not.toContain('meltdown');
     for (const id of KRAKEN.signatures) expect(KRAKEN.abilityText[id]?.title).toBeTruthy();
+    expect(KRAKEN.signatures).toContain('grip');
+    expect(KRAKEN.abilityText.grip?.title).toBe('Sucker Grip');
     expect(KRAKEN.abilityText.spines?.title).toBe('Ink Cloud');
     expect(KRAKEN.upgradeText.multiShot?.title).toBe('More Arms');
     expect(KRAKEN.fx.particle).toBe('ink');

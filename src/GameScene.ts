@@ -51,6 +51,8 @@ import { Passives } from './systems/Passives';
 import { AcidPools } from './systems/AcidPools';
 import { BroodDrones } from './systems/BroodDrones';
 import { decide, nearestInRange, type BrainOrder, type BrainTarget } from './monster/brain';
+import { assignStrikes } from './monsters/kraken/strikes';
+import type { ArmStrike } from './monsters/kraken/TentacleArms';
 import { INSECT } from './monsters/insect/kind';
 import { KINDS, ROSTER_ORDER, isMonsterId, rosterEntries } from './monsters/roster';
 import { loadPick, savePick, type PickStore } from './monsters/pick';
@@ -165,6 +167,14 @@ export class GameScene {
       this.footCrush(p);
       const pool = this.passives.acidPool();
       if (pool && this.state === 'playing') this.acid.add(p, pool.radius, pool.life);
+      const grip = this.passives.grip();
+      if (grip && this.state === 'playing') {
+        const victim = nearestInRange({ x: p.x, z: p.z }, this.enemyTargets().filter((t) => !t.airborne), grip.radius);
+        if (victim) {
+          victim.applyDamage(grip.damage * this.dmgMult());
+          this.particles.emit('ink', victim.position, 8, 0.8);
+        }
+      }
     };
     this.monster.onMeleeImpact = (p) => this.meleeImpact(p);
     this.monster.onLeapLand = (p) => this.leapLand(p);
@@ -243,6 +253,7 @@ export class GameScene {
     this.city.reset();
     this.projectiles.clear();
     this.breath.clear();
+    this.monster.body.arms?.clear();
     this.particles.clear();
     this.monster.reset();
     this.progression.reset();
@@ -429,6 +440,7 @@ export class GameScene {
 
   private startDying(): void {
     this.breath.clear();
+    this.monster.body.arms?.clear();
     this.monster.charge = 0;
     this.monster.lookAt = null;
     this.monster.alive = false;
@@ -493,6 +505,8 @@ export class GameScene {
           for (const p of ringOnRoads(c, CONFIG.opening.count, CONFIG.opening.radius, ROAD_ORIGIN, CONFIG.world.blockSize)) this.enemies.get<TankFleet>('tank').spawnAt(p.x, p.z, this.ctx);
         }
         this.updateMonster(dt);
+        this.tentacleSlams();
+        this.monster.body.arms?.update(dt, CONFIG.kraken.arms.spinTime, this.onArmImpact);
         // The head turns to the breath's aim; the breath fires once the head is on target.
         this.monster.lookAt = this.breath.busy ? this.breath.aimPoint : null;
         const headOnTarget = this.monster.aimError() < CONFIG.kaiju.neck.aimTolerance;
@@ -800,7 +814,7 @@ export class GameScene {
     ];
     const picks = nearestWithin(center, r, threats, budget, (t) => t.pos);
     for (const t of picks) {
-      this.particles.emit('spark', t.pos, 8, 0.6);
+      this.particles.emit(this.monster.kind.fx.intercept, t.pos, 8, 0.6);
       this.particles.emit('smoke', t.pos, 1, 0.3);
       t.kill();
     }
@@ -818,6 +832,7 @@ export class GameScene {
     for (const t of footTargets({ x: p.x, z: p.z }, radius, this.enemyTargets())) t.applyDamage(dmg);
     this.particles.ring(this.monster.kind.fx.particle, p, radius * 0.6, 24);
     this.rig.addTrauma(0.25);
+    this.monster.body.arms?.spin();
   }
 
   /** Acid Mortar: lob globs at priority ground threats (artillery, SAMs, trucks, then tanks). */
@@ -1020,7 +1035,11 @@ export class GameScene {
     const pos = { x: m.position.x, z: m.position.z };
     if (!m.busy) {
       // A breather only picks targets its neck can reach, so the body never has to turn away from its path.
-      const rangedPool = m.kind.ranged === 'breath' ? this.enemyTargets().filter((t) => this.canBreatheAt(t)) : this.enemyTargets();
+      const reach = this.ms.meleeRange * 0.8;
+      const rangedPool =
+        m.kind.ranged === 'breath' ? this.enemyTargets().filter((t) => this.canBreatheAt(t))
+        : m.kind.ranged === 'hurl' ? this.enemyTargets().filter((t) => Math.hypot(t.position.x - pos.x, t.position.z - pos.z) > reach)
+        : this.enemyTargets();
       const auto = nearestInRange(pos, rangedPool, this.ms.rangedRange);
       const autoMelee = nearestInRange(pos, this.enemyTargets().filter((t) => !t.airborne), this.ms.meleeRange);
       const order: BrainOrder =
@@ -1032,7 +1051,7 @@ export class GameScene {
         autoMelee: autoMelee ? this.toBrain(autoMelee) : null,
         meleeRange: this.ms.meleeRange,
         spikeRange: this.ms.rangedRange,
-        meleeReady: m.meleeReady(),
+        meleeReady: m.kind.melee.kind === 'multi' ? false : m.meleeReady(),
         spikeReady: m.rangedReady(),
         arriveRadius: CONFIG.monster.arriveRadius,
       });
@@ -1061,8 +1080,73 @@ export class GameScene {
 
   private fireRanged(target: Target | null): void {
     if (this.monster.kind.ranged === 'breath') this.breathAt(target);
+    else if (this.monster.kind.ranged === 'hurl') this.hurlAt(target);
     else this.fireSpikes(target);
   }
+
+  /**
+   * Tentacle Slam: every free arm takes the nearest unclaimed ground enemy (or the ordered target) within
+   * reach on any side; the body never turns. Damage lands in onArmImpact.
+   */
+  private tentacleSlams(): void {
+    const m = this.monster;
+    const arms = m.body.arms;
+    if (!arms || m.kind.melee.kind !== 'multi' || !m.alive || m.busy) return;
+    const free = arms.freeArms();
+    if (free.length === 0) return;
+    const busy = arms.striking();
+    const ordered = this.order?.kind === 'attack' && !this.order.target.airborne ? this.order.target : null;
+    const cands = this.enemyTargets().filter((t) => !t.airborne && !busy.has(t));
+    if (ordered && !busy.has(ordered) && !cands.includes(ordered)) cands.push(ordered);
+    const from = { x: m.position.x, z: m.position.z };
+    const cd = this.ms.meleeCooldown * this.progression.stats.cooldownMult;
+    for (const { arm, target } of assignStrikes(free, m.yaw, from, cands, this.ms.meleeRange)) {
+      arms.start(arm, 'slam', target.position, target, cd, this.ms.meleeTiming);
+    }
+  }
+
+  /** Hurl: free arms (1 + extra-projectile upgrades) throw rubble at the target and its nearest neighbours. */
+  private hurlAt(target: Target | null): void {
+    const m = this.monster;
+    const arms = m.body.arms;
+    if (!target || !arms) return;
+    const free = arms.freeArms();
+    if (free.length === 0) return;
+    const from = { x: m.position.x, z: m.position.z };
+    const count = Math.min(free.length, 1 + this.progression.stats.extraSpikes);
+    const others = this.enemyTargets()
+      .filter((t) => t.isAlive() && Math.hypot(t.position.x - from.x, t.position.z - from.z) <= this.ms.rangedRange)
+      .sort((a, b) => a.position.distanceToSquared(target.position) - b.position.distanceToSquared(target.position));
+    const H = CONFIG.kraken.arms.hurl;
+    let left = free;
+    for (const t of spikeTargets(target, others, count)) {
+      const pick = assignStrikes(left, m.yaw, from, [t], Infinity)[0];
+      if (!pick) break;
+      arms.start(pick.arm, 'hurl', t.position, t, 0, H.timing);
+      left = left.filter((a) => a !== pick.arm);
+    }
+    m.consumeRanged(this.rangedCdMult());
+  }
+
+  /** An arm's strike lands: a slam hits around its tip; a hurl releases its chunk from the tip. */
+  private onArmImpact = (arm: number, s: ArmStrike): void => {
+    const arms = this.monster.body.arms!;
+    if (s.kind === 'hurl') {
+      const tip = arms.tips[arm]!;
+      this.projectiles.fireChunk(tip.clone(), s.target.clone().setY(0), this.ms.rangedDamage * this.dmgMult());
+      this.particles.emit('debris', tip, 6, 0.8);
+      return;
+    }
+    const at = { x: s.target.x, z: s.target.z };
+    const r = this.ms.meleeRadius * this.progression.stats.stompRadiusMult;
+    const dmg = this.ms.meleeDamage * this.dmgMult();
+    this.city.forEachStandingInRadius(at, r, (t) => t.applyDamage(dmg));
+    for (const t of footTargets(at, r, this.enemyTargets())) t.applyDamage(dmg);
+    this.tmpV.set(at.x, 0, at.z);
+    this.particles.ring('dust', this.tmpV, r, 10);
+    this.particles.emit('debris', this.tmpV.setY(10), 6, 1);
+    this.rig.addTrauma(0.12);
+  };
 
   /** The Kaiju's neck can turn to `t` without the body turning. */
   private canBreatheAt(t: Target): boolean {
@@ -1115,6 +1199,16 @@ export class GameScene {
   }
 
   private onProjectileHit = (h: Hit): void => {
+    if (h.kind === 'chunk') {
+      const r = CONFIG.kraken.arms.hurl.splash;
+      const at = { x: h.point.x, z: h.point.z };
+      this.city.forEachStandingInRadius(at, r, (t) => t.applyDamage(h.damage));
+      for (const t of footTargets(at, r, this.enemyTargets())) t.applyDamage(h.damage);
+      this.particles.ring('dust', h.point, r, 12);
+      this.particles.emit('debris', h.point, 12, 1.2);
+      this.rig.addTrauma(0.15);
+      return;
+    }
     if (h.kind === 'glob') {
       const r = this.passives.mortarSplash();
       this.city.forEachStandingInRadius({ x: h.point.x, z: h.point.z }, r, (t) => t.applyDamage(h.damage));

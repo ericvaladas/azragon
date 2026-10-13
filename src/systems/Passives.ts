@@ -53,6 +53,12 @@ export class Passives {
     return { radius: P.nova.radius[r]!, damage: P.nova.damage[r]! };
   }
 
+  /** Sucker Grip (Kraken): radius and damage of the crush on each plant, or null if not taken. */
+  grip(): { radius: number; damage: number } | null {
+    const r = this.ranks().grip;
+    return r > 0 ? { radius: P.grip.radius[r]!, damage: P.grip.damage[r]! } : null;
+  }
+
   mortarSplash(): number {
     return P.mortar.splash[this.ranks().mortar]!;
   }
