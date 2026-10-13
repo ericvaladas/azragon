@@ -3,9 +3,11 @@ import { hash2, valueNoise } from '../noise';
 import type { DistrictId } from '../types';
 
 /** World metres; north is +Z, west is +X, east is −X. The crash is at the origin. */
-export const SHIBUYA_CROSSING = { x: 600, z: 1600 } as const;
-export const SHINJUKU = { x: 300, z: 3100 } as const;
-export const TMG_SITE = { x: 500, z: 3100 } as const;
+export const SHIBUYA_CROSSING = { x: 200, z: 1000 } as const;
+export const SHINJUKU = { x: 1100, z: 2900 } as const;
+export const TMG_SITE = { x: 1300, z: 2900 } as const;
+export const TOKYO_TOWER_SITE = { x: -300, z: 1500 } as const;
+export const SKYTREE_SITE = { x: -1900, z: 3100 } as const;
 /** Inside this radius the districts are laid by hand (CORE_REGIONS); beyond it, noise. */
 export const CORE_RADIUS = 4000;
 
@@ -13,14 +15,16 @@ type Region = { district: DistrictId } & ({ x0: number; z0: number; x1: number; 
 
 /** The hand-laid core. First match wins; unmatched core points are office / mixed. */
 const CORE_REGIONS: readonly Region[] = [
-  { district: 'neon', x: SHIBUYA_CROSSING.x, z: SHIBUYA_CROSSING.z, r: 450 },
-  // Yoyogi Park and the Meiji Shrine woods.
-  { district: 'park', x0: 900, z0: 2150, x1: 1700, z1: 2450 },
-  // Neon streets along Shinjuku's east edge.
-  { district: 'neon', x0: -1100, z0: 2500, x1: -500, z1: 3700 },
-  { district: 'highrise', x0: -800, z0: 2500, x1: 1400, z1: 3700 },
-  { district: 'residential', x0: 200, z0: -4000, x1: 4000, z1: 1150 },
-  { district: 'residential', x0: -4000, z0: -4000, x1: 4000, z1: -700 },
+  { district: 'neon', x: SHIBUYA_CROSSING.x, z: SHIBUYA_CROSSING.z, r: 420 },
+  // The Imperial Palace gardens (east of the crash) and Shiba Park around Tokyo Tower.
+  { district: 'park', x0: -1600, z0: 200, x1: -1000, z1: 1000 },
+  { district: 'park', x0: -800, z0: 1400, x1: -200, z1: 1600 },
+  // Neon streets along Shinjuku's east edge, then the towers.
+  { district: 'neon', x0: 200, z0: 2000, x1: 600, z1: 3400 },
+  { district: 'highrise', x0: 400, z0: 2000, x1: 2000, z1: 3400 },
+  { district: 'highrise', x0: -1400, z0: 1600, x1: -800, z1: 2400 },
+  { district: 'residential', x0: 1600, z0: -4000, x1: 4000, z1: 1150 },
+  { district: 'residential', x0: -4000, z0: -4000, x1: 4000, z1: -900 },
 ];
 
 const inRegion = (r: Region, x: number, z: number): boolean =>

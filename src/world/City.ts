@@ -5,7 +5,7 @@ import type { Vec2 } from '../util/math';
 import { mulberry32 } from '../util/rng';
 import type { CityStyle, LandmarkSpec, SignDef } from '../cities/types';
 import { blastTopples, chunksInRadius, DestroyedLog, generateChunk, planStreaming, type BuildingSpec, type ChunkContent } from './chunks';
-import { canvasCityTextures, patchFacadeShader, SCREEN_FRAMES, type CityTextures } from './pixelTextures';
+import { canvasCityTextures, patchFacadeShader, SCREEN_FRAMES, SIGN_RECTS, type CityTextures } from './pixelTextures';
 import { faceted, toonMat } from '../render/toon';
 
 type BuildingState = 'standing' | 'collapsing' | 'rubble';
@@ -86,6 +86,7 @@ export class City {
   private treeMesh: THREE.InstancedMesh;
   private parkMesh: THREE.InstancedMesh;
   private signMesh: THREE.InstancedMesh;
+  private signRect: THREE.InstancedBufferAttribute;
   private screenMesh: THREE.InstancedMesh;
   private freeSigns: number[] = [];
   private freeScreens: number[] = [];
@@ -161,11 +162,25 @@ export class City {
     this.treeMat = toonMat(this._style.colors.tree);
     this.treeMesh = new THREE.InstancedMesh(cone, this.treeMat, world.maxTrees);
     this.treeMesh.castShadow = true;
-    this.parkMesh = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), toonMat(this._style.colors.park), world.maxParks);
+    this.parkMesh = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), toonMat(0xffffff), world.maxParks);
+    for (let i = 0; i < world.maxParks; i++) this.parkMesh.setColorAt(i, _c.setHex(0xffffff));
     this.parkMesh.receiveShadow = true;
     this.parkMesh.position.y = 0.2;
     const signBox = new THREE.BoxGeometry(1, 1, 1);
-    this.signMesh = new THREE.InstancedMesh(signBox, new THREE.MeshBasicMaterial({ color: 0xffffff }), world.maxSigns);
+    const signGeo = new THREE.BoxGeometry(1, 1, 1);
+    this.signRect = new THREE.InstancedBufferAttribute(new Float32Array(world.maxSigns * 4), 4);
+    signGeo.setAttribute('aRect', this.signRect);
+    const signMat = new THREE.MeshBasicMaterial({ map: this.textures.signs() });
+    signMat.onBeforeCompile = (sh) => {
+      sh.vertexShader = sh.vertexShader
+        .replace('#include <common>', '#include <common>\nattribute vec4 aRect;\nvarying vec4 vRect;')
+        .replace('#include <uv_vertex>', '#include <uv_vertex>\n  vRect = aRect;');
+      sh.fragmentShader = sh.fragmentShader
+        .replace('#include <common>', '#include <common>\nvarying vec4 vRect;')
+        .replace('#include <map_fragment>', 'diffuseColor *= texture2D(map, mix(vRect.xy, vRect.zw, vMapUv));');
+    };
+    signMat.customProgramCacheKey = () => 'city-sign';
+    this.signMesh = new THREE.InstancedMesh(signGeo, signMat, world.maxSigns);
     this.screenTex = this.textures.screen();
     this.screenTex.repeat.set(1 / SCREEN_FRAMES, 1);
     this.screenMesh = new THREE.InstancedMesh(signBox, new THREE.MeshBasicMaterial({ map: this.screenTex }), world.maxScreens);
@@ -280,7 +295,6 @@ export class City {
       mat.needsUpdate = true;
       this.roofMat.color.setHex(style.colors.roof);
       this.treeMat.color.setHex(style.colors.tree);
-      (this.parkMesh.material as THREE.MeshToonMaterial).color.setHex(style.colors.park);
     }
     this.buildOverlays();
     this.crater.visible = false;
@@ -373,7 +387,8 @@ export class City {
       const chunk = this.chunks.get(ref.key);
       if (!chunk) continue;
       for (const b of chunk.buildings) {
-        if (b.state === 'rubble') continue;
+        // Landmarks and hand-placed lots (the opening view) ride out the crash.
+        if (b.state === 'rubble' || b.mesh || b.spec.keep) continue;
         const d = Math.hypot(b.spec.x - p.x, b.spec.z - p.z) - b.radius;
         if (!blastTopples(b.spec.x, b.spec.z, d, r, outer)) continue;
         if (!instant) {
@@ -418,6 +433,8 @@ export class City {
       for (const m of [this.buildingMesh, this.rubbleMesh, this.treeMesh, this.parkMesh, this.signMesh, this.screenMesh]) m.instanceMatrix.needsUpdate = true;
       if (this.buildingMesh.instanceColor) this.buildingMesh.instanceColor.needsUpdate = true;
       if (this.signMesh.instanceColor) this.signMesh.instanceColor.needsUpdate = true;
+      this.signRect.needsUpdate = true;
+      if (this.parkMesh.instanceColor) this.parkMesh.instanceColor.needsUpdate = true;
       this.facadeAttr.needsUpdate = true;
     }
   }
@@ -471,6 +488,7 @@ export class City {
       if (slot === undefined) break;
       _m.compose(_p.set(p.x, 0, p.z), _q.identity(), _s.set(inner, 1, inner));
       this.parkMesh.setMatrixAt(slot, _m);
+      this.parkMesh.setColorAt(slot, _c.setHex(this._style.colors.park));
       this.parkUsed[slot] = true;
       parkSlots.push(slot);
     }
@@ -571,7 +589,11 @@ export class City {
       const slot = (screen ? this.freeScreens : this.freeSigns).pop();
       if (slot === undefined) continue;
       (screen ? this.screenUsed : this.signUsed)[slot] = true;
-      if (!screen) this.signMesh.setColorAt(slot, _c.setHex(sign.color));
+      if (!screen) {
+        this.signMesh.setColorAt(slot, _c.setHex(sign.color));
+        const r = SIGN_RECTS[sign.cell ?? 0]!;
+        this.signRect.setXYZW(slot, r[0], r[1], r[2], r[3]);
+      }
       b.signSlots.push({ sign, pool: screen ? 'screen' : 'sign', slot });
     }
   }

@@ -65,7 +65,7 @@ export const CONFIG = {
     blimpTrim: 0xd8322a,
     blimpTrimDark: 0x5a1612,
   },
-  fog: { near: 1200, far: 4600 },
+  fog: { near: 2200, far: 4700 },
   camera: {
     near: 5,
     far: 12000,
@@ -440,7 +440,7 @@ export const CONFIG = {
      * a ring of secondary fireballs; crater fires per second during the settle.
      */
     impact: {
-      outer: 2,
+      outer: 1.3,
       shockSpeed: 1400,
       rings: [
         { radius: 2.4, life: 0.8, delay: 0 },

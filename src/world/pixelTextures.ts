@@ -76,7 +76,7 @@ export function facadeAtlas(): THREE.CanvasTexture {
   cell(1, (x0) => {
     g.fillStyle = '#ffffff';
     g.fillRect(x0, 0, CELL_W, CELL_H);
-    g.fillStyle = '#3d4a5e';
+    g.fillStyle = '#7f93ab';
     for (let y = 2; y < CELL_H; y += 6) g.fillRect(x0, y, CELL_W, 3);
     g.fillStyle = '#b8b0a4';
     for (let x = 0; x < CELL_W; x += 8) g.fillRect(x0 + x, 0, 1, CELL_H);
@@ -86,7 +86,7 @@ export function facadeAtlas(): THREE.CanvasTexture {
     g.fillStyle = '#ffffff';
     g.fillRect(x0, 0, CELL_W, CELL_H);
     for (let y = 0; y < CELL_H; y += 8) {
-      g.fillStyle = '#4a4f57';
+      g.fillStyle = '#8a9aae';
       g.fillRect(x0 + 2, y + 2, 4, 4);
       g.fillRect(x0 + 10, y + 2, 4, 4);
       g.fillStyle = '#d9d3c8';
@@ -99,7 +99,7 @@ export function facadeAtlas(): THREE.CanvasTexture {
     g.fillRect(x0, 0, CELL_W, CELL_H);
     const rng = mulberry32(CONFIG.world.seed + 7);
     for (let y = 1; y < CELL_H; y += 4) for (let x = 1; x < CELL_W; x += 4) {
-      g.fillStyle = rng() < 0.3 ? '#ffe9a8' : '#4a5566';
+      g.fillStyle = rng() < 0.35 ? '#ffe9a8' : '#8796aa';
       g.fillRect(x0 + x, y, 2, 2);
     }
   });
@@ -222,6 +222,7 @@ export type CityTextures = {
   crater(): THREE.Texture;
   facades(): THREE.Texture;
   screen(): THREE.Texture;
+  signs(): THREE.Texture;
   overlay(id: string): THREE.Texture;
 };
 
@@ -230,6 +231,7 @@ export const canvasCityTextures: CityTextures = {
   crater: craterTexture,
   facades: facadeAtlas,
   screen: screenTexture,
+  signs: () => signAtlas(),
   overlay: () => scrambleTexture(),
 };
 
@@ -254,4 +256,78 @@ export function patchFacadeShader(sh: { vertexShader: string; fragmentShader: st
       `vec2 facadeUv = vec2((fract(vFacadeUv.x) + vFacade) / ${FACADE_COUNT.toFixed(1)}, fract(vFacadeUv.y));
   diffuseColor *= texture2D(map, facadeUv);`,
     );
+}
+
+/** Sign atlas size (px) and the UV rect (u0, v0, u1, v1) of each cell: 0–2 vertical glyph boards, 3–5 billboards. */
+const SA = 64;
+const rect = (x: number, y: number, w: number, h: number): readonly [number, number, number, number] => [x / SA, 1 - (y + h) / SA, (x + w) / SA, 1 - y / SA];
+export const SIGN_RECTS = [rect(0, 0, 12, 48), rect(12, 0, 12, 48), rect(24, 0, 12, 48), rect(36, 0, 28, 16), rect(36, 16, 28, 16), rect(36, 32, 28, 16)] as const;
+
+/**
+ * Sign atlas. Vertical boards: dark panels with a white frame and a column of blocky, kanji-like white glyphs; the
+ * per-sign tint turns the white into neon. Billboards: small full-colour pictures (drawn untinted).
+ */
+export function signAtlas(): THREE.CanvasTexture {
+  const c = document.createElement('canvas');
+  c.width = SA;
+  c.height = SA;
+  const g = c.getContext('2d')!;
+  const rng = mulberry32(CONFIG.world.seed + 11);
+  for (let k = 0; k < 3; k++) {
+    const x0 = k * 12;
+    // A bright board (tinted to the sign colour) with a dark frame and dark lettering.
+    g.fillStyle = '#ffffff';
+    g.fillRect(x0, 0, 12, 48);
+    g.fillStyle = '#26222e';
+    g.fillRect(x0, 0, 12, 1);
+    g.fillRect(x0, 47, 12, 1);
+    g.fillRect(x0, 0, 1, 48);
+    g.fillRect(x0 + 11, 0, 1, 48);
+    // Glyphs: 8 × 8 cells stacked down the board, each a few strokes.
+    for (let y = 3; y + 8 <= 46; y += 9) {
+      const gx = x0 + 2;
+      g.fillRect(gx + 3, y, 2, 8);
+      if (rng() < 0.8) g.fillRect(gx, y + 1 + Math.floor(rng() * 3), 8, 1);
+      if (rng() < 0.7) g.fillRect(gx + 1, y + 5 + Math.floor(rng() * 2), 6, 1);
+      if (rng() < 0.6) g.fillRect(gx + (rng() < 0.5 ? 0 : 6), y + 2, 2, 5);
+      if (rng() < 0.5) g.fillRect(gx + 1, y + 7, 6, 1);
+    }
+  }
+  // Billboard 3: a drink can on yellow with a red band of text.
+  g.fillStyle = '#ffd23a';
+  g.fillRect(36, 0, 28, 16);
+  g.fillStyle = '#e8502a';
+  g.fillRect(38, 2, 6, 12);
+  g.fillStyle = '#ffffff';
+  g.fillRect(39, 5, 4, 2);
+  g.fillStyle = '#2a2a3a';
+  for (let i = 0; i < 4; i++) g.fillRect(47 + i * 4, 5, 3, 3);
+  g.fillRect(47, 10, 14, 2);
+  // Billboard 4: an anime face on pink.
+  g.fillStyle = '#ff8fc8';
+  g.fillRect(36, 16, 28, 16);
+  g.fillStyle = '#fbe3cf';
+  g.fillRect(44, 19, 12, 11);
+  g.fillStyle = '#4a2a6a';
+  g.fillRect(43, 17, 14, 4);
+  g.fillRect(43, 17, 2, 10);
+  g.fillRect(55, 17, 2, 10);
+  g.fillStyle = '#35a0ff';
+  g.fillRect(46, 23, 2, 3);
+  g.fillRect(52, 23, 2, 3);
+  g.fillStyle = '#e8502a';
+  g.fillRect(49, 27, 2, 1);
+  // Billboard 5: a white logo and text on deep blue.
+  g.fillStyle = '#1f4fa8';
+  g.fillRect(36, 32, 28, 16);
+  g.fillStyle = '#ffffff';
+  g.fillRect(39, 36, 8, 8);
+  g.fillStyle = '#1f4fa8';
+  g.fillRect(41, 38, 4, 4);
+  g.fillStyle = '#ffffff';
+  g.fillRect(50, 36, 11, 2);
+  g.fillRect(50, 40, 8, 2);
+  g.fillStyle = '#35e8ff';
+  g.fillRect(50, 44, 11, 1);
+  return finish(c);
 }

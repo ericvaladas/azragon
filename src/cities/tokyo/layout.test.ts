@@ -5,11 +5,13 @@ import { CORE_RADIUS, SHIBUYA_CROSSING, SHINJUKU, TMG_SITE, districtAt } from '.
 
 describe('Tokyo layout', () => {
   it('puts the Shinjuku high-rise to the north and the Metropolitan Government Building inside it', () => {
-    expect(SHINJUKU.z).toBeGreaterThan(2000);
+    expect(SHINJUKU).toEqual({ x: 1100, z: 2900 });
+    expect(TMG_SITE).toEqual({ x: 1300, z: 2900 });
     expect(districtAt(SHINJUKU.x, SHINJUKU.z)).toBe('highrise');
     expect(districtAt(TMG_SITE.x, TMG_SITE.z)).toBe('highrise');
   });
   it('puts the Shibuya Crossing north-west of the crash (+X is west), on a road intersection, in neon', () => {
+    expect(SHIBUYA_CROSSING).toEqual({ x: 200, z: 1000 });
     expect(SHIBUYA_CROSSING.x).toBeGreaterThan(0);
     expect(SHIBUYA_CROSSING.z).toBeGreaterThan(0);
     expect(SHIBUYA_CROSSING.x % CONFIG.world.blockSize).toBe(0);
@@ -17,10 +19,10 @@ describe('Tokyo layout', () => {
     expect(districtAt(SHIBUYA_CROSSING.x + 100, SHIBUYA_CROSSING.z + 100)).toBe('neon');
   });
   it('lines the east (−X) edge of Shinjuku with neon streets', () => {
-    expect(districtAt(-800, 3000)).toBe('neon');
+    expect(districtAt(300, 3000)).toBe('neon');
   });
-  it('has a park between Shibuya and Shinjuku, west of centre', () => {
-    expect(districtAt(1300, 2300)).toBe('park');
+  it('sets Tokyo Tower in Shiba Park', () => {
+    expect(districtAt(-500, 1500)).toBe('park');
   });
   it('never makes the crash site a park', () => {
     const W = CONFIG.world;

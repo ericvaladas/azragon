@@ -34,10 +34,10 @@ export type DistrictRules = {
 
 export type SignKind = 'vertical' | 'billboard' | 'screen';
 /** A sign in its building's frame: centre offset from the building's base centre (m), box size (m), colour. */
-export type SignDef = { kind: SignKind; lx: number; ly: number; lz: number; w: number; h: number; d: number; color: number };
+export type SignDef = { kind: SignKind; lx: number; ly: number; lz: number; w: number; h: number; d: number; color: number; cell?: number };
 
 /** One building: base centre (x, z), footprint w (x) × d (z), height h, facade atlas cell, tint, signs. */
-export type BuildingSpec = { x: number; z: number; w: number; d: number; h: number; facade: number; color: number; signs: SignDef[] };
+export type BuildingSpec = { x: number; z: number; w: number; d: number; h: number; facade: number; color: number; signs: SignDef[]; keep?: boolean };
 
 /** A destructible structure with its own mesh. `build` returns vertex-coloured geometry with its base centre at the origin, +Y up. */
 export type LandmarkSpec = { id: string; x: number; z: number; w: number; d: number; h: number; build(): THREE.BufferGeometry };

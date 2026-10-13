@@ -3,8 +3,8 @@ import { BUILDINGS_PER_CHUNK, CHUNK_SIZE, DestroyedLog, SIGNS_PER_CHUNK, blastTo
 import type { BuildingSpec } from './chunks';
 import { CONFIG } from '../config';
 import { TOKYO } from '../cities/tokyo';
+import { SHIBUYA_CROSSING } from '../cities/tokyo/layout';
 import type { CityStyle } from '../cities/types';
-import { CRATER_RADIUS } from './City';
 
 const W = CONFIG.world;
 
@@ -75,7 +75,7 @@ describe('generateChunk', () => {
   it('places the Shibuya corner buildings exactly, and no random building overlaps them', () => {
     const found: BuildingSpec[] = [];
     const all: BuildingSpec[] = [];
-    for (const r of chunksInRadius(600, 1600, CHUNK_SIZE)) {
+    for (const r of chunksInRadius(SHIBUYA_CROSSING.x, SHIBUYA_CROSSING.z, CHUNK_SIZE)) {
       const c = generateChunk(TOKYO, 1337, r.cx, r.cz);
       all.push(...c.buildings);
       for (const s of TOKYO.specialLots) found.push(...c.buildings.filter((b) => b.x === s.x && b.z === s.z && b.h === s.h));
@@ -83,15 +83,15 @@ describe('generateChunk', () => {
     expect(found).toHaveLength(4);
     const overlaps = (a: BuildingSpec, b: BuildingSpec) => Math.abs(a.x - b.x) * 2 < a.w + b.w && Math.abs(a.z - b.z) * 2 < a.d + b.d;
     for (const s of found) for (const b of all) if (b !== s) expect(overlaps(s, b)).toBe(false);
-    for (const s of found) expect(Math.hypot(s.x, s.z) - Math.max(s.w, s.d) / 2).toBeGreaterThanOrEqual(2 * CRATER_RADIUS);
+    for (const s of found) expect(s.keep).toBe(true);
   });
 
   it('spreads signs evenly: every block column and row with buildings has a signed one', () => {
-    const chunks = [generateChunk(TOKYO, 1337, 0, 2), generateChunk(ALL_NEON, 1337, 10, 7), generateChunk(ALL_NEON, 1337, 12, 7)];
+    const chunks = [generateChunk(TOKYO, 1337, 0, 1), generateChunk(ALL_NEON, 1337, 10, 7), generateChunk(ALL_NEON, 1337, 12, 7)];
     for (const c of chunks) {
       const signed = c.buildings.filter((b) => b.signs.length > 0).length;
       expect(signed / c.buildings.length).toBeGreaterThanOrEqual(0.5);
-      if (c === chunks[0]) continue; // Shibuya mixes in unsigned residential blocks; evenness is pinned on the all-neon chunks
+      if (c === chunks[0]) continue; // The Shibuya chunk mixes in sparsely signed office blocks; evenness is pinned on the all-neon chunks
       for (const axis of ['x', 'z'] as const) {
         const groups = new Map<number, number>();
         for (const b of c.buildings) groups.set(blockCell(b[axis]), (groups.get(blockCell(b[axis])) ?? 0) + (b.signs.length > 0 ? 1 : 0));
@@ -107,7 +107,35 @@ describe('generateChunk', () => {
           expect(Math.abs(s.lx)).toBeLessThanOrEqual(b.w / 2 + s.w + 4);
           expect(Math.abs(s.lz)).toBeLessThanOrEqual(b.d / 2 + s.d + 4);
           expect(s.ly - s.h / 2).toBeGreaterThanOrEqual(0);
-          expect(s.ly + s.h / 2).toBeLessThanOrEqual(b.h + 30);
+          expect(s.ly + s.h / 2).toBeLessThanOrEqual(b.h + 50);
+        }
+      }
+    }
+  });
+
+  it('places at most one billboard per chunk, on a building in the chunk\'s central 400 × 400 m', () => {
+    let total = 0;
+    for (const r of chunksInRadius(0, 0, 4000)) {
+      const c = generateChunk(TOKYO, 1337, r.cx, r.cz);
+      const ccx = (r.cx + 0.5) * CHUNK_SIZE;
+      const ccz = (r.cz + 0.5) * CHUNK_SIZE;
+      const boards = c.buildings.filter((b) => b.signs.some((s) => s.kind === 'billboard'));
+      expect(boards.flatMap((b) => b.signs.filter((s) => s.kind === 'billboard')).length).toBeLessThanOrEqual(1);
+      for (const b of boards) {
+        expect(Math.abs(b.x - ccx)).toBeLessThanOrEqual(200);
+        expect(Math.abs(b.z - ccz)).toBeLessThanOrEqual(200);
+      }
+      total += boards.length;
+    }
+    expect(total).toBeGreaterThan(0);
+  });
+
+  it('draws vertical signs from glyph cells 0–2 and billboards from picture cells 3–5', () => {
+    for (const r of chunksInRadius(0, 0, 4000)) {
+      for (const b of generateChunk(TOKYO, 1337, r.cx, r.cz).buildings) {
+        for (const s of b.signs) {
+          if (s.kind === 'vertical') expect([0, 1, 2]).toContain(s.cell);
+          if (s.kind === 'billboard') expect([3, 4, 5]).toContain(s.cell);
         }
       }
     }

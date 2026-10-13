@@ -6,12 +6,14 @@ import type { CityStyle } from '../cities/types';
 import { City, CRATER_RADIUS } from './City';
 import type { CityTextures } from './pixelTextures';
 import type { Target } from '../combat';
+import { gameplayPose } from '../intro/timeline';
 
 const STUB: CityTextures = {
   ground: () => new THREE.Texture(),
   crater: () => new THREE.Texture(),
   facades: () => new THREE.Texture(),
   screen: () => new THREE.Texture(),
+  signs: () => new THREE.Texture(),
   overlay: () => new THREE.Texture(),
 };
 const make = (style: CityStyle = TOKYO, onDestroyed = (_t: Target, _e: number) => {}) => {
@@ -28,7 +30,7 @@ const landmarkTarget = (city: City): Target => {
 describe('City (Tokyo)', () => {
   it('loads the Metropolitan Government Building as a standing building-kind target with HP by height', () => {
     const { city } = make();
-    expect(city.landmarkCount()).toBe(1);
+    expect(city.landmarkCount()).toBe(TOKYO.landmarks.length);
     const t = landmarkTarget(city);
     expect(t.kind).toBe('building');
     expect((t as unknown as { maxHp: number }).maxHp).toBe(Math.round(tmg.h * CONFIG.world.buildingHpPerMetre));
@@ -64,7 +66,7 @@ describe('City (Tokyo)', () => {
     for (let i = 0; i < 200; i++) city.update(0.016, new THREE.Vector3(30000, 0, 0));
     expect(city.landmarkCount()).toBe(0);
     for (let i = 0; i < 200; i++) city.update(0.016, new THREE.Vector3());
-    expect(city.landmarkCount()).toBe(1);
+    expect(city.landmarkCount()).toBe(TOKYO.landmarks.length);
     let standing = false;
     city.forEachStandingInRadius({ x: tmg.x, z: tmg.z }, 5, (b) => { if (b.radius >= tmg.w / 2 - 1) standing = true; });
     expect(standing).toBe(false);
@@ -76,13 +78,39 @@ describe('City (Tokyo)', () => {
     expect(landmarkTarget(city).isAlive()).toBe(true);
   });
 
-  it('a landmark inside the blast radius topples like any building', () => {
+  it('a landmark inside the blast radius rides it out', () => {
     const near: CityStyle = { ...TOKYO, landmarks: [{ ...tmg, x: 500, z: 700 }] };
     const { city } = make(near);
     let t: Target | null = null;
     city.forEachStandingInRadius({ x: 500, z: 700 }, 5, (b) => { if (b.radius >= tmg.w / 2 - 1) t = b; });
     city.blast({ x: 0, z: 0 }, CRATER_RADIUS, true, CRATER_RADIUS * CONFIG.intro.impact.outer);
-    expect(t!.isAlive()).toBe(false);
+    expect(t!.isAlive()).toBe(true);
+  });
+
+  it('keeps every landmark and every Shibuya corner building standing through the crash blast', () => {
+    const { city } = make();
+    const at = (x: number, z: number): Target | null => {
+      let t: Target | null = null;
+      city.forEachStandingInRadius({ x, z }, 2, (b) => { if (b.position.x === x && b.position.z === z) t = b; });
+      return t;
+    };
+    const targets = [...TOKYO.landmarks, ...TOKYO.specialLots].map((s) => at(s.x, s.z));
+    for (const t of targets) expect(t).not.toBeNull();
+    city.blast({ x: 0, z: 0 }, CRATER_RADIUS, true, CRATER_RADIUS * CONFIG.intro.impact.outer);
+    for (const t of targets) expect(t!.isAlive()).toBe(true);
+  });
+
+  it('frames Tokyo Tower in the opening gameplay view', () => {
+    const pose = gameplayPose();
+    const cam = new THREE.PerspectiveCamera(CONFIG.camera.baseVFovDeg, 16 / 10, CONFIG.camera.near, CONFIG.camera.far);
+    cam.position.copy(pose.pos);
+    cam.lookAt(pose.look);
+    cam.updateMatrixWorld();
+    const tower = TOKYO.landmarks.find((l) => l.id === 'tokyo-tower')!;
+    const p = new THREE.Vector3(tower.x, tower.h / 2, tower.z).project(cam);
+    expect(Math.abs(p.x)).toBeLessThan(0.9);
+    expect(Math.abs(p.y)).toBeLessThan(0.9);
+    expect(p.z).toBeLessThan(1);
   });
 
   it('reset(style) twice leaves exactly one mesh per loaded landmark and per overlay (no leftovers)', () => {
@@ -92,7 +120,7 @@ describe('City (Tokyo)', () => {
     city.reset(TOKYO);
     city.reset(TOKYO);
     expect(count()).toBe(before);
-    expect(city.landmarkCount()).toBe(1);
+    expect(city.landmarkCount()).toBe(TOKYO.landmarks.length);
     expect(city.style).toBe(TOKYO);
   });
 

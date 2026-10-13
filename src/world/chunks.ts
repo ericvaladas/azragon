@@ -67,28 +67,29 @@ export const SIGNS_PER_CHUNK = Math.floor(CONFIG.world.maxSigns / maxLoadedChunk
 const overlaps = (a: { x: number; z: number; w: number; d: number }, b: { x: number; z: number; w: number; d: number }, gap = 0) =>
   Math.abs(a.x - b.x) * 2 < a.w + b.w + gap && Math.abs(a.z - b.z) * 2 < a.d + b.d + gap;
 
-/** Vertical neon blades on the sides and maybe a rooftop billboard, in the building's frame. */
-function makeSigns(rules: DistrictRules, style: CityStyle, w: number, d: number, h: number, rng: () => number): SignDef[] {
+/** Vertical neon blades on the sides and, when `allowBillboard`, maybe a rooftop billboard, in the building's frame. */
+function makeSigns(rules: DistrictRules, style: CityStyle, w: number, d: number, h: number, allowBillboard: boolean, rng: () => number): SignDef[] {
   const signs: SignDef[] = [];
   const n = Math.floor(rules.signs) + (rng() < rules.signs % 1 ? 1 : 0);
   for (let i = 0; i < n; i++) {
     const face = Math.floor(rng() * 4);
-    const len = 4 + rng() * 3;
-    const sh = Math.min(h * 0.6, 18 + rng() * 22);
+    const len = 14 + rng() * 8;
+    const sh = Math.min(h * 0.8, 50 + rng() * 40);
+    const cell = Math.floor(rng() * 3);
     const ly = Math.min(h - sh / 2, Math.max(sh / 2 + 6, h * (0.4 + 0.4 * rng())));
     const color = pick(style.signColors, rng);
     // A blade sticks straight out of the facade.
     if (face < 2) {
       const sx = face === 0 ? 1 : -1;
-      signs.push({ kind: 'vertical', lx: sx * (w / 2 + len / 2), ly, lz: (rng() - 0.5) * d * 0.6, w: len, h: sh, d: 1.5, color });
+      signs.push({ kind: 'vertical', lx: sx * (w / 2 + len / 2), ly, lz: (rng() - 0.5) * d * 0.6, w: len, h: sh, d: 2, color, cell });
     } else {
       const sz = face === 2 ? 1 : -1;
-      signs.push({ kind: 'vertical', lx: (rng() - 0.5) * w * 0.6, ly, lz: sz * (d / 2 + len / 2), w: 1.5, h: sh, d: len, color });
+      signs.push({ kind: 'vertical', lx: (rng() - 0.5) * w * 0.6, ly, lz: sz * (d / 2 + len / 2), w: 2, h: sh, d: len, color, cell });
     }
   }
-  if (rng() < rules.billboard) {
-    const bh = 10 + rng() * 8;
-    signs.push({ kind: 'billboard', lx: 0, ly: h + bh / 2 + 2, lz: 0, w: w * 0.8, h: bh, d: 1.5, color: pick(style.signColors, rng) });
+  if (allowBillboard && rng() < rules.billboard) {
+    const bh = 30 + rng() * 16;
+    signs.push({ kind: 'billboard', lx: 0, ly: h + bh / 2 + 2, lz: 0, w: w * 0.9, h: bh, d: 2, color: 0xffffff, cell: 3 + Math.floor(rng() * 3) });
   }
   return signs;
 }
@@ -110,6 +111,10 @@ export function generateChunk(style: CityStyle, seed: number, cx: number, cz: nu
   const parks: ParkSpec[] = [];
   const landmarks: LandmarkSpec[] = [];
   const blockOf = (v: number) => Math.floor(v / pitch);
+  // Billboards: at most one per chunk, only on a building whose centre is in the chunk's central 400 × 400 m.
+  const midX = (cx + 0.5) * CHUNK_SIZE + ROAD_ORIGIN;
+  const midZ = (cz + 0.5) * CHUNK_SIZE + ROAD_ORIGIN;
+  let billboardPlaced = false;
 
   for (let i = 0; i < w.chunkBlocks; i++) {
     for (let j = 0; j < w.chunkBlocks; j++) {
@@ -160,7 +165,12 @@ export function generateChunk(style: CityStyle, seed: number, cx: number, cz: nu
         const bw = lot * range(rng, rules.footprint[0], rules.footprint[1]);
         const bd = lot * range(rng, rules.footprint[0], rules.footprint[1]);
         const h = rules.height[0] + (rules.height[1] - rules.height[0]) * Math.pow(rng(), rules.heightCurve);
-        buildings.push({ x: r.lx, z: r.lz, w: bw, d: bd, h, facade: pick(rules.facades, rng), color: pick(rules.colors, rng), signs: makeSigns(rules, style, bw, bd, h, rng) });
+        const facade = pick(rules.facades, rng);
+        const color = pick(rules.colors, rng);
+        const central = Math.abs(r.lx - midX) <= 200 && Math.abs(r.lz - midZ) <= 200;
+        const signs = makeSigns(rules, style, bw, bd, h, central && !billboardPlaced, rng);
+        if (signs.some((s) => s.kind === 'billboard')) billboardPlaced = true;
+        buildings.push({ x: r.lx, z: r.lz, w: bw, d: bd, h, facade, color, signs });
       }
       if (!craterSite) {
         for (let t = 0; t < rules.trees; t++) {
