@@ -85,11 +85,18 @@ export function craterTexture(): THREE.CanvasTexture {
   const g = c.getContext('2d')!;
   const rng = mulberry32(world.seed + 2);
   const r = size / 2;
-  g.fillStyle = hex(palette.ochre);
+  g.fillStyle = hex(palette.crater);
   g.beginPath();
   g.arc(r, r, r, 0, Math.PI * 2);
   g.fill();
-  g.fillStyle = hex(palette.dust);
+  // A ragged, burnt patch in the middle where the pod struck.
+  g.fillStyle = hex(palette.craterScorch);
+  for (let i = 0; i < 900; i++) {
+    const a = rng() * Math.PI * 2;
+    const d = Math.sqrt(rng()) * r * (0.35 + 0.15 * Math.sin(a * 5));
+    g.fillRect(Math.floor(r + Math.cos(a) * d), Math.floor(r + Math.sin(a) * d), 2, 2);
+  }
+  g.fillStyle = hex(palette.craterFleck);
   for (let i = 0; i < 260; i++) {
     const a = rng() * Math.PI * 2;
     const d = Math.sqrt(rng()) * (r - 2);

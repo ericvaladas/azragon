@@ -196,6 +196,9 @@ export class IntroCinematic {
     for (let i = 0; i < 16; i++) h.particles.emit('smoke', this.around(ORIGIN, R * 0.25, i * 35), 3, 1.2);
     h.particles.ring('dust', ORIGIN, R * 0.8, 70);
     h.particles.ring('dust', ORIGIN, R * 1.8, 90);
+    // Impact dust clouds: a wall of huge billows rolling out from the crater, and a column boiling up from it.
+    h.particles.ring('billow', ORIGIN, R * X.dustRing, X.dustBillows);
+    h.particles.emit('billow', _p.set(0, 60, 0), X.dustColumn, 0.35);
     h.particles.emit('debris', _p.set(0, 60, 0), 80, 5);
     for (let i = 0; i < X.boulders; i++) {
       const a = Math.random() * Math.PI * 2;

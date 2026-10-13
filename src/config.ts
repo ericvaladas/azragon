@@ -16,6 +16,10 @@ export const CONFIG = {
     ground: 0x8fb46a,
     groundDark: 0x6f9a52,
     ochre: 0xc9b06a,
+    /** The crash crater: dark earth, burnt darkest toward the middle, flecked with paler grit. */
+    crater: 0x5e4630,
+    craterScorch: 0x3a2a1e,
+    craterFleck: 0x7d6446,
     road: 0x9a9184,
     roadLine: 0xd9d0b8,
     sun: 0xfff1d6,
@@ -435,6 +439,10 @@ export const CONFIG = {
         { radius: 4.2, life: 1.9, delay: 0.25 },
       ],
       boulders: 40,
+      /** Impact dust clouds: billows rolling out from dustRing/2 × crater radius, and puffs in the rising column. */
+      dustRing: 0.9,
+      dustBillows: 40,
+      dustColumn: 5,
       fireballs: 10,
       fireRate: 14,
     },
