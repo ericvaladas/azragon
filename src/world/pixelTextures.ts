@@ -214,6 +214,31 @@ export function cityGroundTexture(style: CityStyle): THREE.CanvasTexture {
   return tex;
 }
 
+export type Rect = { x: number; y: number; w: number; h: number };
+
+/**
+ * Stripe rectangles of the scramble overlay on an n × n pixel grid: four straight zebra crossings at the edges of the
+ * intersection plus both diagonals. `roadWidth` is in metres over `size` metres of ground. Whole pixels only, so
+ * nearest-filtered alpha-tested stripes stay crisp.
+ */
+export function scrambleStripes(n: number, roadWidth: number, size: number): Rect[] {
+  const out: Rect[] = [];
+  const m = n / 2;
+  const road = Math.round((roadWidth / size) * n);
+  const half = Math.floor(road / 2);
+  for (let t = -half; t < half; t += 2) {
+    for (const e of [Math.round(m - road / 2 - 4), Math.round(m + road / 2 + 1)]) {
+      out.push({ x: m + t, y: e, w: 1, h: 3 });
+      out.push({ x: e, y: m + t, w: 3, h: 1 });
+    }
+  }
+  for (let k = -m + 6; k < m - 6; k += 2) for (let s = -2; s <= 2; s++) {
+    out.push({ x: m + k + s, y: m + k - s, w: 1, h: 1 });
+    out.push({ x: m + k + s, y: m - k + s, w: 1, h: 1 });
+  }
+  return out;
+}
+
 /** The Shibuya scramble: zebra crossings on all four arms plus both diagonals, transparent elsewhere (use alphaTest). */
 export function scrambleTexture(): THREE.CanvasTexture {
   const n = 64;
@@ -222,20 +247,7 @@ export function scrambleTexture(): THREE.CanvasTexture {
   c.height = n;
   const g = c.getContext('2d')!;
   g.fillStyle = '#f2f0ea';
-  const m = n / 2;
-  const road = Math.round((CONFIG.world.roadWidth / 120) * n);
-  for (let t = -road / 2; t < road / 2; t += 2) {
-    // The four straight crossings, at the edge of the intersection.
-    for (const e of [m - road / 2 - 4, m + road / 2 + 1]) {
-      g.fillRect(m + t, e, 1, 3);
-      g.fillRect(e, m + t, 3, 1);
-    }
-  }
-  // Both diagonals, as stripes across a band.
-  for (let k = -m + 6; k < m - 6; k += 2) for (let s = -2; s <= 2; s++) {
-    g.fillRect(m + k + s, m + k - s, 1, 1);
-    g.fillRect(m + k + s, m - k + s, 1, 1);
-  }
+  for (const r of scrambleStripes(n, CONFIG.world.roadWidth, 120)) g.fillRect(r.x, r.y, r.w, r.h);
   return finish(c);
 }
 
