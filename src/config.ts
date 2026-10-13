@@ -178,6 +178,46 @@ export const CONFIG = {
       ember: 0xff9a3c,
     },
   },
+  /** The Kraken. Stats feed its MonsterKind; arms tune the tentacles; colours its body and effects. */
+  kraken: {
+    stats: {
+      maxHp: 1100,
+      moveSpeed: 125,
+      turnRate: 2.0,
+      damageMult: 1.1,
+      /** One crawl cycle covers this many model units (each front arm pulls the mantle half of it). */
+      strideLength: 320,
+      bodyRadius: 150 * MONSTER_SCALE,
+      footRadius: 60,
+      footDamage: 120,
+      /** Slam reach (world m) — also the brain's melee range for attack orders. */
+      meleeRange: 400,
+      meleeRadius: 90,
+      meleeDamage: 70,
+      meleeCooldown: 1.4,
+      meleeTiming: { windup: 0.3, impact: 0.45, end: 0.85 },
+      rangedRange: 1400,
+      rangedDamage: 85,
+      rangedCooldown: 1.8,
+      headHeight: 420,
+      /** Measured standing bounding box (world m) — re-measure in Task 3 after the model exists. */
+      size: { width: 760, length: 760, height: 300 },
+    },
+    arms: {
+      /** Hurl: seconds to grab, release (throw), end; chunk splash radius (m), flight time (s), arc height (m). */
+      hurl: { timing: { windup: 0.35, impact: 0.55, end: 0.9 }, splash: 110, flight: 1.3, arc: 500 },
+      /** Whirlpool spin duration (s). */
+      spinTime: 0.8,
+    },
+    colors: {
+      mantle: 0x7a2348,
+      mantleDark: 0x4a1430,
+      underside: 0xe0a6a0,
+      eye: 0xffb320,
+      ink: 0x2a1838,
+      chunk: 0x8a8378,
+    },
+  },
   artillery: {
     hp: 120, exp: 20, size: 40, guns: 3, gunSpacing: 70, distMin: 2500, distMax: 3500,
     salvoEvery: 6, fillTime: 3.2, shellFlight: 1.8, shellArc: 750, radius: 90, damage: 60, buildingDamage: 200, spread: 260,
