@@ -4,7 +4,7 @@ import type { PoolSpec } from '../systems/Progression';
 import type { TentacleArms } from './kraken/TentacleArms';
 
 /** Playable creatures (widened as each one is built). */
-export type MonsterId = 'insect' | 'kaiju' | 'kraken';
+export type MonsterId = 'insect' | 'kaiju' | 'kraken' | 'golem';
 /** Everything the select carousel shows, including creatures still to come. */
 export type RosterId = 'insect' | 'kaiju' | 'kraken' | 'golem';
 

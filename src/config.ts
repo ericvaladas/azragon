@@ -240,8 +240,8 @@ export const CONFIG = {
       rangedDamage: 90,
       rangedCooldown: 2.0,
       headHeight: 480,
-      /** Measured standing bounding box (world m) — re-measure in Task 3 after the model exists. */
-      size: { width: 420, length: 420, height: 380 },
+      /** Measured standing bounding box (world m). */
+      size: { width: 490, length: 370, height: 470 },
     },
     /**
      * Molten Fist: targets within `frontHalf` (rad) of dead ahead take a slam; others a backhand whose hit arc
@@ -251,9 +251,9 @@ export const CONFIG = {
     /** Magma Lob: splash radius (m), flight time (s), arc height (m); the lava pool it leaves (radius m, life s). */
     lob: { splash: 120, flight: 1.4, arc: 520, poolRadius: 110, poolLife: 3 },
     colors: {
-      basalt: 0x3a3330,
-      basaltDark: 0x221e1c,
-      rock: 0x564b44,
+      basalt: 0x4a403b,
+      basaltDark: 0x2c2624,
+      rock: 0x6a5d54,
       magma: 0xff6a1a,
       core: 0xffc23a,
       eye: 0xffd060,
