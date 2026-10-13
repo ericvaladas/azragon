@@ -3,9 +3,9 @@ import { CONFIG } from '../config';
 import type { OnDestroyed, Target } from '../combat';
 import type { Vec2 } from '../util/math';
 import { mulberry32 } from '../util/rng';
-import type { CityStyle, LandmarkSpec } from '../cities/types';
+import type { CityStyle, LandmarkSpec, SignDef } from '../cities/types';
 import { blastTopples, chunksInRadius, DestroyedLog, generateChunk, planStreaming, type BuildingSpec, type ChunkContent } from './chunks';
-import { canvasCityTextures, patchFacadeShader, type CityTextures } from './pixelTextures';
+import { canvasCityTextures, patchFacadeShader, SCREEN_FRAMES, type CityTextures } from './pixelTextures';
 import { faceted, toonMat } from '../render/toon';
 
 type BuildingState = 'standing' | 'collapsing' | 'rubble';
@@ -25,6 +25,7 @@ class Building implements Target {
   /** Collapse dust is due when the delayed collapse actually starts. */
   dustPending = false;
   tiltAxis = new THREE.Vector3();
+  signSlots: { sign: SignDef; pool: 'sign' | 'screen'; slot: number }[] = [];
 
   constructor(
     readonly chunk: string,
@@ -67,6 +68,9 @@ const _p = new THREE.Vector3();
 const _s = new THREE.Vector3();
 const _hit = new THREE.Vector3();
 const _c = new THREE.Color();
+const _p2 = new THREE.Vector3();
+const _s2 = new THREE.Vector3();
+const _m2 = new THREE.Matrix4();
 
 /** Radius of the pod's crater (and its ground decal) around the origin. */
 export const CRATER_RADIUS = CONFIG.world.clearRadius + CONFIG.world.blockSize * 0.5;
@@ -81,6 +85,14 @@ export class City {
   private rubbleMesh: THREE.InstancedMesh;
   private treeMesh: THREE.InstancedMesh;
   private parkMesh: THREE.InstancedMesh;
+  private signMesh: THREE.InstancedMesh;
+  private screenMesh: THREE.InstancedMesh;
+  private freeSigns: number[] = [];
+  private freeScreens: number[] = [];
+  private signUsed: boolean[];
+  private screenUsed: boolean[];
+  private screenTex: THREE.Texture;
+  private screenT = 0;
   private ground: THREE.Mesh;
   private crater: THREE.Mesh;
   private chunks = new Map<string, LoadedChunk>();
@@ -152,7 +164,15 @@ export class City {
     this.parkMesh = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), toonMat(this._style.colors.park), world.maxParks);
     this.parkMesh.receiveShadow = true;
     this.parkMesh.position.y = 0.2;
-    for (const m of [this.buildingMesh, this.rubbleMesh, this.treeMesh, this.parkMesh]) {
+    const signBox = new THREE.BoxGeometry(1, 1, 1);
+    this.signMesh = new THREE.InstancedMesh(signBox, new THREE.MeshBasicMaterial({ color: 0xffffff }), world.maxSigns);
+    this.screenTex = this.textures.screen();
+    this.screenTex.repeat.set(1 / SCREEN_FRAMES, 1);
+    this.screenMesh = new THREE.InstancedMesh(signBox, new THREE.MeshBasicMaterial({ map: this.screenTex }), world.maxScreens);
+    for (let i = 0; i < world.maxSigns; i++) this.signMesh.setColorAt(i, _c.setHex(0xffffff));
+    this.signUsed = new Array(world.maxSigns).fill(false);
+    this.screenUsed = new Array(world.maxScreens).fill(false);
+    for (const m of [this.buildingMesh, this.rubbleMesh, this.treeMesh, this.parkMesh, this.signMesh, this.screenMesh]) {
       m.frustumCulled = false;
       for (let i = 0; i < m.instanceMatrix.count; i++) m.setMatrixAt(i, ZERO);
     }
@@ -162,7 +182,7 @@ export class City {
     this.rubbleUsed = new Array(world.maxRubble).fill(false);
     this.parkUsed = new Array(world.maxParks).fill(false);
     this.resetPools();
-    scene.add(this.buildingMesh, this.rubbleMesh, this.treeMesh, this.parkMesh);
+    scene.add(this.buildingMesh, this.rubbleMesh, this.treeMesh, this.parkMesh, this.signMesh, this.screenMesh);
     this.landmarkMat = toonMat(0xffffff, { vertexColors: true });
 
     this.buildOverlays();
@@ -229,6 +249,10 @@ export class City {
     for (let i = CONFIG.world.maxRubble - 1; i >= 0; i--) this.freeRubble.push(i);
     this.freeParks = [];
     for (let i = CONFIG.world.maxParks - 1; i >= 0; i--) this.freeParks.push(i);
+    this.freeSigns = [];
+    for (let i = CONFIG.world.maxSigns - 1; i >= 0; i--) this.freeSigns.push(i);
+    this.freeScreens = [];
+    for (let i = CONFIG.world.maxScreens - 1; i >= 0; i--) this.freeScreens.push(i);
   }
 
   /** Draw only up to the highest slot in use: empty slots still cost vertex work even at zero scale. */
@@ -242,6 +266,8 @@ export class City {
     this.treeMesh.count = high((i) => this.treeUsed[i]!, this.treeUsed.length);
     this.parkMesh.count = high((i) => this.parkUsed[i]!, this.parkUsed.length);
     this.rubbleMesh.count = high((i) => this.rubbleUsed[i]!, this.rubbleUsed.length);
+    this.signMesh.count = high((i) => this.signUsed[i]!, this.signUsed.length);
+    this.screenMesh.count = high((i) => this.screenUsed[i]!, this.screenUsed.length);
   }
 
   /** Forget all destruction and rebuild the city around the origin, in `style` if given. */
@@ -263,6 +289,16 @@ export class City {
     this.destroyed.clear();
     this.resetPools();
     this.stream(new THREE.Vector3(), Infinity);
+  }
+
+  /** Sign slots in use. */
+  signCount(): number {
+    return this.signUsed.filter(Boolean).length;
+  }
+
+  /** Video-screen slots in use. */
+  screenCount(): number {
+    return this.screenUsed.filter(Boolean).length;
   }
 
   destroyedCount(): number {
@@ -374,11 +410,14 @@ export class City {
       }
       this.dirty = true;
     }
+    this.screenT += dt;
+    this.screenTex.offset.x = (Math.floor(this.screenT / 0.7) % SCREEN_FRAMES) / SCREEN_FRAMES;
     if (this.dirty) {
       this.dirty = false;
       this.updateCounts();
-      for (const m of [this.buildingMesh, this.rubbleMesh, this.treeMesh, this.parkMesh]) m.instanceMatrix.needsUpdate = true;
+      for (const m of [this.buildingMesh, this.rubbleMesh, this.treeMesh, this.parkMesh, this.signMesh, this.screenMesh]) m.instanceMatrix.needsUpdate = true;
       if (this.buildingMesh.instanceColor) this.buildingMesh.instanceColor.needsUpdate = true;
+      if (this.signMesh.instanceColor) this.signMesh.instanceColor.needsUpdate = true;
       this.facadeAttr.needsUpdate = true;
     }
   }
@@ -408,7 +447,10 @@ export class City {
       this.buildingMesh.setColorAt(slot, _c.setHex(spec.color));
       this.facadeAttr.setX(slot, spec.facade);
       if (this.destroyed.has(key, index)) this.writeRubble(b);
-      else this.writeStanding(b, 0, 0);
+      else {
+        this.attachSigns(b);
+        this.writeStanding(b, 0, 0);
+      }
       buildings.push(b);
     });
     content.landmarks.forEach((l, i) => {
@@ -457,6 +499,7 @@ export class City {
         continue;
       }
       this.buildingMesh.setMatrixAt(b.slot, ZERO);
+      this.releaseSigns(b);
       this.releaseRubble(b);
       this.slotOwner[b.slot] = null;
       this.freeSlots.push(b.slot);
@@ -479,6 +522,7 @@ export class City {
 
   private writeRubble(b: Building): void {
     b.state = 'rubble';
+    this.releaseSigns(b);
     const s = b.spec;
     if (b.mesh) b.mesh.visible = false;
     else this.buildingMesh.setMatrixAt(b.slot, ZERO);
@@ -512,5 +556,33 @@ export class City {
     }
     _m.compose(_p.set(s.x, -sink, s.z), _q, _s.set(s.w, s.h, s.d));
     this.buildingMesh.setMatrixAt(b.slot, _m);
+    for (const e of b.signSlots) {
+      const g = e.sign;
+      // Building frame: base centre (x, -sink, z), tilted by _q; the sign's centre offset, rotated with it.
+      _p2.set(g.lx, g.ly, g.lz).applyQuaternion(_q).add(_p.set(s.x, -sink, s.z));
+      _m2.compose(_p2, _q, _s2.set(g.w, g.h, g.d));
+      (e.pool === 'screen' ? this.screenMesh : this.signMesh).setMatrixAt(e.slot, _m2);
+    }
+  }
+
+  private attachSigns(b: Building): void {
+    for (const sign of b.spec.signs) {
+      const screen = sign.kind === 'screen';
+      const slot = (screen ? this.freeScreens : this.freeSigns).pop();
+      if (slot === undefined) continue;
+      (screen ? this.screenUsed : this.signUsed)[slot] = true;
+      if (!screen) this.signMesh.setColorAt(slot, _c.setHex(sign.color));
+      b.signSlots.push({ sign, pool: screen ? 'screen' : 'sign', slot });
+    }
+  }
+
+  private releaseSigns(b: Building): void {
+    for (const e of b.signSlots) {
+      const mesh = e.pool === 'screen' ? this.screenMesh : this.signMesh;
+      mesh.setMatrixAt(e.slot, ZERO);
+      (e.pool === 'screen' ? this.screenUsed : this.signUsed)[e.slot] = false;
+      (e.pool === 'screen' ? this.freeScreens : this.freeSigns).push(e.slot);
+    }
+    b.signSlots = [];
   }
 }

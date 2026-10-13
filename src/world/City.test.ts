@@ -119,3 +119,58 @@ describe('City (Tokyo)', () => {
     expect(seen).toBe(true);
   });
 });
+
+describe('signs', () => {
+  const corner = TOKYO.specialLots.find((s) => s.signs.some((g) => g.kind === 'screen'))!;
+  const cornerTarget = (city: City): Target => {
+    let t: Target | null = null;
+    city.forEachStandingInRadius({ x: corner.x, z: corner.z }, 2, (b) => { if (b.position.x === corner.x && b.position.z === corner.z) t = b; });
+    return t!;
+  };
+  const signMatrix = (city: City, b: Target, k: number) => {
+    const entry = (b as unknown as { signSlots: { pool: 'sign' | 'screen'; slot: number }[] }).signSlots[k]!;
+    const mesh = (city as unknown as Record<string, THREE.InstancedMesh>)[entry.pool === 'sign' ? 'signMesh' : 'screenMesh']!;
+    const m = new THREE.Matrix4();
+    mesh.getMatrixAt(entry.slot, m);
+    return m;
+  };
+
+  it('builds signs and screens for standing buildings', () => {
+    const { city } = make();
+    expect(city.signCount()).toBeGreaterThan(0);
+    expect(city.screenCount()).toBeGreaterThanOrEqual(3);
+  });
+
+  it('a screen sits on its building and follows it as it tilts and sinks', () => {
+    const { city } = make();
+    const b = cornerTarget(city);
+    const k = corner.signs.findIndex((g) => g.kind === 'screen');
+    const g = corner.signs[k]!;
+    const at = new THREE.Vector3().setFromMatrixPosition(signMatrix(city, b, k));
+    expect(at.x).toBeCloseTo(corner.x + g.lx);
+    expect(at.y).toBeCloseTo(g.ly);
+    expect(at.z).toBeCloseTo(corner.z + g.lz);
+    b.applyDamage(1e9);
+    city.update(CONFIG.world.collapseTime * 0.6, new THREE.Vector3());
+    const mid = new THREE.Vector3().setFromMatrixPosition(signMatrix(city, b, k));
+    expect(mid.y).toBeLessThan(g.ly - 1);
+  });
+
+  it('is gone once the building is rubble', () => {
+    const { city } = make();
+    const before = city.screenCount();
+    cornerTarget(city).applyDamage(1e9);
+    city.update(CONFIG.world.collapseTime * 2, new THREE.Vector3());
+    expect(city.screenCount()).toBe(before - corner.signs.filter((g) => g.kind === 'screen').length);
+  });
+
+  it('a destroyed building that streams back returns as rubble without signs', () => {
+    const { city } = make();
+    cornerTarget(city).applyDamage(1e9);
+    city.update(CONFIG.world.collapseTime * 2, new THREE.Vector3());
+    const after = city.screenCount();
+    for (let i = 0; i < 200; i++) city.update(0.016, new THREE.Vector3(30000, 0, 0));
+    for (let i = 0; i < 200; i++) city.update(0.016, new THREE.Vector3());
+    expect(city.screenCount()).toBe(after);
+  });
+});
