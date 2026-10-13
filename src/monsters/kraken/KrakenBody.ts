@@ -30,6 +30,8 @@ const REST_ARCH = -200;
 const CURL = 150;
 const WAVE = 55;
 const THICK = 58;
+/** Whirlpool: how far (rad) each arm swings either side of its rest bearing. */
+const SWING = 0.85;
 /** A frame-to-frame jump longer than this (model units) is a teleport: the arms snap instead of trailing. */
 const SNAP = 500;
 /** Joint springs: stiff at the root, loose and underdamped at the tip, so motion cracks down the arm. */
@@ -294,9 +296,11 @@ export class KrakenBody implements MonsterBody {
         tune = STRIKE_TUNE;
       }
       if (this.arms.spinT >= 0) {
+        // Whirlpool: every arm lashes left–right–left about its own root, low over the ground, each a little
+        // behind its neighbour so the sweep ripples round the ring.
         const k = this.arms.spinT / K.arms.spinTime;
-        const sa = ang + k * Math.PI * 2;
-        _tip.set(Math.sin(sa) * PLANT_R * 1.15, 40 + Math.sin(Math.PI * k) * 160, Math.cos(sa) * PLANT_R * 1.15);
+        const sa = ang + SWING * Math.sin(Math.PI * k) * Math.sin(3 * Math.PI * k - i * 0.35);
+        _tip.set(Math.sin(sa) * PLANT_R * 1.1, 50 + Math.sin(Math.PI * k) * 110, Math.cos(sa) * PLANT_R * 1.1);
         pin = false;
         arch = 60;
         drop = -40;
