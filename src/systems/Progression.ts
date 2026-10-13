@@ -38,6 +38,13 @@ export type AbilityId = 'dash' | 'roar' | 'acid' | 'storm' | 'chitin' | 'frenzy'
 export const MAX_RANK = 3;
 const ROMAN = ['', 'I', 'II', 'III'];
 
+/** What a monster's level-up pool offers beyond the shared abilities, and its display names. */
+export type PoolSpec = {
+  signatures: readonly AbilityId[];
+  abilityText: Partial<Record<AbilityId, { title: string; icon: string; desc(rank: number): string }>>;
+  upgradeText: Partial<Record<UpgradeId, { title: string; desc?: string; icon?: string }>>;
+};
+
 export const ABILITIES: Record<AbilityId, { title: string; icon: string; desc(rank: number): string }> = {
   dash: { title: 'Dash', icon: '💨', desc: (r) => (r === 1 ? 'Button: charge and flatten a path (E)' : 'Dash recharges faster') },
   roar: { title: 'Roar', icon: '📣', desc: (r) => (r === 1 ? 'Button: shockwave, downs flyers (R)' : 'Roar recharges faster') },

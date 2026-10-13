@@ -47,6 +47,7 @@ import { Passives } from './systems/Passives';
 import { AcidPools } from './systems/AcidPools';
 import { BroodDrones } from './systems/BroodDrones';
 import { decide, nearestInRange, type BrainOrder, type BrainTarget } from './monster/brain';
+import { INSECT } from './monsters/insect/kind';
 
 type Order = { kind: 'move'; to: Vec2 } | { kind: 'attack'; target: Target } | null;
 
@@ -64,6 +65,11 @@ export class GameScene {
   private city: City;
   private kills = 0;
   private monster: Monster;
+
+  /** The current monster's stats. */
+  private get ms() {
+    return this.monster.kind.stats;
+  }
   private elapsed = 0;
   private rig: CameraRig;
   private input: Input;
@@ -104,7 +110,7 @@ export class GameScene {
     this.lighting.attachSky(createSky(this.scene));
 
     this.city = new City(this.scene, CONFIG.world.seed, this.onTargetDestroyed);
-    this.monster = new Monster(this.scene);
+    this.monster = new Monster(this.scene, INSECT);
     this.rig = new CameraRig(this.camera);
     this.markers = new Markers(this.scene);
     this.particles = new Particles(this.scene);
@@ -180,7 +186,7 @@ export class GameScene {
     if (id === 'dash' || id === 'roar') this.abilities.setRank(id, this.progression.ranks[id]);
     const s = this.progression.stats;
     const m = this.monster;
-    const newMax = Math.round(CONFIG.monster.maxHp * s.maxHpMult);
+    const newMax = Math.round(this.ms.maxHp * s.maxHpMult);
     if (id === 'vitality') m.hp = Math.min(newMax, m.hp + newMax * 0.3);
     m.maxHp = newMax;
     this.emitHud();
@@ -345,7 +351,7 @@ export class GameScene {
         this.abilities.tick(dt);
         const fire = this.passives.update(dt);
         if (fire.storm > 0) this.spikeStorm(fire.storm);
-        if (fire.brood > 0) this.brood.spawn(fire.brood, this.monster.model.stingerTip.getWorldPosition(new THREE.Vector3()));
+        if (fire.brood > 0) this.brood.spawn(fire.brood, this.monster.rangedOrigin(new THREE.Vector3()));
         if (fire.nova > 0) this.venomNova();
         if (fire.mortar > 0) this.acidMortar(fire.mortar);
         if (fire.intercepts > 0) this.passives.spendIntercepts(this.spineShield(fire.intercepts));
@@ -504,11 +510,11 @@ export class GameScene {
     private spikeStorm(n: number): void {
       const m = this.monster;
       const inRange = this.enemyTargets()
-        .filter((t) => t.position.distanceTo(m.position) <= CONFIG.monster.spikeRange)
+        .filter((t) => t.position.distanceTo(m.position) <= this.ms.rangedRange)
         .sort((a, b) => a.position.distanceToSquared(m.position) - b.position.distanceToSquared(m.position));
       if (inRange.length === 0) return;
-      const from = m.model.stingerTip.getWorldPosition(new THREE.Vector3());
-      const dmg = CONFIG.monster.spikeDamage * this.progression.stats.damageMult;
+      const from = m.rangedOrigin(new THREE.Vector3());
+      const dmg = this.ms.rangedDamage * this.progression.stats.damageMult;
       for (let i = 0; i < n; i++) {
         this.projectiles.fireSpike(from, inRange[i % inRange.length]!, dmg, (i - (n - 1) / 2) * 0.25);
       }
@@ -525,7 +531,7 @@ export class GameScene {
     this.swatCd = Math.max(0, this.swatCd - dt);
     if (this.swatCd > 0 || this.monster.airborne || this.monster.swatting) return;
     const sw = this.passives.swat();
-    const head = this.bodyPoint(CONFIG.passives.swat.headHeight);
+    const head = this.bodyPoint(this.ms.headHeight);
     const flyers = this.enemyTargets().filter((t) => t.airborne && t.isAlive());
     const hits = nearestWithin(head, sw.range, flyers, sw.targets, (t) => t.position);
     if (hits.length === 0) return;
@@ -591,7 +597,7 @@ export class GameScene {
       // The shield is invisible except for a patch flashing where the shot struck it.
       const at = shieldHitPoint(center, R.radius, from, new THREE.Vector3());
       this.shieldFx.reflectHit(at, at.clone().sub(center));
-      const target = nearestInRange({ x: from.x, z: from.z }, this.enemyTargets(), CONFIG.monster.spikeRange * 1.5);
+      const target = nearestInRange({ x: from.x, z: from.z }, this.enemyTargets(), this.ms.rangedRange * 1.5);
       if (target) this.projectiles.fireSpike(at.clone(), target, dmg, 0);
       this.particles.emit('spark', at, 8, 0.6);
     };
@@ -646,7 +652,7 @@ export class GameScene {
     const M = CONFIG.passives.mortar;
     const targets = mortarTargets(this.monster.position, M.range, this.enemyTargets(), globs);
     if (targets.length === 0) return;
-    const from = this.monster.model.stingerTip.getWorldPosition(new THREE.Vector3());
+    const from = this.monster.rangedOrigin(new THREE.Vector3());
     const dmg = M.damage * this.progression.stats.damageMult;
     targets.forEach((t) => this.projectiles.fireGlob(from, t.position.clone().setY(0), dmg));
     this.particles.emit('acid', from, 6, 0.6);
@@ -785,16 +791,16 @@ export class GameScene {
   /** A landed foot damages buildings and ground enemies under it. */
   private footCrush(p: THREE.Vector3): void {
     if (this.state !== 'playing' || !this.monster.alive) return;
-    const r = CONFIG.monster.footRadius;
-    const dmg = CONFIG.monster.footDamage * this.progression.stats.damageMult;
+    const r = this.ms.footRadius;
+    const dmg = this.ms.footDamage * this.progression.stats.damageMult;
     this.city.forEachStandingInRadius({ x: p.x, z: p.z }, r, (t) => t.applyDamage(dmg));
     for (const t of footTargets({ x: p.x, z: p.z }, r, this.enemyTargets())) t.applyDamage(dmg);
   }
 
   private meleeImpact(p: THREE.Vector3): void {
     const s = this.progression.stats;
-    const r = CONFIG.monster.meleeRadius * s.stompRadiusMult;
-    const dmg = CONFIG.monster.meleeDamage * s.damageMult;
+    const r = this.ms.meleeRadius * s.stompRadiusMult;
+    const dmg = this.ms.meleeDamage * s.damageMult;
     this.city.forEachStandingInRadius({ x: p.x, z: p.z }, r, (t) => t.applyDamage(dmg));
     for (const t of this.enemyTargets()) {
       if (!t.airborne && t.isAlive() && Math.hypot(t.position.x - p.x, t.position.z - p.z) <= r + t.radius) t.applyDamage(dmg);
@@ -810,8 +816,8 @@ export class GameScene {
     const s = this.progression.stats;
     const pos = { x: m.position.x, z: m.position.z };
     if (!m.busy) {
-      const auto = nearestInRange(pos, this.enemyTargets(), CONFIG.monster.spikeRange);
-      const autoMelee = nearestInRange(pos, this.enemyTargets().filter((t) => !t.airborne), CONFIG.monster.meleeRange);
+      const auto = nearestInRange(pos, this.enemyTargets(), this.ms.rangedRange);
+      const autoMelee = nearestInRange(pos, this.enemyTargets().filter((t) => !t.airborne), this.ms.meleeRange);
       const order: BrainOrder =
         this.order?.kind === 'attack' ? { kind: 'attack', target: this.toBrain(this.order.target) } : this.order;
       const d = decide({
@@ -819,10 +825,10 @@ export class GameScene {
         order,
         auto: auto ? this.toBrain(auto) : null,
         autoMelee: autoMelee ? this.toBrain(autoMelee) : null,
-        meleeRange: CONFIG.monster.meleeRange,
-        spikeRange: CONFIG.monster.spikeRange,
+        meleeRange: this.ms.meleeRange,
+        spikeRange: this.ms.rangedRange,
         meleeReady: m.meleeReady(),
-        spikeReady: m.spikeReady(),
+        spikeReady: m.rangedReady(),
         arriveRadius: CONFIG.monster.arriveRadius,
       });
       if (d.orderDone) {
@@ -832,14 +838,14 @@ export class GameScene {
       if (d.moveTo) m.moveToward(d.moveTo, dt, s.moveSpeedMult);
       else if (d.face) m.faceToward(d.face, dt);
       if (d.attack === 'melee' && d.meleeAt) {
-        const plan = strikePlan(pos, m.yaw, d.meleeAt, CONFIG.monster.meleeRange);
+        const plan = strikePlan(pos, m.yaw, d.meleeAt, this.ms.meleeRange);
         m.startMelee(s.cooldownMult, plan.leg, plan.point);
       }
       if (d.attack === 'ranged') this.fireSpikes(d.attackOn === 'order' && this.order?.kind === 'attack' ? this.order.target : auto);
     }
     m.tick(dt);
 
-    if (!m.airborne) this.city.forEachStandingInRadius(pos, CONFIG.monster.bodyRadius, (t) => t.applyDamage(CONFIG.monster.contactDps * dt));
+    if (!m.airborne) this.city.forEachStandingInRadius(pos, this.ms.bodyRadius, (t) => t.applyDamage(CONFIG.monster.contactDps * dt));
     m.hp = regen(m.hp, m.maxHp, CONFIG.monster.regenPerSec + s.regenBonus, dt);
   }
 
@@ -850,14 +856,14 @@ export class GameScene {
     const count = 1 + s.extraSpikes;
     const pos = { x: m.position.x, z: m.position.z };
     const others = this.enemyTargets()
-      .filter((t) => t.isAlive() && Math.hypot(t.position.x - pos.x, t.position.z - pos.z) <= CONFIG.monster.spikeRange)
+      .filter((t) => t.isAlive() && Math.hypot(t.position.x - pos.x, t.position.z - pos.z) <= this.ms.rangedRange)
       .sort((a, b) => a.position.distanceToSquared(target.position) - b.position.distanceToSquared(target.position));
-    const from = m.model.stingerTip.getWorldPosition(new THREE.Vector3());
+    const from = m.rangedOrigin(new THREE.Vector3());
     spikeTargets(target, others, count).forEach((t, i) => {
-      this.projectiles.fireSpike(from, t, CONFIG.monster.spikeDamage * s.damageMult, (i - (count - 1) / 2) * CONFIG.monster.spikeSpreadRad);
+      this.projectiles.fireSpike(from, t, this.ms.rangedDamage * s.damageMult, (i - (count - 1) / 2) * CONFIG.monster.spikeSpreadRad);
     });
     this.particles.emit('spark', from, 4);
-    m.consumeSpike(s.cooldownMult);
+    m.consumeRanged(s.cooldownMult);
   }
 
   private onProjectileHit = (h: Hit): void => {

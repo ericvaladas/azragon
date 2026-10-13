@@ -86,7 +86,7 @@ export class IntroCinematic {
     // Standing on the crater floor, curled up inside the (as yet unseen) cocoon.
     m.position.set(0, 0, 0);
     m.pose.dip = I.crouchDip;
-    m.model.root.visible = false;
+    m.visible = false;
     this.flashEl.style.opacity = '0';
     this.space.update(0, 0);
   }
@@ -232,7 +232,7 @@ export class IntroCinematic {
     }
     h.particles.emit('acid', _p.set(0, I.podLength * 0.3, 0), 60, 3);
     h.particles.ring('dust', ORIGIN, CRATER_RADIUS * 0.6, 24);
-    h.monster.model.root.visible = true;
+    h.monster.visible = true;
   }
 
   /** Boulders and shell fragments arc out, land, and shrink away over the last 0.6 s so nothing pops at play start. */
@@ -284,7 +284,7 @@ export class IntroCinematic {
     const m = this.host.monster;
     m.position.set(0, 0, 0);
     m.pose.dip = 0;
-    m.model.root.visible = true;
+    m.visible = true;
   }
 
   dispose(): void {
