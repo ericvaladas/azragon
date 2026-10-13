@@ -138,7 +138,11 @@ const BACKHAND_END_MAX = Math.PI - 0.05;
 const BACKHAND_SWEEP_R = 580;
 /** Howl: how far (rad) the skull tips back from its rest (snout 35° down) to point the muzzle up at the sky. */
 const HOWL_TILT = 1.65;
-/** Leap: how deep (units) the body sinks in its crouches (leapPose sink 1). */
+/**
+ * Leap: where (frame units, left side) a hoof trails in the air, back and down past the hind leg's reach so the leg
+ * stays straight; how deep (units) the body sinks in its crouches (leapPose sink 1).
+ */
+const LEAP_TRAIL = new THREE.Vector3(140, -20, -340);
 const LEAP_SINK = 120;
 /** Shadow Hands: how far from the shoulder the lifted claw reaches toward the flyer, and when its gesture is over. */
 const BECKON_REACH = 400;
@@ -1064,9 +1068,10 @@ export class GolemBody implements MonsterBody {
       const foot = this.footAt[side]!.set(FOOT_AT.x * sx, g.lift * FOOT_LIFT * m, FOOT_AT.z + g.stride * A * m);
       if (leaping) foot.y = 0;
       if (flying) {
-        // Kick off where it left the ground, trail, tuck up under the body, and come down after the claws.
+        // Kick off where it left the ground, then stretch straight out behind (never tucked) through the flight,
+        // reaching down for the ground after the claws; it bends only on landing, in the crouch on the ground.
         this.frame.worldToLocal(_end.copy(this.leapPlant[2 + side]!));
-        _raise.set(sx * 150, 60, -280).lerp(_tmp.set(sx * 150, 150, -30), leap!.tuck);
+        _raise.copy(LEAP_TRAIL).setX(LEAP_TRAIL.x * sx);
         _raise.lerp(_ref.copy(foot).setY(groundY), smooth(0.4, 1, leap!.land));
         foot.copy(_raise).lerp(_end, leap!.push);
       } else if (f.airborne && !leap) foot.set(sx * 150, 60, -60);

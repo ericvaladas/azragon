@@ -22,10 +22,16 @@ describe('Wendigo leap pose', () => {
     expect(leapPhase(L0 + 0.2, D, C).push).toBe(0);
   });
 
-  it('reaches forward in the air, tucks the hind legs, and puts the claws down first to land', () => {
+  it('reaches forward in the air, hind legs stretched out behind (never tucked), and puts the claws down first to land', () => {
     const mid = leapPhase(L0 + 0.4 * (D - L0), D, C);
     expect(mid.reach).toBeGreaterThan(0.8);
-    expect(mid.tuck).toBeGreaterThan(0.6);
+    expect('tuck' in mid).toBe(false);
+    // Once the spring is done the legs stay fully stretched, trailing, until they reach down for the ground to land.
+    for (let t = L0 + 0.15; t <= D; t += 0.01) {
+      const p = leapPhase(t, D, C);
+      expect(p.trail + p.land).toBeGreaterThan(0.99);
+      expect(p.sink).toBeLessThanOrEqual(0);
+    }
     expect(leapPhase(D - 0.01, D, C).land).toBeGreaterThan(0.9);
     expect(leapPhase(L0 + 0.3 * (D - L0), D, C).land).toBe(0);
   });
