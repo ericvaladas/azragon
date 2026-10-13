@@ -3,8 +3,7 @@ import { abilityKey, canTap, classifyGesture, isSkipKey, menuKey, pinchToWheel }
 
 export type InputHandlers = {
   tap(x: number, y: number): void;
-  /** `touch`: the drag came from a finger (not a mouse). */
-  drag(dx: number, dy: number, touch: boolean): void;
+  drag(dx: number, dy: number): void;
   hover(x: number, y: number): void;
   wheel(deltaY: number): void;
   /** Ability key pressed; return true when the game used it (then the browser default is suppressed). */
@@ -101,7 +100,7 @@ export class Input {
       const moved = Math.hypot(x - this.startX, y - this.startY);
       this.dragging = classifyGesture(moved, performance.now() - this.startT, false) === 'drag';
     }
-    if (this.dragging) this.h.drag(x - this.lastX, y - this.lastY, e.pointerType === 'touch');
+    if (this.dragging) this.h.drag(x - this.lastX, y - this.lastY);
     this.lastX = x;
     this.lastY = y;
   };

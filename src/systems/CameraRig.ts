@@ -28,8 +28,8 @@ export class CameraRig {
     this.camera.updateProjectionMatrix();
   }
 
-  drag(dx: number, dy: number, touch = false): void {
-    this.orbit = applyDrag(this.orbit, dx, dy, touch);
+  drag(dx: number, dy: number): void {
+    this.orbit = applyDrag(this.orbit, dx, dy);
   }
 
   zoom(deltaY: number): void {
