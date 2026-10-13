@@ -2,7 +2,7 @@ import type * as THREE from 'three';
 import type { PoolSpec } from '../systems/Progression';
 
 /** Playable creatures (widened as each one is built). */
-export type MonsterId = 'insect';
+export type MonsterId = 'insect' | 'kaiju';
 /** Everything the select carousel shows, including creatures still to come. */
 export type RosterId = 'insect' | 'kaiju' | 'kraken' | 'golem';
 

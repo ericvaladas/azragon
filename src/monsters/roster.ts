@@ -1,13 +1,13 @@
 import { INSECT } from './insect/kind';
+import { KAIJU } from './kaiju/kind';
 import type { MonsterId, MonsterKind, RosterId } from './types';
 
-export const KINDS: Record<MonsterId, MonsterKind> = { insect: INSECT };
+export const KINDS: Record<MonsterId, MonsterKind> = { insect: INSECT, kaiju: KAIJU };
 
 export const ROSTER_ORDER: readonly RosterId[] = ['insect', 'kaiju', 'kraken', 'golem'];
 
 /** Creatures shown in the carousel but not playable yet. */
 const COMING_SOON: Partial<Record<RosterId, { name: string; blurb: string }>> = {
-  kaiju: { name: 'Reptile Kaiju', blurb: 'Walking extinction. Armoured, unstoppable, breathes plasma.' },
   kraken: { name: 'Kraken', blurb: 'Hauls itself through the streets on a hundred grasping arms.' },
   golem: { name: 'Stone Golem', blurb: 'A mountain that learned to walk. Slow, crushing, nearly unbreakable.' },
 };

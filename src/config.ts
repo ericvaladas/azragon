@@ -130,6 +130,44 @@ export const CONFIG = {
     spikeSpreadRad: 0.12,
     deathTime: 2.2,
   },
+  /** Reptile Kaiju. Stats feed its MonsterKind; breath tunes Plasma Breath; colours its body and effects. */
+  kaiju: {
+    stats: {
+      maxHp: 1250,
+      moveSpeed: 110,
+      turnRate: 1.9,
+      damageMult: 1.15,
+      strideLength: 300,
+      bodyRadius: 140 * MONSTER_SCALE,
+      footRadius: 70,
+      footDamage: 150,
+      meleeRange: 420,
+      meleeRadius: 0,
+      meleeDamage: 75,
+      meleeCooldown: 0.9,
+      meleeTiming: { windup: 0.25, impact: 0.4, end: 0.8 },
+      rangedRange: 1300,
+      rangedDamage: 70,
+      rangedCooldown: 2.2,
+      headHeight: 560,
+      /** Measured standing bounding box (world m) — re-measure in Step 6 after any model change. */
+      size: { width: 180, length: 617, height: 385 },
+    },
+    /** Claw Rake: half-angle (rad) of the forward arc. */
+    rakeHalfAngle: 0.9,
+    /** Plasma Breath: charge (s), beam on-screen time (s), beam half-width (m), visual sweep (rad), fan per extra beam (rad), beam cap, building damage per hit. */
+    breath: { charge: 0.4, show: 0.35, halfWidth: 45, sweep: 0.1, fan: 0.12, maxLines: 4, buildingDamage: 120 },
+    colors: {
+      scale: 0x3f5f48,
+      scaleDark: 0x2b4234,
+      belly: 0x9aa883,
+      claw: 0xe6e0cc,
+      plate: 0x6ff6ff,
+      eye: 0xa8fdff,
+      plasma: 0x6ff6ff,
+      ember: 0xff9a3c,
+    },
+  },
   artillery: {
     hp: 120, exp: 20, size: 40, guns: 3, gunSpacing: 70, distMin: 2500, distMax: 3500,
     salvoEvery: 6, fillTime: 3.2, shellFlight: 1.8, shellArc: 750, radius: 90, damage: 60, buildingDamage: 200, spread: 260,
