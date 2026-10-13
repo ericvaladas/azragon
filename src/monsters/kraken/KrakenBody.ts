@@ -34,10 +34,10 @@ const THICK = 58;
  * fully swung arm wraps the mantle. */
 const SWING = 2.5;
 const WRAP_R = 330;
-/** Whirlpool: the arm's length while it swings (about its longest idle length, so it doesn't visibly
+/** Whirlpool: the arm's length while it swings (about its average idle length, so it doesn't visibly
  * stretch), the tip radius at the fastest point of a lash (that length flung straight out), and the swing
  * speed (whirl units per second) that counts as fastest. */
-const WHIRL_LEN = 800;
+const WHIRL_LEN = 680;
 const FLING_R = ANCHOR_R + WHIRL_LEN - 30;
 const FLING_SPEED = 5.5;
 /** A frame-to-frame jump longer than this (model units) is a teleport: the arms snap instead of trailing. */
