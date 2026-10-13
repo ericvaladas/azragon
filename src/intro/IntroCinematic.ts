@@ -216,10 +216,10 @@ export class IntroCinematic {
     return { mesh: obj, vel: new THREE.Vector3(Math.cos(angle) * out, up, Math.sin(angle) * out), spin, size };
   }
 
-  /** One puff of the crater cloud, over the spot where the pod struck, tall enough to swallow the monster. */
+  /** One puff of the crater cloud over the spot where the pod struck: low, so the standing figure's head and shoulders loom up through it. */
   private cloudPuff(): void {
     const L = this.podLength;
-    this.host.particles.emit('veil', this.around(ORIGIN, L * 0.55, L * (0.1 + Math.random() * 0.6)), 1);
+    this.host.particles.emit('veil', this.around(ORIGIN, L * 0.55, L * (0.05 + Math.random() * 0.4)), 1);
   }
 
   /** Boulders arc out, land, and shrink away over the last 0.6 s so nothing pops at play start. */

@@ -164,8 +164,8 @@ export function silhouetteAt(t: number): number {
   return 1 - u * u * (3 - 2 * u);
 }
 
-/** How curled up the monster is, 1..0: fully crouched inside the cocoon, straightening (eased out) over riseTime after the split. */
+/** How curled up the monster is, 1..0: fully crouched in the cloud, straightening (eased out) over riseTime from riseAfter s after impact. */
 export function monsterCrouch(t: number): number {
-  const u = clamp01((t - EMERGE_TIME) / I.riseTime);
+  const u = clamp01((t - IMPACT_TIME - I.reveal.riseAfter) / I.riseTime);
   return (1 - u) * (1 - u);
 }

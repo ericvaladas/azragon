@@ -10,11 +10,11 @@ describe('veil (the cloud that hides the crater after impact)', () => {
   it('is mostly fed in after the first burst, so it thins gradually (in the order it was fed) rather than all at once', () => {
     expect(R.feedRate * R.feedFor).toBeGreaterThan(R.cloud);
   });
-  it('starts to thin a little before the clear-up, and fades out over a long stretch (not all at once)', () => {
+  it('is solid for a second after impact, then thins over a long stretch, so the dark figure shows through it early', () => {
     const thin = S.impact + V.life * (V.fadeFrom ?? 0.75);
-    expect(thin).toBeGreaterThanOrEqual(S.emerge - 1);
-    expect(thin).toBeLessThan(S.emerge);
-    expect(V.fadeFrom).toBeLessThanOrEqual(0.6);
+    expect(thin).toBeGreaterThanOrEqual(S.impact + 1);
+    expect(thin).toBeLessThanOrEqual(S.impact + 1.5);
+    expect(V.fadeFrom).toBeLessThanOrEqual(0.45);
   });
   it('the last puffs fed into it are gone by the time play starts, after the colour has come back', () => {
     const last = S.impact + R.feedFor + V.life;

@@ -194,12 +194,14 @@ describe('silhouetteAt', () => {
 });
 
 describe('monsterCrouch', () => {
-  it('stays fully curled inside the cocoon until it splits, then stands up within riseTime', () => {
+  it('stays curled up in the cloud for a moment after impact, then stands up within riseTime, while the cloud is still thick', () => {
+    const rise = IMPACT_TIME + CONFIG.intro.reveal.riseAfter;
     expect(monsterCrouch(0)).toBe(1);
-    expect(monsterCrouch(EMERGE_TIME - 0.01)).toBe(1);
-    expect(monsterCrouch(EMERGE_TIME)).toBe(1);
-    expect(monsterCrouch(EMERGE_TIME + CONFIG.intro.riseTime / 2)).toBeLessThan(0.5);
-    expect(monsterCrouch(EMERGE_TIME + CONFIG.intro.riseTime)).toBe(0);
+    expect(monsterCrouch(rise - 0.01)).toBe(1);
+    expect(monsterCrouch(rise + CONFIG.intro.riseTime / 2)).toBeLessThan(0.5);
+    expect(monsterCrouch(rise + CONFIG.intro.riseTime)).toBe(0);
+    // Standing (a figure, not a lump) well before the cloud clears.
+    expect(rise + CONFIG.intro.riseTime).toBeLessThanOrEqual(EMERGE_TIME + 0.5);
     expect(monsterCrouch(INTRO_LENGTH)).toBe(0);
   });
 });

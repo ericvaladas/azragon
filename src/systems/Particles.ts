@@ -41,7 +41,7 @@ export const PRESETS: Record<ParticleKind, Preset> = {
   /** The pod crash's dust cloud: huge, slow billows that roll out across the city and hang (readable from high up). */
   billow: { color: 0x9c8a70, life: 2.3, size0: 200, size1: 520, speed: 280, up: 240, gravity: -10, drag: 1.3 },
   /** The cloud that erupts over the crater at impact and hides it: big, dense, slowly swelling puffs that thin away. */
-  veil: { color: 0xb5a588, life: 3.2, size0: 240, size1: 460, speed: 110, up: 30, gravity: -6, drag: 1.4, fadeFrom: 0.55 },
+  veil: { color: 0xb5a588, life: 3.2, size0: 240, size1: 460, speed: 110, up: 30, gravity: -6, drag: 1.4, fadeFrom: 0.38 },
   ink: { color: CONFIG.kraken.colors.ink, life: 1.1, size0: 30, size1: 70, speed: 120, up: 50, gravity: -10, drag: 2 },
 };
 
@@ -54,8 +54,8 @@ const HIDDEN = new THREE.Matrix4().makeScale(0, 0, 0);
 
 /** Opacity per draw layer. Smoke and dust are see-through so trails never hide units behind them. */
 /** `murk`: the Wendigo's dark smoke and mist, dense enough to read as dark over light ground. */
-/** `cloud`: the intro's crater cloud, dense enough that a few overlapping puffs hide what is inside. */
-const LAYER_OPACITY = { solid: 1, dust: 0.65, smoke: 0.35, murk: 0.85, cloud: 0.85 } as const;
+/** `cloud`: the intro's crater cloud: where it is thick it hides what is inside; where thin, a dark shape looms through. */
+const LAYER_OPACITY = { solid: 1, dust: 0.65, smoke: 0.35, murk: 0.85, cloud: 0.6 } as const;
 type LayerName = keyof typeof LAYER_OPACITY;
 const LAYER_OF: Record<ParticleKind, LayerName> = { dust: 'dust', smoke: 'smoke', debris: 'solid', fire: 'solid', spark: 'solid', acid: 'solid', plasma: 'solid', trail: 'dust', ink: 'smoke', rot: 'solid', shade: 'murk', mist: 'murk', bone: 'solid', wisp: 'dust', hexfire: 'solid', hexember: 'solid', wraith: 'murk', billow: 'dust', veil: 'cloud' };
 const LAYER_MAX: Record<LayerName, number> = { solid: 500, dust: 400, smoke: 500, murk: 400, cloud: 160 };

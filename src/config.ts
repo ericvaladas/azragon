@@ -420,9 +420,10 @@ export const CONFIG = {
      * The reveal. At impact (under the white flash) the pod gives way to the monster, black, and a dense cloud
      * (`cloud` puffs, fed at `feedRate`/s for `feedFor` s) erupts over the crater, hiding both. It thins from about
      * `emerge`; the silhouette shows through, stays black until emerge + `hold`, then comes into colour over `fade` s.
+     * It stands up inside the cloud `riseAfter` s after impact, so a dark figure looms through it as it thins.
      */
-    reveal: { hold: 1.1, fade: 0.7, cloud: 20, feedRate: 36, feedFor: 1.2 },
-    /** Inside the cocoon the monster stands curled down by crouchDip (model units of body drop); it straightens over riseTime s after the split. */
+    reveal: { hold: 1.1, fade: 0.7, cloud: 20, feedRate: 36, feedFor: 1.2, riseAfter: 1.5 },
+    /** In the cloud the monster starts curled down by crouchDip (model units of body drop); it straightens over riseTime s (see reveal.riseAfter). */
     crouchDip: 170,
     riseTime: 1.4,
     /** Cocoon length = the monster's largest dimension × podFit (the Insect's 484 m span gets a 620 m cocoon). */
