@@ -10,6 +10,7 @@ import { SWING, limbPlanted, limbSwing } from './knuckleGait';
 import { clampShoulder, reachTwist, softCap, springStep, type ShoulderLimits } from './shoulder';
 import { bendAngleAt, bendPoint, outwardBearing, pivotStep, stepToward } from './spine';
 import { LEAP_RECOVER, leapPhase, type LeapPose } from './leapPose';
+import { HOWL_AFTER, howlPose, type HowlPose } from './howlPose';
 
 const G = CONFIG.golem;
 const C = G.colors;
@@ -135,6 +136,8 @@ const PROTRACT = 26;
 const BACKHAND_END_MIN = 1.35;
 const BACKHAND_END_MAX = Math.PI - 0.05;
 const BACKHAND_SWEEP_R = 580;
+/** Howl: how far (rad) the skull tips back from its rest (snout 35° down) to point the muzzle up at the sky. */
+const HOWL_TILT = 1.65;
 /** Leap: how deep (units) the body sinks in its crouches (leapPose sink 1). */
 const LEAP_SINK = 120;
 /** Shadow Hands: how far from the shoulder the lifted claw reaches toward the flyer, and when its gesture is over. */
@@ -429,6 +432,10 @@ export class GolemBody implements MonsterBody {
   private stepTwist = [0, 0];
   /** The skull and antlers, turned toward `lookAt` (Dread Gaze) and eased back to rest; yaw is root-relative. */
   private headPivot = new THREE.Group();
+  /** The lower jaw, hinged under the skull (it drops open to howl). */
+  private jawPivot = new THREE.Group();
+  /** Roar (a wolf's howl): its clock (s, −1 when none), run on HOWL_AFTER past the roar to lower the head. */
+  private howlT = -1;
   private headYaw = 0;
   private headPitch = 0;
   private nextLaunch = 0;
@@ -605,16 +612,18 @@ export class GolemBody implements MonsterBody {
     // Nasal cavity at the tip and the dark of the mouth under the upper jaw.
     piece(skull, box, C.socket, [0, -4, 100], [12, 10, 14], [0, 0, 0], head);
     piece(skull, box, C.socket, [0, -24, 58], [24, 8, 62], [0, 0, 0], head);
-    // The lower jaw: two thin bars hinged under the skull, hanging slightly open, a few worn teeth.
+    // The lower jaw (its own mesh, hinged under the skull, so it can drop open to howl): two thin bars hanging
+    // slightly open, a few worn teeth.
+    const jaw: THREE.BufferGeometry[] = [];
     for (const sx of [1, -1]) {
       const j0 = hp(sx * 22, -18, 6);
       const j1 = hp(sx * 16, -38, 50);
       const j2 = hp(sx * 8, -40, 88);
-      strut(skull, TUBE, C.boneShade, v3(j0), v3(j1), 7);
-      strut(skull, TUBE, C.boneShade, v3(j1), v3(j2), 5);
+      strut(jaw, TUBE, C.boneShade, v3(j0), v3(j1), 7);
+      strut(jaw, TUBE, C.boneShade, v3(j1), v3(j2), 5);
       for (let i = 0; i < 3; i++) {
         _at.lerpVectors(j1, j2, 0.15 + i * 0.3);
-        strut(skull, spike, C.boneShade, v3(_at), v3(_at.clone().add(hp(0, 12, 0).sub(HEAD_AT))), 3.5);
+        strut(jaw, spike, C.boneShade, v3(_at), v3(_at.clone().add(hp(0, 12, 0).sub(HEAD_AT))), 3.5);
         const u = hp(sx * (13 - i * 2.5), -20, 48 + i * 15);
         strut(skull, spike, C.boneShade, v3(u), v3(u.clone().add(hp(0, -10, 0).sub(HEAD_AT))), 3.5);
       }
@@ -767,6 +776,10 @@ export class GolemBody implements MonsterBody {
     this.headPivot.position.copy(HEAD_PIVOT);
     this.shell.add(this.headPivot);
     this.mesh(this.headPivot, this.keep(merge(skull).translate(-HEAD_PIVOT.x, -HEAD_PIVOT.y, -HEAD_PIVOT.z)), this.bodyMat).receiveShadow = false;
+    const hinge = hp(0, -18, 6);
+    this.jawPivot.position.copy(hinge).sub(HEAD_PIVOT);
+    this.headPivot.add(this.jawPivot);
+    this.mesh(this.jawPivot, this.keep(merge(jaw).translate(-hinge.x, -hinge.y, -hinge.z)), this.bodyMat).receiveShadow = false;
 
     this.shell.position.copy(PIVOT).multiplyScalar(-1);
     this.body.add(this.shell);
@@ -923,6 +936,14 @@ export class GolemBody implements MonsterBody {
       }
       this.leapPlanted = true;
     }
+    // Roar: a wolf's howl, all four limbs planted.
+    const roarD = CONFIG.abilities.roar.duration;
+    if (f.roaring) this.howlT = this.howlT < 0 ? 0 : this.howlT + f.dt;
+    else if (this.howlT >= 0) {
+      this.howlT = Math.max(this.howlT, roarD) + f.dt;
+      if (this.howlT > roarD + HOWL_AFTER) this.howlT = -1;
+    }
+    const howl: HowlPose | null = this.howlT >= 0 && f.pose.collapse === 0 ? howlPose(this.howlT, roarD) : null;
     // The ground's height in the frame (the root rises off it in the air).
     this.root.updateMatrixWorld();
     this.frame.getWorldPosition(_look);
@@ -1023,7 +1044,6 @@ export class GolemBody implements MonsterBody {
         _raise.addScaledVector(bk.dir, BECKON_REACH);
         want.lerp(_raise, lift);
       }
-      if (f.roaring) want.set(sx * 90, 430 + Math.sin(f.time * 14 + side * Math.PI) * 45, 250);
       if (flying) {
         // Push off where it left the ground, trail, reach forward, then come down claws first onto its walking plant.
         this.frame.worldToLocal(_end.copy(this.leapPlant[side]!));
@@ -1031,7 +1051,7 @@ export class GolemBody implements MonsterBody {
         _raise.lerp(_ref.copy(gait).setY(groundY + gait.y), leap!.land);
         want.copy(_raise).lerp(_end, leap!.push);
       } else if (f.airborne) want.set(sx * 230, -30, 260);
-      const posed = striking || nova >= 0 || beckoning || f.roaring || flying || (f.airborne && !leap);
+      const posed = striking || nova >= 0 || beckoning || flying || (f.airborne && !leap);
       this.handPosed[side] = posed;
       this.handPlanted[side] = !posed && g.lift * m < 1e-3;
     }
@@ -1113,10 +1133,12 @@ export class GolemBody implements MonsterBody {
     const bob = Math.cos(f.cycle * Math.PI * 4) * 10 * m + Math.sin(f.time * 1.1) * 6;
     const novaY = nova < 0 ? 0 : nova < 0.5 ? 15 * smooth(0, 0.5, nova) : nova < 0.65 ? 15 - 65 * ((nova - 0.5) / 0.15) ** 2 : -50 * (1 - smooth(0.65, 1, nova));
     const base = {
-      y: PIVOT.y + bob - (leap ? LEAP_SINK * leap.sink : f.pose.dip) + novaY - f.pose.collapse * 230,
+      y:
+        PIVOT.y + bob - (leap ? LEAP_SINK * leap.sink : f.pose.dip) + novaY - f.pose.collapse * 230 +
+        (howl ? -32 * howl.lower + 16 * howl.lift + 3 * Math.sin(f.time * 41) * howl.tremble : 0),
       // Leaning toward bearing leanA: +X rotation tips the shoulders forward (+Z), −Z rotation toward the left (+X).
-      pitch: (leap ? leap.pitch : f.pose.pitch) + (f.roaring ? -0.55 : 0) + (f.dashing ? 0.25 : 0) + f.pose.collapse * 0.4 + Math.cos(leanA) * lean,
-      roll: roll - f.pose.collapse * 0.15 - Math.sin(leanA) * lean,
+      pitch: (leap ? leap.pitch : howl ? 0.14 * howl.lower - 0.12 * howl.lift : f.pose.pitch) + (f.dashing ? 0.25 : 0) + f.pose.collapse * 0.4 + Math.cos(leanA) * lean,
+      roll: roll - f.pose.collapse * 0.15 - Math.sin(leanA) * lean + (howl ? 0.015 * Math.sin(f.time * 47) * howl.tremble : 0),
     };
     let k = 1;
     this.poseBody(base, k);
@@ -1222,7 +1244,7 @@ export class GolemBody implements MonsterBody {
     let yaw = (1 - HEAD_COUNTER) * frontYaw;
     let pitch = 0;
     this.shell.updateMatrixWorld(true);
-    if (f.lookAt && f.pose.collapse === 0) {
+    if (f.lookAt && f.pose.collapse === 0 && !howl) {
       this.shell.worldToLocal(_sum.copy(f.lookAt)).sub(this.headPivot.position).applyAxisAngle(_Y, -this.bend);
       const horiz = Math.hypot(_sum.x, _sum.z);
       yaw = Math.max(-GAZE_YAW, Math.min(GAZE_YAW, Math.atan2(_sum.x, _sum.z))) + frontYaw;
@@ -1246,6 +1268,16 @@ export class GolemBody implements MonsterBody {
       0,
       'YXZ',
     );
+    this.jawPivot.rotation.x = 0;
+    if (howl) {
+      // The howl: head dropped in the build-up, then the neck stretches up and the skull tips back until the
+      // muzzle points at the sky, jaw hanging wide; it sways a little and shudders as it holds.
+      this.headPivot.rotation.x += 0.3 * howl.lower - HOWL_TILT * howl.lift + 0.03 * Math.sin(f.time * 53) * howl.tremble;
+      this.headPivot.rotation.y += 0.1 * Math.sin(this.howlT * 2.6) * howl.lift;
+      this.headPivot.position.y += 40 * howl.lift - 25 * howl.lower;
+      this.headPivot.position.z += 24 * howl.lift;
+      this.jawPivot.rotation.x = 0.75 * howl.jaw + 0.05 * Math.sin(f.time * 37) * howl.tremble;
+    }
     // Launch points ride the bent back.
     for (const L of this.launchMounts) {
       bendPoint(L.pos, this.bend, SPINE_Z0, SPINE_Z1, L.obj.position);
