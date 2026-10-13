@@ -391,11 +391,16 @@ export const CONFIG = {
     select: { distance: 2.4, pad: 250, lift: 1.0, speed: 0.25, startAngle: 0.5 },
   },
   intro: {
-    /** Phase start times (s); `done` is the intro length. The cut to the game world is at `clouds`. */
-    starts: { space: 0, reentry: 3.5, clouds: 5.5, descent: 8.5, impact: 10.5, settle: 11, emerge: 13, done: 15 },
-    /** Pod drop in the game world: starts this high and this far behind (-Z), lands at the origin. */
+    /**
+     * Phase start times (s); `done` is the intro length. The cut to the game world is at `clouds`; the cloud
+     * scene was trimmed to nothing, so the game world opens straight on the descent.
+     */
+    starts: { space: 0, reentry: 3.5, clouds: 5.5, descent: 5.5, impact: 7.5, settle: 8, emerge: 10, done: 12 },
+    /** The full pod drop: from this high and this far behind (-Z), landing at the origin. */
     dropHeight: 4200,
     dropBack: 1400,
+    /** Fraction of the full drop already fallen at the cut: the game world joins the fall part-way (3 s of a 5 s fall). */
+    dropJoin: 0.6,
     /** Pod rests half-buried after impact (world y). */
     podRestY: 0,
     /** Camera offsets from the pod while falling (start of clouds) and the wide shot at impact (absolute). */

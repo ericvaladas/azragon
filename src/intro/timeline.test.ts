@@ -26,15 +26,25 @@ describe('phaseAt', () => {
 });
 
 describe('podPath', () => {
-  it('starts high and behind at the cut, lands on the origin at impact, then rests half-buried', () => {
+  it('joins the fall part-way at the cut (the first 3 s of clouds are skipped), lands on the origin at impact, then rests half-buried', () => {
     const p = new THREE.Vector3();
     podPath(CUT_TIME, p);
-    expect(p.y).toBeCloseTo(CONFIG.intro.dropHeight);
-    expect(p.z).toBeCloseTo(-CONFIG.intro.dropBack);
+    // Where the old 5 s fall was 3 s in (u = 0.6).
+    expect(p.y).toBeCloseTo(CONFIG.intro.dropHeight * (1 - 0.6 * 0.6));
+    expect(p.z).toBeCloseTo(-CONFIG.intro.dropBack * 0.4);
     podPath(IMPACT_TIME, p);
     expect(p.length()).toBeCloseTo(0);
     podPath(IMPACT_TIME + 1, p);
     expect(p.y).toBeCloseTo(CONFIG.intro.podRestY);
+  });
+  it('falls at the same pace as before the trim (no squashed, rushed drop)', () => {
+    const v = (t: number) => (podPath(t, new THREE.Vector3()).y - podPath(t + 0.01, new THREE.Vector3()).y) / 0.01;
+    // The old fall: y = H(1 - u²), u over 5 s, so dy/dt at u = 0.6 was 2 * 0.6 * H / 5.
+    expect(v(CUT_TIME)).toBeCloseTo((2 * 0.6 * CONFIG.intro.dropHeight) / 5, -1);
+  });
+  it('cuts the intro 3 s shorter, all of it from the cloud scene', () => {
+    expect(S.descent - S.clouds).toBe(0);
+    expect(INTRO_LENGTH).toBe(12);
   });
   it('falls faster and faster (accelerating descent)', () => {
     const y = (t: number) => podPath(t, new THREE.Vector3()).y;
@@ -61,8 +71,8 @@ describe('cameraPath', () => {
       expect(a.look.distanceTo(c.look)).toBeLessThan(1);
     }
   });
-  it('follows behind and above the falling pod during the clouds', () => {
-    const t = CUT_TIME + 1;
+  it('opens behind and above the falling pod at the cut', () => {
+    const t = CUT_TIME + 0.05;
     const pod = podPath(t, new THREE.Vector3());
     const c = cam(t);
     expect(c.pos.y).toBeGreaterThan(pod.y);

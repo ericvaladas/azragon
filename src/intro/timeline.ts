@@ -41,10 +41,13 @@ export function podLengthFor(size: { width: number; length: number; height: numb
   return Math.max(size.width, size.length, size.height) * I.podFit;
 }
 
-/** Game-world pod position: accelerating fall from high and behind to the origin, then half-buried. */
+/**
+ * Game-world pod position: an accelerating fall from high and behind to the origin, then half-buried. The cut
+ * joins the fall `dropJoin` of the way down, so the drop keeps its pace.
+ */
 export function podPath(t: number, out: THREE.Vector3): THREE.Vector3 {
   if (t > IMPACT_TIME) return out.set(0, I.podRestY, 0);
-  const u = clamp01((t - CUT_TIME) / (IMPACT_TIME - CUT_TIME));
+  const u = I.dropJoin + (1 - I.dropJoin) * clamp01((t - CUT_TIME) / (IMPACT_TIME - CUT_TIME));
   return out.set(0, I.dropHeight * (1 - u * u), -I.dropBack * (1 - u));
 }
 
