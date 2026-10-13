@@ -591,7 +591,7 @@ export class City {
       (screen ? this.screenUsed : this.signUsed)[slot] = true;
       if (!screen) {
         this.signMesh.setColorAt(slot, _c.setHex(sign.color));
-        const r = SIGN_RECTS[sign.cell ?? 0]!;
+        const r = SIGN_RECTS[sign.cell ?? (sign.kind === 'billboard' ? 3 : 0)]!;
         this.signRect.setXYZW(slot, r[0], r[1], r[2], r[3]);
       }
       b.signSlots.push({ sign, pool: screen ? 'screen' : 'sign', slot });
