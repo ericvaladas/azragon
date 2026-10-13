@@ -51,16 +51,7 @@ export function merge(parts: THREE.BufferGeometry[]): THREE.BufferGeometry {
   return g;
 }
 
-/** One tuft (grass blades): a clump of three spikes hanging from the origin along −Y, length 1. Painted white (instance colours tint it). */
-export function tuftGeometry(): THREE.BufferGeometry {
-  const parts: THREE.BufferGeometry[] = [];
-  piece(parts, SHAPES.spike, 0xffffff, [0, -0.5, 0], [0.55, 1, 0.55], [Math.PI, 0, 0]);
-  piece(parts, SHAPES.spike, 0xffffff, [0.28, -0.38, 0.1], [0.4, 0.8, 0.4], [Math.PI, 0.6, 0.3]);
-  piece(parts, SHAPES.spike, 0xffffff, [-0.24, -0.34, -0.12], [0.4, 0.72, 0.4], [Math.PI, -0.4, -0.3]);
-  return merge(parts);
-}
-
-/** Deterministic random in [0, 1) (mulberry32), so the moss and plants are the same every run. */
+/** Deterministic random in [0, 1) (mulberry32), so the scatter is the same every run. */
 export function rng(seed: number): () => number {
   let a = seed | 0;
   return () => {

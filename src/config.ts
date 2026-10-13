@@ -241,7 +241,7 @@ export const CONFIG = {
       rangedCooldown: 2.0,
       headHeight: 480,
       /** Measured standing bounding box (world m). */
-      size: { width: 424, length: 349, height: 464 },
+      size: { width: 441, length: 459, height: 595 },
     },
     /**
      * Molten Fist: targets within `frontHalf` (rad) of dead ahead take a slam; others a backhand whose hit arc
@@ -251,25 +251,26 @@ export const CONFIG = {
     /** Magma Lob: splash radius (m), flight time (s), arc height (m); the lava pool it leaves (radius m, life s). */
     lob: { splash: 120, flight: 1.4, arc: 520, poolRadius: 110, poolLife: 3 },
     colors: {
-      /** Rust-brown armour shell (base, weathered highlight, grimy lower panels) and the dark joint metal. */
-      shell: 0x9a5634,
-      shellLight: 0xb8703f,
-      shellDark: 0x6e3b25,
-      metal: 0x3f3631,
-      metalLight: 0x5e5049,
-      /** Moss, grass and vines overgrowing its back, and the odd flower in the moss. */
-      moss: 0x5e8a2c,
-      mossDark: 0x3c5f22,
-      mossLight: 0x8fb846,
-      vine: 0x3f6b25,
-      flower: 0xf4e8a6,
-      flowerAlt: 0xe8a4b8,
-      /** Magma in the joint gaps and exhaust throats; the fainter glow along the panel seams. */
+      /** Desiccated ash-grey hide stretched over bone (base, pale highlight, shadowed underside) and the black sinew. */
+      skin: 0x908f87,
+      skinLight: 0xb0aea4,
+      skinDark: 0x62625c,
+      sinew: 0x241d1b,
+      /** Bleached bone (skull, teeth), its weathered shade (ribs, vertebrae, blades) and the antlers. */
+      bone: 0xeee6d2,
+      boneShade: 0xc4b9a0,
+      antler: 0xdcd0b4,
+      /** Tattered dark hide hanging off the back; hooves and claws; the dark of the eye sockets and mouth. */
+      hide: 0x3d3430,
+      horn: 0x1a1615,
+      socket: 0x120b0a,
+      /** Embers: in the joints, smouldering along the spine, the hellfire between the ribs, the eyes. */
       glow: 0xff6a1a,
-      seam: 0xc8501c,
+      seam: 0xff5418,
       magma: 0xff6a1a,
-      core: 0xffc23a,
-      eye: 0xffc444,
+      core: 0xffa62e,
+      coreDeep: 0x3a0e06,
+      eye: 0xffd04a,
       ember: 0xffb347,
       lava: 0xff4a12,
     },
