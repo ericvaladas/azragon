@@ -23,12 +23,11 @@ export type IntroHost = {
 const I = CONFIG.intro;
 const ORIGIN = new THREE.Vector3();
 const X = I.impact;
-const FRAGMENTS = 7;
 const GRAVITY = 600;
-/** Heat the shell cools to during the fall (and from which it cools out in the crater). */
+/** The dull ember glow the shell cools to during the fall. */
 const FALL_EMBER = 0.12;
-/** A tumbling solid thrown by the impact (boulders) or the split (shell fragments); `size` is its full scale. */
-type Fragment = { mesh: THREE.Object3D; vel: THREE.Vector3; spin: THREE.Vector3; size: number };
+/** A tumbling boulder thrown by the impact; `size` is its full scale. */
+type Boulder = { mesh: THREE.Object3D; vel: THREE.Vector3; spin: THREE.Vector3; size: number };
 const _pose = { pos: new THREE.Vector3(), look: new THREE.Vector3(), up: new THREE.Vector3() };
 const _p = new THREE.Vector3();
 const _c = new THREE.Color();
@@ -44,11 +43,8 @@ export class IntroCinematic {
   private pod = new PodModel(1);
   /** Cocoon length for the selected monster; set in start(). */
   private podLength = 1;
-  private fragments: Fragment[] = [];
-  private fragGeo = faceted(new THREE.TetrahedronGeometry(0.17, 0));
-  private fragMat = toonMat(0x3b2433);
   /** Boulders: simulated as plain transforms, drawn as one instanced mesh (one draw call). */
-  private boulders: Fragment[] = [];
+  private boulders: Boulder[] = [];
   private boulderMesh = new THREE.InstancedMesh(faceted(new THREE.DodecahedronGeometry(1, 0)), toonMat(CONFIG.palette.debris), X.boulders);
   /** Impact rings: white-hot, fire, then a slow wide dust front. */
   private rings: Shockwave[];
@@ -83,10 +79,9 @@ export class IntroCinematic {
     this.active = true;
     this.t = 0;
     this.trailT = 0;
-    this.clearFragments();
+    this.clearBoulders();
     for (const r of this.rings) r.clear();
     this.pod.root.visible = false;
-    this.pod.setGlow(0);
     const m = this.host.monster;
     // Standing on the crater floor, curled up inside the (as yet unseen) cocoon.
     m.position.set(0, 0, 0);
@@ -111,7 +106,7 @@ export class IntroCinematic {
     return true;
   }
 
-  /** Jump to the end state: crater blasted, pod and fragments gone, monster standing at the origin. */
+  /** Jump to the end state: crater blasted, pod and boulders gone, monster standing at the origin. */
   skip(): void {
     if (!this.active) return;
     this.host.city.blast({ x: 0, z: 0 }, CRATER_RADIUS, true, CRATER_RADIUS * X.outer);
@@ -129,13 +124,12 @@ export class IntroCinematic {
       if (prev < at && t >= at) this.rings[i]!.start(ORIGIN, CRATER_RADIUS * r.radius);
     });
     for (const r of this.rings) r.update(dt);
-    if (prev < EMERGE_TIME && t >= EMERGE_TIME) this.burst();
 
-    const pod = this.pod.root;
-    // Nose-first along the fall, rolling until impact; it stays buried exactly as it hit until it splits.
-    podPath(t, pod.position);
-    pod.rotation.set(FALL_PITCH, 0, podSpin(t));
     if (t < IMPACT_TIME) {
+      // Nose-first along the fall, rolling.
+      const pod = this.pod.root;
+      podPath(t, pod.position);
+      pod.rotation.set(FALL_PITCH, 0, podSpin(t));
       // White-hot, cooling quickly to a dull ember glow so the shell's detail shows; fire and smoke trail.
       this.pod.setHeat(heatColor(Math.max(FALL_EMBER, 1 - (t - CUT_TIME) / 1.5), _c));
       this.trailT -= dt;
@@ -146,23 +140,23 @@ export class IntroCinematic {
         for (let i = 0; i < 3; i++) h.particles.emit('fire', this.around(pod.position, L * 0.3, L * 0.1), 2, 0.8);
         h.particles.emit('smoke', this.around(pod.position, L * 0.25, L * 0.5), 3, 0.6);
       }
-    } else if (t < EMERGE_TIME) {
-      // Cooling, while the shell throbs faster and stronger toward the split.
-      const k = (t - IMPACT_TIME) / (EMERGE_TIME - IMPACT_TIME);
-      this.pod.setHeat(heatColor(FALL_EMBER * (1 - k), _c));
-      this.pod.setGlow(k * (0.5 + 0.5 * Math.sin(t * (4 + k * 14))));
-      // The crater keeps burning and smoking around the cocoon.
-      if (Math.random() < dt * 8) h.particles.emit('smoke', _p.set(0, 20, 0), 2, 1.5);
-      if (Math.random() < dt * X.fireRate * (1 - k * 0.5)) {
-        this.around(ORIGIN, CRATER_RADIUS * 0.9, 10);
-        h.particles.emit('fire', _p, 3, 0.5);
-        h.particles.emit('smoke', _p, 2, 0.6);
-      }
-      this.updateFragments(t, dt);
     } else {
+      // Hidden in the cloud, the monster stands up, black, and comes into colour as the cloud clears.
       h.monster.pose.dip = I.crouchDip * monsterCrouch(t);
       h.monster.setSilhouette(silhouetteAt(t));
-      this.updateFragments(t, dt);
+      // The cloud is fed for a while so it billows; the last of it thins away just before play starts.
+      if (t < IMPACT_TIME + I.reveal.feedFor && Math.random() < dt * I.reveal.feedRate) this.cloudPuff();
+      if (t < EMERGE_TIME) {
+        // The crater keeps burning and smoking around the cloud.
+        const k = (t - IMPACT_TIME) / (EMERGE_TIME - IMPACT_TIME);
+        if (Math.random() < dt * 8) h.particles.emit('smoke', _p.set(0, 20, 0), 2, 1.5);
+        if (Math.random() < dt * X.fireRate * (1 - k * 0.5)) {
+          this.around(ORIGIN, CRATER_RADIUS * 0.9, 10);
+          h.particles.emit('fire', _p, 3, 0.5);
+          h.particles.emit('smoke', _p, 2, 0.6);
+        }
+      }
+      this.updateBoulders(t, dt);
     }
 
     cameraPath(t, this.podLength, _pose);
@@ -188,6 +182,11 @@ export class IntroCinematic {
   private impact(): void {
     const h = this.host;
     const R = CRATER_RADIUS;
+    // Under the white flash the pod gives way to the monster (crouched, black), and a dense cloud erupts over both.
+    this.pod.root.visible = false;
+    h.monster.setSilhouette(1);
+    h.monster.visible = true;
+    for (let i = 0; i < I.reveal.cloud; i++) this.cloudPuff();
     h.city.blast({ x: 0, z: 0 }, R, false, R * X.outer, X.shockSpeed);
     h.particles.explosion(_p.set(0, 60, 0), 7);
     for (let i = 0; i < X.fireballs; i++) {
@@ -210,43 +209,22 @@ export class IntroCinematic {
   }
 
   /** Set an object flying from `from`: `out` m/s horizontally along `angle`, `up` m/s upward, tumbling. */
-  private launch(obj: THREE.Object3D, from: THREE.Vector3, size: number, angle: number, out: number, up: number): Fragment {
+  private launch(obj: THREE.Object3D, from: THREE.Vector3, size: number, angle: number, out: number, up: number): Boulder {
     obj.position.copy(from);
     obj.scale.setScalar(size);
     const spin = new THREE.Vector3(Math.random() * 6 - 3, Math.random() * 6 - 3, Math.random() * 6 - 3);
     return { mesh: obj, vel: new THREE.Vector3(Math.cos(angle) * out, up, Math.sin(angle) * out), spin, size };
   }
 
-  /** The cocoon splits: shell fragments fly out in a green burst and the monster starts to climb out. */
-  private burst(): void {
-    const h = this.host;
-    this.pod.root.visible = false;
-    _p.set(0, this.podLength * 0.3, 0);
-    for (let i = 0; i < FRAGMENTS; i++) {
-      const a = (i / FRAGMENTS) * Math.PI * 2 + 0.4;
-      const mesh = new THREE.Mesh(this.fragGeo, this.fragMat);
-      mesh.castShadow = true;
-      h.scene.add(mesh);
-      this.fragments.push(this.launch(mesh, _p.set(0, this.podLength * 0.3, 0), this.podLength, a, 520, 480 + 160 * (i % 2)));
-    }
-    h.particles.emit('acid', _p.set(0, this.podLength * 0.3, 0), 60, 3);
-    h.particles.ring('dust', ORIGIN, CRATER_RADIUS * 0.6, 24);
-    // The monster stands up in a cloud of smoke as a black silhouette, coming into colour as the smoke thins.
+  /** One puff of the crater cloud, over the spot where the pod struck, tall enough to swallow the monster. */
+  private cloudPuff(): void {
     const L = this.podLength;
-    // A ring of it around (not over) the monster, low, so the dark shape shows through the gaps before it thins away.
-    for (let i = 0; i < I.reveal.veil; i++) {
-      const a = Math.random() * Math.PI * 2;
-      const d = L * (0.35 + Math.random() * 0.35);
-      h.particles.emit('veil', _p.set(Math.cos(a) * d, Math.random() * L * 0.3, Math.sin(a) * d), 1);
-    }
-    h.monster.setSilhouette(1);
-    h.monster.visible = true;
+    this.host.particles.emit('veil', this.around(ORIGIN, L * 0.55, L * (0.1 + Math.random() * 0.6)), 1);
   }
 
-  /** Boulders and shell fragments arc out, land, and shrink away over the last 0.6 s so nothing pops at play start. */
-  private updateFragments(t: number, dt: number): void {
+  /** Boulders arc out, land, and shrink away over the last 0.6 s so nothing pops at play start. */
+  private updateBoulders(t: number, dt: number): void {
     const shrink = Math.min(1, Math.max(0, (INTRO_LENGTH - t) / 0.6));
-    for (const f of this.fragments) this.fly(f, shrink, dt);
     this.boulders.forEach((f, i) => {
       this.fly(f, shrink, dt);
       f.mesh.updateMatrix();
@@ -256,7 +234,7 @@ export class IntroCinematic {
     this.boulderMesh.instanceMatrix.needsUpdate = true;
   }
 
-  private fly(f: Fragment, shrink: number, dt: number): void {
+  private fly(f: Boulder, shrink: number, dt: number): void {
     const m = f.mesh;
     if (m.position.y > 0 || f.vel.y > 0) {
       f.vel.y -= GRAVITY * dt;
@@ -272,9 +250,7 @@ export class IntroCinematic {
     m.scale.setScalar(f.size * shrink);
   }
 
-  private clearFragments(): void {
-    for (const f of this.fragments) f.mesh.removeFromParent();
-    this.fragments = [];
+  private clearBoulders(): void {
     this.boulders = [];
     this.boulderMesh.count = 0;
   }
@@ -283,7 +259,7 @@ export class IntroCinematic {
     this.active = false;
     this.t = INTRO_LENGTH;
     this.pod.root.visible = false;
-    this.clearFragments();
+    this.clearBoulders();
     this.flashEl.style.opacity = '0';
     this.blackEl.style.opacity = '0';
     this.host.camera.up.set(0, 1, 0);
@@ -298,13 +274,11 @@ export class IntroCinematic {
   }
 
   dispose(): void {
-    this.clearFragments();
+    this.clearBoulders();
     this.flashEl.remove();
     this.blackEl.remove();
     this.space.dispose();
     this.pod.dispose();
-    this.fragGeo.dispose();
-    this.fragMat.dispose();
     this.boulderMesh.geometry.dispose();
     (this.boulderMesh.material as THREE.Material).dispose();
   }

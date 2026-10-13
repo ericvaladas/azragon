@@ -180,7 +180,8 @@ describe('shakeAt', () => {
 
 describe('silhouetteAt', () => {
   const R = CONFIG.intro.reveal;
-  it('shows the monster as a black silhouette when the cocoon splits, holds, then fades to full colour before play starts', () => {
+  it('is black from the impact (when it takes the pod\'s place, unseen), through the thinning cloud, then fades to full colour before play starts', () => {
+    expect(silhouetteAt(IMPACT_TIME)).toBe(1);
     expect(silhouetteAt(EMERGE_TIME)).toBe(1);
     expect(silhouetteAt(EMERGE_TIME + R.hold - 0.01)).toBe(1);
     const mid = silhouetteAt(EMERGE_TIME + R.hold + R.fade / 2);

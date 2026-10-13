@@ -417,10 +417,11 @@ export const CONFIG = {
      */
     chase: { back: 3.2, lift: 1.7, side: 0.45, ahead: 4, dip: 0.9 },
     /**
-     * The reveal: when the cocoon splits the monster is a black silhouette in a cloud of smoke; it holds `hold` s, then
-     * fades to full colour over `fade` s as the smoke (`veil` puffs) thins.
+     * The reveal. At impact (under the white flash) the pod gives way to the monster, black, and a dense cloud
+     * (`cloud` puffs, fed at `feedRate`/s for `feedFor` s) erupts over the crater, hiding both. It thins from about
+     * `emerge`; the silhouette shows through, stays black until emerge + `hold`, then comes into colour over `fade` s.
      */
-    reveal: { hold: 1.2, fade: 0.7, veil: 36 },
+    reveal: { hold: 1.1, fade: 0.7, cloud: 20, feedRate: 36, feedFor: 1.2 },
     /** Inside the cocoon the monster stands curled down by crouchDip (model units of body drop); it straightens over riseTime s after the split. */
     crouchDip: 170,
     riseTime: 1.4,

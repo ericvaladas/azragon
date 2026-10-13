@@ -9,8 +9,6 @@ const SHELL = 0x3e2536;
 const CREST = 0x6e4459;
 const GROWTH = 0x8a5a6b;
 const SPINE = 0x150a11;
-/** The throb before the split: a deep, living red under the shell. */
-const PULSE = new THREE.Color(0x6a0e24);
 
 /** Profile rings along the axis and segments around it. */
 const RINGS = 14;
@@ -119,8 +117,6 @@ function spines(rng: () => number): THREE.BufferGeometry[] {
 export class PodModel {
   readonly root = new THREE.Group();
   private mat: THREE.MeshToonMaterial;
-  private heat = new THREE.Color(0, 0, 0);
-  private glow = 0;
 
   constructor(length: number) {
     const rng = mulberry32(7919);
@@ -144,18 +140,7 @@ export class PodModel {
 
   /** Re-entry glow on the shell (black = none). */
   setHeat(c: THREE.Color): void {
-    this.heat.copy(c);
-    this.apply();
-  }
-
-  /** Throb 0..1 as the cocoon is about to split: a deep red under the shell, on top of its heat. */
-  setGlow(k: number): void {
-    this.glow = Math.min(1, Math.max(0, k));
-    this.apply();
-  }
-
-  private apply(): void {
-    this.mat.emissive.copy(PULSE).multiplyScalar(this.glow).add(this.heat);
+    this.mat.emissive.copy(c);
   }
 
   dispose(): void {

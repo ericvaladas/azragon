@@ -3,11 +3,27 @@ import { CONFIG } from '../config';
 import { CRATER_RADIUS } from '../world/City';
 import { PRESETS } from './Particles';
 
-describe('veil (the reveal smoke)', () => {
-  it('outlasts the silhouette hold but is gone by the time play starts', () => {
-    const R = CONFIG.intro.reveal;
-    expect(PRESETS.veil.life).toBeGreaterThan(R.hold + R.fade * 0.5);
-    expect(CONFIG.intro.starts.emerge + PRESETS.veil.life).toBeLessThanOrEqual(CONFIG.intro.starts.done);
+describe('veil (the cloud that hides the crater after impact)', () => {
+  const S = CONFIG.intro.starts;
+  const R = CONFIG.intro.reveal;
+  const V = PRESETS.veil;
+  it('is mostly fed in after the first burst, so it thins gradually (in the order it was fed) rather than all at once', () => {
+    expect(R.feedRate * R.feedFor).toBeGreaterThan(R.cloud);
+  });
+  it('starts to thin a little before the clear-up, and fades out over a long stretch (not all at once)', () => {
+    const thin = S.impact + V.life * (V.fadeFrom ?? 0.75);
+    expect(thin).toBeGreaterThanOrEqual(S.emerge - 1);
+    expect(thin).toBeLessThan(S.emerge);
+    expect(V.fadeFrom).toBeLessThanOrEqual(0.6);
+  });
+  it('the last puffs fed into it are gone by the time play starts, after the colour has come back', () => {
+    const last = S.impact + R.feedFor + V.life;
+    expect(last).toBeLessThanOrEqual(S.done);
+    expect(last).toBeGreaterThanOrEqual(S.emerge + R.hold + R.fade - 0.3);
+  });
+  it('is dense: drawn more opaque than plain dust, and big enough to swallow a cocoon seen from ~2 km', () => {
+    expect(V.size0).toBeGreaterThan(200);
+    expect(R.cloud + R.feedRate * R.feedFor).toBeGreaterThanOrEqual(50);
   });
 });
 

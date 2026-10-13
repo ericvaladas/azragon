@@ -4,8 +4,11 @@ import { faceted } from '../render/toon';
 
 export type ParticleKind = 'dust' | 'debris' | 'fire' | 'smoke' | 'spark' | 'acid' | 'plasma' | 'trail' | 'ink' | 'rot' | 'shade' | 'mist' | 'bone' | 'wisp' | 'hexfire' | 'hexember' | 'wraith' | 'billow' | 'veil';
 
-/** `stretch`: drawn upright and this many times taller than wide, flickering (flame tongues) instead of tumbling. */
-type Preset = { color: number; life: number; size0: number; size1: number; speed: number; up: number; gravity: number; drag: number; stretch?: number };
+/**
+ * `stretch`: drawn upright and this many times taller than wide, flickering (flame tongues) instead of tumbling.
+ * `fadeFrom`: the fraction of its life after which a puff shrinks away (0.75 when absent).
+ */
+type Preset = { color: number; life: number; size0: number; size1: number; speed: number; up: number; gravity: number; drag: number; stretch?: number; fadeFrom?: number };
 
 const P = CONFIG.palette;
 const W = CONFIG.golem.colors;
@@ -37,8 +40,8 @@ export const PRESETS: Record<ParticleKind, Preset> = {
   spark: { color: P.eye, life: 0.3, size0: 10, size1: 2, speed: 260, up: 80, gravity: 200, drag: 0.5 },
   /** The pod crash's dust cloud: huge, slow billows that roll out across the city and hang (readable from high up). */
   billow: { color: 0x9c8a70, life: 2.3, size0: 200, size1: 520, speed: 280, up: 240, gravity: -10, drag: 1.3 },
-  /** The reveal's smoke: pale, slow, swelling puffs the monster stands in as a silhouette, thinning away. */
-  veil: { color: 0xb5a588, life: 1.8, size0: 150, size1: 300, speed: 60, up: 30, gravity: -12, drag: 1.6 },
+  /** The cloud that erupts over the crater at impact and hides it: big, dense, slowly swelling puffs that thin away. */
+  veil: { color: 0xb5a588, life: 3.2, size0: 240, size1: 460, speed: 110, up: 30, gravity: -6, drag: 1.4, fadeFrom: 0.55 },
   ink: { color: CONFIG.kraken.colors.ink, life: 1.1, size0: 30, size1: 70, speed: 120, up: 50, gravity: -10, drag: 2 },
 };
 
@@ -51,10 +54,11 @@ const HIDDEN = new THREE.Matrix4().makeScale(0, 0, 0);
 
 /** Opacity per draw layer. Smoke and dust are see-through so trails never hide units behind them. */
 /** `murk`: the Wendigo's dark smoke and mist, dense enough to read as dark over light ground. */
-const LAYER_OPACITY = { solid: 1, dust: 0.65, smoke: 0.35, murk: 0.85 } as const;
+/** `cloud`: the intro's crater cloud, dense enough that a few overlapping puffs hide what is inside. */
+const LAYER_OPACITY = { solid: 1, dust: 0.65, smoke: 0.35, murk: 0.85, cloud: 0.85 } as const;
 type LayerName = keyof typeof LAYER_OPACITY;
-const LAYER_OF: Record<ParticleKind, LayerName> = { dust: 'dust', smoke: 'smoke', debris: 'solid', fire: 'solid', spark: 'solid', acid: 'solid', plasma: 'solid', trail: 'dust', ink: 'smoke', rot: 'solid', shade: 'murk', mist: 'murk', bone: 'solid', wisp: 'dust', hexfire: 'solid', hexember: 'solid', wraith: 'murk', billow: 'dust', veil: 'dust' };
-const LAYER_MAX: Record<LayerName, number> = { solid: 500, dust: 400, smoke: 500, murk: 400 };
+const LAYER_OF: Record<ParticleKind, LayerName> = { dust: 'dust', smoke: 'smoke', debris: 'solid', fire: 'solid', spark: 'solid', acid: 'solid', plasma: 'solid', trail: 'dust', ink: 'smoke', rot: 'solid', shade: 'murk', mist: 'murk', bone: 'solid', wisp: 'dust', hexfire: 'solid', hexember: 'solid', wraith: 'murk', billow: 'dust', veil: 'cloud' };
+const LAYER_MAX: Record<LayerName, number> = { solid: 500, dust: 400, smoke: 500, murk: 400, cloud: 160 };
 
 /** One pooled InstancedMesh: swap-remove on death, no per-frame allocation. */
 class Layer {
@@ -131,7 +135,8 @@ class Layer {
       this.pos[o + 2] = this.pos[o + 2]! + this.vel[o + 2]! * dt;
       const k = age / p.life;
       _s.setScalar(p.size0 + (p.size1 - p.size0) * k);
-      if (k > 0.75) _s.multiplyScalar((1 - k) / 0.25);
+      const f = p.fadeFrom ?? 0.75;
+      if (k > f) _s.multiplyScalar((1 - k) / (1 - f));
       if (p.stretch) {
         // Flame tongue: upright, tall, its width flickering.
         _s.x *= 0.75 + 0.35 * Math.sin(age * 37 + i);
@@ -171,6 +176,7 @@ export class Particles {
       dust: new Layer(scene, geo, LAYER_OPACITY.dust, LAYER_MAX.dust),
       smoke: new Layer(scene, geo, LAYER_OPACITY.smoke, LAYER_MAX.smoke),
       murk: new Layer(scene, geo, LAYER_OPACITY.murk, LAYER_MAX.murk),
+      cloud: new Layer(scene, geo, LAYER_OPACITY.cloud, LAYER_MAX.cloud),
     };
   }
 
