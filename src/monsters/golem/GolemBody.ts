@@ -84,18 +84,20 @@ const TWIST_MAX = 1.5;
 const HIP_COUNTER = 0.12;
 const SPINE_Z0 = -150;
 const SPINE_Z1 = 150;
-const ROLL_PER_TWIST = 0.4;
+const ROLL_PER_TWIST = 0.25;
 const SHIFT_PER_TWIST = 30;
 const CROUCH_PER_TWIST = 50;
 const RECRUIT_SOFT = 0.7;
 const RECRUIT_LEAD = 0.1;
+/** A backhand's longer look-ahead: the slow body starts round before the sweep does. */
+const BACKHAND_LEAD = 0.16;
 /**
  * Pivot step: when the turn (target) passes STEP_ON rad the planted hand on the far side lifts and re-plants under
  * the turned shoulders, over STEP_TIME s; it steps back once the turn falls below STEP_OFF.
  */
 const STEP_ON = 0.7;
 const STEP_OFF = 0.35;
-const STEP_TIME = 0.24;
+const STEP_TIME = 0.38;
 /** The spine bend, run in the torso's vertex shader (the same map as spine.ts bendPoint, for the shoulders and head). */
 const SPINE_BEND_GLSL = `
 uniform float uSpineBend;
@@ -137,9 +139,14 @@ const BECKON_REACH = 400;
 const BECKON_END = BECKON_T.end;
 /** How fast (1/s) the beckoning claw's reach swings round to a new flyer. */
 const BECKON_TURN = 4;
-/** Body springs: natural frequency (rad/s) and damping; underdamped, so the torso overshoots and settles. */
-const TWIST_SPRING = { omega: 18, zeta: 0.5 };
-const LEAN_SPRING = { omega: 13, zeta: 0.5 };
+/**
+ * Body springs: natural frequency (rad/s) and damping. Slow and only a little underdamped, so the body winds round
+ * heavily and settles with a small overshoot, no wobble. TWIST_RATE caps how fast (rad/s) the turn it aims for may
+ * move, so a target that jumps (in front of the shoulder one frame, behind it the next) never whips the body round.
+ */
+const TWIST_SPRING = { omega: 13, zeta: 0.75 };
+const LEAN_SPRING = { omega: 9, zeta: 0.75 };
+const TWIST_RATE = 7.5;
 /** Fraction of the torso's turn and pitch the neck takes back, so the skull stays roughly on its target. */
 const HEAD_COUNTER = 0.65;
 
@@ -273,6 +280,7 @@ const _world = new THREE.Vector3();
 const _lunge = new THREE.Vector3();
 const _rel = new THREE.Matrix4();
 const _lead = new THREE.Vector3();
+const _peak = new THREE.Vector3();
 const _clamp = new THREE.Vector3();
 const _armQ = new THREE.Quaternion();
 const _armQInv = new THREE.Quaternion();
@@ -422,6 +430,8 @@ export class GolemBody implements MonsterBody {
   private strikeKind: FistKind = 'slam';
   /** Torso turn (yaw, + toward the left) and extra pitch (+ forward) recruited for the reach: springs. */
   private twist = { x: 0, v: 0 };
+  /** The turn the twist spring is chasing, moved at most TWIST_RATE rad/s toward the reach's need. */
+  private twistGoal = 0;
   private lean = { x: 0, v: 0 };
   /** Per side (0 left): where each hand and hoof wants to be this frame (root space), and which are on the ground. */
   private gaitAt = [new THREE.Vector3(), new THREE.Vector3()];
@@ -987,19 +997,28 @@ export class GolemBody implements MonsterBody {
       const side = f.melee.side;
       const sx = side === 0 ? 1 : -1;
       const t = f.melee.t;
-      this.strikePose(Math.min(T.end, t + RECRUIT_LEAD), sx, this.gaitAt[side]!, _lead);
-      twistT += sx * reachTwist(this.outBearing(_lead, sx), SWEEP_LO, SWEEP_HI, TWIST_MAX);
+      this.strikePose(Math.min(T.end, t + (this.strikeKind === 'backhand' ? BACKHAND_LEAD : RECRUIT_LEAD)), sx, this.gaitAt[side]!, _lead);
+      let reach = reachTwist(this.outBearing(_lead, sx), SWEEP_LO, SWEEP_HI, TWIST_MAX);
       // 0 → 1 through the windup, held to impact and the hold, then back to 0 by the end.
       const env = t < T.windup ? smooth(0, 1, t / T.windup) : 1 - strikeReturn(t, T, hold);
       strikeEnv = env;
       const u = Math.min(1, Math.max(0, (t - T.windup) / (T.impact - T.windup)));
       if (this.strikeKind === 'slam') {
         // Turn into the target; rear back as the claw rises, then drive the shoulders down onto it.
-        twistT += 0.3 * Math.max(-1, Math.min(1, Math.atan2(_aim.x, _aim.z))) * env;
+        twistT += sx * reach + 0.3 * Math.max(-1, Math.min(1, Math.atan2(_aim.x, _aim.z))) * env;
         leanT += t < T.windup ? -0.12 * env : t < T.impact ? -0.12 + 0.3 * u * u : 0.18 * env;
       } else {
-        // Coil away from the strike side in the windup (the claw cocked across the chest), then uncoil through the sweep.
-        twistT -= sx * 0.14 * (t < T.windup ? env : 1 - u);
+        // Beside: coil away in the windup (the claw cocked across the chest), then uncoil through the sweep. Behind
+        // (`rear`): the slow body could not get round in the sweep alone, so it winds round toward the target
+        // through the windup instead of coiling away, most of the way by the impact.
+        const rear = smooth(1.9, 2.8, Math.abs(Math.atan2(_aim.x, _aim.z)));
+        if (rear > 0) {
+          this.strikePose(T.impact + hold - 1e-3, sx, this.gaitAt[side]!, _peak);
+          const peak = reachTwist(this.outBearing(_peak, sx), SWEEP_LO, SWEEP_HI, TWIST_MAX);
+          const pre = 0.85 * peak * smooth(0, T.impact, t) * (1 - strikeReturn(t, T, hold));
+          reach = (1 - rear) * reach + rear * Math.max(reach, pre);
+        }
+        twistT += sx * reach - sx * 0.14 * (1 - 0.6 * rear) * (t < T.windup ? env : 1 - u);
         leanT += 0.06 * env;
       }
     }
@@ -1017,7 +1036,10 @@ export class GolemBody implements MonsterBody {
       const rise = Math.asin(Math.max(-1, Math.min(1, (want.y - _tmp.y) / Math.max(1, want.distanceTo(_tmp)))));
       leanT -= 0.12 * summon + softCap(Math.max(0, rise - 0.5), 0.25);
     }
-    const twistGoal = Math.max(-TWIST_MAX, Math.min(TWIST_MAX, twistT));
+    const goal = Math.max(-TWIST_MAX, Math.min(TWIST_MAX, twistT));
+    const step = TWIST_RATE * f.dt;
+    this.twistGoal += Math.max(-step, Math.min(step, goal - this.twistGoal));
+    const twistGoal = this.twistGoal;
     springStep(this.twist, twistGoal, TWIST_SPRING.omega, TWIST_SPRING.zeta, f.dt);
     this.pivotSteps(f, twistGoal, onFootLand);
     springStep(this.lean, leanT, LEAN_SPRING.omega, LEAN_SPRING.zeta, f.dt);
@@ -1306,7 +1328,9 @@ export class GolemBody implements MonsterBody {
       const a = angAt(u);
       const k = Math.min(1, u);
       const r = r0 + (BACKHAND_SWEEP_R - r0) * k;
-      return o.set(Math.sin(a) * r + _lunge.x, _raise.y + (FIST_R + 30 - _raise.y) * k, Math.cos(a) * r + _lunge.z);
+      // Low early (ease-out), so the claw sweeps round under the turning head.
+      const ky = 1 - (1 - k) * (1 - k);
+      return o.set(Math.sin(a) * r + _lunge.x, _raise.y + (FIST_R + 30 - _raise.y) * ky, Math.cos(a) * r + _lunge.z);
     };
     if (t < T.windup) out.lerpVectors(gait, _raise, smooth(0, 1, t / T.windup));
     else if (t < T.impact + hold) at(backhandSweep(t, T, hold), out);
