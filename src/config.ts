@@ -218,6 +218,49 @@ export const CONFIG = {
       chunk: 0x8a8378,
     },
   },
+  /** The Magma Golem. Stats feed its MonsterKind; fist and lob tune its attacks; colours its body and effects. */
+  golem: {
+    stats: {
+      maxHp: 1450,
+      moveSpeed: 110,
+      turnRate: 1.6,
+      damageMult: 1.2,
+      /** One knuckle-walk cycle (all four limbs) covers this many model units. */
+      strideLength: 340,
+      bodyRadius: 170 * MONSTER_SCALE,
+      footRadius: 75,
+      footDamage: 160,
+      /** Fist reach (world m) — also the brain's melee range for attack orders. */
+      meleeRange: 360,
+      meleeRadius: 110,
+      meleeDamage: 95,
+      meleeCooldown: 1.2,
+      meleeTiming: { windup: 0.3, impact: 0.45, end: 0.85 },
+      rangedRange: 1400,
+      rangedDamage: 90,
+      rangedCooldown: 2.0,
+      headHeight: 480,
+      /** Measured standing bounding box (world m) — re-measure in Task 3 after the model exists. */
+      size: { width: 420, length: 420, height: 380 },
+    },
+    /**
+     * Molten Fist: targets within `frontHalf` (rad) of dead ahead take a slam; others a backhand whose hit arc
+     * is centred `backhandCenter` rad off the nose on the target's side, ±`backhandHalf`. Buildings take buildingMult×.
+     */
+    fist: { frontHalf: 0.75, backhandCenter: 1.95, backhandHalf: 1.25, buildingMult: 2 },
+    /** Magma Lob: splash radius (m), flight time (s), arc height (m); the lava pool it leaves (radius m, life s). */
+    lob: { splash: 120, flight: 1.4, arc: 520, poolRadius: 110, poolLife: 3 },
+    colors: {
+      basalt: 0x3a3330,
+      basaltDark: 0x221e1c,
+      rock: 0x564b44,
+      magma: 0xff6a1a,
+      core: 0xffc23a,
+      eye: 0xffd060,
+      ember: 0xffb347,
+      lava: 0xff4a12,
+    },
+  },
   artillery: {
     hp: 120, exp: 20, size: 40, guns: 3, gunSpacing: 70, distMin: 2500, distMax: 3500,
     salvoEvery: 6, fillTime: 3.2, shellFlight: 1.8, shellArc: 750, radius: 90, damage: 60, buildingDamage: 200, spread: 260,
@@ -242,6 +285,11 @@ export const CONFIG = {
     meltdown: { threshold: [0, 0.3, 0.4, 0.5], damageMult: 1.5, cooldownMult: 0.5 },
     /** Sucker Grip (Kraken): each plant crushes the nearest ground enemy within radius[rank] of the tip. */
     grip: { radius: [0, 140, 180, 220], damage: [0, 90, 140, 200] },
+    /**
+     * Molten Core (Golem): heat 0..1 rises by (damage taken / max HP) × gain and cools by `cool` per second.
+     * Damage × (1 + heat × bonus[rank]); at heat ≥ auraAt a burn aura of radius[rank] deals dps[rank] to ground enemies.
+     */
+    core: { gain: 4, cool: 0.12, auraAt: 0.5, bonus: [0, 0.3, 0.45, 0.6], radius: [0, 260, 320, 380], dps: [0, 40, 60, 85] },
     /** Auto-shields trigger only when something is about to hit: projectiles or blimps within this range. */
     threatRange: 700,
     earlyAbilityPicks: 3,
