@@ -3,6 +3,7 @@ import { CONFIG } from '../config';
 import type { OnDestroyed, Target } from '../combat';
 import type { Vec2 } from '../util/math';
 import { mulberry32 } from '../util/rng';
+import { TOKYO } from '../cities/tokyo';
 import { blastTopples, chunksInRadius, DestroyedLog, generateChunk, planStreaming, type BuildingSpec, type ChunkContent } from './chunks';
 import { blockGroundTexture, craterTexture, facadeTexture } from './pixelTextures';
 import { faceted, toonMat } from '../render/toon';
@@ -306,7 +307,7 @@ export class City {
   }
 
   private loadChunk(key: string, cx: number, cz: number): void {
-    const content = generateChunk(this.seed, cx, cz);
+    const content = generateChunk(TOKYO, this.seed, cx, cz);
     const buildings: Building[] = [];
     const treeSlots: number[] = [];
     content.buildings.forEach((spec, index) => {
@@ -314,7 +315,7 @@ export class City {
       if (slot === undefined) return;
       const b = new Building(key, index, slot, spec, this);
       this.slotOwner[slot] = b;
-      this.buildingMesh.setColorAt(slot, _c.setHex(CONFIG.palette.buildingFacades[spec.style]!));
+      this.buildingMesh.setColorAt(slot, _c.setHex(spec.color));
       if (this.destroyed.has(key, index)) this.writeRubble(b);
       else this.writeStanding(b, 0, 0);
       buildings.push(b);

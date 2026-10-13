@@ -1,34 +1,40 @@
 import { describe, it, expect } from 'vitest';
-import { CHUNK_SIZE, DestroyedLog, blastTopples, chunkKey, chunksInRadius, generateChunk, planStreaming } from './chunks';
+import { BUILDINGS_PER_CHUNK, CHUNK_SIZE, DestroyedLog, SIGNS_PER_CHUNK, blastTopples, chunkKey, chunksInRadius, generateChunk, maxLoadedChunks, planStreaming } from './chunks';
+import type { BuildingSpec } from './chunks';
 import { CONFIG } from '../config';
+import { TOKYO } from '../cities/tokyo';
+import type { CityStyle } from '../cities/types';
+import { CRATER_RADIUS } from './City';
 
 const W = CONFIG.world;
 
+const ALL_NEON: CityStyle = { ...TOKYO, districtAt: () => 'neon', landmarks: [], specialLots: [] };
+const blockCell = (v: number) => Math.floor(v / W.blockSize);
+
 describe('generateChunk', () => {
-  it('is deterministic per seed and chunk, and differs between chunks', () => {
-    expect(generateChunk(1337, 3, -2)).toEqual(generateChunk(1337, 3, -2));
-    expect(generateChunk(1337, 3, -2).buildings).not.toEqual(generateChunk(1337, 4, -2).buildings);
-    expect(generateChunk(1337, 3, -2).buildings).not.toEqual(generateChunk(99, 3, -2).buildings);
+  it('is deterministic per style, seed and chunk, and differs between chunks and seeds', () => {
+    expect(generateChunk(TOKYO, 1337, 3, -2)).toEqual(generateChunk(TOKYO, 1337, 3, -2));
+    expect(generateChunk(TOKYO, 1337, 3, -2).buildings).not.toEqual(generateChunk(TOKYO, 1337, 4, -2).buildings);
+    expect(generateChunk(TOKYO, 1337, 30, -2).buildings).not.toEqual(generateChunk(TOKYO, 99, 30, -2).buildings);
   });
 
-  it('keeps every building inside its own chunk and off every road line', () => {
-    const cell = (v: number) => Math.floor(v / W.blockSize);
-    for (const [cx, cz] of [[0, 0], [5, -3], [-7, 11], [40, 40]] as const) {
-      for (const b of generateChunk(1337, cx, cz).buildings) {
-        expect(Math.floor((b.x - b.w / 2) / CHUNK_SIZE)).toBe(cx);
-        expect(Math.floor((b.z + b.d / 2) / CHUNK_SIZE)).toBe(cz);
-        expect(cell(b.x - b.w / 2)).toBe(cell(b.x + b.w / 2));
-        expect(cell(b.z - b.d / 2)).toBe(cell(b.z + b.d / 2));
+  it('keeps every building inside its own chunk and its own block (off every road line)', () => {
+    for (const [cx, cz] of [[0, 0], [0, 2], [0, 4], [5, -3], [-7, 11], [40, 40]] as const) {
+      for (const b of generateChunk(TOKYO, 1337, cx, cz).buildings) {
+        expect(Math.floor(b.x / CHUNK_SIZE)).toBe(cx);
+        expect(Math.floor(b.z / CHUNK_SIZE)).toBe(cz);
+        expect(blockCell(b.x - b.w / 2)).toBe(blockCell(b.x + b.w / 2));
+        expect(blockCell(b.z - b.d / 2)).toBe(blockCell(b.z + b.d / 2));
       }
     }
   });
 
-  it('builds on the crater site (the impact flattens it) but plants no parks there', () => {
+  it('builds on the crater site but plants no parks or trees there', () => {
     let inside = 0;
     for (const r of chunksInRadius(0, 0, W.clearRadius + CHUNK_SIZE)) {
-      const c = generateChunk(1337, r.cx, r.cz);
+      const c = generateChunk(TOKYO, 1337, r.cx, r.cz);
       inside += c.buildings.filter((b) => Math.hypot(b.x, b.z) < W.clearRadius).length;
-      // Park blocks start one half-block outside the crater; trees scatter at most ~0.6 blocks from their block centre.
+      for (const p of c.parks) expect(Math.hypot(p.x, p.z)).toBeGreaterThan(W.clearRadius + W.blockSize * 0.5);
       for (const t of c.trees) expect(Math.hypot(t.x, t.z)).toBeGreaterThan(W.clearRadius - W.blockSize * 0.25);
     }
     expect(inside).toBeGreaterThan(4);
@@ -36,8 +42,67 @@ describe('generateChunk', () => {
 
   it('fills chunks far from the origin densely', () => {
     let total = 0;
-    for (let i = 0; i < 10; i++) total += generateChunk(1337, 20 + i, -30).buildings.length;
+    for (let i = 0; i < 10; i++) total += generateChunk(TOKYO, 1337, 20 + i, -30).buildings.length;
     expect(total / 10).toBeGreaterThan(25);
+  });
+
+  it('stays within the per-chunk caps even when every block is neon, and the caps fit the pools', () => {
+    expect(BUILDINGS_PER_CHUNK * maxLoadedChunks()).toBeLessThanOrEqual(W.maxBuildings);
+    expect(SIGNS_PER_CHUNK * maxLoadedChunks()).toBeLessThanOrEqual(W.maxSigns);
+    for (let i = 0; i < 6; i++) {
+      const c = generateChunk(ALL_NEON, 1337, 10 + i, 7);
+      expect(c.buildings.length).toBeLessThanOrEqual(BUILDINGS_PER_CHUNK);
+      expect(c.buildings.reduce((n, b) => n + b.signs.length, 0)).toBeLessThanOrEqual(SIGNS_PER_CHUNK);
+      expect(c.buildings.length).toBeGreaterThan(BUILDINGS_PER_CHUNK * 0.8);
+    }
+  });
+
+  it('gives a landmark to exactly one chunk, and builds nothing else on its block', () => {
+    const tmg = TOKYO.landmarks[0]!;
+    let owners = 0;
+    for (const r of chunksInRadius(tmg.x, tmg.z, CHUNK_SIZE * 2)) {
+      const c = generateChunk(TOKYO, 1337, r.cx, r.cz);
+      owners += c.landmarks.filter((l) => l.id === tmg.id).length;
+      for (const b of c.buildings) {
+        const same = blockCell(b.x) === blockCell(tmg.x) && blockCell(b.z) === blockCell(tmg.z);
+        expect(same).toBe(false);
+      }
+      for (const p of c.parks) expect(blockCell(p.x) === blockCell(tmg.x) && blockCell(p.z) === blockCell(tmg.z)).toBe(false);
+    }
+    expect(owners).toBe(1);
+  });
+
+  it('places the Shibuya corner buildings exactly, and no random building overlaps them', () => {
+    const found: BuildingSpec[] = [];
+    const all: BuildingSpec[] = [];
+    for (const r of chunksInRadius(600, 1600, CHUNK_SIZE)) {
+      const c = generateChunk(TOKYO, 1337, r.cx, r.cz);
+      all.push(...c.buildings);
+      for (const s of TOKYO.specialLots) found.push(...c.buildings.filter((b) => b.x === s.x && b.z === s.z && b.h === s.h));
+    }
+    expect(found).toHaveLength(4);
+    const overlaps = (a: BuildingSpec, b: BuildingSpec) => Math.abs(a.x - b.x) * 2 < a.w + b.w && Math.abs(a.z - b.z) * 2 < a.d + b.d;
+    for (const s of found) for (const b of all) if (b !== s) expect(overlaps(s, b)).toBe(false);
+    for (const s of found) expect(Math.hypot(s.x, s.z) - Math.max(s.w, s.d) / 2).toBeGreaterThanOrEqual(2 * CRATER_RADIUS);
+  });
+
+  it('keeps every sign on its building: beside a face or on the roof, within its height', () => {
+    for (const [cx, cz] of [[0, 2], [-2, 3], [-1, 4]] as const) {
+      for (const b of generateChunk(TOKYO, 1337, cx, cz).buildings) {
+        for (const s of b.signs) {
+          expect(Math.abs(s.lx)).toBeLessThanOrEqual(b.w / 2 + s.w + 4);
+          expect(Math.abs(s.lz)).toBeLessThanOrEqual(b.d / 2 + s.d + 4);
+          expect(s.ly - s.h / 2).toBeGreaterThanOrEqual(0);
+          expect(s.ly + s.h / 2).toBeLessThanOrEqual(b.h + 30);
+        }
+      }
+    }
+  });
+
+  it('builds neon blocks with signs and Shinjuku with tall towers', () => {
+    const near = (x: number, z: number) => generateChunk(TOKYO, 1337, Math.floor(x / CHUNK_SIZE), Math.floor(z / CHUNK_SIZE)).buildings;
+    expect(near(600, 1600).some((b) => b.signs.length > 0)).toBe(true);
+    expect(Math.max(...near(300, 3100).map((b) => b.h))).toBeGreaterThanOrEqual(150);
   });
 });
 

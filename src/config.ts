@@ -25,7 +25,6 @@ export const CONFIG = {
     sun: 0xfff1d6,
     hemiSky: 0xcfe3ff,
     hemiGround: 0x6b5a3a,
-    buildingFacades: [0xe8d9c4, 0xc9d6df, 0xe6c3b0, 0xd4dcc2, 0xbfb8d6],
     roof: 0x5d5a66,
     carapace: 0x7fd41e,
     carapaceDark: 0x4e8f12,
@@ -96,16 +95,19 @@ export const CONFIG = {
     loadRadius: 4800,
     unloadRadius: 5600,
     chunksPerFrame: 3,
-    maxBuildings: 7000,
-    maxTrees: 3000,
+    maxBuildings: 12000,
+    maxTrees: 5000,
+    /** Pool size for neon sign boxes across all loaded chunks. */
+    maxSigns: 6000,
+    /** Pool size for animated video-screen signs across all loaded chunks. */
+    maxScreens: 60,
+    /** Pool size for park ground pads across all loaded chunks. */
+    maxParks: 2000,
     maxRubble: 2500,
     blockSize: 200,
     roadWidth: 36,
     /** Crater around the origin (the pod's impact site; the decal is half a block wider), sized to the cocoon. */
     clearRadius: 650,
-    parkChance: 0.12,
-    minBuildingH: 20,
-    maxBuildingH: 120,
     groundExtent: 30000,
     buildingHpPerMetre: 1.5,
     /** EXP per building HP, rounded per building (min 1); 0.0365 is ~30% below the original 0.05 on average. */
