@@ -210,7 +210,7 @@ export class GameScene {
     this.monster.onLeapLand = (p) => this.leapLand(p);
     this.input = new Input(this.pixel.domElement, {
       tap: this.onTap,
-      drag: (dx, dy) => this.rig.drag(dx, dy),
+      drag: (dx, dy, touch) => this.rig.drag(dx, dy, touch),
       wheel: (dy) => this.rig.zoom(dy),
       hover: this.onHover,
       menuKey: (k) => {

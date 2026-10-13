@@ -32,6 +32,12 @@ describe('applyDrag / applyZoom', () => {
     expect(s.yaw).toBeLessThan(0);
     expect(s.pitch).toBeGreaterThan(base.pitch);
   });
+  it('a touch drag grabs the world instead: drag right turns the view left (yaw increases); vertical is unchanged', () => {
+    const s = applyDrag(base, 100, 50, true);
+    expect(s.yaw).toBeCloseTo(-applyDrag(base, 100, 50).yaw);
+    expect(s.yaw).toBeGreaterThan(0);
+    expect(s.pitch).toBe(applyDrag(base, 100, 50).pitch);
+  });
   it('clamps pitch and distance', () => {
     expect(applyDrag(base, 0, 1e6).pitch).toBe(C.maxPitch);
     expect(applyDrag(base, 0, -1e6).pitch).toBe(C.minPitch);
