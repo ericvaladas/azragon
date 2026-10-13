@@ -421,6 +421,7 @@ export class GameScene {
 
   private startDying(): void {
     this.breath.clear();
+    this.monster.charge = 0;
     this.monster.alive = false;
     this.order = null;
     this.markers.setTarget(null);
@@ -1033,6 +1034,7 @@ export class GameScene {
     }
     for (const t of enemies) t.applyDamage(this.ms.rangedDamage * mult);
     for (const t of buildings) t.applyDamage(B.buildingDamage * mult);
+    this.particles.emit('spark', this.monster.rangedOrigin(this.tmpV), 10, 1.5);
     this.rig.addTrauma(0.25);
   };
 

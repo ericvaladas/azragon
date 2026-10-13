@@ -7,6 +7,7 @@ const B = CONFIG.kaiju.breath;
 const _jaws = new THREE.Vector3();
 const _aim = new THREE.Vector3();
 const _end = new THREE.Vector3();
+const _far = new THREE.Vector3();
 
 /** Rotate (dx, dz) about the vertical axis by `a` and add it back to (ox, oz). */
 function turned(ox: number, oz: number, dx: number, dz: number, a: number, y: number, out: THREE.Vector3): THREE.Vector3 {
@@ -77,7 +78,15 @@ export class BreathBeam {
       const dz = this.aim.z - from.z;
       for (let i = 0; i < this.lines; i++) {
         turned(from.x, from.z, dx, dz, (i - (this.lines - 1) / 2) * B.fan, this.aim.y, _aim);
-        const e = beamEnd(from, _aim, range);
+        let e;
+        if (_aim.y < 100) {
+          // Ground aim: the beam runs the whole lane out to full range.
+          const h = Math.hypot(_aim.x - from.x, _aim.z - from.z) || 1;
+          _far.set(from.x + ((_aim.x - from.x) / h) * range, 0, from.z + ((_aim.z - from.z) / h) * range);
+          e = beamEnd(from, _far, range);
+        } else {
+          e = beamEnd(from, _aim, range);
+        }
         this.ends[i]!.set(e.x, e.y, e.z);
       }
       onFire(this.from, this.ends.slice(0, this.lines));
@@ -92,7 +101,7 @@ export class BreathBeam {
       const e = this.ends[i]!;
       turned(this.from.x, this.from.z, e.x - this.from.x, e.z - this.from.z, sweep, e.y, _end);
       placeSegment(m, _jaws, _end);
-      m.scale.x = m.scale.z = B.halfWidth * 0.6 * (1 - 0.6 * k);
+      m.scale.x = m.scale.z = B.halfWidth * 0.9 * (1 - 0.6 * k);
     }
     this.mat.opacity = 0.9 * (1 - 0.7 * k);
     if (k >= 1) this.clear();

@@ -23,12 +23,23 @@ describe('BreathBeam', () => {
     expect(fired).toHaveLength(1);
     expect(fired[0]).toHaveLength(3);
     for (const e of fired[0]!) expect(Math.hypot(e.x, e.z)).toBeLessThanOrEqual(1300 + 1e-6);
-    // The middle beam goes straight through the aim and stops at the ground there.
-    expect(fired[0]![1]!.z).toBeCloseTo(600);
+    // A ground aim: the middle beam runs the whole lane to full range.
+    expect(fired[0]![1]!.z).toBeCloseTo(1300);
     beam.start(new THREE.Vector3(500, 0, 0), 1);
     for (let i = 0; i < 20; i++) beam.update(0.05, jaws, 1300, () => fired.push([]));
     expect(fired).toHaveLength(1);
     expect(beam.busy).toBe(false);
+  });
+  it('keeps an airborne aim: the beam passes through the target', () => {
+    const beam = new BreathBeam(new THREE.Scene());
+    let end: THREE.Vector3 | null = null;
+    beam.start(new THREE.Vector3(0, 500, 600), 1);
+    for (let i = 0; i < 20; i++) beam.update(0.05, new THREE.Vector3(0, 300, 0), 1300, (_f, ends) => (end = ends[0]!.clone()));
+    const e = end as unknown as THREE.Vector3;
+    expect(e.x).toBeCloseTo(0);
+    expect(e.z).toBeGreaterThanOrEqual(600);
+    expect(Math.hypot(e.x, e.z)).toBeLessThanOrEqual(1300 + 1e-6);
+    expect(e.y).toBeGreaterThan(500);
   });
   it('caps the fan at maxLines and clear() cancels', () => {
     const beam = new BreathBeam(new THREE.Scene());
