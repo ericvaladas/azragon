@@ -342,8 +342,13 @@ export const CONFIG = {
     trackTime: 2.5, lockTime: 0.8, fireTime: 1.5, cooldownMin: 20, cooldownMax: 30,
     trackSpeed: 80, startOffset: 150, radius: 110, dps: 220, buildingDps: 400, beamHeight: 4000, scorchLife: 10,
   },
-  /** Laser Cannon Truck: deploys, tracks with a sight line, locks, then fires a beam along the locked line. */
-  truck: { hp: 70, exp: 22, size: 110, speed: 45, range: 1200, deployTime: 0.8, aimTime: 2, lockTime: 1.2, fireTime: 1.2, cooldown: 5, beamWidth: 50, beamLength: 1700, hitRadius: 93, dps: 140, buildingDps: 300, aimHeight: 250 },
+  /**
+   * Laser Cannon Truck: deploys, tracks with a sight line, locks, then fires a beam along the locked line.
+   * trackRate (rad/s) caps how fast the cannon's aim turns while tracking: below the ~0.17 rad/s sweep of a
+   * monster walking across the line at 700 m, so it drags behind and the monster slips out before lock.
+   * turnRate (rad/s) caps how fast the truck body turns to face its waypoint or the monster.
+   */
+  truck: { hp: 70, exp: 22, size: 110, speed: 45, range: 1200, deployTime: 0.8, aimTime: 2, trackRate: 0.08, turnRate: 2, lockTime: 1.2, fireTime: 1.2, cooldown: 5, beamWidth: 50, beamLength: 1700, hitRadius: 93, dps: 140, buildingDps: 300, aimHeight: 250 },
   sam: {
     hp: 260, exp: 30, size: 130, spawnMin: 600, spawnMax: 1400,
     riseTime: 1, upTime: 6, sinkTime: 1, downMin: 4, downMax: 6, fireDelay: 1.2,

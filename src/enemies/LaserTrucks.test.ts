@@ -4,6 +4,7 @@ import { LaserTrucks } from './LaserTrucks';
 import type { WorldContext } from './types';
 import type { DamageSource } from '../combat';
 import { CONFIG } from '../config';
+import { pointSegmentDistance } from './beamMath';
 
 const T = CONFIG.truck;
 
@@ -27,14 +28,20 @@ function makeCtx() {
   return { ctx, monster, hits };
 }
 
-/** One truck parked in range at +Z, so it deploys on the first update. */
-function parked(ctx: WorldContext) {
+type TruckView = { position: THREE.Vector3; phase: string; heading: number; aim: THREE.Vector3; muzzle: THREE.Vector3; beamEnd: THREE.Vector3 };
+
+/** One truck parked in range at +Z (`dist` from the monster), so it deploys on the first update; it faces the monster unless `heading` is given. */
+function parked(ctx: WorldContext, dist = 800, heading = Math.PI) {
   const sys = new LaserTrucks(new THREE.Scene());
   sys.spawn(ctx);
-  const t = (sys as unknown as { trucks: { position: THREE.Vector3; phase: string }[] }).trucks[0]!;
-  t.position.set(0, t.position.y, 800);
+  const t = (sys as unknown as { trucks: TruckView[] }).trucks[0]!;
+  t.position.set(0, t.position.y, dist);
+  t.heading = heading;
   return { sys, t };
 }
+
+/** The monster body point the trucks aim at. */
+const body = (m: THREE.Vector3) => new THREE.Vector3(m.x, m.y + T.aimHeight * CONFIG.monster.scale, m.z);
 
 const run = (sys: LaserTrucks, ctx: WorldContext, s: number) => {
   for (let t = 0; t < s; t += 0.05) sys.update(0.05, ctx);
@@ -81,5 +88,88 @@ describe('LaserTrucks', () => {
     expect(sys.threatening(ctx.monster.position)).toBe(false);
     run(sys, ctx, T.aimTime);
     expect(sys.threatening(ctx.monster.position)).toBe(true);
+  });
+
+  it('turns the aim at no more than trackRate, starting from the truck heading', () => {
+    const { ctx, monster } = makeCtx();
+    const { sys, t } = parked(ctx, 700);
+    run(sys, ctx, T.deployTime + 0.05);
+    expect(t.phase).toBe('aiming');
+    const prev = new THREE.Vector3();
+    let maxRate = 0;
+    for (let s = 0; s < T.aimTime; s += 0.05) {
+      prev.copy(t.aim);
+      monster.position.x += 130 * 0.05;
+      sys.update(0.05, ctx);
+      if (t.phase === 'aiming') maxRate = Math.max(maxRate, prev.angleTo(t.aim) / 0.05);
+    }
+    expect(maxRate).toBeGreaterThan(T.trackRate * 0.9);
+    expect(maxRate).toBeLessThanOrEqual(T.trackRate + 1e-6);
+  });
+
+  it('starts aiming from the forward heading, never snapping onto the monster', () => {
+    const { ctx, monster } = makeCtx();
+    const { sys, t } = parked(ctx, 700);
+    run(sys, ctx, T.deployTime);
+    monster.position.x = 400;
+    while (t.phase !== 'aiming') sys.update(0.05, ctx);
+    const fwd = new THREE.Vector3(Math.sin(t.heading), 0, Math.cos(t.heading));
+    expect(t.aim.angleTo(fwd)).toBeLessThanOrEqual(T.trackRate * 0.05 + 1e-6);
+  });
+
+  it('turns the body toward the monster at a capped rate', () => {
+    const { ctx } = makeCtx();
+    const { sys, t } = parked(ctx, 800, Math.PI / 2);
+    run(sys, ctx, 0.2);
+    expect(t.heading).toBeGreaterThan(Math.PI / 2);
+    expect(t.heading - Math.PI / 2).toBeLessThanOrEqual(T.turnRate * 0.2 + 1e-6);
+    run(sys, ctx, T.deployTime);
+    expect(Math.abs(Math.abs(t.heading) - Math.PI)).toBeLessThan(1e-6);
+  });
+
+  it('a monster walking across the line at mid range slips out of the sight line before lock and is missed', () => {
+    const { ctx, monster, hits } = makeCtx();
+    const { sys, t } = parked(ctx, 700);
+    run(sys, ctx, T.deployTime + 0.05);
+    expect(t.phase).toBe('aiming');
+    while (t.phase === 'aiming') {
+      monster.position.x += 120 * 0.05;
+      sys.update(0.05, ctx);
+    }
+    expect(t.phase).toBe('locked');
+    expect(pointSegmentDistance(body(monster.position), t.muzzle, t.beamEnd)).toBeGreaterThan(T.hitRadius);
+    expect(sys.threatening(monster.position)).toBe(false);
+    for (let s = 0; s < T.lockTime + T.fireTime; s += 0.05) {
+      monster.position.x += 120 * 0.05;
+      sys.update(0.05, ctx);
+    }
+    expect(hits).toEqual([]);
+  });
+
+  it('still locks onto a slow monster', () => {
+    const { ctx, monster } = makeCtx();
+    const { sys, t } = parked(ctx, 700);
+    run(sys, ctx, T.deployTime + 0.05);
+    while (t.phase === 'aiming') {
+      monster.position.x += 30 * 0.05;
+      sys.update(0.05, ctx);
+    }
+    expect(sys.threatening(monster.position)).toBe(true);
+  });
+
+  it('locks onto a stationary monster even when it arrives facing 90° away', () => {
+    const { ctx, monster } = makeCtx();
+    const { sys } = parked(ctx, 1100, Math.PI / 2);
+    run(sys, ctx, T.deployTime + T.aimTime + 0.1);
+    expect(sys.threatening(monster.position)).toBe(true);
+  });
+
+  it('never produces NaN with the monster directly on top of the truck', () => {
+    const { ctx, monster } = makeCtx();
+    const { sys, t } = parked(ctx, 800);
+    run(sys, ctx, T.deployTime + 0.1);
+    monster.position.set(t.position.x, 0, t.position.z);
+    run(sys, ctx, T.aimTime);
+    expect([t.aim.x, t.aim.y, t.aim.z, t.beamEnd.x, t.heading].every(Number.isFinite)).toBe(true);
   });
 });

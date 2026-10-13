@@ -5,6 +5,7 @@ import { faceted, toonMat } from '../render/toon';
 import { dist2, type Vec2 } from '../util/math';
 import { ROAD_ORIGIN } from '../world/chunks';
 import { planRoadPath, snapToRoad } from '../world/roads';
+import { rotateToward, stepAngle } from './aimMath';
 import { beamHits } from './beamMath';
 import type { EnemySystem, WorldContext } from './types';
 
@@ -17,7 +18,12 @@ const _q = new THREE.Quaternion();
 const _s = new THREE.Vector3();
 const _p = new THREE.Vector3();
 const _body = new THREE.Vector3();
+const _to = new THREE.Vector3();
 const UP = new THREE.Vector3(0, 1, 0);
+const FWD = new THREE.Vector3(0, 0, 1);
+/** Height of the deployed cannon's pivot above the truck's ground point, and the pivot-to-emitter length. */
+const PIVOT_Y = S * 0.9;
+const BARREL = S * 0.45;
 /** Points sampled along a firing beam for building damage. */
 const BEAM_SAMPLES = 12;
 
@@ -34,6 +40,8 @@ class LaserTruck implements Target {
   phase: Phase = 'driving';
   t = 0;
   heading = 0;
+  /** Unit direction the cannon points (world space); turns toward the monster at `trackRate` while aiming. */
+  readonly aim = new THREE.Vector3(0, 0, 1);
   path: Vec2[] = [];
   replanT = 0;
 
@@ -135,11 +143,20 @@ export class LaserTrucks implements EnemySystem {
     t.t = 0;
   }
 
-  /** Point the cannon at the monster's body and run the beam out to full length along that line. */
-  private aimAt(t: LaserTruck, monster: THREE.Vector3): void {
-    t.muzzle.set(t.position.x, S * 0.9, t.position.z);
-    bodyPoint(monster, _body);
-    t.beamEnd.subVectors(_body, t.muzzle).normalize().multiplyScalar(T.beamLength).add(t.muzzle);
+  /** Points the cannon along the truck's heading (stowed, or turned with the body before deploying). */
+  private aimForward(t: LaserTruck): void {
+    t.aim.set(Math.sin(t.heading), 0, Math.cos(t.heading));
+  }
+
+  /**
+   * Turns the cannon toward the monster's body by at most `trackRate * dt`, then runs the beam
+   * from the emitter out to full length along the cannon's direction.
+   */
+  private aimAt(t: LaserTruck, monster: THREE.Vector3, dt: number): void {
+    _p.set(t.position.x, PIVOT_Y, t.position.z);
+    rotateToward(t.aim, _to.subVectors(bodyPoint(monster, _body), _p), T.trackRate * dt, t.aim);
+    t.muzzle.copy(t.aim).multiplyScalar(BARREL).add(_p);
+    t.beamEnd.copy(t.aim).multiplyScalar(T.beamLength).add(t.muzzle);
   }
 
   update(dt: number, ctx: WorldContext): void {
@@ -155,7 +172,8 @@ export class LaserTrucks implements EnemySystem {
       t.t += dt;
       const here = { x: t.position.x, z: t.position.z };
       const d = dist2(here, goal);
-      if (t.phase !== 'driving') t.heading = Math.atan2(goal.x - here.x, goal.z - here.z);
+      if (t.phase !== 'driving' && d > 1e-3) t.heading = stepAngle(t.heading, Math.atan2(goal.x - here.x, goal.z - here.z), T.turnRate * dt);
+      if (t.phase === 'driving' || t.phase === 'deploying') this.aimForward(t);
       switch (t.phase) {
         case 'driving': {
           if (d <= T.range && ctx.monster.alive) {
@@ -173,7 +191,7 @@ export class LaserTrucks implements EnemySystem {
           const wd = dist2(here, wp);
           const step = Math.min(wd, T.speed * dt);
           if (wd > 1e-3) {
-            t.heading = Math.atan2(wp.x - here.x, wp.z - here.z);
+            t.heading = stepAngle(t.heading, Math.atan2(wp.x - here.x, wp.z - here.z), T.turnRate * dt);
             t.position.x += ((wp.x - here.x) / wd) * step;
             t.position.z += ((wp.z - here.z) / wd) * step;
           }
@@ -184,7 +202,7 @@ export class LaserTrucks implements EnemySystem {
           if (t.t >= T.deployTime) this.enter(t, 'aiming');
           break;
         case 'aiming':
-          this.aimAt(t, mp);
+          this.aimAt(t, mp, dt);
           if (!ctx.monster.alive) this.enter(t, 'cooldown');
           else if (t.t >= T.aimTime) this.enter(t, 'locked');
           break;
@@ -233,6 +251,7 @@ export class LaserTrucks implements EnemySystem {
       _m.compose(_p, _q, _s.set(S * 0.5, S * 0.6, S * 0.4));
       this.body.setMatrixAt(i * 2 + 1, _m);
       const raised = t.phase === 'driving' ? 0.55 : 0.9;
+      _q.setFromUnitVectors(FWD, t.aim);
       _m.compose(_p.set(t.position.x, S * raised, t.position.z), _q, _s.setScalar(S * 0.9));
       this.dish.setMatrixAt(i, _m);
       if (t.phase === 'aiming' || t.phase === 'locked') {
