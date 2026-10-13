@@ -1,6 +1,6 @@
 import type { CityStyle } from '../types';
 import { TOKYO_DISTRICTS } from './districts';
-import { districtAt, SKYTREE_SITE, TMG_SITE, TOKYO_TOWER_SITE } from './layout';
+import { districtAt, SHIBUYA_CROSSING, SKYTREE_SITE, TMG_SITE, TOKYO_TOWER_SITE } from './layout';
 import { SKYTREE, skytreeGeometry, TOKYO_TOWER, tokyoTowerGeometry } from './towers';
 import { SCRAMBLE, SHIBUYA_LOTS } from './shibuya';
 import { TMG, tmgGeometry } from './tmg';
@@ -30,4 +30,7 @@ export const TOKYO: CityStyle = {
   ],
   specialLots: SHIBUYA_LOTS,
   overlays: [SCRAMBLE],
+  river: { z0: 1300, amp: 180, wavelength: 900, halfWidth: 130 },
+  roadRemoval: { highrise: 0.15, neon: 0.15, office: 0.3, residential: 0.3, park: 0.5 },
+  keepNodes: [SHIBUYA_CROSSING],
 };

@@ -45,6 +45,9 @@ export type LandmarkSpec = { id: string; x: number; z: number; w: number; d: num
 /** A ground decal drawn over the road texture, `size` m square, centred on (x, z). */
 export type GroundOverlay = { id: string; x: number; z: number; size: number };
 
+/** A winding river: centreline z = z0 + amp · sin(x / wavelength); cells within halfWidth (vertical) are water. */
+export type RiverSpec = { z0: number; amp: number; wavelength: number; halfWidth: number };
+
 export type CityStyle = {
   id: string;
   name: string;
@@ -68,4 +71,9 @@ export type CityStyle = {
   /** Hand-placed buildings; they replace the random lots they overlap. */
   specialLots: readonly BuildingSpec[];
   overlays: readonly GroundOverlay[];
+  river?: RiverSpec;
+  /** Fraction of removable street segments removed, by the district at the segment's midpoint. */
+  roadRemoval: Readonly<Record<DistrictId, number>>;
+  /** Lattice nodes (world x, z) whose four segments always exist (e.g. the Shibuya Crossing). */
+  keepNodes: readonly { x: number; z: number }[];
 };
