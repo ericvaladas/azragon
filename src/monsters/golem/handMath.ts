@@ -185,8 +185,8 @@ export function handPhase(t: number, released = false): HandPhase {
 /**
  * Ground point (y = 0) the arm rises from for a flyer at `flyer`, the monster standing at `monster`: out beyond the
  * flyer, away from the monster (so the arm never comes out of its body), turned up to ±1.1 rad off that line by
- * `rand` (0..1), and set back from the flyer's ground point by 0.7 × its altitude, clamped to 120..360 m, so the arm
- * leans in rather than standing straight up.
+ * `rand` (0..1), and set back from the flyer's ground point by 1.3 × its altitude, clamped to 180..600 m, so the
+ * arm leans in long and low rather than standing up steeply (and need hardly bend to come over the flyer).
  */
 export function handBase(flyer: THREE.Vector3, monster: THREE.Vector3, rand: number, out: THREE.Vector3): THREE.Vector3 {
   let dx = flyer.x - monster.x;
@@ -202,7 +202,7 @@ export function handBase(flyer: THREE.Vector3, monster: THREE.Vector3, rand: num
   const a = (rand * 2 - 1) * 1.1;
   const c = Math.cos(a);
   const s = Math.sin(a);
-  const off = Math.min(360, Math.max(120, flyer.y * 0.7));
+  const off = Math.min(600, Math.max(180, flyer.y * 1.3));
   return out.set(flyer.x + (dx * c - dz * s) * off, 0, flyer.z + (dx * s + dz * c) * off);
 }
 
@@ -238,19 +238,26 @@ export function dragPoint(base: THREE.Vector3, held: THREE.Vector3, drag: number
   return out.set(base.x + _h.x * PLUNGE, -30, base.z + _h.z * PLUNGE).lerp(held, 1 - drag);
 }
 
+/** Hand pitch (rad, + fingers down) over the flyer and at the end of the drag. */
+const GRAB_PITCH = -0.3;
+const DRAG_PITCH = 0.4;
+/** The shadow arm's bow (armJointsTo `bend`): nearly straight, leaning in from its pool. */
+export const ARM_BEND = 0.05;
+
 /**
  * Hand frame at `rise` for an arm from its pool at `base` reaching for `target` (unit vectors): F along the hand
  * toward the fingertips, S across the knuckles, N out of the palm (S × F = N). The hand bursts out of the pool
  * reaching up, palm toward the flyer, and rolls over as it rises until, over the flyer, the fingers point on past it
- * and down and the palm faces down: an overhand grip, the fingers curling down around the prize. As it drags the
- * prize down (`down`) it tips on over to point straight down into the pool, palm toward the pool's middle.
+ * about level and the palm faces down: an overhand grip, the fingers curling down around the prize. As it drags the
+ * prize down (`down`) it tips on over, fingers pointing down toward the ground.
  */
 export function handFrame(base: THREE.Vector3, target: THREE.Vector3, rise: number, F: THREE.Vector3, S: THREE.Vector3, N: THREE.Vector3, down = 0): void {
   _h.set(target.x - base.x, 0, target.z - base.z);
   if (_h.lengthSq() < 1e-6) _h.set(0, 0, 1);
   _h.normalize();
-  // Dragging its prize down (`down` 0..1), the hand tips on over until it points straight down into the pool.
-  const p = -1.25 + 1.9 * smooth(clamp01((rise - 0.15) / 0.7)) + (Math.PI / 2 - 0.65) * smooth(clamp01(down));
+  // Over the flyer the fingers lie about level (GRAB_PITCH, a touch up, so the leaning arm need hardly bend to them:
+  // the palm still faces down); dragging its prize down (`down` 0..1) the hand tips over to DRAG_PITCH.
+  const p = -1.25 + (1.25 + GRAB_PITCH) * smooth(clamp01((rise - 0.15) / 0.7)) + (DRAG_PITCH - GRAB_PITCH) * smooth(clamp01(down));
   const c = Math.cos(p);
   const s = Math.sin(p);
   F.set(_h.x * c, -s, _h.z * c);
@@ -276,7 +283,7 @@ const _arc = new Array<number>(DENSE + 1).fill(0);
  * raised elbow) and sideways by `twist`, its end tangent along F (it hooks over and comes down onto whatever the
  * hand holds; the forearm's approach runs back `approach` × its length along F), the last bone laid exactly along F.
  */
-export function armJointsTo(base: THREE.Vector3, wrist: THREE.Vector3, F: THREE.Vector3, bend: number, twist: number, out: THREE.Vector3[], approach = 0.65): THREE.Vector3[] {
+export function armJointsTo(base: THREE.Vector3, wrist: THREE.Vector3, F: THREE.Vector3, bend: number, twist: number, out: THREE.Vector3[], approach = 0.35): THREE.Vector3[] {
   const n = out.length - 1;
   _d.subVectors(wrist, base);
   const len = _d.length();

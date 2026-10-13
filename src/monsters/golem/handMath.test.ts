@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { SWAT_TIMES } from '../../monster/tailSwat';
-import { armJointsTo, BECKON_T, dragPoint, beckonLift, beckonPull, beckonResume, fingerPoints, fistPoint, HAND_DIM, jointCurl, thumbPoints, HAND_T, handBase, handFrame, handPhase, WENDIGO_SWAT } from './handMath';
+import { ARM_BEND, armJointsTo, BECKON_T, dragPoint, beckonLift, beckonPull, beckonResume, fingerPoints, fistPoint, HAND_DIM, jointCurl, thumbPoints, HAND_T, handBase, handFrame, handPhase, WENDIGO_SWAT } from './handMath';
 
 describe('handPhase', () => {
   it("reaches the flyer exactly at the Wendigo's anti-air impact, fist closed", () => {
@@ -55,26 +55,26 @@ describe('handPhase', () => {
 
 describe('handBase', () => {
   const monster = new THREE.Vector3(100, 0, -50);
-  it('is on the ground beyond the flyer, away from the monster, set back by part of the altitude', () => {
+  it('is on the ground beyond the flyer, away from the monster, set back by more than the altitude (a leaning arm)', () => {
     const flyer = new THREE.Vector3(100, 300, 400);
     for (const r of [0, 0.25, 0.5, 0.75, 1]) {
       const b = handBase(flyer, monster, r, new THREE.Vector3());
       expect(b.y).toBe(0);
-      expect(Math.hypot(b.x - flyer.x, b.z - flyer.z)).toBeCloseTo(210);
+      expect(Math.hypot(b.x - flyer.x, b.z - flyer.z)).toBeCloseTo(390);
       // Never back toward the monster: at least as far from it as the flyer's own ground point, give or take.
       expect(Math.hypot(b.x - monster.x, b.z - monster.z)).toBeGreaterThan(450 - 1);
     }
     const straight = handBase(flyer, monster, 0.5, new THREE.Vector3());
     expect(straight.x).toBeCloseTo(100);
-    expect(straight.z).toBeCloseTo(610);
+    expect(straight.z).toBeCloseTo(790);
   });
   it('clamps the set-back for low and very high flyers, and copes with a flyer straight overhead', () => {
     const low = handBase(new THREE.Vector3(0, 50, 500), new THREE.Vector3(), 0.5, new THREE.Vector3());
-    expect(low.z).toBeCloseTo(620);
+    expect(low.z).toBeCloseTo(680);
     const high = handBase(new THREE.Vector3(0, 2000, 500), new THREE.Vector3(), 0.5, new THREE.Vector3());
-    expect(high.z).toBeCloseTo(860);
+    expect(high.z).toBeCloseTo(1100);
     const over = handBase(new THREE.Vector3(0, 300, 0), new THREE.Vector3(), 0.5, new THREE.Vector3());
-    expect(Math.hypot(over.x, over.z)).toBeCloseTo(210);
+    expect(Math.hypot(over.x, over.z)).toBeCloseTo(390);
   });
 });
 
@@ -102,14 +102,15 @@ describe('overhand grip', () => {
       expect(at(0).y).toBeLessThan(60);
     }
   });
-  it('turns the palm down over the flyer: back of the hand to the sky, fingers forward and down', () => {
+  it('turns the palm down over the flyer: back of the hand to the sky, fingers reaching on past it', () => {
     const flyer = new THREE.Vector3(40, 300, 200);
     const F = new THREE.Vector3();
     const S = new THREE.Vector3();
     const N = new THREE.Vector3();
     handFrame(base, flyer, 1, F, S, N);
-    expect(N.y).toBeLessThan(-0.6);
-    expect(F.y).toBeLessThan(0);
+    expect(N.y).toBeLessThan(-0.9);
+    // Fingers about level (a touch up, so the arm need hardly bend to them), reaching on past the flyer.
+    expect(Math.abs(F.y)).toBeLessThan(0.35);
     // Fingers reach on past the flyer, away from the pool.
     const out = new THREE.Vector3(flyer.x - base.x, 0, flyer.z - base.z).normalize();
     expect(F.dot(out)).toBeGreaterThan(0.5);
@@ -231,37 +232,34 @@ describe('fist grasp', () => {
 });
 
 describe('rigid wrist', () => {
-  it('runs the forearm (the last arm bone) straight into the hand at every phase, the arm hooking over the flyer', () => {
+  it('a long, nearly straight arm leaning in from its pool, bending only a little at the elbow, the forearm running straight into the hand', () => {
     const F = new THREE.Vector3();
     const S = new THREE.Vector3();
     const N = new THREE.Vector3();
     const a = new THREE.Vector3();
     const w = new THREE.Vector3();
     const J = Array.from({ length: 8 }, () => new THREE.Vector3());
-    for (const [bx, bz, fy] of [[0, 600, 300], [300, 400, 150], [-200, 500, 450]] as const) {
-      const base = new THREE.Vector3(bx, -25, bz);
-      const flyer = new THREE.Vector3(40, fy, 200);
-      for (let t = 0.02; t < HAND_T.total; t += 0.02) {
+    for (const flyer of [new THREE.Vector3(0, 300, 400), new THREE.Vector3(250, 150, 300), new THREE.Vector3(-200, 450, 250), new THREE.Vector3(0, 600, 500)]) {
+      const base = handBase(flyer, new THREE.Vector3(), 0.5, new THREE.Vector3()).setY(-25);
+      for (let t = 0.1; t < HAND_T.drag; t += 0.02) {
         const ph = handPhase(t);
         if (t < HAND_T.impact) fistPoint(base, flyer, ph.rise, a);
         else dragPoint(base, flyer, ph.drag, a);
         handFrame(base, flyer, t < HAND_T.impact ? ph.rise : 1, F, S, N, ph.drag);
         w.copy(a).addScaledVector(F, -HAND_DIM.holdFwd * 2).addScaledVector(N, -HAND_DIM.holdIn * 2);
-        for (const bend of [0.4, 0.5]) {
-          armJointsTo(base, w, F, bend, 0.08, J);
-          expect(J[0]!.distanceTo(base)).toBeLessThan(1e-6);
-          expect(J[7]!.distanceTo(w)).toBeLessThan(1e-6);
-          const fore = J[7]!.clone().sub(J[6]!).normalize();
-          expect(fore.angleTo(F)).toBeLessThan((3 * Math.PI) / 180);
-          // A smooth arm, its bones even; no joint folds back on itself (the last, the elbow, bends most).
-          const seg = J[1]!.distanceTo(J[0]!);
-          for (let k = 1; k < 7; k++) {
-            const u = J[k]!.clone().sub(J[k - 1]!);
-            const v = J[k + 1]!.clone().sub(J[k]!);
-            expect(u.angleTo(v)).toBeLessThan(k < 6 ? 0.85 : 1.4);
-            if (k < 5) expect(Math.abs(v.length() - seg)).toBeLessThan(0.25 * seg);
-          }
+        armJointsTo(base, w, F, ARM_BEND, 0.03, J);
+        expect(J[0]!.distanceTo(base)).toBeLessThan(1e-6);
+        expect(J[7]!.distanceTo(w)).toBeLessThan(1e-6);
+        const fore = J[7]!.clone().sub(J[6]!).normalize();
+        expect(fore.angleTo(F)).toBeLessThan((3 * Math.PI) / 180);
+        // Nearly straight: little turn between bones along the arm, a modest elbow, under 1.5 rad in all (was ~2.7).
+        let total = 0;
+        for (let k = 1; k < 7; k++) {
+          const g = J[k]!.clone().sub(J[k - 1]!).angleTo(J[k + 1]!.clone().sub(J[k]!));
+          total += g;
+          expect(g).toBeLessThan(k < 6 ? 0.25 : 1.1);
         }
+        expect(total).toBeLessThan(1.5);
       }
     }
   });
@@ -279,7 +277,8 @@ describe('rigid wrist', () => {
     const S = new THREE.Vector3();
     const N = new THREE.Vector3();
     handFrame(base, held, 1, F, S, N, 1);
-    expect(F.y).toBeLessThan(-0.99);
+    expect(F.y).toBeLessThan(-0.3);
+    expect(N.y).toBeLessThan(-0.85);
     handFrame(base, held, 1, F, S, N, 0);
     expect(N.y).toBeLessThan(-0.6);
   });
