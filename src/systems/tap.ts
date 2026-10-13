@@ -52,3 +52,12 @@ const FUNCTION_KEY = /^F\d{1,2}$/;
 export function isSkipKey(e: { key: string; repeat: boolean; metaKey: boolean; ctrlKey: boolean; altKey: boolean }): boolean {
   return !e.repeat && !e.metaKey && !e.ctrlKey && !e.altKey && !NOT_SKIP.has(e.key) && !FUNCTION_KEY.test(e.key);
 }
+
+/** Select-screen keys: browse with arrows (or A/D), confirm with Enter/Space; no repeats or shortcuts. */
+export function menuKey(e: { code: string; repeat: boolean; metaKey: boolean; ctrlKey: boolean; altKey: boolean }): 'left' | 'right' | 'confirm' | null {
+  if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return null;
+  if (e.code === 'ArrowLeft' || e.code === 'KeyA') return 'left';
+  if (e.code === 'ArrowRight' || e.code === 'KeyD') return 'right';
+  if (e.code === 'Enter' || e.code === 'Space') return 'confirm';
+  return null;
+}

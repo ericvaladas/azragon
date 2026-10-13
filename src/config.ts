@@ -197,6 +197,11 @@ export const CONFIG = {
   progression: { expBase: 20, expExponent: 1.55, offerCount: 3 },
   /** One-off wave at the start of every run, outside the spawn budget. */
   opening: { time: 5, count: 8, radius: 1200 },
+  /** Menu cameras: a slow high circle over the city (title), and a turntable orbit of the monster (select). */
+  menu: {
+    title: { radius: 2400, height: 1300, speed: 0.04, startAngle: 2.4 },
+    select: { distance: 2.4, pad: 250, lift: 1.0, speed: 0.25, startAngle: 0.5 },
+  },
   intro: {
     /** Phase start times (s); `done` is the intro length. The cut to the game world is at `clouds`. */
     starts: { space: 0, reentry: 3.5, clouds: 5.5, descent: 8.5, impact: 10.5, settle: 11, emerge: 13, done: 15 },

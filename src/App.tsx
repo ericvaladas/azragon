@@ -8,11 +8,25 @@ import type { AbilityView, ActiveId } from './systems/abilities';
 import { Hud } from './ui/Hud';
 import { LevelUpCards } from './ui/LevelUpCards';
 import { GameOver } from './ui/GameOver';
+import { Title } from './ui/Title';
+import { MonsterSelect } from './ui/MonsterSelect';
+import type { RosterEntry } from './monsters/roster';
+import type { PickStore } from './monsters/pick';
 import './style.css';
 
 /** Touch devices tap; desktops click or press a key. */
 const SKIP_HINT = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches ? 'Tap to skip' : 'Click or press any key to skip';
 const EMPTY_HUD: HudSnapshot = { hp: 1, maxHp: 1, exp: 0, expToNext: 1, level: 1, timeSec: 0, levelingUp: false };
+
+/** RUN app storage for the remembered pick, or null outside the RUN host. */
+function appStore(): PickStore | null {
+  try {
+    const s = RundotGameAPI.appStorage;
+    return { getItem: (k) => s.getItem(k), setItem: (k, v) => s.setItem(k, v) };
+  } catch {
+    return null;
+  }
+}
 
 function applySafeArea(el: HTMLElement): void {
   try {
@@ -34,11 +48,12 @@ function App() {
   const [stats, setStats] = useState<RunStats | null>(null);
   const [threats, setThreats] = useState<ThreatArrow[]>([]);
   const [abilities, setAbilities] = useState<AbilityView[]>([]);
+  const [roster, setRoster] = useState<{ entries: RosterEntry[]; index: number } | null>(null);
   const [expPop, setExpPop] = useState<{ amount: number; key: number } | null>(null);
 
   const sceneRef = useCallback((container: HTMLDivElement | null) => {
     if (!container || gameRef.current) return;
-    const game = new GameScene(container);
+    const game = new GameScene(container, appStore());
     gameRef.current = game;
     // Dev-only handle for scripted browser checks.
     if (import.meta.env.DEV) (window as unknown as { __game: GameScene }).__game = game;
@@ -48,8 +63,9 @@ function App() {
     game.events.on('gameOver', setStats);
     game.events.on('threats', setThreats);
     game.events.on('abilities', setAbilities);
+    game.events.on('roster', setRoster);
     game.events.on('expGain', (amount) => setExpPop((p) => ({ amount, key: (p?.key ?? 0) + 1 })));
-    // The constructor already entered 'intro' before these subscriptions existed.
+    // The constructor already entered 'title' before these subscriptions existed.
     setState(game.getState());
     try {
       RundotGameAPI.lifecycles.onPause(() => game.pause());
@@ -69,20 +85,29 @@ function App() {
     setStats(null);
     gameRef.current?.restart();
   }, []);
+  const step = useCallback((d: number) => gameRef.current?.selectStep(d), []);
+  const play = useCallback(() => gameRef.current?.playSelected(), []);
+  const changeMonster = useCallback(() => {
+    setStats(null);
+    gameRef.current?.changeMonster();
+  }, []);
+  const inMenu = state === 'title' || state === 'select';
 
   return (
     <div className="app-container">
       <div ref={sceneRef} className="scene-container" />
       <div ref={hudRef} className="hud">
         {state === 'playing' && <EdgeArrows arrows={threats} />}
-        {state !== 'loading' && state !== 'intro' && <Hud hud={hud} expPop={expPop} />}
+        {state !== 'loading' && state !== 'intro' && !inMenu && <Hud hud={hud} expPop={expPop} />}
+        {state === 'title' && <Title />}
+        {state === 'select' && roster && <MonsterSelect entries={roster.entries} index={roster.index} onStep={step} onPlay={play} />}
         {state === 'intro' && <div className="skip-hint">{SKIP_HINT}</div>}
         {hud.levelingUp && <div className="level-up-banner">Level Up!</div>}
         {state === 'playing' && <AbilityButtons views={abilities} onPress={press} />}
         {state === 'levelup' && offer && (
           <LevelUpCards key={offer.seq} offers={offer.offers} onPick={(id) => pick(id, offer.seq)} />
         )}
-        {state === 'gameover' && stats && <GameOver stats={stats} onRestart={restart} />}
+        {state === 'gameover' && stats && <GameOver stats={stats} onRestart={restart} onChangeMonster={changeMonster} />}
       </div>
     </div>
   );

@@ -370,3 +370,69 @@ body {
   animation: skip-hint-blink 1.6s steps(2) infinite;
 }
 @keyframes skip-hint-blink { 50% { opacity: 0.45; } }
+
+/* Title: logo over the drifting city; taps fall through to the canvas. */
+.title-screen {
+  position: absolute; inset: 0; pointer-events: none;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 28px;
+  animation: menu-in 350ms ease-out both;
+}
+.title-logo {
+  margin: 0; font-weight: 700; font-size: clamp(56px, 16vw, 128px); letter-spacing: 0.08em; line-height: 1;
+  color: #ecffd8;
+  text-shadow: 4px 4px 0 #1b2a10, 8px 8px 0 rgba(0, 0, 0, 0.35), 0 0 28px rgba(155, 226, 45, 0.55);
+}
+.title-hint {
+  font-size: 15px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-text);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+  animation: skip-hint-blink 1.6s steps(2) infinite;
+}
+
+/* Select: carousel UI over the 3D diorama. */
+.select-screen {
+  position: absolute; inset: 0; pointer-events: auto; touch-action: none;
+  display: flex; flex-direction: column; justify-content: space-between;
+  padding: calc(var(--safe-top, 0px) + 16px) 16px calc(var(--safe-bottom, 0px) + 16px);
+  animation: menu-in 350ms ease-out both;
+}
+.select-header { display: flex; align-items: center; justify-content: center; gap: 12px; }
+.select-name {
+  min-width: 220px; text-align: center; font-size: 26px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8); animation: menu-in 250ms ease-out both;
+}
+.select-arrow {
+  width: 48px; height: 48px; border-radius: 4px; border: 2px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.55); color: var(--color-text); font: inherit; font-size: 30px; line-height: 1; cursor: pointer;
+}
+.select-arrow:active { transform: scale(0.92); }
+.select-silhouette {
+  position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%);
+  font-size: min(42vw, 260px); filter: brightness(0) opacity(0.55); pointer-events: none;
+}
+.select-panel {
+  align-self: center; margin-top: auto; margin-bottom: 14px; width: min(100%, 520px); display: flex; flex-direction: column; gap: 10px;
+  padding: 16px; border-radius: 6px; background: rgba(0, 0, 0, 0.62); border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(4px); contain: content; animation: menu-in 250ms ease-out both;
+}
+.select-blurb { color: var(--color-text-muted); font-size: 14px; }
+.pip-row { display: flex; align-items: center; gap: 10px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.08em; }
+.pip-row span { width: 96px; }
+.pips { display: flex; gap: 4px; }
+.pips i { width: 22px; height: 10px; border-radius: 2px; background: rgba(255, 255, 255, 0.12); }
+.pips i.on { background: var(--color-primary); }
+.select-moves { display: flex; flex-wrap: wrap; gap: 8px 14px; font-size: 13px; }
+.select-soon { font-size: 18px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--color-text-muted); }
+.select-play { margin-top: 6px; }
+.select-play:disabled { opacity: 0.35; filter: grayscale(0.5); cursor: default; }
+.select-dots { display: flex; justify-content: center; gap: 8px; }
+.select-dots span { width: 8px; height: 8px; border-radius: 50%; background: rgba(255, 255, 255, 0.25); }
+.select-dots span.on { background: var(--color-primary); }
+
+.btn-secondary {
+  min-height: 44px; padding: 10px 24px; border-radius: 4px; border: 2px solid rgba(255, 255, 255, 0.18);
+  background: rgba(0, 0, 0, 0.4); color: var(--color-text); font: inherit; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.08em; cursor: pointer;
+}
+.btn-secondary:active { transform: scale(0.95); }
+
+@keyframes menu-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }

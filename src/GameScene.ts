@@ -8,7 +8,7 @@ import { PixelRenderer } from './render/PixelRenderer';
 import { createSky } from './render/Sky';
 import { clampDelta, type Vec2 } from './util/math';
 import { resolveHit, type DamageSource, type Target } from './combat';
-import { City } from './world/City';
+import { City, CRATER_RADIUS } from './world/City';
 import { IntroCinematic } from './intro/IntroCinematic';
 import { ringOnRoads } from './world/roads';
 import { ROAD_ORIGIN } from './world/chunks';
@@ -48,6 +48,11 @@ import { AcidPools } from './systems/AcidPools';
 import { BroodDrones } from './systems/BroodDrones';
 import { decide, nearestInRange, type BrainOrder, type BrainTarget } from './monster/brain';
 import { INSECT } from './monsters/insect/kind';
+import { KINDS, ROSTER_ORDER, isMonsterId, rosterEntries } from './monsters/roster';
+import { loadPick, savePick, type PickStore } from './monsters/pick';
+import type { MonsterKind } from './monsters/types';
+import { flowNext } from './menuFlow';
+import { selectPose, titlePose } from './systems/menuCamera';
 
 type Order = { kind: 'move'; to: Vec2 } | { kind: 'attack'; target: Target } | null;
 
@@ -103,8 +108,11 @@ export class GameScene {
   private acid: AcidPools;
   private brood: BroodDrones;
   private intro: IntroCinematic;
+  private selIndex = 0;
+  private menuT = 0;
+  private menuPose = { pos: new THREE.Vector3(), look: new THREE.Vector3() };
 
-  constructor(private container: HTMLDivElement) {
+  constructor(private container: HTMLDivElement, private store: PickStore | null = null) {
     this.pixel = new PixelRenderer(container);
     this.lighting = new Lighting(this.scene);
     this.lighting.attachSky(createSky(this.scene));
@@ -155,7 +163,17 @@ export class GameScene {
       drag: (dx, dy) => this.rig.drag(dx, dy),
       wheel: (dy) => this.rig.zoom(dy),
       hover: this.onHover,
+      menuKey: (k) => {
+        if (this.state !== 'select') return false;
+        if (k === 'confirm') this.playSelected();
+        else this.selectStep(k === 'left' ? -1 : 1);
+        return true;
+      },
       skipKey: () => {
+        if (this.state === 'title') {
+          this.startFromTitle();
+          return true;
+        }
         if (this.state !== 'intro') return false;
         this.skipIntro();
         return true;
@@ -174,7 +192,12 @@ export class GameScene {
     this.resizeObserver.observe(container);
     this.clock.start();
     this.update();
-    this.startIntro();
+    this.enterTitle();
+    // The saved pick arrives asynchronously; it only picks the carousel's starting monster.
+    void loadPick(this.store).then((id) => {
+      this.selIndex = ROSTER_ORDER.indexOf(id);
+      if (this.state === 'select') this.showSelection();
+    });
   }
 
   getState(): GameState {
@@ -205,7 +228,7 @@ export class GameScene {
     if (this.state === 'paused') this.setState(this.stateBeforePause);
   }
 
-  restart(): void {
+  private resetRun(): void {
     this.city.reset();
     this.projectiles.clear();
     this.particles.clear();
@@ -229,8 +252,77 @@ export class GameScene {
     this.brood.clear();
     this.markers.setAim(null, 0);
     this.dyingT = 0;
+  }
+
+  /** Game over → Play Again: same monster, fresh world, the intro replays. */
+  restart(): void {
+    if (flowNext(this.state, 'playAgain') === null) return;
+    this.resetRun();
     this.startIntro();
     this.emitHud();
+  }
+
+  /** Game over → Change Monster: fresh world, back to the select screen. */
+  changeMonster(): void {
+    if (flowNext(this.state, 'changeMonster') === null) return;
+    this.resetRun();
+    this.enterSelect();
+  }
+
+  startFromTitle(): void {
+    if (flowNext(this.state, 'start') === null) return;
+    this.enterSelect();
+  }
+
+  /** Browse the carousel (wraps around). */
+  selectStep(delta: number): void {
+    if (this.state !== 'select') return;
+    const n = ROSTER_ORDER.length;
+    this.selIndex = (((this.selIndex + delta) % n) + n) % n;
+    this.showSelection();
+  }
+
+  /** PLAY: only for a playable monster; the city is rebuilt so the intro crashes into it. */
+  playSelected(): void {
+    if (flowNext(this.state, 'play') === null) return;
+    if (!rosterEntries()[this.selIndex]!.available) return;
+    this.resetRun();
+    this.startIntro();
+    this.emitHud();
+  }
+
+  private enterTitle(): void {
+    this.monster.visible = false;
+    this.menuT = 0;
+    this.setState('title');
+  }
+
+  private enterSelect(): void {
+    this.menuT = 0;
+    this.setState('select');
+    this.showSelection();
+  }
+
+  /** Show the carousel's current entry: the monster in its crater (or an empty crater for coming-soon). */
+  private showSelection(): void {
+    const entries = rosterEntries();
+    const e = entries[this.selIndex]!;
+    if (isMonsterId(e.id)) {
+      this.applyKind(KINDS[e.id]);
+      this.monster.visible = true;
+      void savePick(this.store, e.id);
+    } else {
+      this.monster.visible = false;
+    }
+    // Diorama crater: the same instant blast a skipped intro applies (no EXP, no stat).
+    this.city.blast({ x: 0, z: 0 }, CRATER_RADIUS, true, CRATER_RADIUS * CONFIG.intro.impact.outer);
+    this.events.emit('roster', { entries, index: this.selIndex });
+  }
+
+  /** Become `kind`: body, stats, and level-up pool. */
+  private applyKind(kind: MonsterKind): void {
+    this.monster.setKind(kind);
+    this.progression.setPool(kind);
   }
 
   private startIntro(): void {
@@ -411,8 +503,17 @@ export class GameScene {
       this.monster.glow = this.aura.glow();
       if (frozen) this.monster.animate(0, this.elapsed);
     }
-    // While the intro runs (even paused) it owns the camera.
-    if (!this.intro.active) this.rig.update(frozen ? 0 : dt, this.monster.position);
+    const shown = this.state === 'paused' ? this.stateBeforePause : this.state;
+    if (shown === 'title' || shown === 'select') {
+      if (!frozen) this.menuT += realDt;
+      if (shown === 'title') titlePose(this.menuT, this.menuPose);
+      else selectPose(this.menuT, this.ms.size.height, this.menuPose);
+      this.camera.position.copy(this.menuPose.pos);
+      this.camera.lookAt(this.menuPose.look);
+    } else if (!this.intro.active) {
+      // While the intro runs (even paused) it owns the camera.
+      this.rig.update(frozen ? 0 : dt, this.monster.position);
+    }
     this.chevrons.update(this.enemyTargets(), this.camera, this.elapsed);
     this.lighting.follow(this.monster.position);
     this.lighting.followCamera(this.camera);
@@ -745,6 +846,10 @@ export class GameScene {
   }
 
   private onTap = (x: number, y: number): void => {
+    if (this.state === 'title') {
+      this.startFromTitle();
+      return;
+    }
     if (this.state === 'intro') {
       this.skipIntro();
       return;
