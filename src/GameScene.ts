@@ -35,6 +35,7 @@ import { Artillery } from './enemies/Artillery';
 import { LaserTrucks } from './enemies/LaserTrucks';
 import { OrbitalLaser } from './enemies/OrbitalLaser';
 import { mulberry32 } from './util/rng';
+import { pickCity } from './cities';
 import { Progression, expToNext } from './systems/Progression';
 import { healOnKill, regen } from './monster/vitals';
 import { DebugOverlay } from './systems/DebugOverlay';
@@ -149,7 +150,7 @@ export class GameScene {
     this.lighting = new Lighting(this.scene);
     this.lighting.attachSky(createSky(this.scene));
 
-    this.city = new City(this.scene, CONFIG.world.seed, this.onTargetDestroyed);
+    this.city = new City(this.scene, pickCity(this.rng), CONFIG.world.seed, this.onTargetDestroyed);
     this.monster = new Monster(this.scene, INSECT);
     this.progression.setPool(this.monster.kind);
     this.rig = new CameraRig(this.camera);
@@ -282,7 +283,7 @@ export class GameScene {
   }
 
   private resetRun(): void {
-    this.city.reset();
+    this.city.reset(pickCity(this.rng));
     this.projectiles.clear();
     this.breath.clear();
     this.monster.body.arms?.clear();

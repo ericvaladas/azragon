@@ -3,9 +3,9 @@ import { CONFIG } from '../config';
 import type { OnDestroyed, Target } from '../combat';
 import type { Vec2 } from '../util/math';
 import { mulberry32 } from '../util/rng';
-import { TOKYO } from '../cities/tokyo';
+import type { CityStyle, LandmarkSpec } from '../cities/types';
 import { blastTopples, chunksInRadius, DestroyedLog, generateChunk, planStreaming, type BuildingSpec, type ChunkContent } from './chunks';
-import { blockGroundTexture, craterTexture, facadeTexture } from './pixelTextures';
+import { canvasCityTextures, patchFacadeShader, type CityTextures } from './pixelTextures';
 import { faceted, toonMat } from '../render/toon';
 
 type BuildingState = 'standing' | 'collapsing' | 'rubble';
@@ -29,9 +29,11 @@ class Building implements Target {
   constructor(
     readonly chunk: string,
     readonly index: number,
+    /** Instanced slot, or −1 for a landmark (which has its own mesh). */
     readonly slot: number,
     readonly spec: BuildingSpec,
     private city: City,
+    readonly mesh: THREE.Mesh | null = null,
   ) {
     this.position = new THREE.Vector3(spec.x, spec.h / 2, spec.z);
     this.radius = Math.max(spec.w, spec.d) / 2;
@@ -52,7 +54,7 @@ class Building implements Target {
   }
 }
 
-type LoadedChunk = { content: ChunkContent; buildings: Building[]; treeSlots: number[] };
+type LoadedChunk = { content: ChunkContent; buildings: Building[]; treeSlots: number[]; parkSlots: number[] };
 
 const ZERO = new THREE.Matrix4().makeScale(0, 0, 0);
 const UP = new THREE.Vector3(0, 1, 0);
@@ -78,6 +80,7 @@ export class City {
   readonly buildingMesh: THREE.InstancedMesh;
   private rubbleMesh: THREE.InstancedMesh;
   private treeMesh: THREE.InstancedMesh;
+  private parkMesh: THREE.InstancedMesh;
   private ground: THREE.Mesh;
   private crater: THREE.Mesh;
   private chunks = new Map<string, LoadedChunk>();
@@ -87,6 +90,15 @@ export class City {
   private freeTrees: number[] = [];
   private freeRubble: number[] = [];
   private treeUsed: boolean[];
+  private freeParks: number[] = [];
+  private parkUsed: boolean[];
+  private overlays: THREE.Mesh[] = [];
+  private landmarkMat: THREE.MeshToonMaterial;
+  private facadeAttr: THREE.InstancedBufferAttribute;
+  private roofMat: THREE.MeshToonMaterial;
+  private treeMat: THREE.MeshToonMaterial;
+  private landmarks = 0;
+  private groundSpan = Math.ceil((CONFIG.world.unloadRadius * 2.4) / GROUND_TILE) * GROUND_TILE;
   private rubbleUsed: boolean[];
   private collapsing: Building[] = [];
   private destroyed = new DestroyedLog();
@@ -94,20 +106,20 @@ export class City {
   onCollapseStart: (pos: THREE.Vector3, size: number) => void = () => {};
 
   constructor(
-    scene: THREE.Scene,
+    private scene: THREE.Scene,
+    private _style: CityStyle,
     private seed: number,
     private onDestroyed: OnDestroyed,
+    private textures: CityTextures = canvasCityTextures,
   ) {
     const { palette, world } = CONFIG;
 
-    const tex = blockGroundTexture();
-    const span = Math.ceil((world.unloadRadius * 2.4) / GROUND_TILE) * GROUND_TILE;
-    tex.repeat.set(span / GROUND_TILE, span / GROUND_TILE);
-    this.ground = new THREE.Mesh(new THREE.PlaneGeometry(span, span), toonMat(0xffffff, { map: tex }));
+    const span = this.groundSpan;
+    this.ground = new THREE.Mesh(new THREE.PlaneGeometry(span, span), toonMat(0xffffff, { map: this.groundTexture() }));
     this.ground.rotation.x = -Math.PI / 2;
     this.ground.receiveShadow = true;
 
-    const craterMat = toonMat(0xffffff, { map: craterTexture() });
+    const craterMat = toonMat(0xffffff, { map: this.textures.crater() });
     craterMat.alphaTest = 0.5;
     craterMat.polygonOffset = true;
     craterMat.polygonOffsetFactor = -2;
@@ -120,19 +132,27 @@ export class City {
 
     // Unit box with base at y=0; per-face materials: sides = facade, top = roof.
     const box = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
-    const facade = toonMat(0xffffff, { map: facadeTexture() });
-    const roof = toonMat(palette.roof);
     const max = world.maxBuildings;
-    this.buildingMesh = new THREE.InstancedMesh(box, [facade, facade, roof, roof, facade, facade], max);
+    const facade = toonMat(0xffffff, { map: this.textures.facades() });
+    facade.onBeforeCompile = (sh) => patchFacadeShader(sh);
+    facade.customProgramCacheKey = () => 'city-facade';
+    this.roofMat = toonMat(this._style.colors.roof);
+    this.facadeAttr = new THREE.InstancedBufferAttribute(new Float32Array(max), 1);
+    box.setAttribute('aFacade', this.facadeAttr);
+    this.buildingMesh = new THREE.InstancedMesh(box, [facade, facade, this.roofMat, this.roofMat, facade, facade], max);
     this.buildingMesh.castShadow = true;
     this.buildingMesh.receiveShadow = true;
     const rubbleGeo = faceted(new THREE.DodecahedronGeometry(0.5, 0)).translate(0, 0.25, 0);
     this.rubbleMesh = new THREE.InstancedMesh(rubbleGeo, toonMat(palette.debris), world.maxRubble);
     this.rubbleMesh.receiveShadow = true;
     const cone = faceted(new THREE.ConeGeometry(0.5, 1.6, 5)).translate(0, 0.8, 0);
-    this.treeMesh = new THREE.InstancedMesh(cone, toonMat(palette.groundDark), world.maxTrees);
+    this.treeMat = toonMat(this._style.colors.tree);
+    this.treeMesh = new THREE.InstancedMesh(cone, this.treeMat, world.maxTrees);
     this.treeMesh.castShadow = true;
-    for (const m of [this.buildingMesh, this.rubbleMesh, this.treeMesh]) {
+    this.parkMesh = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), toonMat(this._style.colors.park), world.maxParks);
+    this.parkMesh.receiveShadow = true;
+    this.parkMesh.position.y = 0.2;
+    for (const m of [this.buildingMesh, this.rubbleMesh, this.treeMesh, this.parkMesh]) {
       m.frustumCulled = false;
       for (let i = 0; i < m.instanceMatrix.count; i++) m.setMatrixAt(i, ZERO);
     }
@@ -140,10 +160,64 @@ export class City {
     this.slotOwner = new Array(max).fill(null);
     this.treeUsed = new Array(world.maxTrees).fill(false);
     this.rubbleUsed = new Array(world.maxRubble).fill(false);
+    this.parkUsed = new Array(world.maxParks).fill(false);
     this.resetPools();
-    scene.add(this.buildingMesh, this.rubbleMesh, this.treeMesh);
+    scene.add(this.buildingMesh, this.rubbleMesh, this.treeMesh, this.parkMesh);
+    this.landmarkMat = toonMat(0xffffff, { vertexColors: true });
 
+    this.buildOverlays();
     this.stream(new THREE.Vector3(), Infinity);
+  }
+
+  get style(): CityStyle {
+    return this._style;
+  }
+
+  /** The style's ground tile, repeated across the ground plane. */
+  private groundTexture(): THREE.Texture {
+    const tex = this.textures.ground(this._style);
+    const span = this.groundSpan;
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(span / GROUND_TILE, span / GROUND_TILE);
+    return tex;
+  }
+
+  /** Replace the ground decals (e.g. the Shibuya scramble) with the current style's. */
+  private buildOverlays(): void {
+    for (const o of this.overlays) {
+      o.removeFromParent();
+      o.geometry.dispose();
+      (o.material as THREE.MeshToonMaterial).map?.dispose();
+      (o.material as THREE.Material).dispose();
+    }
+    this.overlays = this._style.overlays.map((ov) => {
+      const mat = toonMat(0xffffff, { map: this.textures.overlay(ov.id) });
+      mat.alphaTest = 0.5;
+      mat.polygonOffset = true;
+      mat.polygonOffsetFactor = -1;
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(ov.size, ov.size).rotateX(-Math.PI / 2), mat);
+      m.position.set(ov.x, 0.35, ov.z);
+      m.receiveShadow = true;
+      this.scene.add(m);
+      return m;
+    });
+  }
+
+  private landmarkSpec(l: LandmarkSpec): BuildingSpec {
+    return { x: l.x, z: l.z, w: l.w, d: l.d, h: l.h, facade: 0, color: 0xffffff, signs: [] };
+  }
+
+  /** Whether (x, z) lies inside any loaded landmark's footprint. */
+  landmarkAt(x: number, z: number): boolean {
+    for (const c of this.chunks.values()) for (const b of c.buildings) {
+      if (b.mesh && Math.abs(x - b.spec.x) <= b.spec.w / 2 && Math.abs(z - b.spec.z) <= b.spec.d / 2) return true;
+    }
+    return false;
+  }
+
+  /** Loaded landmark meshes. */
+  landmarkCount(): number {
+    return this.landmarks;
   }
 
   private resetPools(): void {
@@ -153,6 +227,8 @@ export class City {
     for (let i = CONFIG.world.maxTrees - 1; i >= 0; i--) this.freeTrees.push(i);
     this.freeRubble = [];
     for (let i = CONFIG.world.maxRubble - 1; i >= 0; i--) this.freeRubble.push(i);
+    this.freeParks = [];
+    for (let i = CONFIG.world.maxParks - 1; i >= 0; i--) this.freeParks.push(i);
   }
 
   /** Draw only up to the highest slot in use: empty slots still cost vertex work even at zero scale. */
@@ -164,11 +240,23 @@ export class City {
     };
     this.buildingMesh.count = high((i) => this.slotOwner[i] !== null, this.slotOwner.length);
     this.treeMesh.count = high((i) => this.treeUsed[i]!, this.treeUsed.length);
+    this.parkMesh.count = high((i) => this.parkUsed[i]!, this.parkUsed.length);
     this.rubbleMesh.count = high((i) => this.rubbleUsed[i]!, this.rubbleUsed.length);
   }
 
-  /** Forget all destruction and rebuild the city around the origin. */
-  reset(): void {
+  /** Forget all destruction and rebuild the city around the origin, in `style` if given. */
+  reset(style?: CityStyle): void {
+    if (style && style !== this._style) {
+      this._style = style;
+      const mat = this.ground.material as THREE.MeshToonMaterial;
+      mat.map?.dispose();
+      mat.map = this.groundTexture();
+      mat.needsUpdate = true;
+      this.roofMat.color.setHex(style.colors.roof);
+      this.treeMat.color.setHex(style.colors.tree);
+      (this.parkMesh.material as THREE.MeshToonMaterial).color.setHex(style.colors.park);
+    }
+    this.buildOverlays();
     this.crater.visible = false;
     for (const key of [...this.loadedKeys]) this.unloadChunk(key);
     this.collapsing = [];
@@ -226,7 +314,7 @@ export class City {
     b.state = 'collapsing';
     b.t = -delay;
     b.dustPending = delay > 0;
-    const rng = mulberry32(b.slot + 99);
+    const rng = mulberry32(b.slot >= 0 ? b.slot + 99 : b.index + 7919);
     b.tiltAxis.set(rng() - 0.5, 0, rng() - 0.5).normalize();
     this.collapsing.push(b);
     this.destroyed.mark(b.chunk, b.index, award);
@@ -289,8 +377,9 @@ export class City {
     if (this.dirty) {
       this.dirty = false;
       this.updateCounts();
-      for (const m of [this.buildingMesh, this.rubbleMesh, this.treeMesh]) m.instanceMatrix.needsUpdate = true;
+      for (const m of [this.buildingMesh, this.rubbleMesh, this.treeMesh, this.parkMesh]) m.instanceMatrix.needsUpdate = true;
       if (this.buildingMesh.instanceColor) this.buildingMesh.instanceColor.needsUpdate = true;
+      this.facadeAttr.needsUpdate = true;
     }
   }
 
@@ -307,19 +396,42 @@ export class City {
   }
 
   private loadChunk(key: string, cx: number, cz: number): void {
-    const content = generateChunk(TOKYO, this.seed, cx, cz);
+    const content = generateChunk(this._style, this.seed, cx, cz);
     const buildings: Building[] = [];
     const treeSlots: number[] = [];
+    const parkSlots: number[] = [];
     content.buildings.forEach((spec, index) => {
       const slot = this.freeSlots.pop();
       if (slot === undefined) return;
       const b = new Building(key, index, slot, spec, this);
       this.slotOwner[slot] = b;
       this.buildingMesh.setColorAt(slot, _c.setHex(spec.color));
+      this.facadeAttr.setX(slot, spec.facade);
       if (this.destroyed.has(key, index)) this.writeRubble(b);
       else this.writeStanding(b, 0, 0);
       buildings.push(b);
     });
+    content.landmarks.forEach((l, i) => {
+      const index = content.buildings.length + i;
+      const mesh = new THREE.Mesh(l.build(), this.landmarkMat);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      this.scene.add(mesh);
+      this.landmarks++;
+      const b = new Building(key, index, -1, this.landmarkSpec(l), this, mesh);
+      if (this.destroyed.has(key, index)) this.writeRubble(b);
+      else this.writeStanding(b, 0, 0);
+      buildings.push(b);
+    });
+    const inner = CONFIG.world.blockSize - CONFIG.world.roadWidth;
+    for (const p of content.parks) {
+      const slot = this.freeParks.pop();
+      if (slot === undefined) break;
+      _m.compose(_p.set(p.x, 0, p.z), _q.identity(), _s.set(inner, 1, inner));
+      this.parkMesh.setMatrixAt(slot, _m);
+      this.parkUsed[slot] = true;
+      parkSlots.push(slot);
+    }
     for (const t of content.trees) {
       const slot = this.freeTrees.pop();
       if (slot === undefined) break;
@@ -328,7 +440,7 @@ export class City {
       this.treeUsed[slot] = true;
       treeSlots.push(slot);
     }
-    this.chunks.set(key, { content, buildings, treeSlots });
+    this.chunks.set(key, { content, buildings, treeSlots, parkSlots });
     this.loadedKeys.add(key);
     this.dirty = true;
   }
@@ -337,6 +449,13 @@ export class City {
     const chunk = this.chunks.get(key);
     if (!chunk) return;
     for (const b of chunk.buildings) {
+      if (b.mesh) {
+        b.mesh.removeFromParent();
+        b.mesh.geometry.dispose();
+        this.landmarks--;
+        this.releaseRubble(b);
+        continue;
+      }
       this.buildingMesh.setMatrixAt(b.slot, ZERO);
       this.releaseRubble(b);
       this.slotOwner[b.slot] = null;
@@ -347,6 +466,11 @@ export class City {
       this.treeUsed[slot] = false;
       this.freeTrees.push(slot);
     }
+    for (const slot of chunk.parkSlots) {
+      this.parkMesh.setMatrixAt(slot, ZERO);
+      this.parkUsed[slot] = false;
+      this.freeParks.push(slot);
+    }
     if (this.collapsing.length) this.collapsing = this.collapsing.filter((b) => b.chunk !== key);
     this.chunks.delete(key);
     this.loadedKeys.delete(key);
@@ -356,14 +480,15 @@ export class City {
   private writeRubble(b: Building): void {
     b.state = 'rubble';
     const s = b.spec;
-    this.buildingMesh.setMatrixAt(b.slot, ZERO);
+    if (b.mesh) b.mesh.visible = false;
+    else this.buildingMesh.setMatrixAt(b.slot, ZERO);
     if (b.rubbleSlot < 0) {
       const slot = this.freeRubble.pop();
       if (slot === undefined) return; // pool full: the lot is simply left empty
       b.rubbleSlot = slot;
       this.rubbleUsed[slot] = true;
     }
-    _q.setFromAxisAngle(UP, b.slot);
+    _q.setFromAxisAngle(UP, b.slot >= 0 ? b.slot : b.index);
     _m.compose(_p.set(s.x, 0, s.z), _q, _s.set(s.w * 1.1, s.h * 0.12 + 6, s.d * 1.1));
     this.rubbleMesh.setMatrixAt(b.rubbleSlot, _m);
   }
@@ -379,6 +504,12 @@ export class City {
   private writeStanding(b: Building, sink: number, tilt: number): void {
     const s = b.spec;
     _q.setFromAxisAngle(b.tiltAxis.lengthSq() > 0 ? b.tiltAxis : X_AXIS, tilt);
+    if (b.mesh) {
+      b.mesh.visible = true;
+      b.mesh.position.set(s.x, -sink, s.z);
+      b.mesh.quaternion.copy(_q);
+      return;
+    }
     _m.compose(_p.set(s.x, -sink, s.z), _q, _s.set(s.w, s.h, s.d));
     this.buildingMesh.setMatrixAt(b.slot, _m);
   }
