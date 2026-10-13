@@ -258,6 +258,8 @@ export const CONFIG = {
       /** Weathered carved stone armour, and the deeper stone it is layered on. */
       stone: 0x9d927c,
       stoneDark: 0x645b4e,
+      /** The craggy rock crust on its back (between the two stones). */
+      crust: 0x6f665a,
       /** Magma glyphs carved into the stone. */
       glyph: 0xff6a1a,
       magma: 0xff6a1a,

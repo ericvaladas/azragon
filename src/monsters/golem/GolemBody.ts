@@ -43,21 +43,39 @@ const LUNGE_LEAN = 0.25;
 const STRIKE_HOLD = 0.1;
 /** Eruption: seconds for both fists to rise and slam. */
 const NOVA_TIME = 0.6;
+/** The back (torso space): upper-torso and hump ellipsoids (centre, radii, X tilt) under the craggy rock crust. */
+const BACK: readonly (readonly [V3, V3, number])[] = [
+  [[0, 505, -30], [255, 145, 215], 0.15],
+  [[0, 548, -60], [165, 72, 150], 0.1],
+];
+/** Height of the back's top surface over (x, z), torso space (searched down from above). */
+function backTop(x: number, z: number): number {
+  for (let y = 800; y > 300; y -= 2) {
+    for (const [c, r, tilt] of BACK) {
+      const dy = y - c[1];
+      const dz = z - c[2];
+      const ly = dy * Math.cos(tilt) + dz * Math.sin(tilt);
+      const lz = -dy * Math.sin(tilt) + dz * Math.cos(tilt);
+      if ((x - c[0]) ** 2 / r[0] ** 2 + ly ** 2 / r[1] ** 2 + lz ** 2 / r[2] ** 2 <= 1) return y;
+    }
+  }
+  return 300;
+}
 /** Back vents (torso space): Magma Lob, Ember Storm and Pyroclast leave from these in turn. */
 const BACK_VENTS: readonly (readonly [number, number, number])[] = [
-  [85, 690, -75],
-  [-85, 690, -75],
-  [0, 682, -185],
+  [80, backTop(80, -70) + 6, -70],
+  [-80, backTop(-80, -70) + 6, -70],
+  [0, backTop(0, -170) + 6, -170],
 ];
-/** Fire tendrils (torso space): roots on the back hump, each rising away from the hump's centre. */
+/** Fire tendrils (torso space): roots in the back's rock crust, each rising away from the hump's centre. */
 const TENDRIL_ROOTS: readonly THREE.Vector3[] = [
-  new THREE.Vector3(140, 650, -20),
-  new THREE.Vector3(-140, 650, -20),
-  new THREE.Vector3(50, 700, -10),
-  new THREE.Vector3(-50, 700, -10),
-  new THREE.Vector3(0, 685, -130),
-];
-const HUMP_CENTRE = new THREE.Vector3(0, 520, -40);
+  [130, -20],
+  [-130, -20],
+  [45, -10],
+  [-45, -10],
+  [0, -125],
+].map(([x, z]) => new THREE.Vector3(x, backTop(x!, z!) + 10, z));
+const HUMP_CENTRE = new THREE.Vector3(0, 480, -40);
 /** Which edge of a plate's face a fur fringe hangs from: −Y, +X or −X of its face. */
 type Edge = 'b' | 'r' | 'l';
 /**
@@ -78,26 +96,15 @@ const CHEST: Plate = {
 const PLATES: readonly Plate[] = [
   CHEST,
   { p: [0, 314, 214], s: [286, 204, 30], r: [0.3, 0, 0], dark: true },
-  // Loin slab between the legs.
-  { p: [0, 200, 76], s: [118, 104, 30], r: [0.12, 0, 0], dark: true, g: [[0, 34, 0, -28], [-26, -8, 26, -8]], fringe: ['b'] },
-  // Belly flanks and upper flanks.
-  { p: [224, 350, 34], s: [150, 136, 32], r: [0, Math.PI / 2, 0.2], dark: true, g: [...glyph.steps(-52, -42, 3, 26, 26), [40, -42, 40, 40]], fringe: ['b'], pair: true },
-  { p: [276, 520, -52], s: [170, 128, 30], r: [0, Math.PI / 2, 0.32], g: [...glyph.rect(0, 0, 120, 80), ...glyph.diamond(0, 0, 22)], fringe: ['b'], pair: true },
-  // Pauldrons: a carved top slab on a broader dark one.
-  { p: [222, 632, 72], s: [176, 166, 40], r: [UP, 0, -0.45], g: [...glyph.diamond(0, 0, 50), ...glyph.diamond(0, 0, 18)], fringe: ['r', 'b'], pair: true },
-  { p: [244, 600, 74], s: [204, 190, 30], r: [UP, 0, -0.75], dark: true, fringe: ['r'], pair: true },
-  // Back: a spine slab and two side slabs on the hump, a big carved slab across the back, a lower one above the hips.
-  { p: [0, 678, -36], s: [96, 150, 30], r: [UP + 0.15, 0, 0], g: [[0, -56, 0, 56], [-26, -28, 26, -28], [-26, 8, 26, 8], [-26, 44, 26, 44]] },
-  { p: [152, 650, -72], s: [128, 196, 32], r: [UP + 0.1, 0, -0.45], g: glyph.steps(-42, -70, 4, 22, 34), fringe: ['r'], pair: true },
-  { p: [0, 556, -264], s: [236, 172, 40], r: [-0.25, Math.PI, 0], g: [...glyph.spiral(0, 0, 62, 2, 26), [62 + 28, -62, 62 + 28, 62], [-62 - 28, -62, -62 - 28, 62]], fringe: ['b'] },
-  { p: [0, 398, -224], s: [192, 120, 34], r: [-0.1, Math.PI, 0], dark: true, g: [...glyph.steps(-84, -36, 3, 22, 22), ...glyph.mirrorX(glyph.steps(-84, -36, 3, 22, 22))], fringe: ['b'] },
+  // Pauldrons.
+  { p: [222, 632, 72], s: [176, 166, 40], r: [UP, 0, -0.45], g: glyph.diamond(0, 0, 46), fringe: ['r', 'b'], pair: true },
   // Helmet-mask face.
   { p: [0, 460, 294], s: [100, 96, 16], r: [0.12, 0, 0], g: [[0, -6, 0, -30], [-20, -36, 0, -46], [0, -46, 20, -36]] },
 ];
 /** Fur (torso space): ellipsoid patches the tufts grow from: centre, radii, X tilt, count. */
 const FUR: readonly (readonly [V3, V3, number, number])[] = [
-  [[0, 520, -30], [280, 165, 240], 0.15, 230],
-  [[0, 590, -60], [200, 90, 180], 0.1, 40],
+  [BACK[0]![0], BACK[0]![1], BACK[0]![2], 230],
+  [BACK[1]![0], BACK[1]![1], BACK[1]![2], 40],
   [[200, 500, 70], [140, 125, 140], 0, 55],
   [[-200, 500, 70], [140, 125, 140], 0, 55],
   [[0, 380, 20], [230, 180, 200], 0.3, 60],
@@ -108,6 +115,8 @@ const _rel = new THREE.Matrix4();
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
 const _q2 = new THREE.Quaternion();
+const _e = new THREE.Euler();
+const _up = new THREE.Vector3(0, 1, 0);
 const _s = new THREE.Vector3();
 const _rot = new THREE.Matrix4();
 const _n = new THREE.Vector3();
@@ -215,9 +224,36 @@ export class GolemBody implements MonsterBody {
     // Shaggy fur body: hips, belly, a hunched back with a hump, shoulders.
     piece(torso, blob, C.furDark, [0, 250, -110], [150, 110, 140]);
     piece(torso, blob, C.fur, [0, 380, 20], [230, 180, 200], [0.3, 0, 0]);
-    piece(torso, blob, C.furDark, [0, 520, -30], [280, 165, 240], [0.15, 0, 0]);
-    piece(torso, blob, C.furDark, [0, 590, -60], [200, 90, 180], [0.1, 0, 0]);
+    for (const [c, r, tilt] of BACK) piece(torso, blob, C.furDark, c, r, [tilt, 0, 0]);
     for (const sx of [1, -1]) piece(torso, blob, C.furDark, [sx * 200, 500, 70], [140, 125, 140]);
+    // A craggy rock crust over the back: the creature's own stony hide, flattened lumps half sunk into the fur,
+    // its edge ragged; faint magma cracks glow between the lumps.
+    const crust: { p: THREE.Vector3; r: number }[] = [];
+    const rockTones = [C.crust, C.stoneDark, C.crust, C.stone, C.stoneDark];
+    BACK.forEach(([c, r, tilt], b) => {
+      _rot.makeRotationX(tilt);
+      for (let i = 0; i < (b === 0 ? 320 : 100); i++) {
+        const z = rand() * 2 - 1;
+        const a = rand() * Math.PI * 2;
+        const k = Math.sqrt(1 - z * z);
+        _n.set(k * Math.cos(a), k * Math.sin(a), z);
+        _dir.set(_n.x / r[0], _n.y / r[1], _n.z / r[2]).applyMatrix4(_rot).normalize();
+        if (_dir.z > 0.2 || _dir.y < 0.05 + rand() * 0.35 || Math.abs(_dir.x) > 0.75) continue;
+        _at.set(_n.x * r[0], _n.y * r[1], _n.z * r[2]).multiplyScalar(0.97).applyMatrix4(_rot).add(_tmp.set(c[0], c[1], c[2]));
+        if (crust.some((q) => q.p.distanceTo(_at) < q.r * 0.75)) continue;
+        const size = 34 + rand() * 38;
+        _q.setFromUnitVectors(_up, _dir).multiply(_q2.setFromAxisAngle(_up, rand() * Math.PI * 2));
+        const g = boulder.clone().applyMatrix4(_m.compose(_at, _q, _s.set(size, size * (0.45 + rand() * 0.45), size * (0.7 + rand() * 0.5))));
+        torso.push(painted(g, rockTones[Math.floor(rand() * rockTones.length)]!));
+        crust.push({ p: _at.clone(), r: size });
+        if (rand() < 0.3) {
+          // A short crack lying in the surface, sunk so it shows only between the lumps.
+          _e.set(0, rand() * Math.PI, 0);
+          glyphs.push(new THREE.Matrix4().compose(_at.clone().addScaledVector(_dir, 8), _q.clone().multiply(_q2.setFromEuler(_e)), _s.set(60 + rand() * 40, 11, 11).clone()));
+        }
+      }
+    });
+    const crusted = (p: THREE.Vector3) => crust.some((q) => q.p.distanceTo(p) < q.r * 0.7);
     // Plate frames (inverse, both sides), so tufts rooted under an upright slab do not poke through its carved face.
     const under = PLATES.flatMap((pl) => {
       const M = partMatrix(pl.p, pl.r, [1, 1, 1]);
@@ -242,7 +278,7 @@ export class GolemBody implements MonsterBody {
         _dir.set(_n.x / r[0], _n.y / r[1], _n.z / r[2]).applyMatrix4(_rot).normalize();
         // No fur under the chest plate or over the face.
         if (_at.z > 130 && Math.abs(_at.x) < 105 && _at.y < 530) continue;
-        if (_dir.y < -0.75 || hidden(_at)) continue;
+        if (_dir.y < -0.75 || hidden(_at) || crusted(_at)) continue;
         // Lie along the surface, flowing downhill (a pelt), lifted a little off it.
         _tmp.set((rand() - 0.5) * 0.5, -1, (rand() - 0.5) * 0.5);
         _tmp.addScaledVector(_dir, -_tmp.dot(_dir));
@@ -389,20 +425,20 @@ export class GolemBody implements MonsterBody {
       for (const sx of [1, -1]) piece(p, box, C.stoneDark, [sx * R * 0.66, -4, 0], [R * 0.3, R * 0.6, R * 0.9], [0, 0, sx * 0.2]);
     };
     const thighGeo = (p: THREE.BufferGeometry[]) => {
-      piece(p, SHAPES.limb, C.fur, [0, 0, 0], [94, THIGH, 98]);
-      [-0.36, -0.08, 0.2, 0.42].forEach((y, k) => furRing(p, furTones, 7, y * THIGH, 44, 72, 34, 0.5, k * 0.5));
+      piece(p, SHAPES.limb, C.fur, [0, 0, 0], [134, THIGH, 138]);
+      [-0.36, -0.08, 0.2, 0.42].forEach((y, k) => furRing(p, furTones, 8, y * THIGH, 64, 76, 42, 0.5, k * 0.5));
     };
     const shinGeo = (p: THREE.BufferGeometry[], g: THREE.Matrix4[]) => {
-      piece(p, SHAPES.hex, C.stoneDark, [0, 10, 0], [104, 124, 104]);
-      const guard = partMatrix([0, 8, 42], [-0.06, 0, 0], [1, 1, 1]);
-      piece(p, box, C.stone, [0, 0, 0], [96, 128, 24], [0, 0, 0], guard);
+      piece(p, SHAPES.hex, C.stoneDark, [0, 10, 0], [148, 124, 148]);
+      const guard = partMatrix([0, 8, 60], [-0.06, 0, 0], [1, 1, 1]);
+      piece(p, box, C.stone, [0, 0, 0], [128, 128, 26], [0, 0, 0], guard);
       glyphMatrices(guard, 24, [[0, -46, 0, 30], [-24, 16, 0, 40], [0, 40, 24, 16]], g, 11);
-      furRing(p, furTones, 8, -66, 46, 64, 34, 0.55, 0.3);
+      furRing(p, furTones, 9, -66, 66, 66, 40, 0.55, 0.3);
     };
     const footGeo = (p: THREE.BufferGeometry[]) => {
-      piece(p, box, C.stoneDark, [0, 0, 0], [104, 44, 134]);
-      for (const x of [-34, 0, 34]) piece(p, box, C.stone, [x, -4, 70], [30, 34, 28], [0, 0, 0]);
-      piece(p, box, C.stone, [0, 26, 6], [90, 16, 104], [0.08, 0, 0]);
+      piece(p, box, C.stoneDark, [0, 0, 0], [150, 44, 168]);
+      for (const x of [-46, 0, 46]) piece(p, box, C.stone, [x, -4, 88], [40, 36, 34], [0, 0, 0]);
+      piece(p, box, C.stone, [0, 26, 8], [128, 16, 132], [0.08, 0, 0]);
     };
     for (let i = 0; i < 2; i++) {
       this.limbArms.push({ upper: limb(upperGeo, UPPER), fore: limb(foreGeo, FORE), fist: limb(fistGeo, 1) });

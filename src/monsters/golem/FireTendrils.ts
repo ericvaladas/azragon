@@ -6,8 +6,8 @@ const SEGS = 10;
 /** Points sampled along each pose curve before it is evened out into SEGS + 1 joint targets. */
 const SAMPLES = 16;
 /** Model units: radius at the root and the tip; idle flare length; longest a lash can stretch. */
-const R_ROOT = 18;
-const R_TIP = 5;
+const R_ROOT = 9;
+const R_TIP = 3;
 const FLARE_LEN = 230;
 const MAX_LEN = 1300;
 /** A frame-to-frame jump longer than this (model units) is a teleport: the tendrils snap instead of trailing. */
