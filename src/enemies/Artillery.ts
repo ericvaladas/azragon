@@ -108,20 +108,27 @@ export class Artillery implements EnemySystem {
   spawn(ctx: WorldContext): void {
     this.ctx = ctx;
     if (this.batteries.length >= MAX_BATTERIES) return;
-    const a = ctx.rng() * Math.PI * 2;
-    const r = A.distMin + ctx.rng() * (A.distMax - A.distMin);
     const m = ctx.monster.position;
-    const cx = m.x + Math.cos(a) * r;
-    const cz = m.z + Math.sin(a) * r;
-    const guns: Gun[] = [];
-    for (let i = 0; i < A.guns; i++) {
-      const g = new Gun(A.hp * ctx.difficulty.hpMult, this.damage);
-      const off = (i - (A.guns - 1) / 2) * A.gunSpacing;
-      g.position.set(cx - Math.sin(a) * off, A.size * 0.3, cz + Math.cos(a) * off);
-      g.yaw = Math.atan2(m.x - cx, m.z - cz);
-      guns.push(g);
+    for (let attempt = 0; attempt < 8; attempt++) {
+      const a = ctx.rng() * Math.PI * 2;
+      const r = A.distMin + ctx.rng() * (A.distMax - A.distMin);
+      const cx = m.x + Math.cos(a) * r;
+      const cz = m.z + Math.sin(a) * r;
+      const spots: { x: number; z: number }[] = [];
+      for (let i = 0; i < A.guns; i++) {
+        const off = (i - (A.guns - 1) / 2) * A.gunSpacing;
+        spots.push({ x: cx - Math.sin(a) * off, z: cz + Math.cos(a) * off });
+      }
+      if (ctx.blocked && spots.some((s) => ctx.blocked!(s.x, s.z))) continue;
+      const guns = spots.map((s) => {
+        const g = new Gun(A.hp * ctx.difficulty.hpMult, this.damage);
+        g.position.set(s.x, A.size * 0.3, s.z);
+        g.yaw = Math.atan2(m.x - cx, m.z - cz);
+        return g;
+      });
+      this.batteries.push({ guns, salvoT: A.salvoEvery * 0.5 });
+      return;
     }
-    this.batteries.push({ guns, salvoT: A.salvoEvery * 0.5 });
   }
 
   private damage = (g: Gun, amount: number): void => {

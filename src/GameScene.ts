@@ -1009,6 +1009,7 @@ export class GameScene {
         return self.progression.level;
       },
       rng: this.rng,
+      blocked: (x, z) => this.city.landmarkAt(x, z),
       particles: this.particles,
       damageMonster: (amount, source, attacker) => this.damageMonster(amount, source, attacker),
       damageBuildings: (p, r, amount) => this.city.forEachStandingInRadius(p, r, (t) => t.applyDamage(amount)),

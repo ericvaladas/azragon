@@ -15,6 +15,8 @@ export interface WorldContext {
   /** Player level: drives unlocks, spawn rate, difficulty, and salvo sizes. */
   readonly level: number;
   readonly rng: () => number;
+  /** True where nothing may be placed (inside a landmark's footprint). Optional: absent means nowhere is blocked. */
+  blocked?(x: number, z: number): boolean;
   readonly particles: Particles;
   /** `attacker` is the enemy dealing the hit, when there is one (Overload fires beams back at it). */
   damageMonster(amount: number, source: DamageSource, attacker?: Target): void;
