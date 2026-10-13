@@ -241,7 +241,7 @@ export const CONFIG = {
       rangedCooldown: 2.0,
       headHeight: 480,
       /** Measured standing bounding box (world m). */
-      size: { width: 490, length: 370, height: 470 },
+      size: { width: 550, length: 415, height: 470 },
     },
     /**
      * Molten Fist: targets within `frontHalf` (rad) of dead ahead take a slam; others a backhand whose hit arc
@@ -251,9 +251,15 @@ export const CONFIG = {
     /** Magma Lob: splash radius (m), flight time (s), arc height (m); the lava pool it leaves (radius m, life s). */
     lob: { splash: 120, flight: 1.4, arc: 520, poolRadius: 110, poolLife: 3 },
     colors: {
-      basalt: 0x4a403b,
-      basaltDark: 0x2c2624,
-      rock: 0x6a5d54,
+      /** Shaggy fur (base, shadowed clumps, sun-caught tips). */
+      fur: 0x4d3523,
+      furDark: 0x2f2017,
+      furLight: 0x6b4a2e,
+      /** Weathered carved stone armour, and the deeper stone it is layered on. */
+      stone: 0x9d927c,
+      stoneDark: 0x645b4e,
+      /** Magma glyphs carved into the stone. */
+      glyph: 0xff6a1a,
       magma: 0xff6a1a,
       core: 0xffc23a,
       eye: 0xffd060,
