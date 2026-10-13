@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { CONFIG } from '../config';
-import { CUT_TIME } from './timeline';
+import { CUT_TIME, chaseFrame } from './timeline';
 
 const SP = CONFIG.intro.space;
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
@@ -31,14 +31,9 @@ export function earthCenter(t: number, out: THREE.Vector3): THREE.Vector3 {
   return out.set(0, -(h + 0.3 * d), d);
 }
 
-/**
- * Space camera (before shake): behind, above and to the side of the pod, looking ahead and down, at a fixed
- * offset (no zoom). Narrow (portrait) screens get less sideways offset so the pod stays on screen.
- */
-export function spaceCamera(aspect: number, pos: THREE.Vector3, look: THREE.Vector3): void {
-  const L = SP.podLength;
-  pos.set(L * (aspect < 1 ? 0.5 : 1.2), L * 0.9, -L * 3.5);
-  look.set(0, -L * 0.3, L * 6);
+/** Space camera (before shake): the shared chase framing, behind and well above the pod, at a fixed offset (no zoom). */
+export function spaceCamera(pos: THREE.Vector3, look: THREE.Vector3): void {
+  chaseFrame(SP.podLength, pos, look);
 }
 
 /** Re-entry heat 0..1: zero until the pod enters the atmosphere, white-hot at the cut. */

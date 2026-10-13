@@ -34,21 +34,37 @@ export function phaseAt(t: number): { phase: IntroPhase; k: number } {
 
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
 const easeInOut = (u: number) => (u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2);
-const V = (a: readonly [number, number, number]) => new THREE.Vector3(a[0], a[1], a[2]);
 
 /** Cocoon length for a monster of this size: its largest dimension with room to spare. */
 export function podLengthFor(size: { width: number; length: number; height: number }): number {
   return Math.max(size.width, size.length, size.height) * I.podFit;
 }
 
+/** The fall's angle below horizontal: the pod drops nose-first in a straight line from high and behind. */
+export const FALL_PITCH = Math.atan2(I.dropHeight, I.dropBack);
+/** Turns the pod's travel frame (+Z ahead) into the fall: nose pitched FALL_PITCH down. */
+const FALL_Q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), FALL_PITCH);
+
 /**
- * Game-world pod position: an accelerating fall from high and behind to the origin, then half-buried. The cut
- * joins the fall `dropJoin` of the way down, so the drop keeps its pace.
+ * Game-world pod position: an accelerating, straight nose-first fall from high and behind to the origin, where it
+ * stays (buried nose-first) until it splits. The cut joins the fall `dropJoin` of the way down, so the drop keeps its pace.
  */
 export function podPath(t: number, out: THREE.Vector3): THREE.Vector3 {
-  if (t > IMPACT_TIME) return out.set(0, I.podRestY, 0);
   const u = I.dropJoin + (1 - I.dropJoin) * clamp01((t - CUT_TIME) / (IMPACT_TIME - CUT_TIME));
-  return out.set(0, I.dropHeight * (1 - u * u), -I.dropBack * (1 - u));
+  const s = 1 - u * u;
+  return out.set(0, I.dropHeight * s, -I.dropBack * s);
+}
+
+/** The cocoon's roll about its long axis: steady through space and the fall, frozen where it was at impact. */
+export function podSpin(t: number): number {
+  return Math.min(t, IMPACT_TIME) * I.spin;
+}
+
+/** The shared chase framing for a pod `length` long, in its travel frame (+Z ahead, +Y up away from the ground). */
+export function chaseFrame(length: number, pos: THREE.Vector3, look: THREE.Vector3): void {
+  const C = I.chase;
+  pos.set(C.side * length, C.lift * length, -C.back * length);
+  look.set(0, -C.dip * length, C.ahead * length);
 }
 
 /** The camera pose gameplay starts with (default orbit around the monster at the origin). */
@@ -59,34 +75,50 @@ export function gameplayPose(): { pos: THREE.Vector3; look: THREE.Vector3 } {
 }
 
 const _pod = new THREE.Vector3();
-const _a = new THREE.Vector3();
-const _b = new THREE.Vector3();
+const _hold = { pos: new THREE.Vector3(), look: new THREE.Vector3(), up: new THREE.Vector3() };
+const UP = new THREE.Vector3(0, 1, 0);
+
+/** The chase shot on a pod `podLength` long at `pod`, pitched into the fall. */
+function chase(pod: THREE.Vector3, podLength: number, out: { pos: THREE.Vector3; look: THREE.Vector3; up: THREE.Vector3 }): void {
+  chaseFrame(podLength, out.pos, out.look);
+  out.pos.applyQuaternion(FALL_Q).add(pod);
+  out.look.applyQuaternion(FALL_Q).add(pod);
+  out.up.copy(UP).applyQuaternion(FALL_Q);
+}
 
 /**
- * Game-world camera after the cut: follows behind the falling pod, swings out to a wide shot by
- * impact, holds through the settle, then eases into the gameplay pose, reaching it at INTRO_LENGTH.
+ * Game-world camera after the cut: the space shot's chase framing, pitched into the fall so it looks down past
+ * the pod at the city. It rides the pod down, stops with it at impact and holds while the crater settles, then
+ * eases into the gameplay pose (upright again), reaching it at INTRO_LENGTH.
  */
-export function cameraPath(t: number, out: { pos: THREE.Vector3; look: THREE.Vector3 }): { pos: THREE.Vector3; look: THREE.Vector3 } {
-  const wide = V(I.camWide);
-  const lookImpact = V(I.lookImpact);
-  if (t < IMPACT_TIME) {
-    podPath(t, _pod);
-    const d = easeInOut(clamp01((t - S.descent) / (IMPACT_TIME - S.descent)));
-    // Offset blends from "follow the pod" to the absolute wide shot (pod is at the origin at impact).
-    out.pos.copy(_pod).add(_a.copy(V(I.camFollow)).lerp(_b.copy(wide).sub(_pod), d));
-    // The look target rides with the pod (which reaches the origin at impact), so it stays in frame.
-    out.look.copy(_pod).add(_a.copy(V(I.lookFollow)).lerp(lookImpact, d));
-    return out;
-  }
+export function cameraPath(
+  t: number,
+  podLength: number,
+  out: { pos: THREE.Vector3; look: THREE.Vector3; up: THREE.Vector3 },
+): { pos: THREE.Vector3; look: THREE.Vector3; up: THREE.Vector3 } {
   if (t < EMERGE_TIME) {
-    out.pos.copy(wide);
-    out.look.copy(lookImpact);
+    chase(podPath(t, _pod), podLength, out);
     return out;
   }
+  chase(podPath(IMPACT_TIME, _pod), podLength, _hold);
   const g = gameplayPose();
   const e = easeInOut(clamp01((t - EMERGE_TIME) / (INTRO_LENGTH - EMERGE_TIME)));
-  out.pos.copy(wide).lerp(g.pos, e);
-  out.look.copy(lookImpact).lerp(g.look, e);
+  out.pos.copy(_hold.pos).lerp(g.pos, e);
+  out.look.copy(_hold.look).lerp(g.look, e);
+  out.up.copy(_hold.up).lerp(UP, e).normalize();
+  return out;
+}
+
+/** Black over the opening: fully black at the start, fading in over fadeIn s. */
+export function blackAt(t: number): number {
+  const u = clamp01(t / I.fadeIn);
+  return 1 - u * u * (3 - 2 * u);
+}
+
+/** Fog for a camera this high: pushed out while it looks down from altitude (so the city shows), the game's fog near the ground. */
+export function introFog(camY: number, out: { near: number; far: number }): { near: number; far: number } {
+  out.near = Math.max(CONFIG.fog.near, camY * 1.1);
+  out.far = Math.max(CONFIG.fog.far, camY * 2.6);
   return out;
 }
 

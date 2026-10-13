@@ -396,24 +396,24 @@ export const CONFIG = {
      * scene was trimmed to nothing, so the game world opens straight on the descent.
      */
     starts: { space: 0, reentry: 3.5, clouds: 5.5, descent: 5.5, impact: 7.5, settle: 8, emerge: 10, done: 12 },
-    /** The full pod drop: from this high and this far behind (-Z), landing at the origin. */
+    /** The full pod drop: a straight, nose-first line from this high and this far behind (-Z), landing at the origin. */
     dropHeight: 4200,
     dropBack: 1400,
     /** Fraction of the full drop already fallen at the cut: the game world joins the fall part-way (3 s of a 5 s fall). */
     dropJoin: 0.6,
-    /** Pod rests half-buried after impact (world y). */
-    podRestY: 0,
-    /** Camera offsets from the pod while falling (start of clouds) and the wide shot at impact (absolute). */
-    camFollow: [0, 650, -1700] as const,
-    camWide: [-1100, 720, -1900] as const,
-    lookFollow: [0, -600, 1200] as const,
-    lookImpact: [0, 120, 0] as const,
+    /** The cocoon's spin about its long axis (rad/s); it freezes where it was at impact. */
+    spin: 0.8,
+    /** Fade in from black over this long (s) at the very start. */
+    fadeIn: 1.2,
+    /**
+     * Chase framing, in pod lengths, in the pod's travel frame (+Z ahead, +Y up away from the ground): the camera
+     * sits behind, above and a little to the side, looking ahead and down. Space and the fall share it, so the shot
+     * holds through the cut and after the crash.
+     */
+    chase: { back: 3.2, lift: 1.7, side: 0.45, ahead: 4, dip: 0.9 },
     /** Inside the cocoon the monster stands curled down by crouchDip (model units of body drop); it straightens over riseTime s after the split. */
     crouchDip: 170,
     riseTime: 1.4,
-    clouds: { count: 80, minY: 1500, maxY: 4000, spreadX: 1500, minZ: -2200, maxZ: 900, minSize: 500, maxSize: 1100 },
-    /** Fog while inside the cloud band (eases back to CONFIG.fog through the descent). */
-    cloudFog: { near: 700, far: 3400 },
     /** Cocoon length = the monster's largest dimension × podFit (the Insect's 484 m span gets a 620 m cocoon). */
     podFit: 1.28,
     /** Screen wash: builds over `rise` s before the cut, holds, fades; a full white-out at impact. */

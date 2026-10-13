@@ -6,7 +6,7 @@ import { mulberry32 } from '../util/rng';
 import { earthTexture } from './earthTexture';
 import { PodModel } from './PodModel';
 import { earthCenter, heatAt, spaceCamera, heatColor, starDirections } from './spaceMath';
-import { shakeAt } from './timeline';
+import { podSpin, shakeAt } from './timeline';
 
 const SP = CONFIG.intro.space;
 const L = SP.podLength;
@@ -84,7 +84,7 @@ export class SpaceScene {
     // Earth sits below the flight path (lower half of the frame) and swells as it closes in.
     earthCenter(t, this.earth.position);
     this.earth.rotation.y = t * 0.04;
-    this.pod.root.rotation.z = t * 0.5;
+    this.pod.root.rotation.z = podSpin(t);
 
     const h = heatAt(t);
     this.pod.setHeat(heatColor(h, _heat));
@@ -107,8 +107,8 @@ export class SpaceScene {
 
     const s = shakeAt(t);
     const amp = s * s * L * 0.12;
-    // Three-quarter view from behind and above, so the seams read along the shell.
-    spaceCamera(this.camera.aspect, this.camera.position, _look);
+    // Chase view from behind and well above, looking down past the pod at Earth.
+    spaceCamera(this.camera.position, _look);
     this.camera.position.x += Math.sin(t * 43) * amp;
     this.camera.position.y += Math.sin(t * 61 + 1) * amp;
     this.camera.lookAt(_look);

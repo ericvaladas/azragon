@@ -360,6 +360,13 @@ body {
   background: #fff1d6;
   opacity: 0;
 }
+.intro-black {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: #000;
+  opacity: 0;
+}
 .skip-hint {
   position: absolute;
   left: 50%;
