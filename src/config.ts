@@ -241,7 +241,7 @@ export const CONFIG = {
       rangedCooldown: 2.0,
       headHeight: 480,
       /** Measured standing bounding box (world m). */
-      size: { width: 441, length: 459, height: 595 },
+      size: { width: 415, length: 459, height: 413 },
     },
     /**
      * Molten Fist: targets within `frontHalf` (rad) of dead ahead take a slam; others a backhand whose hit arc
@@ -251,26 +251,26 @@ export const CONFIG = {
     /** Magma Lob: splash radius (m), flight time (s), arc height (m); the lava pool it leaves (radius m, life s). */
     lob: { splash: 120, flight: 1.4, arc: 520, poolRadius: 110, poolLife: 3 },
     colors: {
-      /** Desiccated ash-grey hide stretched over bone (base, pale highlight, shadowed underside) and the black sinew. */
-      skin: 0x908f87,
-      skinLight: 0xb0aea4,
-      skinDark: 0x62625c,
-      sinew: 0x241d1b,
-      /** Bleached bone (skull, teeth), its weathered shade (ribs, vertebrae, blades) and the antlers. */
-      bone: 0xeee6d2,
-      boneShade: 0xc4b9a0,
-      antler: 0xdcd0b4,
-      /** Tattered dark hide hanging off the back; hooves and claws; the dark of the eye sockets and mouth. */
-      hide: 0x3d3430,
-      horn: 0x1a1615,
-      socket: 0x120b0a,
-      /** Embers: in the joints, smouldering along the spine, the hellfire between the ribs, the eyes. */
-      glow: 0xff6a1a,
-      seam: 0xff5418,
+      /** Tight, starved olive-grey skin (base, ridge highlight over the ribs and bones, shadowed underside) and the black sinew. */
+      skin: 0x4c5142,
+      skinLight: 0x676c57,
+      skinDark: 0x34372d,
+      sinew: 0x1b1a16,
+      /** Matted fur: the dark mane, its umber body, the lighter weathered tips that catch the light; moss on the antlers. */
+      furDark: 0x17130f,
+      fur: 0x2c231c,
+      furTip: 0x5e5244,
+      moss: 0x2d3222,
+      /** Weathered bone-grey skull, its shade (jaw, ridges, teeth) and the dark gnarled antlers with paler worn tips. */
+      bone: 0xb9b3a5,
+      boneShade: 0x8a8476,
+      antler: 0x5f5548,
+      antlerTip: 0x8c8172,
+      /** Hooves and claws; the empty sockets, nasal cavity and mouth. */
+      horn: 0x121010,
+      socket: 0x090707,
+      /** Magma FX (bombs, pools, particles, Eruption): not on the body. */
       magma: 0xff6a1a,
-      core: 0xffa62e,
-      coreDeep: 0x3a0e06,
-      eye: 0xffd04a,
       ember: 0xffb347,
       lava: 0xff4a12,
     },
