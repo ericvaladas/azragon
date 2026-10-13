@@ -1,11 +1,11 @@
 import * as THREE from 'three';
 import { CONFIG } from '../../config';
-import { painted, toonMat } from '../../render/toon';
+import { faceted, painted, toonMat } from '../../render/toon';
 import { solveTwoBone } from '../../monster/ik';
 import type { BodyFrame, MonsterBody } from '../types';
 import { fistKind, lungeAmount, lungeWeight, strikeReturn, strikeStarted, type FistKind } from './fist';
 import { FireTendrils } from './FireTendrils';
-import { furRing, glyph, glyphMatrices, merge, partMatrix, piece, rng, SHAPES, tuftGeometry, type Seg, type V3 } from './golemParts';
+import { merge, piece, rng, SHAPES, tuftGeometry, type V3 } from './golemParts';
 import { SWING, limbPlanted, limbSwing } from './knuckleGait';
 
 const G = CONFIG.golem;
@@ -43,86 +43,90 @@ const LUNGE_LEAN = 0.25;
 const STRIKE_HOLD = 0.1;
 /** Eruption: seconds for both fists to rise and slam. */
 const NOVA_TIME = 0.6;
-/** The back (torso space): upper-torso and hump ellipsoids (centre, radii, X tilt) under the craggy rock crust. */
-const BACK: readonly (readonly [V3, V3, number])[] = [
-  [[0, 505, -30], [255, 145, 215], 0.15],
-  [[0, 548, -60], [165, 72, 150], 0.1],
-];
-/** Height of the back's top surface over (x, z), torso space (searched down from above). */
-function backTop(x: number, z: number): number {
-  for (let y = 800; y > 300; y -= 2) {
-    for (const [c, r, tilt] of BACK) {
-      const dy = y - c[1];
-      const dz = z - c[2];
-      const ly = dy * Math.cos(tilt) + dz * Math.sin(tilt);
-      const lz = -dy * Math.sin(tilt) + dz * Math.cos(tilt);
-      if ((x - c[0]) ** 2 / r[0] ** 2 + ly ** 2 / r[1] ** 2 + lz ** 2 / r[2] ** 2 <= 1) return y;
-    }
-  }
-  return 300;
-}
-/** Back vents (torso space): Magma Lob, Ember Storm and Pyroclast leave from these in turn. */
-const BACK_VENTS: readonly (readonly [number, number, number])[] = [
-  [80, backTop(80, -70) + 6, -70],
-  [-80, backTop(-80, -70) + 6, -70],
-  [0, backTop(0, -170) + 6, -170],
-];
-/** Fire tendrils (torso space): roots in the back's rock crust, each rising away from the hump's centre. */
-const TENDRIL_ROOTS: readonly THREE.Vector3[] = [
-  [130, -20],
-  [-130, -20],
-  [45, -10],
-  [-45, -10],
-  [0, -125],
-].map(([x, z]) => new THREE.Vector3(x, backTop(x!, z!) + 10, z));
-const HUMP_CENTRE = new THREE.Vector3(0, 480, -40);
-/** Which edge of a plate's face a fur fringe hangs from: −Y, +X or −X of its face. */
-type Edge = 'b' | 'r' | 'l';
+
 /**
- * Carved stone armour slabs (torso space). `p` centre, `s` width × height × thickness (the face is local +Z),
- * `r` tilt/turn/roll (see partMatrix), `dark` for the deeper stone, `g` magma glyphs carved into the face,
- * `fringe` the edges fur hangs from, `pair` for a left-side slab mirrored onto the right.
+ * The shell (torso space): a top-heavy egg turned about an axis that rises from EGG_BASE (behind the hips) and
+ * leans forward EGG_TILT rad over the knuckle-walk. `h` runs 0..1 along the axis (EGG_LEN), `phi` around it
+ * (0 = front, π/2 = left, π = back); the widest ring (EGG_R) sits at h = EGG_PEAK; the depth is squashed by EGG_D.
  */
-type Plate = { p: V3; s: V3; r: V3; dark?: boolean; g?: readonly Seg[]; fringe?: readonly Edge[]; pair?: boolean };
-const UP = -Math.PI / 2;
-/** Chest plate: the Molten Core sigil sits on its face. */
-const CHEST: Plate = {
-  p: [0, 322, 232],
-  s: [250, 172, 46],
-  r: [0.3, 0, 0],
-  g: [...glyph.diamond(0, 4, 62), [62, 4, 112, 4], [-62, 4, -112, 4], [0, -58, 0, -86], [0, 66, 0, 86], ...glyph.steps(-118, -86, 2, 22, 22), ...glyph.mirrorX(glyph.steps(-118, -86, 2, 22, 22))],
-  fringe: ['b'],
-};
-const PLATES: readonly Plate[] = [
-  CHEST,
-  { p: [0, 314, 214], s: [286, 204, 30], r: [0.3, 0, 0], dark: true },
-  // Pauldrons.
-  { p: [222, 632, 72], s: [176, 166, 40], r: [UP, 0, -0.45], g: glyph.diamond(0, 0, 46), fringe: ['r', 'b'], pair: true },
-  // Helmet-mask face.
-  { p: [0, 460, 294], s: [100, 96, 16], r: [0.12, 0, 0], g: [[0, -6, 0, -30], [-20, -36, 0, -46], [0, -46, 20, -36]] },
+const EGG_BASE = new THREE.Vector3(0, 188, -128);
+const EGG_TILT = 0.38;
+const EGG_LEN = 530;
+const EGG_R = 218;
+const EGG_D = 0.9;
+const EGG_PEAK = 0.62;
+const EGG_K = Math.log(0.5) / Math.log(EGG_PEAK);
+const EGG_ROT = new THREE.Matrix4().makeRotationX(EGG_TILT);
+/** Profile rings of the shell's lathe (h); the panel seams run along the rings in SEAM_H. */
+const EGG_RINGS = [0, 0.04, 0.1, 0.18, 0.3, 0.42, 0.52, 0.62, 0.72, 0.85, 0.92, 0.97, 1];
+const SEAM_H = [0.3, 0.62, 0.85];
+/** Radial segments of the shell; the meridian seams run along every fourth (diagonals between the panels). */
+const EGG_SEGS = 16;
+
+/** Shell radius at h. */
+function eggR(h: number): number {
+  if (h <= 0 || h >= 1) return 0;
+  return EGG_R * Math.pow(Math.sin(Math.PI * Math.pow(h, EGG_K)), 0.7);
+}
+
+/** The point at (h, phi) on the shell (torso space), without lift. */
+function eggAt(h: number, phi: number, out: THREE.Vector3): THREE.Vector3 {
+  const r = eggR(h);
+  return out.set(r * Math.sin(phi), h * EGG_LEN, r * Math.cos(phi) * EGG_D).applyMatrix4(EGG_ROT).add(EGG_BASE);
+}
+
+const _ea = new THREE.Vector3();
+const _eb = new THREE.Vector3();
+const _ec = new THREE.Vector3();
+/**
+ * The point at (h, phi) on the shell, lifted `lift` along its outward normal (written to `nrm` when given).
+ * Torso space.
+ */
+function eggSurf(h: number, phi: number, lift = 0, out = new THREE.Vector3(), nrm?: THREE.Vector3): THREE.Vector3 {
+  const e = 1e-3;
+  const hh = Math.min(0.985, Math.max(0.015, h));
+  eggAt(hh + e, phi, _ea).sub(eggAt(hh - e, phi, _eb));
+  eggAt(hh, phi + e, _eb).sub(eggAt(hh, phi - e, _ec));
+  _ec.crossVectors(_eb, _ea).normalize();
+  if (nrm) nrm.copy(_ec);
+  return eggAt(h, phi, out).addScaledVector(_ec, lift);
+}
+
+/** Fire tendrils rise from the exhaust stacks away from this point (torso space): the shell's heart. */
+const HUMP_CENTRE = new THREE.Vector3(0, 0.5 * EGG_LEN, 0).applyMatrix4(EGG_ROT).add(EGG_BASE);
+/** Exhaust stacks (torso space), left then right, on the upper back: base on the shell, axis away from HUMP_CENTRE. */
+const STACK_H = 70;
+const STACKS = [1, -1].map((sx) => {
+  const base = eggSurf(0.76, Math.PI - sx * 0.62, -8);
+  const axis = base.clone().sub(HUMP_CENTRE).normalize();
+  return { base, axis, mouth: base.clone().addScaledVector(axis, STACK_H) };
+});
+/** Fire tendrils (torso space): two from each stack's mouth. */
+const TENDRIL_ROOTS: readonly THREE.Vector3[] = STACKS.flatMap(({ mouth, axis }) => {
+  const across = new THREE.Vector3().crossVectors(axis, new THREE.Vector3(0, 0, 1)).normalize();
+  return [mouth.clone().addScaledVector(across, 12), mouth.clone().addScaledVector(across, -12)];
+});
+/** Magma Lob hatches (h, phi on the shell): Magma Lob, Ember Storm and Pyroclast leave from these in turn. */
+const HATCHES: readonly (readonly [number, number])[] = [
+  [0.52, Math.PI - 0.55],
+  [0.52, Math.PI + 0.55],
+  [0.9, Math.PI],
 ];
-/** Fur (torso space): ellipsoid patches the tufts grow from: centre, radii, X tilt, count. */
-const FUR: readonly (readonly [V3, V3, number, number])[] = [
-  [BACK[0]![0], BACK[0]![1], BACK[0]![2], 230],
-  [BACK[1]![0], BACK[1]![1], BACK[1]![2], 40],
-  [[200, 500, 70], [140, 125, 140], 0, 55],
-  [[-200, 500, 70], [140, 125, 140], 0, 55],
-  [[0, 380, 20], [230, 180, 200], 0.3, 60],
-  [[0, 250, -110], [150, 110, 140], 0, 30],
-];
-const F_MIRROR = new THREE.Matrix4().makeScale(-1, 1, 1);
+/** The head (torso space): a forward-jutting tube on a short neck from the front of the shell's crown. */
+const HEAD_AT = new THREE.Vector3(0, 596, 262);
+const HEAD_R = 54;
+const HEAD_LEN = 150;
+const HEAD_PITCH = 0.18;
+
 const _rel = new THREE.Matrix4();
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
 const _q2 = new THREE.Quaternion();
-const _e = new THREE.Euler();
 const _up = new THREE.Vector3(0, 1, 0);
 const _s = new THREE.Vector3();
-const _rot = new THREE.Matrix4();
 const _n = new THREE.Vector3();
 const _at = new THREE.Vector3();
 const _dir = new THREE.Vector3();
-const _nrm = new THREE.Vector3();
 const _down = new THREE.Vector3(0, -1, 0);
 const _col = new THREE.Color();
 const _lx = new THREE.Vector3();
@@ -144,9 +148,44 @@ const _tmp = new THREE.Vector3();
 const _world = new THREE.Vector3();
 const _lunge = new THREE.Vector3();
 
+/** Extra unit shapes for the robot: an eight-sided tube, one widening toward +Y, and a round lens (axis Y). */
+const TUBE = faceted(new THREE.CylinderGeometry(0.5, 0.5, 1, 8));
+const FLARE = faceted(new THREE.CylinderGeometry(0.6, 0.5, 1, 8));
+const LENS = faceted(new THREE.CylinderGeometry(0.5, 0.5, 1, 10));
+/** Ball and lumpy nub of diameter 1 (SHAPES.blob and .boulder are radius 1). */
+const BALL = faceted(new THREE.IcosahedronGeometry(0.5, 1));
+const NUB = faceted(new THREE.IcosahedronGeometry(0.5, 0));
+
+/** Matrix placing a part at `pos` with its local +Y along `dir`, turned `spin` rad about it. */
+function along(pos: THREE.Vector3, dir: THREE.Vector3, spin = 0, out = new THREE.Matrix4()): THREE.Matrix4 {
+  _q.setFromUnitVectors(_up, _tmp.copy(dir).normalize()).multiply(_q2.setFromAxisAngle(_up, spin));
+  return out.compose(pos, _q, _s.set(1, 1, 1));
+}
+
+/** A tube (`shape`, radius 0.5 units) of radius r from a to b, appended painted. */
+function strut(out: THREE.BufferGeometry[], shape: THREE.BufferGeometry, color: number, a: V3, b: V3, r: number): void {
+  const pa = new THREE.Vector3(...a);
+  const d = new THREE.Vector3(...b).sub(pa);
+  const len = d.length();
+  piece(out, shape, color, [0, 0, 0], [r * 2, len, r * 2], [0, 0, 0], along(pa.addScaledVector(d, 0.5), d));
+}
+
+/** Seam strip (unit-box matrix) from a to b on a surface with outward normal n, `w` wide. */
+function stripMatrix(a: THREE.Vector3, b: THREE.Vector3, n: THREE.Vector3, w: number): THREE.Matrix4 {
+  _lx.subVectors(b, a);
+  const len = _lx.length();
+  _lx.divideScalar(len);
+  _lz.copy(n).addScaledVector(_lx, -n.dot(_lx)).normalize();
+  _ly.crossVectors(_lz, _lx);
+  return new THREE.Matrix4()
+    .makeBasis(_lx, _ly, _lz)
+    .scale(_s.set(len + w * 0.5, w, 8))
+    .setPosition(_at.addVectors(a, b).multiplyScalar(0.5).addScaledVector(n, 2));
+}
+
 /**
  * Stretch a height-1, centred limb mesh from a to b (like placeSegment), turned about its axis so its local +Z
- * leans toward `ref` (the IK bend direction): a stable twist, so the carved bracers and guards never spin.
+ * leans toward `ref` (the IK bend direction): a stable twist, so the armour plates and collars never spin.
  */
 function placeLimb(obj: THREE.Object3D, a: THREE.Vector3, b: THREE.Vector3, ref: THREE.Vector3): void {
   _ly.subVectors(b, a);
@@ -171,10 +210,11 @@ type Arm = { upper: THREE.Mesh; fore: THREE.Mesh; fist: THREE.Mesh };
 type Leg = { thigh: THREE.Mesh; shin: THREE.Mesh; foot: THREE.Mesh };
 
 /**
- * The Magma Golem: a hunched colossus of shaggy dark fur under ancient carved stone armour (chest plate, back
- * slabs, pauldrons, bracers, shin guards, stone-capped fists) whose magma glyphs glow, a Molten Core sigil on its
- * chest, a small stone helmet-mask sunk between its shoulders, huge arms it knuckle-walks on and short thick legs. Back vents lob magma; fire tendrils
- * flare from its back and whip at flyers. Faces +Z; +X is its left.
+ * The Magma Golem: an ancient robot, rust-brown and overgrown. A top-heavy egg of curved armour panels whose seams
+ * glow faintly with the magma inside; moss, grass and vines on its back and shoulders; a small tube head jutting
+ * forward on a short neck with round glowing eyes; a Molten Core port in its chest. Very long thin arms end in
+ * three-clawed hands it knuckle-walks on; short stalky legs on broad flat feet; magma glows in every joint. Two
+ * exhaust stacks on its back throw fire tendrils that whip at flyers; three hatches lob magma. Faces +Z; +X is its left.
  */
 export class GolemBody implements MonsterBody {
   readonly root = new THREE.Group();
@@ -185,13 +225,16 @@ export class GolemBody implements MonsterBody {
   private limbArms: Arm[] = [];
   private legs: Leg[] = [];
   private tintMats: THREE.MeshToonMaterial[];
-  /** One vertex-coloured material for all fur and stone (and the tufts, tinted per instance). */
+  /** One vertex-coloured material for the whole shell, limbs and greenery (the plants tinted per instance). */
   private bodyMat: THREE.MeshToonMaterial;
-  private glyphMat: THREE.MeshToonMaterial;
+  /** Magma in the joint gaps and exhaust throats. */
+  private jointMat: THREE.MeshToonMaterial;
+  /** The faint glow along the panel seams. */
+  private seamMat: THREE.MeshToonMaterial;
   private coreMat: THREE.MeshToonMaterial;
   private eyeMat: THREE.MeshToonMaterial;
-  private glyphs!: THREE.InstancedMesh;
-  private tufts!: THREE.InstancedMesh;
+  private seams!: THREE.InstancedMesh;
+  private plants!: THREE.InstancedMesh;
   private flares = new FireTendrils(TENDRIL_ROOTS, HUMP_CENTRE);
   private geos: THREE.BufferGeometry[] = [];
   private vents: THREE.Object3D[] = [];
@@ -205,247 +248,339 @@ export class GolemBody implements MonsterBody {
 
   constructor() {
     this.bodyMat = toonMat(0xffffff, { vertexColors: true });
-    this.glyphMat = toonMat(C.glyph, { emissive: C.glyph });
+    this.jointMat = toonMat(C.glow, { emissive: C.glow });
+    this.seamMat = toonMat(C.seam, { emissive: C.seam });
     this.coreMat = toonMat(C.core, { emissive: C.core });
     this.eyeMat = toonMat(C.eye, { emissive: C.eye });
     this.tintMats = [this.bodyMat];
-    const { box, blob, boulder, collar } = SHAPES;
+    const { box, boulder, collar, spike } = SHAPES;
     const torso: THREE.BufferGeometry[] = [];
-    const glyphs: THREE.Matrix4[] = [];
-    const tufts: { m: THREE.Matrix4; c: number }[] = [];
-    const rand = rng(7);
-    const furTones = [C.fur, C.furDark, C.fur, C.furLight];
-    const tuft = (at: THREE.Vector3, dir: THREE.Vector3, len: number, wide: number) => {
-      _q.setFromUnitVectors(_down, dir.normalize());
+    const glow: THREE.BufferGeometry[] = [];
+    const seams: THREE.Matrix4[] = [];
+    const plants: { m: THREE.Matrix4; c: number }[] = [];
+    const rand = rng(11);
+    const mossTones = [C.moss, C.mossDark, C.moss, C.mossLight];
+    const plant = (at: THREE.Vector3, dir: THREE.Vector3, len: number, wide: number, c: number) => {
+      _q.setFromUnitVectors(_down, _tmp.copy(dir).normalize());
       _q.multiply(_q2.setFromAxisAngle(_down, rand() * Math.PI * 2));
-      tufts.push({ m: new THREE.Matrix4().compose(at.clone(), _q.clone(), _s.set(wide, len, wide).clone()), c: furTones[Math.floor(rand() * furTones.length)]! });
+      plants.push({ m: new THREE.Matrix4().compose(at.clone(), _q.clone(), _s.set(wide, len, wide).clone()), c });
     };
 
-    // Shaggy fur body: hips, belly, a hunched back with a hump, shoulders.
-    piece(torso, blob, C.furDark, [0, 250, -110], [150, 110, 140]);
-    piece(torso, blob, C.fur, [0, 380, 20], [230, 180, 200], [0.3, 0, 0]);
-    for (const [c, r, tilt] of BACK) piece(torso, blob, C.furDark, c, r, [tilt, 0, 0]);
-    for (const sx of [1, -1]) piece(torso, blob, C.furDark, [sx * 200, 500, 70], [140, 125, 140]);
-    // A craggy rock crust over the back: the creature's own stony hide, flattened lumps half sunk into the fur,
-    // its edge ragged; faint magma cracks glow between the lumps.
-    const crust: { p: THREE.Vector3; r: number }[] = [];
-    const rockTones = [C.crust, C.stoneDark, C.crust, C.stone, C.stoneDark];
-    BACK.forEach(([c, r, tilt], b) => {
-      _rot.makeRotationX(tilt);
-      for (let i = 0; i < (b === 0 ? 320 : 100); i++) {
-        const z = rand() * 2 - 1;
-        const a = rand() * Math.PI * 2;
-        const k = Math.sqrt(1 - z * z);
-        _n.set(k * Math.cos(a), k * Math.sin(a), z);
-        _dir.set(_n.x / r[0], _n.y / r[1], _n.z / r[2]).applyMatrix4(_rot).normalize();
-        if (_dir.z > 0.2 || _dir.y < 0.05 + rand() * 0.35 || Math.abs(_dir.x) > 0.75) continue;
-        _at.set(_n.x * r[0], _n.y * r[1], _n.z * r[2]).multiplyScalar(0.97).applyMatrix4(_rot).add(_tmp.set(c[0], c[1], c[2]));
-        if (crust.some((q) => q.p.distanceTo(_at) < q.r * 0.75)) continue;
-        const size = 34 + rand() * 38;
-        _q.setFromUnitVectors(_up, _dir).multiply(_q2.setFromAxisAngle(_up, rand() * Math.PI * 2));
-        const g = boulder.clone().applyMatrix4(_m.compose(_at, _q, _s.set(size, size * (0.45 + rand() * 0.45), size * (0.7 + rand() * 0.5))));
-        torso.push(painted(g, rockTones[Math.floor(rand() * rockTones.length)]!));
-        crust.push({ p: _at.clone(), r: size });
-        if (rand() < 0.3) {
-          // A short crack lying in the surface, sunk so it shows only between the lumps.
-          _e.set(0, rand() * Math.PI, 0);
-          glyphs.push(new THREE.Matrix4().compose(_at.clone().addScaledVector(_dir, 8), _q.clone().multiply(_q2.setFromEuler(_e)), _s.set(60 + rand() * 40, 11, 11).clone()));
-        }
+    // The shell: a lathed egg of curved armour panels, banded and quartered, its lower panels grimier.
+    const pts = EGG_RINGS.map((h) => new THREE.Vector2(eggR(h), h * EGG_LEN));
+    const egg = faceted(new THREE.LatheGeometry(pts, EGG_SEGS));
+    egg.applyMatrix4(_m.makeScale(1, 1, EGG_D)).applyMatrix4(EGG_ROT).translate(EGG_BASE.x, EGG_BASE.y, EGG_BASE.z);
+    {
+      const pos = egg.getAttribute('position');
+      const colors = new Float32Array(pos.count * 3);
+      const inv = EGG_ROT.clone().invert();
+      for (let i = 0; i < pos.count; i += 3) {
+        _at.set(0, 0, 0);
+        for (let k = 0; k < 3; k++) _at.add(_n.fromBufferAttribute(pos, i + k));
+        _at.divideScalar(3).sub(EGG_BASE).applyMatrix4(inv);
+        const h = _at.y / EGG_LEN;
+        const phi = Math.atan2(_at.x, _at.z / EGG_D);
+        const band = SEAM_H.filter((s) => h > s).length;
+        const quarter = Math.floor((((phi + Math.PI / 4) % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2) / (Math.PI / 2));
+        let c: number = [C.shellDark, quarter % 2 ? C.shell : C.shellLight, quarter % 2 ? C.shellLight : C.shell, C.shell][band]!;
+        // Rust streaks: a few facets a shade darker.
+        if (rand() < 0.12) c = c === C.shellDark ? C.metalLight : C.shellDark;
+        _col.setHex(c);
+        for (let k = 0; k < 3; k++) colors.set([_col.r, _col.g, _col.b], (i + k) * 3);
       }
-    });
-    const crusted = (p: THREE.Vector3) => crust.some((q) => q.p.distanceTo(p) < q.r * 0.7);
-    // Plate frames (inverse, both sides), so tufts rooted under an upright slab do not poke through its carved face.
-    const under = PLATES.flatMap((pl) => {
-      const M = partMatrix(pl.p, pl.r, [1, 1, 1]);
-      if (_nrm.set(0, 0, 1).transformDirection(M).y > 0.5) return [];
-      const ms = pl.pair ? [M, M.clone().premultiply(F_MIRROR).multiply(F_MIRROR)] : [M];
-      return ms.map((m) => ({ inv: m.clone().invert(), s: pl.s }));
-    });
-    const hidden = (p: THREE.Vector3) =>
-      under.some(({ inv, s }) => {
-        _tmp.copy(p).applyMatrix4(inv);
-        return Math.abs(_tmp.x) < s[0] / 2 + 10 && Math.abs(_tmp.y) < s[1] / 2 && _tmp.z < s[2] / 2 && _tmp.z > -s[2] / 2 - 90;
-      });
-    for (const [c, r, tilt, n] of FUR) {
-      _rot.makeRotationX(tilt);
-      for (let i = 0; i < n; i++) {
-        // Uniform direction on the sphere, then onto the ellipsoid; the tuft hangs down and a little outward.
-        const z = rand() * 2 - 1;
-        const a = rand() * Math.PI * 2;
-        const k = Math.sqrt(1 - z * z);
-        _n.set(k * Math.cos(a), k * Math.sin(a), z);
-        _at.set(_n.x * r[0], _n.y * r[1], _n.z * r[2]).multiplyScalar(0.95).applyMatrix4(_rot).add(_tmp.set(c[0], c[1], c[2]));
-        _dir.set(_n.x / r[0], _n.y / r[1], _n.z / r[2]).applyMatrix4(_rot).normalize();
-        // No fur under the chest plate or over the face.
-        if (_at.z > 130 && Math.abs(_at.x) < 105 && _at.y < 530) continue;
-        if (_dir.y < -0.75 || hidden(_at) || crusted(_at)) continue;
-        // Lie along the surface, flowing downhill (a pelt), lifted a little off it.
-        _tmp.set((rand() - 0.5) * 0.5, -1, (rand() - 0.5) * 0.5);
-        _tmp.addScaledVector(_dir, -_tmp.dot(_dir));
-        if (_tmp.lengthSq() < 0.05) _tmp.set(rand() - 0.5, 0, rand() - 0.5);
-        _dir.multiplyScalar(0.75).add(_tmp.normalize());
-        tuft(_at, _dir, 64 + rand() * 50, 44 + rand() * 18);
-      }
+      egg.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+      torso.push(egg);
     }
-
-    // Stone armour slabs with magma glyphs; fur hangs from their edges.
-    for (const pl of PLATES) {
-      const M = partMatrix(pl.p, pl.r, [1, 1, 1]);
-      const sides = pl.pair ? [M, M.clone().premultiply(F_MIRROR).multiply(F_MIRROR)] : [M];
-      for (const S of sides) piece(torso, box, pl.dark ? C.stoneDark : C.stone, [0, 0, 0], pl.s, [0, 0, 0], S);
-      const g: THREE.Matrix4[] = [];
-      if (pl.g) glyphMatrices(M, pl.s[2], pl.g, g);
-      for (const gm of g) {
-        glyphs.push(gm);
-        if (pl.pair) glyphs.push(gm.clone().premultiply(F_MIRROR).multiply(F_MIRROR));
-      }
-      _nrm.set(0, 0, 1).transformDirection(M);
-      for (const e of pl.fringe ?? []) {
-        const [w, h, d] = pl.s;
-        const along = e === 'b' ? w : h;
-        const n = Math.max(2, Math.round(along / 34));
-        for (let i = 0; i < n; i++) {
-          const u = (i + 0.5) / n - 0.5;
-          if (e === 'b') _at.set(u * along, -h / 2 + 6, -d / 4);
-          else _at.set((e === 'r' ? 1 : -1) * (w / 2 - 6), u * along, -d / 4);
-          _at.applyMatrix4(M);
-          _dir.copy(_nrm).multiplyScalar(0.25).add(_tmp.set((rand() - 0.5) * 0.3, -1, (rand() - 0.5) * 0.3));
-          const len = 60 + rand() * 40;
-          const wide = 34 + rand() * 12;
-          tuft(_at, _dir, len, wide);
-          if (pl.pair) tuft(_at.setX(-_at.x), _dir.setX(-_dir.x), len, wide);
+    // Panel seams (faintly glowing strips) along three rings and four diagonal meridians, rivets beside them.
+    const seg = (Math.PI * 2) / EGG_SEGS;
+    for (const h of SEAM_H) {
+      for (let j = 0; j < EGG_SEGS; j++) {
+        const a = eggAt(h, j * seg, new THREE.Vector3());
+        const b = eggAt(h, (j + 1) * seg, new THREE.Vector3());
+        eggSurf(h, (j + 0.5) * seg, 0, _at, _n);
+        seams.push(stripMatrix(a, b, _n, 12));
+        if (j % 2 === 0) {
+          eggSurf(h + 0.03, (j + 0.5) * seg, 2, _at, _n);
+          piece(torso, boulder, C.metal, [_at.x, _at.y, _at.z], [11, 11, 11]);
         }
       }
     }
+    for (let k = 0; k < 4; k++) {
+      const phi = Math.PI / 4 + (k * Math.PI) / 2;
+      const rings = EGG_RINGS.filter((h) => h >= SEAM_H[0]! && h <= SEAM_H[2]!);
+      for (let j = 0; j + 1 < rings.length; j++) {
+        const a = eggAt(rings[j]!, phi, new THREE.Vector3());
+        const b = eggAt(rings[j + 1]!, phi, new THREE.Vector3());
+        eggSurf((rings[j]! + rings[j + 1]!) / 2, phi, 0, _at, _n);
+        seams.push(stripMatrix(a, b, _n, 11));
+        eggSurf((rings[j]! + rings[j + 1]!) / 2, phi + 0.09, 2, _at);
+        piece(torso, boulder, C.metal, [_at.x, _at.y, _at.z], [10, 10, 10]);
+      }
+    }
 
-    // A small stone helmet-mask sunk between the shoulders: brow, cheek guards, a crest, slit eyes, a fur beard.
-    piece(torso, box, C.stone, [0, 476, 236], [116, 104, 108]);
-    piece(torso, box, C.stoneDark, [0, 506, 300], [128, 22, 30], [0.1, 0, 0]);
-    piece(torso, box, C.stoneDark, [0, 542, 246], [18, 44, 100], [-0.2, 0, 0]);
-    piece(torso, box, C.stone, [0, 530, 196], [14, 30, 60], [-0.1, 0, 0]);
-    for (const sx of [1, -1]) piece(torso, box, C.stoneDark, [sx * 62, 456, 274], [16, 78, 66]);
+    // Pelvis: a dark drum between the hips, ball sockets either side (magma in the gap).
+    piece(torso, TUBE, C.metal, [0, HIP.y + 6, HIP.z], [118, 2 * HIP.x - 30, 118], [0, 0, Math.PI / 2]);
+    piece(torso, TUBE, C.shellDark, [0, HIP.y + 30, HIP.z + 10], [150, 150, 130], [0, 0, Math.PI / 2]);
+    for (const sx of [1, -1]) piece(torso, TUBE, C.metal, [sx * (HIP.x - 40), HIP.y, HIP.z], [104, 22, 104], [0, 0, Math.PI / 2]);
+
+    // Shoulders: round pauldron domes over dark sockets, magma showing between socket and arm.
+    for (const sx of [1, -1]) {
+      piece(torso, BALL, C.shell, [sx * 214, SHOULDER.y + 40, SHOULDER.z - 6], [150, 100, 164], [0, 0, -sx * 0.35]);
+      piece(torso, TUBE, C.metal, [sx * (SHOULDER.x - 22), SHOULDER.y - 4, SHOULDER.z], [112, 34, 112], [0, 0, Math.PI / 2]);
+      piece(glow, TUBE, C.glow, [sx * (SHOULDER.x - 2), SHOULDER.y - 4, SHOULDER.z], [96, 16, 96], [0, 0, Math.PI / 2]);
+      // A rim of rivets around the dome.
+      for (let k = 0; k < 6; k++) {
+        const a = -0.9 + k * 0.42;
+        piece(torso, boulder, C.metal, [sx * (214 + Math.cos(a) * 70), SHOULDER.y + 22, SHOULDER.z - 6 + Math.sin(a) * 76], [10, 10, 10]);
+      }
+    }
+
+    // The head: a tube jutting forward on a short neck, round lenses in a dark face ring, a fin on top.
+    const neckA = eggSurf(0.9, 0, -20);
+    strut(torso, TUBE, C.metal, [neckA.x, neckA.y, neckA.z], [HEAD_AT.x, HEAD_AT.y - 8, HEAD_AT.z - HEAD_LEN * 0.35], 34);
+    for (let k = 0; k < 3; k++) {
+      const u = 0.25 + k * 0.22;
+      _at.lerpVectors(neckA, HEAD_AT, u);
+      piece(torso, TUBE, C.metalLight, [_at.x, _at.y - 4, _at.z], [84, 12, 84], [Math.PI / 2 - 0.3, 0, 0]);
+    }
+    const head = new THREE.Matrix4().compose(HEAD_AT, _q.setFromEuler(new THREE.Euler(Math.PI / 2 + HEAD_PITCH, 0, 0)), _s.set(1, 1, 1));
+    // In `head` space the tube runs along +Y (forward, tipped down HEAD_PITCH) and −Z is up.
+    piece(torso, LENS, C.shell, [0, 0, 0], [HEAD_R * 2, HEAD_LEN, HEAD_R * 2], [0, 0, 0], head);
+    piece(torso, LENS, C.shellLight, [0, -HEAD_LEN * 0.2, 0], [HEAD_R * 2 + 8, 26, HEAD_R * 2 + 8], [0, 0, 0], head);
+    piece(torso, BALL, C.shellDark, [0, -HEAD_LEN / 2, 0], [HEAD_R * 1.9, 44, HEAD_R * 1.9], [0, 0, 0], head);
+    piece(torso, LENS, C.metal, [0, HEAD_LEN / 2 + 4, 0], [HEAD_R * 2 + 6, 16, HEAD_R * 2 + 6], [0, 0, 0], head);
+    piece(torso, LENS, C.metal, [0, HEAD_LEN / 2 + 2, 0], [HEAD_R * 1.7, 16, HEAD_R * 1.7], [0, 0, 0], head);
+    // A fin along the top, bolts on the sides.
+    piece(torso, box, C.shellDark, [0, -6, -HEAD_R - 8], [14, HEAD_LEN * 0.8, 26], [0, 0, 0], head);
+    for (const sx of [1, -1]) piece(torso, LENS, C.metal, [sx * (HEAD_R + 2), -10, 0], [34, 14, 34], [0, 0, Math.PI / 2], head);
     const eyes: THREE.BufferGeometry[] = [];
-    for (const sx of [1, -1]) piece(eyes, box, C.eye, [sx * 26, 488, 304], [34, 9, 10], [0.12, 0, sx * 0.18]);
-    for (let i = 0; i < 11; i++) {
-      const u = i / 10 - 0.5;
-      tuft(_at.set(u * 96, 420 - Math.abs(u) * 30, 284 + rand() * 10), _dir.set(u * 0.6, -1, 0.5), 52 + (0.5 - Math.abs(u)) * 50 + rand() * 14, 34);
+    for (const sx of [1, -1]) {
+      piece(torso, LENS, C.metal, [sx * 24, HEAD_LEN / 2 + 10, -8], [48, 10, 48], [0, 0, 0], head);
+      piece(eyes, LENS, C.eye, [sx * 24, HEAD_LEN / 2 + 14, -8], [36, 10, 36], [0, 0, 0], head);
+    }
+    // A small third lens below.
+    piece(eyes, LENS, C.eye, [0, HEAD_LEN / 2 + 12, 30], [14, 8, 14], [0, 0, 0], head);
+
+    // The Molten Core: a glowing port in the chest behind a dark collar and grille bars.
+    const core: THREE.BufferGeometry[] = [];
+    const coreN = new THREE.Vector3();
+    const coreAt = eggSurf(0.64, 0, 0, new THREE.Vector3(), coreN);
+    const port = along(coreAt, coreN);
+    piece(torso, collar, C.metal, [0, 2, 0], [52, 26, 52], [0, 0, 0], port);
+    piece(core, LENS, C.core, [0, 12, 0], [92, 8, 92], [0, 0, 0], port);
+    for (const x of [-26, 0, 26]) piece(torso, box, C.metal, [x, 18, 0], [10, 8, 96 - Math.abs(x) * 0.9], [0, 0, 0], port);
+
+    // Exhaust stacks: dark pipes with a rust band, magma in the throat; the fire tendrils leave their mouths.
+    for (const { base, axis } of STACKS) {
+      const M = along(base, axis);
+      piece(torso, collar, C.metal, [0, STACK_H / 2, 0], [34, STACK_H, 34], [0, 0, 0], M);
+      piece(torso, TUBE, C.shellDark, [0, STACK_H * 0.45, 0], [88, 16, 88], [0, 0, 0], M);
+      piece(torso, TUBE, C.metal, [0, STACK_H, 0], [80, 12, 80], [0, 0, 0], M);
+      piece(glow, LENS, C.glow, [0, STACK_H + 5, 0], [60, 6, 60], [0, 0, 0], M);
     }
 
-    // The Molten Core: a glowing rhombus at the heart of the chest plate's sigil.
-    const core: THREE.BufferGeometry[] = [];
-    const chest = partMatrix(CHEST.p, CHEST.r, [1, 1, 1]);
-    piece(core, box, C.core, [0, 4, CHEST.s[2] / 2 + 2], [58, 58, 16], [0, 0, Math.PI / 4], chest);
-    piece(core, box, C.core, [0, 4, CHEST.s[2] / 2 + 8], [26, 26, 10], [0, 0, Math.PI / 4], chest);
-
-    // Back vents: ruined stone chimneys around glowing throats; `mouth` is where shots leave.
-    const throat = this.keep(new THREE.CircleGeometry(1, 7).rotateX(-Math.PI / 2));
-    BACK_VENTS.forEach(([x, y, z], i) => {
+    // Magma Lob hatches: round dark collars on a flange, rivets around; `mouth` is where shots leave.
+    const throat = this.keep(new THREE.CircleGeometry(1, 9).rotateX(-Math.PI / 2));
+    const keepOut: { p: THREE.Vector3; r: number }[] = STACKS.map(({ base }) => ({ p: base, r: 80 }));
+    HATCHES.forEach(([h, phi]) => {
+      const n = new THREE.Vector3();
+      const at = eggSurf(h, phi, -4, new THREE.Vector3(), n);
+      keepOut.push({ p: at, r: 70 });
       const vent = new THREE.Object3D();
-      vent.position.set(x, y, z);
-      vent.rotation.set(-0.35, 0, -Math.sign(x) * 0.3);
+      along(at, n).decompose(vent.position, vent.quaternion, vent.scale);
       vent.updateMatrix();
-      piece(torso, collar, C.stoneDark, [0, -10, 0], [44, 90, 44], [0, 0, 0], vent.matrix);
-      // A broken rim: three of four walls, of uneven heights.
-      for (let k = 0; k < 3; k++) {
-        const a = k * (Math.PI / 2) + 0.4 + i;
-        const h = [40, 18, 48][(k + i) % 3]!;
-        piece(torso, box, k % 2 ? C.stoneDark : C.stone, [Math.sin(a) * 38, 26 + h / 2, Math.cos(a) * 38], [88, h, 18], [0, a, 0], vent.matrix);
-      }
+      piece(torso, collar, C.metal, [0, 8, 0], [40, 26, 40], [0, 0, 0], vent.matrix);
+      piece(torso, TUBE, C.shellDark, [0, 6, 0], [100, 6, 100], [0, 0, 0], vent.matrix);
+      for (let k = 0; k < 6; k++) piece(torso, boulder, C.metal, [Math.sin(k * 1.05) * 47, 9, Math.cos(k * 1.05) * 47], [8, 8, 8], [0, 0, 0], vent.matrix);
       const mat = toonMat(C.magma, { emissive: C.magma });
       this.ventMats.push(mat);
       this.ventFlash.push(0);
-      this.mesh(vent, throat, mat, false).position.set(0, 35.5, 0);
-      vent.children[0]!.scale.set(30, 1, 30);
+      this.mesh(vent, throat, mat, false).position.set(0, 21.5, 0);
+      vent.children[0]!.scale.set(33, 1, 33);
       const mouth = new THREE.Object3D();
-      mouth.position.set(0, 55, 0);
+      mouth.position.set(0, 50, 0);
       vent.add(mouth);
       this.vents.push(mouth);
       this.shell.add(vent);
     });
+    keepOut.push({ p: neckA, r: 90 });
+
+    // Moss: flattened green lumps half sunk into the upper back and the shoulder domes, grass and leaves in it.
+    const moss: { p: THREE.Vector3; r: number }[] = [];
+    const blocked = (p: THREE.Vector3, pad: number) => keepOut.some((k) => k.p.distanceTo(p) < k.r + pad);
+    const lump = (at: THREE.Vector3, n: THREE.Vector3, size: number) => {
+      _q.setFromUnitVectors(_up, n).multiply(_q2.setFromAxisAngle(_up, rand() * Math.PI * 2));
+      const g = boulder.clone().applyMatrix4(_m.compose(at, _q, _s.set(size, size * (0.14 + rand() * 0.14), size * (0.7 + rand() * 0.4))));
+      torso.push(painted(g, mossTones[Math.floor(rand() * mossTones.length)]!));
+      moss.push({ p: at.clone(), r: size });
+    };
+    for (let i = 0; i < 400 && moss.length < 46; i++) {
+      // Biased to the crown and the back, thinning toward the sides.
+      const h = 0.5 + Math.pow(rand(), 0.6) * 0.5;
+      const phi = Math.PI + (rand() * 2 - 1) * (h > 0.85 ? Math.PI : 1.5);
+      eggSurf(h, phi, -6, _at, _n);
+      if (_n.y < 0.3 || blocked(_at, 0) || moss.some((q) => q.p.distanceTo(_at) < q.r * 0.9)) continue;
+      lump(_at, _n, 34 + rand() * 38);
+    }
+    for (const sx of [1, -1]) {
+      for (let k = 0; k < 5; k++) {
+        _n.set(sx * (0.2 + rand() * 0.5), 1, (rand() - 0.6) * 0.8).normalize();
+        _at.set(sx * 214, SHOULDER.y + 40, SHOULDER.z - 6).add(_tmp.copy(_n).multiply(_s.set(66, 44, 72)));
+        lump(_at, _n, 30 + rand() * 24);
+      }
+    }
+    // Grass tufts and leaves in the moss.
+    const greens = [C.mossLight, C.moss, C.vine, C.mossLight];
+    for (const { p, r } of moss) {
+      const n = Math.floor(rand() * 3);
+      for (let k = 0; k < n; k++) {
+        _dir.set(rand() - 0.5, 0, rand() - 0.5).multiplyScalar(r * 0.8);
+        _n.set((rand() - 0.5) * 0.6, 1, (rand() - 0.5) * 0.6);
+        plant(_at.copy(p).add(_dir), _n, 26 + rand() * 30, 14 + rand() * 10, greens[Math.floor(rand() * greens.length)]!);
+      }
+      if (rand() < 0.18) piece(torso, box, rand() < 0.5 ? C.flower : C.flowerAlt, [p.x + (rand() - 0.5) * r, p.y + 10, p.z + (rand() - 0.5) * r], [13, 13, 13], [rand(), rand(), 0]);
+    }
+    // Two saplings sprouting from the crown: a thin stem and a few broad leaves.
+    for (const [h, phi, tall] of [[0.94, Math.PI * 0.75, 90], [0.8, Math.PI * 1.12, 70]] as const) {
+      const base = eggSurf(h, phi, -4);
+      const top = base.clone().add(_tmp.set((rand() - 0.5) * 30, tall, -10));
+      strut(torso, TUBE, C.vine, [base.x, base.y, base.z], [top.x, top.y, top.z], 5);
+      for (let k = 0; k < 4; k++) {
+        const a = k * 1.7 + rand();
+        const u = 0.55 + k * 0.15;
+        _at.lerpVectors(base, top, u);
+        piece(torso, BALL, k % 2 ? C.mossLight : C.moss, [_at.x + Math.sin(a) * 22, _at.y + 4, _at.z + Math.cos(a) * 22], [46, 8, 24], [0.3, a, 0.2]);
+      }
+    }
+    // Vines trailing down the flanks and back from the moss, leaves along them; a few dangle off the shoulders.
+    const vineAt = new THREE.Vector3();
+    const vineN = new THREE.Vector3();
+    for (const [h0, phi0, steps] of [
+      [0.74, Math.PI / 2 + 0.5, 9], [0.7, Math.PI / 2 + 1.1, 7], [0.68, -Math.PI / 2 - 0.5, 8], [0.72, -Math.PI / 2 - 1.15, 9],
+      [0.6, Math.PI - 0.15, 6], [0.82, Math.PI / 2 - 0.2, 6], [0.8, -Math.PI / 2 + 0.25, 5],
+    ] as const) {
+      let h = h0;
+      let phi = phi0;
+      const prev = eggSurf(h, phi, 4);
+      for (let k = 0; k < steps; k++) {
+        h -= 0.045;
+        phi += (rand() - 0.5) * 0.12;
+        eggSurf(h, phi, 4, vineAt, vineN);
+        torso.push(painted(box.clone().applyMatrix4(stripMatrix(prev, vineAt, vineN, 9)), C.vine));
+        if (k % 2 === 0) piece(torso, box, k % 4 ? C.mossLight : C.moss, [vineAt.x, vineAt.y, vineAt.z], [24, 6, 14], [rand() * 3, rand() * 3, rand() * 3]);
+        prev.copy(vineAt);
+      }
+    }
+    for (const sx of [1, -1]) {
+      for (const [dz, len] of [[-50, 4], [40, 3]] as const) {
+        let p = new THREE.Vector3(sx * 300, SHOULDER.y + 10, SHOULDER.z + dz);
+        for (let k = 0; k < len; k++) {
+          const q = p.clone().add(_tmp.set(sx * (rand() - 0.3) * 10, -26, (rand() - 0.5) * 10));
+          strut(torso, TUBE, C.vine, [p.x, p.y, p.z], [q.x, q.y, q.z], 5);
+          if (k % 2) piece(torso, box, C.mossLight, [q.x, q.y, q.z], [20, 5, 12], [rand() * 3, rand() * 3, 0]);
+          p = q;
+        }
+      }
+    }
 
     this.mesh(this.shell, this.keep(merge(torso)), this.bodyMat);
+    this.mesh(this.shell, this.keep(merge(glow)), this.jointMat, false);
     this.mesh(this.shell, this.keep(merge(core)), this.coreMat, false);
     this.mesh(this.shell, this.keep(merge(eyes)), this.eyeMat, false);
-    this.glyphs = new THREE.InstancedMesh(box, this.glyphMat, glyphs.length);
-    glyphs.forEach((m, i) => this.glyphs.setMatrixAt(i, m));
-    this.shell.add(this.glyphs);
-    const tuftGeo = this.keep(tuftGeometry());
-    this.tufts = new THREE.InstancedMesh(tuftGeo, this.bodyMat, tufts.length);
-    tufts.forEach((t, i) => {
-      this.tufts.setMatrixAt(i, t.m);
-      this.tufts.setColorAt(i, _col.setHex(t.c));
+    this.seams = new THREE.InstancedMesh(box, this.seamMat, seams.length);
+    seams.forEach((m, i) => this.seams.setMatrixAt(i, m));
+    this.shell.add(this.seams);
+    const plantGeo = this.keep(tuftGeometry());
+    this.plants = new THREE.InstancedMesh(plantGeo, this.bodyMat, plants.length);
+    plants.forEach((t, i) => {
+      this.plants.setMatrixAt(i, t.m);
+      this.plants.setColorAt(i, _col.setHex(t.c));
     });
-    this.tufts.castShadow = true;
-    this.tufts.receiveShadow = true;
-    this.shell.add(this.tufts);
+    this.plants.castShadow = true;
+    this.plants.receiveShadow = true;
+    this.shell.add(this.plants);
 
     this.shell.position.copy(PIVOT).multiplyScalar(-1);
     this.body.add(this.shell);
     this.root.add(this.body);
 
-    // Limbs (root space; placed by IK every frame): furry upper arms and thighs, stone bracers, shin guards, fists, feet.
-    const limb = (build: (parts: THREE.BufferGeometry[], glyph: THREE.Matrix4[]) => void, len: number) => {
+    // Limbs (root space; placed by IK every frame). Limb space: Y runs from the joint nearer the body (−len/2) to
+    // the far one (+len/2); +Z is the IK bend side. Magma glows in the gap between each joint's dark collars.
+    const limb = (build: (parts: THREE.BufferGeometry[], glow: THREE.BufferGeometry[]) => void, len: number) => {
       const parts: THREE.BufferGeometry[] = [];
-      const gm: THREE.Matrix4[] = [];
-      build(parts, gm);
+      const gp: THREE.BufferGeometry[] = [];
+      build(parts, gp);
       const m = this.mesh(this.root, this.keep(merge(parts).scale(1, 1 / len, 1)), this.bodyMat);
-      if (gm.length) {
-        const gp: THREE.BufferGeometry[] = [];
-        for (const g of gm) gp.push(painted(box.clone().applyMatrix4(g), C.glyph));
-        this.mesh(m, this.keep(merge(gp).scale(1, 1 / len, 1)), this.glyphMat, false);
-      }
+      if (gp.length) this.mesh(m, this.keep(merge(gp).scale(1, 1 / len, 1)), this.jointMat, false);
       return m;
     };
-    const upperGeo = (p: THREE.BufferGeometry[]) => {
-      piece(p, SHAPES.limb, C.fur, [0, 0, 0], [112, UPPER, 116]);
-      [-0.4, -0.16, 0.08, 0.3].forEach((y, k) => furRing(p, furTones, 7, y * UPPER, 50, 88, 36, 0.5, k * 0.45));
+    const upperGeo = (p: THREE.BufferGeometry[], g: THREE.BufferGeometry[]) => {
+      const L = UPPER / 2;
+      piece(p, TUBE, C.shell, [0, 0, 0], [62, UPPER - 70, 62]);
+      piece(p, TUBE, C.shellDark, [0, -L + 64, 0], [82, 30, 82]);
+      piece(p, box, C.shellLight, [0, -4, 22], [44, UPPER * 0.5, 30]);
+      piece(g, BALL, C.glow, [0, -L + 4, 0], [70, 70, 70]);
+      piece(p, TUBE, C.metal, [0, -L + 38, 0], [88, 20, 88]);
+      piece(p, TUBE, C.metal, [0, L - 32, 0], [82, 18, 82]);
+      // A strand of moss on the top of the upper arm.
+      piece(p, NUB, C.moss, [0, -L + 90, -30], [50, 70, 24]);
     };
-    const foreGeo = (p: THREE.BufferGeometry[], g: THREE.Matrix4[]) => {
-      piece(p, SHAPES.hex, C.fur, [0, -72, 0], [104, 130, 104]);
-      [-118, -80].forEach((y, k) => furRing(p, furTones, 7, y, 46, 70, 32, 0.5, k * 0.45));
-      piece(p, SHAPES.hex, C.stone, [0, 50, 0], [142, 140, 142]);
-      piece(p, SHAPES.hex, C.stoneDark, [0, -22, 0], [156, 20, 156]);
-      piece(p, SHAPES.hex, C.stoneDark, [0, 118, 0], [156, 20, 156]);
-      furRing(p, furTones, 8, -40, 50, 62, 32, 0.6, 0.2);
-      for (let k = 0; k < 6; k++) {
-        const a = Math.PI / 6 + (k * Math.PI) / 3;
-        const face = partMatrix([Math.sin(a) * 61.5, 50, Math.cos(a) * 61.5], [0, a, 0], [1, 1, 1]);
-        glyphMatrices(face, 0, k % 2 ? [[0, -40, 0, 40], [-14, -10, 14, -10], [-14, 18, 14, 18]] : [[-12, -40, -12, 0], [-12, 0, 12, 0], [12, 0, 12, 40]], g, 11);
+    const foreGeo = (p: THREE.BufferGeometry[], g: THREE.BufferGeometry[]) => {
+      const L = FORE / 2;
+      piece(p, FLARE, C.shell, [0, 6, 0], [60, FORE - 100, 60]);
+      piece(g, BALL, C.glow, [0, -L, 0], [66, 66, 66]);
+      piece(p, TUBE, C.metal, [0, -L + 34, 0], [80, 18, 80]);
+      for (const y of [-30, 30]) piece(p, TUBE, C.shellDark, [0, y, 0], [76, 14, 76]);
+      // A long curved guard down the outside of the forearm.
+      piece(p, box, C.shellLight, [0, 6, 30], [34, FORE * 0.55, 14]);
+      piece(p, TUBE, C.metal, [0, L - 92, 0], [92, 22, 92]);
+      piece(g, TUBE, C.glow, [0, L - 70, 0], [70, 22, 70]);
+    };
+    const handGeo = (p: THREE.BufferGeometry[], g: THREE.BufferGeometry[]) => {
+      // Root-aligned, centred on the palm FIST_R above the ground: three claws splayed forward and a heel spur.
+      piece(p, BALL, C.shell, [0, 6, 6], [118, 70, 126]);
+      piece(p, box, C.shellLight, [0, 34, 0], [84, 18, 82], [0.2, 0, 0]);
+      piece(p, TUBE, C.metal, [0, 30, -26], [80, 34, 80], [-0.6, 0, 0]);
+      for (const a of [-0.55, 0, 0.55]) {
+        const s = Math.sin(a);
+        const c = Math.cos(a);
+        const k: V3 = [s * 44, -6, c * 46];
+        const mid: V3 = [s * 98, -38, c * 98];
+        const tip: V3 = [s * 128, -FIST_R + 2, c * 128];
+        strut(p, TUBE, C.shellDark, k, mid, 17);
+        strut(p, spike, C.metal, mid, tip, 30);
+        piece(p, NUB, C.metal, mid, [38, 38, 38]);
+        piece(g, BALL, C.glow, k, [32, 32, 32]);
       }
+      strut(p, spike, C.metal, [0, -14, -44], [0, -FIST_R + 2, -92], 30);
     };
-    const fistGeo = (p: THREE.BufferGeometry[], g: THREE.Matrix4[]) => {
-      const R = FIST_R;
-      piece(p, boulder, C.stoneDark, [0, -6, 0], [R * 1.32, R * 0.95, R * 1.22]);
-      const cap = partMatrix([0, R * 0.6, -4], [UP + 0.12, 0.25, 0.06], [1, 1, 1]);
-      piece(p, box, C.stone, [0, 0, 0], [R * 1.45, R * 1.25, R * 0.4], [0, 0, 0], cap);
-      glyphMatrices(cap, R * 0.4, [...glyph.diamond(0, 0, 30), [0, -10, 0, 10]], g, 11);
-      const knuckle = partMatrix([0, 4, R * 0.74], [0.25, 0, 0], [1, 1, 1]);
-      piece(p, box, C.stone, [0, 0, 0], [R * 1.22, R * 0.55, R * 0.32], [0, 0, 0], knuckle);
-      glyphMatrices(knuckle, R * 0.32, [[-38, 0, 38, 0]], g, 10);
-      for (const sx of [1, -1]) piece(p, box, C.stoneDark, [sx * R * 0.66, -4, 0], [R * 0.3, R * 0.6, R * 0.9], [0, 0, sx * 0.2]);
+    const thighGeo = (p: THREE.BufferGeometry[], g: THREE.BufferGeometry[]) => {
+      const L = THIGH / 2;
+      piece(p, TUBE, C.shell, [0, 6, 0], [80, THIGH - 50, 80]);
+      piece(g, BALL, C.glow, [0, -L, 0], [84, 84, 84]);
+      piece(p, TUBE, C.metal, [0, -L + 42, 0], [104, 22, 104]);
+      piece(p, TUBE, C.metal, [0, L - 26, 0], [98, 18, 98]);
     };
-    const thighGeo = (p: THREE.BufferGeometry[]) => {
-      piece(p, SHAPES.limb, C.fur, [0, 0, 0], [134, THIGH, 138]);
-      [-0.36, -0.08, 0.2, 0.42].forEach((y, k) => furRing(p, furTones, 8, y * THIGH, 64, 76, 42, 0.5, k * 0.5));
-    };
-    const shinGeo = (p: THREE.BufferGeometry[], g: THREE.Matrix4[]) => {
-      piece(p, SHAPES.hex, C.stoneDark, [0, 10, 0], [148, 124, 148]);
-      const guard = partMatrix([0, 8, 60], [-0.06, 0, 0], [1, 1, 1]);
-      piece(p, box, C.stone, [0, 0, 0], [128, 128, 26], [0, 0, 0], guard);
-      glyphMatrices(guard, 24, [[0, -46, 0, 30], [-24, 16, 0, 40], [0, 40, 24, 16]], g, 11);
-      furRing(p, furTones, 9, -66, 66, 66, 40, 0.55, 0.3);
+    const shinGeo = (p: THREE.BufferGeometry[], g: THREE.BufferGeometry[]) => {
+      const L = SHIN / 2;
+      piece(p, FLARE, C.shell, [0, 4, 0], [76, SHIN - 40, 76]);
+      piece(g, BALL, C.glow, [0, -L, 0], [80, 80, 80]);
+      piece(p, TUBE, C.metal, [0, -L + 36, 0], [98, 18, 98]);
+      piece(p, box, C.shellLight, [0, 6, 40], [62, SHIN * 0.62, 18], [0.06, 0, 0]);
     };
     const footGeo = (p: THREE.BufferGeometry[]) => {
-      piece(p, box, C.stoneDark, [0, 0, 0], [150, 44, 168]);
-      for (const x of [-46, 0, 46]) piece(p, box, C.stone, [x, -4, 88], [40, 36, 34], [0, 0, 0]);
-      piece(p, box, C.stone, [0, 26, 8], [128, 16, 132], [0.08, 0, 0]);
+      // Root-aligned; the shin ends 22 below and 25 behind the centre. A broad flat oval pad, a domed cover, toes.
+      piece(p, LENS, C.metal, [0, -6, 6], [184, 32, 226]);
+      piece(p, BALL, C.shellDark, [0, 12, 0], [160, 44, 196]);
+      for (const x of [-52, 0, 52]) piece(p, BALL, C.shell, [x, 0, 100], [56, 36, 54]);
+      piece(p, BALL, C.metal, [0, 18, -25], [90, 76, 90]);
     };
     for (let i = 0; i < 2; i++) {
-      this.limbArms.push({ upper: limb(upperGeo, UPPER), fore: limb(foreGeo, FORE), fist: limb(fistGeo, 1) });
+      this.limbArms.push({ upper: limb(upperGeo, UPPER), fore: limb(foreGeo, FORE), fist: limb(handGeo, 1) });
       this.legs.push({ thigh: limb(thighGeo, THIGH), shin: limb(shinGeo, SHIN), foot: limb(footGeo, 1) });
     }
 
-    // Fire tendrils licking up from the back; Vent Burst whips one at a flyer.
+    // Fire tendrils licking up from the exhaust stacks; Vent Burst whips one at a flyer.
     this.root.add(this.flares.mesh);
   }
 
@@ -568,13 +703,14 @@ export class GolemBody implements MonsterBody {
     const hot = Math.max(f.heat, f.roaring ? 1 : 0);
     this.flares.update(f.dt, f.time, _rel, this.root.matrixWorld, lashAt, f.antiAir ? Math.min(1, f.antiAir.weight) : 0, hot, f.pose.collapse);
 
-    // Glow: glyphs, core and eyes pulse at rest and blaze with Molten Core heat.
+    // Glow: joints, seams, core and eyes pulse at rest and blaze with Molten Core heat.
     for (const mat of this.tintMats) {
       if (f.flash) mat.emissive.setHex(0xffffff);
       else mat.emissive.setHex(CONFIG.levelUp.color).multiplyScalar(f.glow);
     }
     const pulse = 0.25 * Math.sin(f.time * 2.2);
-    this.glyphMat.emissiveIntensity = f.flash ? 3 : 0.9 + pulse + f.heat * 2.2 + (f.roaring ? 1.5 : 0);
+    this.jointMat.emissiveIntensity = f.flash ? 3 : 0.9 + pulse + f.heat * 2.2 + (f.roaring ? 1.5 : 0);
+    this.seamMat.emissiveIntensity = f.flash ? 2 : 0.35 + pulse * 0.5 + f.heat * 1.8 + (f.roaring ? 0.8 : 0);
     this.coreMat.emissiveIntensity = f.flash ? 3 : 1.2 + pulse + f.heat * 3;
     this.eyeMat.emissiveIntensity = 1 + f.heat * 2 + (f.roaring ? 2 : 0);
     for (let i = 0; i < this.ventMats.length; i++) {
@@ -636,8 +772,8 @@ export class GolemBody implements MonsterBody {
 
   dispose(): void {
     for (const g of this.geos) g.dispose();
-    this.glyphs.dispose();
-    this.tufts.dispose();
+    this.seams.dispose();
+    this.plants.dispose();
     this.flares.dispose();
   }
 }

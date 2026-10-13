@@ -241,7 +241,7 @@ export const CONFIG = {
       rangedCooldown: 2.0,
       headHeight: 480,
       /** Measured standing bounding box (world m). */
-      size: { width: 550, length: 415, height: 470 },
+      size: { width: 424, length: 349, height: 464 },
     },
     /**
      * Molten Fist: targets within `frontHalf` (rad) of dead ahead take a slam; others a backhand whose hit arc
@@ -251,20 +251,25 @@ export const CONFIG = {
     /** Magma Lob: splash radius (m), flight time (s), arc height (m); the lava pool it leaves (radius m, life s). */
     lob: { splash: 120, flight: 1.4, arc: 520, poolRadius: 110, poolLife: 3 },
     colors: {
-      /** Shaggy fur (base, shadowed clumps, sun-caught tips). */
-      fur: 0x4d3523,
-      furDark: 0x2f2017,
-      furLight: 0x6b4a2e,
-      /** Weathered carved stone armour, and the deeper stone it is layered on. */
-      stone: 0x9d927c,
-      stoneDark: 0x645b4e,
-      /** The craggy rock crust on its back (between the two stones). */
-      crust: 0x6f665a,
-      /** Magma glyphs carved into the stone. */
-      glyph: 0xff6a1a,
+      /** Rust-brown armour shell (base, weathered highlight, grimy lower panels) and the dark joint metal. */
+      shell: 0x9a5634,
+      shellLight: 0xb8703f,
+      shellDark: 0x6e3b25,
+      metal: 0x3f3631,
+      metalLight: 0x5e5049,
+      /** Moss, grass and vines overgrowing its back, and the odd flower in the moss. */
+      moss: 0x5e8a2c,
+      mossDark: 0x3c5f22,
+      mossLight: 0x8fb846,
+      vine: 0x3f6b25,
+      flower: 0xf4e8a6,
+      flowerAlt: 0xe8a4b8,
+      /** Magma in the joint gaps and exhaust throats; the fainter glow along the panel seams. */
+      glow: 0xff6a1a,
+      seam: 0xc8501c,
       magma: 0xff6a1a,
       core: 0xffc23a,
-      eye: 0xffd060,
+      eye: 0xffc444,
       ember: 0xffb347,
       lava: 0xff4a12,
     },
