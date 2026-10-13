@@ -5,15 +5,16 @@ export type OrbitState = { yaw: number; pitch: number; distance: number };
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
 /**
- * Mouse: drag right → look right (yaw decreases, since +X is left). Touch grabs the world instead: drag right →
- * look left. Drag down → higher, steeper view (both).
+ * Mouse: drag right → look right (yaw decreases, since +X is left), drag down → higher, steeper view. Touch grabs
+ * the world instead, so both are flipped: drag right → look left, drag down → lower view.
  */
 export function applyDrag(s: OrbitState, dxPx: number, dyPx: number, touch = false): OrbitState {
   const c = CONFIG.camera;
+  const k = touch ? -c.dragSensitivity : c.dragSensitivity;
   return {
     ...s,
-    yaw: s.yaw + (touch ? 1 : -1) * dxPx * c.dragSensitivity,
-    pitch: clamp(s.pitch + dyPx * c.dragSensitivity, c.minPitch, c.maxPitch),
+    yaw: s.yaw - dxPx * k,
+    pitch: clamp(s.pitch + dyPx * k, c.minPitch, c.maxPitch),
   };
 }
 
