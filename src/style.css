@@ -385,8 +385,10 @@ body {
 .title-hint {
   font-size: 15px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-text);
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
-  animation: skip-hint-blink 1.6s steps(2) infinite;
+  background: rgba(0, 0, 0, 0.55); padding: 8px 16px; border-radius: 4px;
+  animation: title-hint-blink 1.6s steps(2) infinite;
 }
+@keyframes title-hint-blink { 50% { opacity: 0.55; } }
 
 /* Select: carousel UI over the 3D diorama. */
 .select-screen {

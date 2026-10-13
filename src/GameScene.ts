@@ -219,7 +219,7 @@ export class GameScene {
   }
 
   pause(): void {
-    if (this.state === 'paused' || this.state === 'gameover') return;
+    if (this.state === 'paused' || this.state === 'gameover' || this.state === 'title' || this.state === 'select') return;
     this.stateBeforePause = this.state;
     this.setState('paused');
   }
@@ -507,7 +507,7 @@ export class GameScene {
     if (shown === 'title' || shown === 'select') {
       if (!frozen) this.menuT += realDt;
       if (shown === 'title') titlePose(this.menuT, this.menuPose);
-      else selectPose(this.menuT, this.ms.size.height, this.menuPose);
+      else selectPose(this.menuT, this.ms.size.height, this.camera.aspect, this.menuPose);
       this.camera.position.copy(this.menuPose.pos);
       this.camera.lookAt(this.menuPose.look);
     } else if (!this.intro.active) {
