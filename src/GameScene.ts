@@ -111,6 +111,7 @@ export class GameScene {
 
     this.city = new City(this.scene, CONFIG.world.seed, this.onTargetDestroyed);
     this.monster = new Monster(this.scene, INSECT);
+    this.progression.setPool(this.monster.kind);
     this.rig = new CameraRig(this.camera);
     this.markers = new Markers(this.scene);
     this.particles = new Particles(this.scene);

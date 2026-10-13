@@ -45,6 +45,16 @@ export type PoolSpec = {
   upgradeText: Partial<Record<UpgradeId, { title: string; desc?: string; icon?: string }>>;
 };
 
+/** Offered to every monster. */
+export const SHARED_ABILITIES: readonly AbilityId[] = ['dash', 'roar', 'bubble', 'reflect', 'overload'];
+
+/** Until a monster is set: the Insect Titan's pool (its signatures, default names). */
+const DEFAULT_POOL: PoolSpec = {
+  signatures: ['acid', 'storm', 'chitin', 'frenzy', 'brood', 'spines', 'swat', 'nova', 'mortar'],
+  abilityText: {},
+  upgradeText: {},
+};
+
 export const ABILITIES: Record<AbilityId, { title: string; icon: string; desc(rank: number): string }> = {
   dash: { title: 'Dash', icon: '💨', desc: (r) => (r === 1 ? 'Button: charge and flatten a path (E)' : 'Dash recharges faster') },
   roar: { title: 'Roar', icon: '📣', desc: (r) => (r === 1 ? 'Button: shockwave, downs flyers (R)' : 'Roar recharges faster') },
@@ -75,10 +85,21 @@ export class Progression {
   pendingLevels = 0;
   ranks = emptyRanks();
   private picks = 0;
+  private pool: PoolSpec = DEFAULT_POOL;
   /** Increments with every offer; a pick must name the offer it was made against. */
   offerSeq = 0;
 
   constructor(private rng: () => number) {}
+
+  /** The monster whose signatures and display names the level-up offers use. */
+  setPool(pool: PoolSpec): void {
+    this.pool = pool;
+  }
+
+  /** Abilities this monster can take, in ABILITIES order (so offers stay deterministic per seed). */
+  private poolAbilities(): AbilityId[] {
+    return (Object.keys(ABILITIES) as AbilityId[]).filter((id) => SHARED_ABILITIES.includes(id) || this.pool.signatures.includes(id));
+  }
 
   reset(): void {
     this.level = 1;
@@ -104,7 +125,7 @@ export class Progression {
 
     offer(): UpgradeOffer[] {
       this.offerSeq++;
-      const abilities = (Object.keys(ABILITIES) as AbilityId[]).filter((id) => this.ranks[id] < MAX_RANK);
+      const abilities = this.poolAbilities().filter((id) => this.ranks[id] < MAX_RANK);
       const pool: string[] = [...(Object.keys(UPGRADES) as UpgradeId[]), ...abilities];
       const ids = shuffle(pool, this.rng).slice(0, CONFIG.progression.offerCount);
       const early = this.picks < CONFIG.passives.earlyAbilityPicks;
@@ -114,12 +135,13 @@ export class Progression {
       }
       return ids.map((id) => {
         if (id in ABILITIES) {
-          const a = ABILITIES[id as AbilityId];
+          const a = this.pool.abilityText[id as AbilityId] ?? ABILITIES[id as AbilityId];
           const next = this.ranks[id as AbilityId] + 1;
           return { id, title: `${a.title} ${ROMAN[next]}`, desc: a.desc(next), icon: a.icon };
         }
         const u = UPGRADES[id as UpgradeId];
-        return { id, title: u.title, desc: u.desc, icon: u.icon };
+        const t = this.pool.upgradeText[id as UpgradeId];
+        return { id, title: t?.title ?? u.title, desc: t?.desc ?? u.desc, icon: t?.icon ?? u.icon };
       });
     }
 
@@ -129,6 +151,7 @@ export class Progression {
       if (seq !== undefined && seq !== this.offerSeq) return false;
       if (id in ABILITIES) {
         const a = id as AbilityId;
+        if (!this.poolAbilities().includes(a)) return false;
         if (this.ranks[a] >= MAX_RANK) return false;
         this.ranks[a]++;
       } else if (id in UPGRADES) {
