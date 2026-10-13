@@ -3,7 +3,7 @@ import { CONFIG } from '../../config';
 import { faceted, toonMat } from '../../render/toon';
 import { placeSegment, solveTwoBone } from '../../monster/ik';
 import type { BodyFrame, MonsterBody } from '../types';
-import { fistKind } from './fist';
+import { fistKind, lungeAmount, lungeWeight, strikeReturn, strikeStarted, type FistKind } from './fist';
 import { SWING, limbPlanted, limbSwing } from './knuckleGait';
 
 const G = CONFIG.golem;
@@ -26,8 +26,19 @@ const FOOT_LIFT = 70;
 /** Slam: where the fist rises (left side) before it drops. Backhand: where it cocks across the chest, and its sweep radius. */
 const SLAM_RAISE = new THREE.Vector3(170, 620, 260);
 const BACKHAND_COCK = new THREE.Vector3(-60, 280, 320);
-const BACKHAND_R = 520;
+const BACKHAND_R = 450;
 const ARM_REACH = UPPER + FORE - 30;
+/**
+ * Molten Fist lunge: for a target farther than the fist reaches standing (LUNGE_FROM for a slam, BACKHAND_R for a
+ * backhand), the torso shifts toward the strike by the shortfall (up to LUNGE_MAX), sinks up to LUNGE_DROP and leans
+ * up to LUNGE_LEAN rad, so the fist reaches it.
+ */
+const LUNGE_FROM = 380;
+const LUNGE_MAX = 200;
+const LUNGE_DROP = 60;
+const LUNGE_LEAN = 0.25;
+/** Molten Fist: seconds the fist stays on its target after impact before it eases home. */
+const STRIKE_HOLD = 0.1;
 /** Eruption: seconds for both fists to rise and slam. */
 const NOVA_TIME = 0.6;
 /** Back vents (torso space): Magma Lob, Ember Storm and Pyroclast leave from these in turn. */
@@ -82,6 +93,7 @@ const _vent = new THREE.Vector3();
 const _tip = new THREE.Vector3();
 const _tmp = new THREE.Vector3();
 const _world = new THREE.Vector3();
+const _lunge = new THREE.Vector3();
 
 /** v with x mirrored to side sx (+1 left, −1 right). */
 function mirror(v: THREE.Vector3, sx: number, out: THREE.Vector3): THREE.Vector3 {
@@ -116,6 +128,9 @@ export class GolemBody implements MonsterBody {
   private ventFlash: number[] = [];
   private nextVent = 0;
   private novaT = -1;
+  /** Molten Fist: the strike's clock last frame (−1 when none), and its slam/backhand kind, latched at its start. */
+  private meleePrevT = -1;
+  private strikeKind: FistKind = 'slam';
 
   constructor() {
     const basalt = toonMat(C.basalt);
@@ -239,14 +254,33 @@ export class GolemBody implements MonsterBody {
     const nova = this.novaT >= 0 ? this.novaT / NOVA_TIME : -1;
     const slam = nova >= 0 ? Math.sin(Math.PI * nova) : 0;
 
+    // Molten Fist: slam or backhand is decided once, as the strike starts; the body lunges toward the strike.
+    let lean = 0;
+    let leanA = 0;
+    _lunge.set(0, 0, 0);
+    if (f.melee) {
+      this.root.updateMatrixWorld();
+      this.root.worldToLocal(_aim.copy(f.melee.target));
+      _aim.y = FIST_R;
+      if (strikeStarted(this.meleePrevT, f.melee.t)) this.strikeKind = fistKind(Math.atan2(_aim.x, _aim.z), G.fist.frontHalf);
+      this.meleePrevT = f.melee.t;
+      // A slam lunges at the target; a backhand toward the end of its sweep, so the sweep ends at the target's distance.
+      const from = this.strikeKind === 'slam' ? LUNGE_FROM : BACKHAND_R;
+      const k = (lungeAmount(Math.hypot(_aim.x, _aim.z), from, LUNGE_MAX) / LUNGE_MAX) * lungeWeight(f.melee.t, G.stats.meleeTiming, STRIKE_HOLD);
+      leanA = this.strikeKind === 'slam' ? Math.atan2(_aim.x, _aim.z) : (f.melee.side === 0 ? 1 : -1) * G.fist.backhandCenter;
+      _lunge.set(Math.sin(leanA) * LUNGE_MAX * k, -LUNGE_DROP * k, Math.cos(leanA) * LUNGE_MAX * k);
+      lean = LUNGE_LEAN * k;
+    } else this.meleePrevT = -1;
+
     // The shoulders roll toward the planting fist; the body bobs twice a cycle and breathes when still.
     const roll = Math.sin(f.cycle * Math.PI * 2) * 0.07 * m;
     const bob = Math.cos(f.cycle * Math.PI * 4) * 10 * m + Math.sin(f.time * 1.1) * 6;
-    this.body.position.set(PIVOT.x, PIVOT.y + bob - f.pose.dip - slam * 40 - f.pose.collapse * 230, PIVOT.z);
+    this.body.position.set(PIVOT.x, PIVOT.y + bob - f.pose.dip - slam * 40 - f.pose.collapse * 230, PIVOT.z).add(_lunge);
+    // Leaning toward bearing leanA: +X rotation tips the shoulders forward (+Z), −Z rotation toward the left (+X).
     this.body.rotation.set(
-      f.pose.pitch + (f.roaring ? -0.55 : 0) + (f.dashing ? 0.25 : 0) + slam * 0.25 + f.pose.collapse * 0.4,
+      f.pose.pitch + (f.roaring ? -0.55 : 0) + (f.dashing ? 0.25 : 0) + slam * 0.25 + f.pose.collapse * 0.4 + Math.cos(leanA) * lean,
       0,
-      roll - f.pose.collapse * 0.15,
+      roll - f.pose.collapse * 0.15 - Math.sin(leanA) * lean,
     );
     this.root.updateMatrixWorld(true);
     _rel.multiplyMatrices(this.body.matrix, this.shell.matrix);
@@ -260,11 +294,17 @@ export class GolemBody implements MonsterBody {
       _gait.set(FIST_AT.x * sx, FIST_AT.y + g.lift * FIST_LIFT * m, FIST_AT.z + g.stride * A * m);
       _fist.copy(_gait);
       const striking = f.melee !== null && f.melee.side === side;
-      if (striking) this.strikePose(f.melee!.t, f.melee!.target, sx, _gait, _fist);
+      if (striking) this.strikePose(f.melee!.t, sx, _gait, _fist);
       if (nova >= 0) {
+        // Rise, slam down by 0.65, then ease back to the gait pose.
         mirror(SLAM_RAISE, sx, _raise);
+        _end.set(sx * 280, FIST_R, 320);
         if (nova < 0.5) _fist.lerpVectors(_gait, _raise, nova / 0.5);
-        else _fist.lerpVectors(_raise, _end.set(sx * 280, FIST_R, 320), Math.min(1, (nova - 0.5) / 0.15));
+        else if (nova < 0.65) _fist.lerpVectors(_raise, _end, (nova - 0.5) / 0.15);
+        else {
+          const u = (nova - 0.65) / 0.35;
+          _fist.lerpVectors(_end, _gait, u * u * (3 - 2 * u));
+        }
       }
       if (f.roaring) _fist.set(sx * 90, 430 + Math.sin(f.time * 14 + side * Math.PI) * 45, 250);
       if (f.airborne) _fist.set(sx * 230, -30, 260);
@@ -324,34 +364,34 @@ export class GolemBody implements MonsterBody {
   }
 
   /**
-   * Molten Fist (root space). Slam: rise, then drop onto the target. Backhand: cock across the chest, then sweep
-   * out along an arc around the body to the target's side. Both ease back to the gait position.
+   * Molten Fist (root space; `_aim` holds the target and `_lunge` the body's lunge). Slam: rise, then drop onto the
+   * target. Backhand: cock across the chest, then sweep out along an arc around the lunging body to the target's
+   * side. Both hold on the target for STRIKE_HOLD, then ease back to the gait position. The kind is the one latched
+   * at the strike's start.
    */
-  private strikePose(t: number, target: THREE.Vector3, sx: number, gait: THREE.Vector3, out: THREE.Vector3): void {
+  private strikePose(t: number, sx: number, gait: THREE.Vector3, out: THREE.Vector3): void {
     const T = G.stats.meleeTiming;
-    this.root.worldToLocal(_aim.copy(target));
-    _aim.y = FIST_R;
-    if (fistKind(Math.atan2(_aim.x, _aim.z), G.fist.frontHalf) === 'slam') {
+    if (this.strikeKind === 'slam') {
       mirror(SLAM_RAISE, sx, _raise);
       if (t < T.windup) out.lerpVectors(gait, _raise, t / T.windup);
       else if (t < T.impact) {
         const u = (t - T.windup) / (T.impact - T.windup);
         out.lerpVectors(_raise, _aim, u * u);
-      } else out.lerpVectors(_aim, gait, Math.min(1, (t - T.impact) / (T.end - T.impact)));
+      } else out.lerpVectors(_aim, gait, strikeReturn(t, T, STRIKE_HOLD));
       return;
     }
     mirror(BACKHAND_COCK, sx, _raise);
     const a0 = Math.atan2(_raise.x, _raise.z);
     const r0 = Math.hypot(_raise.x, _raise.z);
     const a1 = sx * G.fist.backhandCenter;
-    _end.set(Math.sin(a1) * BACKHAND_R, FIST_R + 30, Math.cos(a1) * BACKHAND_R);
+    _end.set(Math.sin(a1) * BACKHAND_R + _lunge.x, FIST_R + 30, Math.cos(a1) * BACKHAND_R + _lunge.z);
     if (t < T.windup) out.lerpVectors(gait, _raise, t / T.windup);
     else if (t < T.impact) {
       const u = (t - T.windup) / (T.impact - T.windup);
       const a = a0 + (a1 - a0) * u;
       const r = r0 + (BACKHAND_R - r0) * u;
-      out.set(Math.sin(a) * r, _raise.y + (_end.y - _raise.y) * u, Math.cos(a) * r);
-    } else out.lerpVectors(_end, gait, Math.min(1, (t - T.impact) / (T.end - T.impact)));
+      out.set(Math.sin(a) * r + _lunge.x, _raise.y + (_end.y - _raise.y) * u, Math.cos(a) * r + _lunge.z);
+    } else out.lerpVectors(_end, gait, strikeReturn(t, T, STRIKE_HOLD));
   }
 
   /** Shots leave from the back vents in turn; the one used flares. */

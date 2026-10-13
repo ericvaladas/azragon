@@ -45,7 +45,7 @@ import { LevelUpAura } from './systems/LevelUpAura';
 import { ShieldFx } from './systems/ShieldFx';
 import { shieldHitPoint } from './systems/shieldHit';
 import { dashTarget, leapTarget } from './monster/leap';
-import { footTargets, strikePlan } from './monster/strike';
+import { FRONT_LEFT, footTargets, strikePlan } from './monster/strike';
 import { mortarTargets, nearestWithin } from './systems/targeting';
 import { Passives } from './systems/Passives';
 import { AcidPools } from './systems/AcidPools';
@@ -54,7 +54,7 @@ import { decide, nearestInRange, type BrainOrder, type BrainTarget } from './mon
 import { assignStrikes } from './monsters/kraken/strikes';
 import type { ArmStrike } from './monsters/kraken/TentacleArms';
 import { INSECT } from './monsters/insect/kind';
-import { backhandYaw, bearingTo, fistKind } from './monsters/golem/fist';
+import { backhandYaw, bearingTo, fistKind, type FistKind } from './monsters/golem/fist';
 import { auraOn, coolHeat, coreDamageMult, heatAfterHit } from './monsters/golem/heat';
 import { KINDS, ROSTER_ORDER, isMonsterId, rosterEntries } from './monsters/roster';
 import { loadPick, savePick, type PickStore } from './monsters/pick';
@@ -120,6 +120,9 @@ export class GameScene {
   private tailCd = 0;
   /** Molten Core heat 0..1 (Golem); always 0 when the passive isn't taken. */
   private heat = 0;
+  /** Molten Fist in flight: its kind and side (+1 left/+X, −1 right), both latched when the strike starts. */
+  private fistStrike: FistKind = 'slam';
+  private fistSide = 1;
   private shieldFx: ShieldFx;
   private passives: Passives;
   private acid: AcidPools;
@@ -169,6 +172,7 @@ export class GameScene {
     };
     this.monster.onFootLand = (p) => {
       this.particles.ring('dust', p, 60, 7);
+      if (this.monster.kind.id === 'golem') this.particles.emit('magma', p.clone().setY(15), 6, 1.4);
       this.rig.addTrauma(0.06);
       this.footCrush(p);
       const pool = this.passives.acidPool();
@@ -725,7 +729,6 @@ export class GameScene {
     m.startTailSweep(tailSide(from, m.yaw, aim), TS.timing);
   }
 
-  /** Head-height point the tail swats around and spines fire from (world space). */
   /** Molten Core: heat cools; while hot it burns ground enemies close by. The body's glow follows the heat. */
   private updateCore(dt: number): void {
     const core = this.passives.core();
@@ -744,6 +747,7 @@ export class GameScene {
     if (this.heat > 0.9 && Math.random() < dt * 12) this.particles.emit('fire', this.bodyPoint(520), 1, 0.5);
   }
 
+  /** Head-height point the tail swats around and spines fire from (world space). */
   private bodyPoint(height: number): THREE.Vector3 {
     return this.monster.position.clone().setY(this.monster.position.y + height * CONFIG.monster.scale);
   }
@@ -1050,8 +1054,8 @@ export class GameScene {
   }
 
   /**
-   * Molten Fist lands at `p` (the clamped strike point). Ahead: a slam splashes ground enemies and buildings
-   * around the fist. Beside or behind: a backhand sweeps everything in an arc on that side, within reach.
+   * Molten Fist lands at `p` (the clamped strike point), as the kind latched at the strike's start. Slam: splashes
+   * ground enemies and buildings around the fist. Backhand: sweeps everything in an arc on the striking side, within reach.
    */
   private fistImpact(p: THREE.Vector3): void {
     const m = this.monster;
@@ -1059,8 +1063,7 @@ export class GameScene {
     const s = this.progression.stats;
     const from = { x: m.position.x, z: m.position.z };
     const dmg = this.ms.meleeDamage * this.dmgMult();
-    const bearing = bearingTo(from, m.yaw, p);
-    if (fistKind(bearing, F.frontHalf) === 'slam') {
+    if (this.fistStrike === 'slam') {
       const r = this.ms.meleeRadius * s.stompRadiusMult;
       const at = { x: p.x, z: p.z };
       this.city.forEachStandingInRadius(at, r, (t) => t.applyDamage(dmg * F.buildingMult));
@@ -1072,7 +1075,7 @@ export class GameScene {
       return;
     }
     const reach = this.ms.meleeRange * s.stompRadiusMult;
-    const yaw = backhandYaw(m.yaw, bearing, F.backhandCenter);
+    const yaw = backhandYaw(m.yaw, this.fistSide, F.backhandCenter);
     for (const t of arcTargets(from, yaw, reach, F.backhandHalf, this.enemyTargets())) t.applyDamage(dmg);
     const buildings: Target[] = [];
     this.city.forEachStandingInRadius(from, reach, (t) => buildings.push(t));
@@ -1154,6 +1157,11 @@ export class GameScene {
       if (d.attack === 'melee' && d.meleeAt && !outsideArc) {
         const plan = strikePlan(pos, m.yaw, d.meleeAt, this.ms.meleeRange);
         m.startMelee(s.cooldownMult, plan.leg, plan.point);
+        // Molten Fist: slam or backhand is decided once, at the start (the body latches the same rule).
+        if (shape.kind === 'fist') {
+          this.fistStrike = fistKind(bearingTo(pos, m.yaw, plan.point), CONFIG.golem.fist.frontHalf);
+          this.fistSide = plan.leg === FRONT_LEFT ? 1 : -1;
+        }
       }
       if (d.attack === 'ranged') this.fireRanged(d.attackOn === 'order' && this.order?.kind === 'attack' ? this.order.target : auto);
     }
