@@ -241,7 +241,7 @@ export const CONFIG = {
       rangedCooldown: 2.0,
       headHeight: 480,
       /** Measured standing bounding box (world m). */
-      size: { width: 415, length: 459, height: 413 },
+      size: { width: 415, length: 453, height: 413 },
     },
     /**
      * Molten Fist: targets within `frontHalf` (rad) of dead ahead take a slam; others a backhand whose hit arc

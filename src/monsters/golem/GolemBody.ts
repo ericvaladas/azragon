@@ -423,8 +423,8 @@ export class GolemBody implements MonsterBody {
     const hp = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z).applyMatrix4(head);
     piece(torso, BALL, C.bone, [0, 0, 0], [68, 58, 78], [0, 0, 0], head);
     piece(torso, BALL, C.boneShade, [0, 2, -30], [54, 48, 34], [0, 0, 0], head);
-    piece(torso, SNOUT, C.bone, [0, -8, 84], [44, 124, 34], [Math.PI / 2, 0, 0], head);
-    piece(torso, box, C.boneShade, [0, 6, 82], [14, 6, 104], [0.08, 0, 0], head);
+    piece(torso, SNOUT, C.bone, [0, -8, 62], [44, 82, 34], [Math.PI / 2, 0, 0], head);
+    piece(torso, box, C.boneShade, [0, 6, 60], [14, 6, 68], [0.1, 0, 0], head);
     // Brow ridges overhanging the sockets, cheekbones under them.
     for (const sx of [1, -1]) {
       piece(torso, NUB, C.bone, [sx * 22, 20, 24], [26, 12, 32], [0, 0, 0], head);
@@ -433,19 +433,19 @@ export class GolemBody implements MonsterBody {
       piece(torso, BALL, C.socket, [sx * 27, 6, 28], [28, 26, 30], [0, 0, 0], head);
     }
     // Nasal cavity at the tip and the dark of the mouth under the upper jaw.
-    piece(torso, box, C.socket, [0, -4, 140], [12, 10, 14], [0, 0, 0], head);
-    piece(torso, box, C.socket, [0, -24, 82], [24, 8, 96], [0, 0, 0], head);
+    piece(torso, box, C.socket, [0, -4, 100], [12, 10, 14], [0, 0, 0], head);
+    piece(torso, box, C.socket, [0, -24, 58], [24, 8, 62], [0, 0, 0], head);
     // The lower jaw: two thin bars hinged under the skull, hanging slightly open, a few worn teeth.
     for (const sx of [1, -1]) {
       const j0 = hp(sx * 22, -18, 6);
-      const j1 = hp(sx * 16, -40, 72);
-      const j2 = hp(sx * 8, -42, 128);
+      const j1 = hp(sx * 16, -38, 50);
+      const j2 = hp(sx * 8, -40, 88);
       strut(torso, TUBE, C.boneShade, v3(j0), v3(j1), 7);
       strut(torso, TUBE, C.boneShade, v3(j1), v3(j2), 5);
       for (let i = 0; i < 3; i++) {
         _at.lerpVectors(j1, j2, 0.15 + i * 0.3);
         strut(torso, spike, C.boneShade, v3(_at), v3(_at.clone().add(hp(0, 12, 0).sub(HEAD_AT))), 3.5);
-        const u = hp(sx * (13 - i * 2.5), -20, 70 + i * 22);
+        const u = hp(sx * (13 - i * 2.5), -20, 48 + i * 15);
         strut(torso, spike, C.boneShade, v3(u), v3(u.clone().add(hp(0, -10, 0).sub(HEAD_AT))), 3.5);
       }
     }
