@@ -35,9 +35,9 @@ const THICK = 58;
 const SWING = 2.5;
 const WRAP_R = 330;
 /** Whirlpool: tip radius at the fastest point of a lash (the arm flung out to full length), and the swing
- * speed (whirl units per timeline unit) that counts as fastest. */
+ * speed (whirl units per second) that counts as fastest. */
 const FLING_R = 1150;
-const FLING_SPEED = 10;
+const FLING_SPEED = 5.5;
 /** A frame-to-frame jump longer than this (model units) is a teleport: the arms snap instead of trailing. */
 const SNAP = 500;
 /** Joint springs: stiff at the root, loose and underdamped at the tip, so motion cracks down the arm. */
@@ -92,16 +92,15 @@ function curve(u: number, out: THREE.Vector3): THREE.Vector3 {
   );
 }
 
-/** Whirlpool swing (−1 right … +1 left) over its 0..1 timeline: wind left, lash right, lash left, settle. */
+/** Whirlpool swing (−1 right … +1 left) over its 0..1 timeline: wind left, lash right, settle. */
 function whirl(k: number): number {
   const ease = (t: number) => {
     const c = Math.max(0, Math.min(1, t));
     return c * c * (3 - 2 * c);
   };
-  if (k < 0.2) return ease(k / 0.2);
-  if (k < 0.48) return 1 - 2 * ease((k - 0.2) / 0.28);
-  if (k < 0.76) return -1 + 2 * ease((k - 0.48) / 0.28);
-  return 1 - ease((k - 0.76) / 0.24);
+  if (k < 0.3) return ease(k / 0.3);
+  if (k < 0.72) return 1 - 2 * ease((k - 0.3) / 0.42);
+  return -1 + ease((k - 0.72) / 0.28);
 }
 
 /** Segment radius at joint j (root to tip). */
@@ -317,13 +316,13 @@ export class KrakenBody implements MonsterBody {
       }
       if (this.arms.spinT >= 0) {
         // Whirlpool: every arm winds left until it nearly wraps the mantle, lashes all the way right to wrap
-        // it the other way, lashes back left, then settles back to rest. Like a flung rope, the faster it
+        // it the other way, then settles back to rest. Like a flung rope, the faster it
         // swings the further it flies out — full length mid-lash — and it coils tight where it turns back.
         const k = this.arms.spinT / K.arms.spinTime;
         const kk = k - i * 0.012;
         const swing = SWING * whirl(kk);
         const w = Math.abs(swing) / SWING;
-        const fling = Math.min(1, Math.abs(whirl(kk + 0.01) - whirl(kk - 0.01)) / 0.02 / FLING_SPEED);
+        const fling = Math.min(1, Math.abs(whirl(kk + 0.01) - whirl(kk - 0.01)) / 0.02 / K.arms.spinTime / FLING_SPEED);
         const sa = ang + swing;
         const r = WRAP_R + (FLING_R - WRAP_R) * fling + (REST_R - WRAP_R) * (1 - w) * (1 - fling);
         _tip.set(Math.sin(sa) * r, 70 + 100 * w * (1 - fling), Math.cos(sa) * r);

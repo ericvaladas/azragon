@@ -206,8 +206,8 @@ export const CONFIG = {
     arms: {
       /** Hurl: seconds to grab, release (throw), end; chunk splash radius (m), flight time (s), arc height (m). */
       hurl: { timing: { windup: 0.35, impact: 0.55, end: 0.9 }, splash: 110, flight: 1.3, arc: 500 },
-      /** Whirlpool arm swing duration (s): wind left, lash right, lash left, settle. */
-      spinTime: 1.8,
+      /** Whirlpool arm swing duration (s): wind left, lash right, settle. */
+      spinTime: 1.3,
     },
     colors: {
       mantle: 0x7a2348,
