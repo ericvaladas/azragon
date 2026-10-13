@@ -6,6 +6,7 @@ import type { BodyFrame, MonsterBody } from '../types';
 import { fistKind, lungeAmount, lungeWeight, strikeReturn, strikeStarted, type FistKind } from './fist';
 import { merge, piece, rng, SHAPES, type V3 } from './golemParts';
 import { SWING, limbPlanted, limbSwing } from './knuckleGait';
+import { clampShoulder, reachTwist, softCap, springStep, type ShoulderLimits } from './shoulder';
 
 const G = CONFIG.golem;
 const C = G.colors;
@@ -37,6 +38,12 @@ const BACKHAND_COCK = new THREE.Vector3(-60, 280, 320);
 const BACKHAND_R = 450;
 const ARM_REACH = UPPER + FORE - 30;
 /**
+ * A planted (braced) arm may straighten further than a walking one, with its shoulder slid (PROTRACT) toward the
+ * hand; a posed arm (striking, slamming, reaching) as far, so a sweep goes through long rather than elbow-up.
+ */
+const PLANTED_REACH = UPPER + FORE - 10;
+const POSED_REACH = UPPER + FORE - 12;
+/**
  * Rending Claws lunge: for a target farther than the hand reaches standing (LUNGE_FROM for a slam, BACKHAND_R for a
  * backhand), the torso shifts toward the strike by the shortfall (up to LUNGE_MAX), sinks up to LUNGE_DROP and leans
  * up to LUNGE_LEAN rad, so the hand reaches it.
@@ -49,6 +56,44 @@ const LUNGE_LEAN = 0.25;
 const STRIKE_HOLD = 0.1;
 /** Withering Ring: seconds for both hands to rise and slam. */
 const NOVA_TIME = 0.6;
+/**
+ * The shoulder's range (torso space, see ShoulderLimits): a level arm stops 15° behind the shoulders' plane (a
+ * hanging one a little further), crosses the chest up to 34° and lifts up to 54° above level. Posed arms are held
+ * to it; planted ones stay put and the body's reach recruitment softens instead.
+ */
+const SHOULDER_LIM: ShoulderLimits = { back: 0.26, tilt: 0.45, medial: 0.6, raise: 0.95 };
+/**
+ * Reach recruitment. The shoulder alone sweeps a hand from SWEEP_LO (across the chest) to SWEEP_HI rad (out and a
+ * little back) of horizontal bearing from the shoulder; beyond that the torso turns (yaw, about the hips) toward the
+ * hand, capped at TWIST_MAX, rolling the strike shoulder down ROLL_PER_TWIST rad per rad, shifting the body
+ * SHIFT_PER_TWIST units toward that side and crouching CROUCH_PER_TWIST. The torso reads the strike RECRUIT_LEAD s
+ * ahead, so it leads the arm.
+ */
+const SWEEP_LO = -0.55;
+const SWEEP_HI = 1.55;
+const TWIST_MAX = 0.7;
+const ROLL_PER_TWIST = 0.4;
+const SHIFT_PER_TWIST = 30;
+const CROUCH_PER_TWIST = 50;
+const RECRUIT_LEAD = 0.1;
+/** The hips' midpoint (torso space): the torso turns about it, so the haunches stay over the hind hooves. */
+const HIPS = new THREE.Vector3(0, HIP.y, HIP.z);
+/** How far (units) a shoulder slides (scapula) toward a hand that is nearly out of reach. */
+const PROTRACT = 26;
+/**
+ * Backhand: the bearing range (rad off the nose) its sweep ends in, toward the target as far as the body allows, and
+ * the radius it reaches for (past the arm's reach, so the arm sweeps through nearly straight).
+ */
+const BACKHAND_END_MIN = 1.35;
+const BACKHAND_END_MAX = 2.35;
+const BACKHAND_SWEEP_R = 580;
+/** Shadow Hands: how far from the shoulder the lifted claw reaches toward the flyer. */
+const BECKON_REACH = 400;
+/** Body springs: natural frequency (rad/s) and damping; underdamped, so the torso overshoots and settles. */
+const TWIST_SPRING = { omega: 18, zeta: 0.5 };
+const LEAN_SPRING = { omega: 13, zeta: 0.5 };
+/** Fraction of the torso's turn and pitch the neck takes back, so the skull stays roughly on its target. */
+const HEAD_COUNTER = 0.65;
 
 
 /** The spine (torso space): from the sacrum up over the high hunched withers above the shoulders, down to the neck. */
@@ -166,9 +211,7 @@ const _ly = new THREE.Vector3();
 const _lz = new THREE.Vector3();
 const _sh = new THREE.Vector3();
 const _hip = new THREE.Vector3();
-const _gait = new THREE.Vector3();
 const _fist = new THREE.Vector3();
-const _foot = new THREE.Vector3();
 const _hock = new THREE.Vector3();
 const _elbow = new THREE.Vector3();
 const _knee = new THREE.Vector3();
@@ -181,6 +224,10 @@ const _tmp = new THREE.Vector3();
 const _world = new THREE.Vector3();
 const _lunge = new THREE.Vector3();
 const _rel = new THREE.Matrix4();
+const _relInv = new THREE.Matrix4();
+const _qInv = new THREE.Quaternion();
+const _lead = new THREE.Vector3();
+const _clamp = new THREE.Vector3();
 const _ca = new THREE.Color();
 const _cb = new THREE.Color();
 
@@ -303,7 +350,7 @@ export class GolemBody implements MonsterBody {
   private bodyMat: THREE.MeshToonMaterial;
   private geos: THREE.BufferGeometry[] = [];
   private launchPts: THREE.Object3D[] = [];
-  /** The skull and antlers, turned toward `lookAt` (Dread Gaze) and eased back to rest. */
+  /** The skull and antlers, turned toward `lookAt` (Dread Gaze) and eased back to rest; yaw is root-relative. */
   private headPivot = new THREE.Group();
   private headYaw = 0;
   private headPitch = 0;
@@ -312,6 +359,17 @@ export class GolemBody implements MonsterBody {
   /** Rending Claws: the strike's clock last frame (−1 when none), and its slam/backhand kind, latched at its start. */
   private meleePrevT = -1;
   private strikeKind: FistKind = 'slam';
+  /** Torso turn (yaw, + toward the left) and extra pitch (+ forward) recruited for the reach: springs. */
+  private twist = { x: 0, v: 0 };
+  private lean = { x: 0, v: 0 };
+  /** Per side (0 left): where each hand and hoof wants to be this frame (root space), and which are on the ground. */
+  private gaitAt = [new THREE.Vector3(), new THREE.Vector3()];
+  private handAt = [new THREE.Vector3(), new THREE.Vector3()];
+  private footAt = [new THREE.Vector3(), new THREE.Vector3()];
+  private handPlanted = [false, false];
+  private footPlanted = [false, false];
+  /** Per side: 0..1, how far a sweeping hand reaches out horizontally (at its height) toward the arm's full length. */
+  private extend = [0, 0];
 
   constructor() {
     this.bodyMat = toonMat(0xffffff, { vertexColors: true });
@@ -712,6 +770,7 @@ export class GolemBody implements MonsterBody {
   animate(f: BodyFrame, onFootLand: (p: THREE.Vector3) => void): void {
     const m = f.motion;
     const S = G.stats.strideLength;
+    const T = G.stats.meleeTiming;
     // Half the distance a planted limb slides back during stance, so it stays still on the ground.
     const A = ((1 - SWING) * S) / 2;
     if (this.novaT >= 0) {
@@ -719,7 +778,6 @@ export class GolemBody implements MonsterBody {
       if (this.novaT >= NOVA_TIME) this.novaT = -1;
     }
     const nova = this.novaT >= 0 ? this.novaT / NOVA_TIME : -1;
-    const slam = nova >= 0 ? Math.sin(Math.PI * nova) : 0;
 
     // Rending Claws: slam or backhand is decided once, as the strike starts; the body lunges toward the strike.
     let lean = 0;
@@ -733,24 +791,11 @@ export class GolemBody implements MonsterBody {
       this.meleePrevT = f.melee.t;
       // A slam lunges at the target; a backhand toward the end of its sweep, so the sweep ends at the target's distance.
       const from = this.strikeKind === 'slam' ? LUNGE_FROM : BACKHAND_R;
-      const k = (lungeAmount(Math.hypot(_aim.x, _aim.z), from, LUNGE_MAX) / LUNGE_MAX) * lungeWeight(f.melee.t, G.stats.meleeTiming, STRIKE_HOLD);
+      const k = (lungeAmount(Math.hypot(_aim.x, _aim.z), from, LUNGE_MAX) / LUNGE_MAX) * lungeWeight(f.melee.t, T, STRIKE_HOLD);
       leanA = this.strikeKind === 'slam' ? Math.atan2(_aim.x, _aim.z) : (f.melee.side === 0 ? 1 : -1) * G.fist.backhandCenter;
       _lunge.set(Math.sin(leanA) * LUNGE_MAX * k, -LUNGE_DROP * k, Math.cos(leanA) * LUNGE_MAX * k);
       lean = LUNGE_LEAN * k;
     } else this.meleePrevT = -1;
-
-    // The shoulders roll toward the planting hand; the body bobs twice a cycle and breathes when still.
-    const roll = Math.sin(f.cycle * Math.PI * 2) * 0.07 * m;
-    const bob = Math.cos(f.cycle * Math.PI * 4) * 10 * m + Math.sin(f.time * 1.1) * 6;
-    this.body.position.set(PIVOT.x, PIVOT.y + bob - f.pose.dip - slam * 40 - f.pose.collapse * 230, PIVOT.z).add(_lunge);
-    // Leaning toward bearing leanA: +X rotation tips the shoulders forward (+Z), −Z rotation toward the left (+X).
-    this.body.rotation.set(
-      f.pose.pitch + (f.roaring ? -0.55 : 0) + (f.dashing ? 0.25 : 0) + slam * 0.25 + f.pose.collapse * 0.4 + Math.cos(leanA) * lean,
-      0,
-      roll - f.pose.collapse * 0.15 - Math.sin(leanA) * lean,
-    );
-    this.root.updateMatrixWorld(true);
-    _rel.multiplyMatrices(this.body.matrix, this.shell.matrix);
 
     // Shadow Hands: the claw on the flyer's side lifts toward it, beckoning, while the hand rises (weight ≤ 0 is the cock-back).
     let summonSide = -1;
@@ -761,80 +806,203 @@ export class GolemBody implements MonsterBody {
       summon = Math.min(1, Math.max(0, f.antiAir.weight * 1.4 + 0.35));
     }
 
-    // Arms: creep on the hands, or strike, slam (Withering Ring), claw at the sky (Roar), reach down (Leap), beckon (Shadow Hands).
+    // Where each hand wants to be (root space): creep on it, or strike, slam (Withering Ring), claw at the sky
+    // (Roar), reach down (Leap), beckon (Shadow Hands). A hand on the ground in its stance is planted.
     for (let side = 0; side < 2; side++) {
       const sx = side === 0 ? 1 : -1;
-      const limb = side === 0 ? 0 : 2;
-      const arm = this.limbArms[side]!;
-      const g = limbSwing(f.cycle, limb);
-      _gait.set(FIST_AT.x * sx, FIST_AT.y + g.lift * FIST_LIFT * m, FIST_AT.z + g.stride * A * m);
-      _fist.copy(_gait);
+      const g = limbSwing(f.cycle, side === 0 ? 0 : 2);
+      const gait = this.gaitAt[side]!.set(FIST_AT.x * sx, FIST_AT.y + g.lift * FIST_LIFT * m, FIST_AT.z + g.stride * A * m);
+      const want = this.handAt[side]!.copy(gait);
       const striking = f.melee !== null && f.melee.side === side;
-      if (striking) this.strikePose(f.melee!.t, sx, _gait, _fist);
+      this.extend[side] = 0;
+      if (striking) {
+        const t = f.melee!.t;
+        this.strikePose(t, sx, gait, want);
+        if (this.strikeKind === 'backhand') this.extend[side] = t < T.windup ? 0 : t < T.impact ? smooth(T.windup, T.impact, t) : 1 - strikeReturn(t, T, STRIKE_HOLD);
+      }
       if (nova >= 0) {
         // Rise, slam down by 0.65, then ease back to the gait pose.
         mirror(SLAM_RAISE, sx, _raise);
         _end.set(sx * 280, FIST_R, 320);
-        if (nova < 0.5) _fist.lerpVectors(_gait, _raise, nova / 0.5);
-        else if (nova < 0.65) _fist.lerpVectors(_raise, _end, (nova - 0.5) / 0.15);
-        else {
-          const u = (nova - 0.65) / 0.35;
-          _fist.lerpVectors(_end, _gait, u * u * (3 - 2 * u));
-        }
+        if (nova < 0.5) want.lerpVectors(gait, _raise, nova / 0.5);
+        else if (nova < 0.65) want.lerpVectors(_raise, _end, (nova - 0.5) / 0.15);
+        else want.lerpVectors(_end, gait, smooth(0, 1, (nova - 0.65) / 0.35));
       }
       const beckoning = side === summonSide && !striking && nova < 0 && summon > 0;
       if (beckoning) {
-        _raise.set(sx * 150, 470, 300).lerp(_tmp.copy(_sum).setLength(320).setY(560), 0.4);
-        _fist.lerp(_raise, summon);
+        // Reach from the shoulder up toward the flyer (the shoulder's range and the torso's rear and turn shape it).
+        mirror(SHOULDER, sx, _raise);
+        _raise.addScaledVector(_tmp.subVectors(_sum, _raise).normalize(), BECKON_REACH);
+        want.lerp(_raise, summon);
       }
-      if (f.roaring) _fist.set(sx * 90, 430 + Math.sin(f.time * 14 + side * Math.PI) * 45, 250);
-      if (f.airborne) _fist.set(sx * 230, -30, 260);
-      mirror(SHOULDER, sx, _sh).applyMatrix4(_rel);
+      if (f.roaring) want.set(sx * 90, 430 + Math.sin(f.time * 14 + side * Math.PI) * 45, 250);
+      if (f.airborne) want.set(sx * 230, -30, 260);
+      const posed = striking || nova >= 0 || beckoning || f.roaring || f.airborne;
+      this.handPlanted[side] = !posed && g.lift * m < 1e-3;
+    }
+    for (let side = 0; side < 2; side++) {
+      const sx = side === 0 ? 1 : -1;
+      const g = limbSwing(f.cycle, side === 0 ? 3 : 1);
+      const foot = this.footAt[side]!.set(FOOT_AT.x * sx, g.lift * FOOT_LIFT * m, FOOT_AT.z + g.stride * A * m);
+      if (f.airborne) foot.set(sx * 150, 60, -60);
+      this.footPlanted[side] = !f.airborne && g.lift * m < 1e-3;
+    }
+
+    // The body drives the reach: the torso turns (and rolls the shoulder down) toward a hand beyond the shoulder's
+    // own sweep, and pitches with the strike: coiling into the windup, uncoiling through the swing, overshooting and
+    // settling after (springs). The monster's heading and path never change; this is all pose inside the root.
+    let twistT = 0;
+    let leanT = 0;
+    if (f.melee && !f.roaring && !f.airborne && f.pose.collapse === 0) {
+      const side = f.melee.side;
+      const sx = side === 0 ? 1 : -1;
+      const t = f.melee.t;
+      this.strikePose(Math.min(T.end, t + RECRUIT_LEAD), sx, this.gaitAt[side]!, _lead);
+      twistT += sx * reachTwist(this.outBearing(_lead, sx), SWEEP_LO, SWEEP_HI, TWIST_MAX);
+      // 0 → 1 through the windup, held to impact and the hold, then back to 0 by the end.
+      const env = t < T.windup ? smooth(0, 1, t / T.windup) : 1 - strikeReturn(t, T, STRIKE_HOLD);
+      const u = Math.min(1, Math.max(0, (t - T.windup) / (T.impact - T.windup)));
+      if (this.strikeKind === 'slam') {
+        // Turn into the target; rear back as the claw rises, then drive the shoulders down onto it.
+        twistT += 0.3 * Math.max(-1, Math.min(1, Math.atan2(_aim.x, _aim.z))) * env;
+        leanT += t < T.windup ? -0.12 * env : t < T.impact ? -0.12 + 0.3 * u * u : 0.18 * env;
+      } else {
+        // Coil away from the strike side in the windup (the claw cocked across the chest), then uncoil through the sweep.
+        twistT -= sx * 0.14 * (t < T.windup ? env : 1 - u);
+        leanT += 0.06 * env;
+      }
+    }
+    if (nova >= 0) {
+      // Withering Ring: rear back as both claws rise, then pitch hard down into the slam.
+      const u = (nova - 0.5) / 0.15;
+      leanT += nova < 0.5 ? -0.2 * smooth(0, 0.5, nova) : nova < 0.65 ? -0.2 + 0.52 * u * u : 0.32 * (1 - smooth(0.65, 1, nova));
+    }
+    if (summonSide >= 0 && summon > 0 && !(f.melee && f.melee.side === summonSide) && nova < 0) {
+      // Shadow Hands: turn toward the flyer and rear up as the claw lifts at it.
+      const sx = summonSide === 0 ? 1 : -1;
+      const want = this.handAt[summonSide]!;
+      twistT += sx * reachTwist(this.outBearing(want, sx), SWEEP_LO, SWEEP_HI, TWIST_MAX) + 0.25 * Math.max(-1.2, Math.min(1.2, Math.atan2(_sum.x, _sum.z))) * summon;
+      mirror(SHOULDER, sx, _tmp);
+      const rise = Math.asin(Math.max(-1, Math.min(1, (want.y - _tmp.y) / Math.max(1, want.distanceTo(_tmp)))));
+      leanT -= 0.12 * summon + softCap(Math.max(0, rise - 0.5), 0.25);
+    }
+    springStep(this.twist, Math.max(-TWIST_MAX, Math.min(TWIST_MAX, twistT)), TWIST_SPRING.omega, TWIST_SPRING.zeta, f.dt);
+    springStep(this.lean, leanT, LEAN_SPRING.omega, LEAN_SPRING.zeta, f.dt);
+
+    // Pose the body; if the turn would overstretch a planted limb (skating it), soften the turn until it reaches.
+    // The shoulders roll toward the planting hand; the body bobs twice a cycle and breathes when still.
+    const roll = Math.sin(f.cycle * Math.PI * 2) * 0.07 * m;
+    const bob = Math.cos(f.cycle * Math.PI * 4) * 10 * m + Math.sin(f.time * 1.1) * 6;
+    const novaY = nova < 0 ? 0 : nova < 0.5 ? 15 * smooth(0, 0.5, nova) : nova < 0.65 ? 15 - 65 * ((nova - 0.5) / 0.15) ** 2 : -50 * (1 - smooth(0.65, 1, nova));
+    const base = {
+      y: PIVOT.y + bob - f.pose.dip + novaY - f.pose.collapse * 230,
+      // Leaning toward bearing leanA: +X rotation tips the shoulders forward (+Z), −Z rotation toward the left (+X).
+      pitch: f.pose.pitch + (f.roaring ? -0.55 : 0) + (f.dashing ? 0.25 : 0) + f.pose.collapse * 0.4 + Math.cos(leanA) * lean,
+      roll: roll - f.pose.collapse * 0.15 - Math.sin(leanA) * lean,
+    };
+    let k = 1;
+    this.poseBody(base, k);
+    if (this.overstretch() > 1) {
+      this.poseBody(base, 0);
+      const floor = Math.max(1, this.overstretch() + 1);
+      let lo = 0;
+      let hi = 1;
+      for (let i = 0; i < 6; i++) {
+        const mid = (lo + hi) / 2;
+        this.poseBody(base, mid);
+        if (this.overstretch() <= floor) lo = mid;
+        else hi = mid;
+      }
+      k = lo;
+      this.poseBody(base, k);
+    }
+    _relInv.copy(_rel).invert();
+    _qInv.copy(this.body.quaternion).invert();
+
+    // Arms: two-bone IK from a shoulder that slides toward a far hand; a posed arm is held to the shoulder's range.
+    for (let side = 0; side < 2; side++) {
+      const sx = side === 0 ? 1 : -1;
+      const arm = this.limbArms[side]!;
+      const planted = this.handPlanted[side]!;
+      _fist.copy(this.handAt[side]!);
+      mirror(SHOULDER, sx, _sh);
+      _tmp.copy(_fist).applyMatrix4(_relInv).sub(_sh);
+      const need = smooth(0.78, 1.02, _tmp.length() / ARM_REACH);
+      _tmp.normalize();
+      _tmp.set(_tmp.x, _tmp.y * 0.3, Math.max(-0.2, _tmp.z)).normalize();
+      _sh.addScaledVector(_tmp, PROTRACT * need).applyMatrix4(_rel);
       _tmp.subVectors(_fist, _sh);
-      if (_tmp.length() > ARM_REACH) _fist.copy(_sh).add(_tmp.setLength(ARM_REACH));
-      _pole.copy(_sh).add(_ref.set(sx * 260, -40, -260)); // elbows out and back
+      const ext = this.extend[side]!;
+      if (ext > 0) {
+        // Out to the arm's length at the hand's own height, so the claw sweeps through on a long arm.
+        const h = Math.hypot(_tmp.x, _tmp.z);
+        const far = Math.sqrt(Math.max(h * h, POSED_REACH * POSED_REACH - _tmp.y * _tmp.y));
+        if (h > 1e-6) _tmp.set((_tmp.x / h) * (h + (far - h) * ext), _tmp.y, (_tmp.z / h) * (h + (far - h) * ext));
+      }
+      const len = Math.min(planted ? PLANTED_REACH : POSED_REACH, _tmp.length());
+      if (!planted) this.holdToShoulder(_tmp, sx);
+      _fist.copy(_sh).add(_tmp.setLength(len));
+      // Elbows out and back (torso space), so they turn with the body; outside the arm's range, so never inverts.
+      _ref.set(sx * 260, -40, -260).applyQuaternion(this.body.quaternion);
+      _pole.copy(_sh).add(_ref);
       solveTwoBone(_sh, _fist, UPPER, FORE, _pole, _elbow);
+      if (!planted) {
+        // The elbow's bend can carry the upper arm past the range: turn the whole arm back about the shoulder.
+        _tmp.subVectors(_elbow, _sh).normalize();
+        _clamp.copy(_tmp);
+        if (this.holdToShoulder(_clamp, sx) > 0) {
+          _q.setFromUnitVectors(_tmp, _clamp);
+          _elbow.sub(_sh).applyQuaternion(_q).add(_sh);
+          _fist.sub(_sh).applyQuaternion(_q).add(_sh);
+        }
+      }
       placeLimb(arm.upper, _sh, _elbow, _ref);
       placeLimb(arm.fore, _elbow, _fist, _ref);
       arm.fist.position.copy(_fist);
-      if (m > 0.3 && !striking && !beckoning && nova < 0 && limbPlanted(f.prevCycle, f.cycle, limb)) {
-        onFootLand(_world.copy(_gait).setY(0).applyMatrix4(this.root.matrixWorld));
+      if (m > 0.3 && planted && limbPlanted(f.prevCycle, f.cycle, side === 0 ? 0 : 2)) {
+        onFootLand(_world.copy(this.gaitAt[side]!).setY(0).applyMatrix4(this.root.matrixWorld));
       }
     }
 
     // Hind legs: digitigrade, knees forward and hocks back; the IK runs hip to hock, the cannon bone rides the hoof.
     for (let side = 0; side < 2; side++) {
       const sx = side === 0 ? 1 : -1;
-      const limb = side === 0 ? 3 : 1;
       const leg = this.legs[side]!;
-      const g = limbSwing(f.cycle, limb);
-      _foot.set(FOOT_AT.x * sx, g.lift * FOOT_LIFT * m, FOOT_AT.z + g.stride * A * m);
-      if (f.airborne) _foot.set(sx * 150, 60, -60);
-      _hock.copy(_foot).add(HOCK);
+      const foot = this.footAt[side]!;
+      _hock.copy(foot).add(HOCK);
       mirror(HIP, sx, _hip).applyMatrix4(_rel);
       _pole.copy(_hip).add(_ref.set(sx * 30, 0, 300));
       solveTwoBone(_hip, _hock, THIGH, SHIN, _pole, _knee);
       placeLimb(leg.thigh, _hip, _knee, _ref);
       placeLimb(leg.shin, _knee, _hock, _ref);
-      leg.foot.position.copy(_foot);
-      if (m > 0.3 && limbPlanted(f.prevCycle, f.cycle, limb)) onFootLand(_world.copy(_foot).setY(0).applyMatrix4(this.root.matrixWorld));
+      leg.foot.position.copy(foot);
+      if (m > 0.3 && limbPlanted(f.prevCycle, f.cycle, side === 0 ? 3 : 1)) onFootLand(_world.copy(foot).setY(0).applyMatrix4(this.root.matrixWorld));
     }
 
     // Dread Gaze: the skull turns (within limits) to stare at the target; the body's heading never changes for it.
-    let yaw = 0;
+    // Its turn is eased in root space, so it holds on its target while the torso turns under it; with no target the
+    // neck takes back HEAD_COUNTER of the torso's turn and pitch, so the skull stays roughly ahead.
+    const tw = this.body.rotation.y;
+    const counterPitch = -HEAD_COUNTER * this.lean.x * k;
+    let yaw = (1 - HEAD_COUNTER) * tw;
     let pitch = 0;
     if (f.lookAt && f.pose.collapse === 0) {
       this.shell.updateMatrixWorld(true);
       this.shell.worldToLocal(_sum.copy(f.lookAt)).sub(HEAD_PIVOT);
       const horiz = Math.hypot(_sum.x, _sum.z);
-      yaw = Math.max(-GAZE_YAW, Math.min(GAZE_YAW, Math.atan2(_sum.x, _sum.z)));
+      yaw = Math.max(-GAZE_YAW, Math.min(GAZE_YAW, Math.atan2(_sum.x, _sum.z))) + tw;
       // At rest the skull already looks ~0.45 rad below level; pitch only makes up the difference.
-      pitch = Math.max(-GAZE_UP, Math.min(GAZE_DOWN, Math.atan2(-_sum.y, horiz) - 0.45));
+      pitch = Math.max(-GAZE_UP, Math.min(GAZE_DOWN, Math.atan2(-_sum.y, horiz) - 0.45)) - counterPitch;
     }
-    const k = 1 - Math.exp(-(f.lookAt ? GAZE_RATE : GAZE_RATE * 0.5) * f.dt);
-    this.headYaw += (yaw - this.headYaw) * k;
-    this.headPitch += (pitch - this.headPitch) * k;
-    this.headPivot.rotation.set(this.headPitch, this.headYaw, 0, 'YXZ');
+    const kh = 1 - Math.exp(-(f.lookAt ? GAZE_RATE : GAZE_RATE * 0.5) * f.dt);
+    this.headYaw += (yaw - this.headYaw) * kh;
+    this.headPitch += (pitch - this.headPitch) * kh;
+    this.headPivot.rotation.set(
+      Math.max(-GAZE_UP, Math.min(GAZE_DOWN, this.headPitch + counterPitch)),
+      Math.max(-GAZE_YAW, Math.min(GAZE_YAW, this.headYaw - tw)),
+      0,
+      'YXZ',
+    );
 
     // The body is matte: its emissive carries only the hit flash and the level-up glow.
     if (f.flash) this.bodyMat.emissive.setHex(0xffffff);
@@ -842,16 +1010,68 @@ export class GolemBody implements MonsterBody {
   }
 
   /**
+   * Body pose with `k` (0..1) of the recruited turn, roll, shift, crouch and pitch: the torso turns about the hips'
+   * midpoint (HIPS). Updates `_rel` (torso → root space).
+   */
+  private poseBody(base: { y: number; pitch: number; roll: number }, k: number): void {
+    const tw = this.twist.x * k;
+    // Keep the hips' midpoint where the unrecruited pose has it: offset by R₀·HIPS − R·HIPS (about PIVOT).
+    this.body.rotation.set(base.pitch, 0, base.roll, 'YXZ');
+    _ly.subVectors(HIPS, PIVOT).applyQuaternion(this.body.quaternion);
+    this.body.rotation.set(base.pitch + this.lean.x * k, tw, base.roll - ROLL_PER_TWIST * tw, 'YXZ');
+    _lx.subVectors(HIPS, PIVOT).applyQuaternion(this.body.quaternion);
+    this.body.position
+      .set(PIVOT.x + SHIFT_PER_TWIST * tw, base.y - CROUCH_PER_TWIST * Math.abs(tw), PIVOT.z)
+      .add(_lunge)
+      .add(_ly.sub(_lx));
+    this.body.updateMatrix();
+    this.root.updateMatrixWorld(true);
+    _rel.multiplyMatrices(this.body.matrix, this.shell.matrix);
+  }
+
+  /** How far (units) the worst planted limb is beyond its reach in the current body pose (≤ 0 when all reach). */
+  private overstretch(): number {
+    let worst = -Infinity;
+    for (let side = 0; side < 2; side++) {
+      const sx = side === 0 ? 1 : -1;
+      if (this.handPlanted[side]) worst = Math.max(worst, mirror(SHOULDER, sx, _sh).applyMatrix4(_rel).distanceTo(this.handAt[side]!) - PLANTED_REACH);
+      if (this.footPlanted[side]) {
+        _hock.copy(this.footAt[side]!).add(HOCK);
+        worst = Math.max(worst, mirror(HIP, sx, _hip).applyMatrix4(_rel).distanceTo(_hock) - (THIGH + SHIN - 2));
+      }
+    }
+    return worst;
+  }
+
+  /**
+   * Hold root-space arm direction `d` (any length; written back as a unit vector) to the shoulder's range on side
+   * sx, in the current torso frame. Returns the angle (rad) it moved.
+   */
+  private holdToShoulder(d: THREE.Vector3, sx: number): number {
+    d.applyQuaternion(_qInv);
+    d.x *= sx;
+    const moved = clampShoulder(d, SHOULDER_LIM, d);
+    d.x *= sx;
+    d.applyQuaternion(this.body.quaternion);
+    return moved;
+  }
+
+  /** Horizontal bearing (rad) of root-space point p from side sx's resting shoulder (plus the lunge): 0 ahead, + outward. */
+  private outBearing(p: THREE.Vector3, sx: number): number {
+    return Math.atan2(sx * (p.x - sx * SHOULDER.x - _lunge.x), p.z - SHOULDER.z - _lunge.z);
+  }
+
+  /**
    * Rending Claws (root space; `_aim` holds the target and `_lunge` the body's lunge). Slam: rise, then drop onto the
-   * target. Backhand: cock across the chest, then sweep out along an arc around the lunging body to the target's
-   * side. Both hold on the target for STRIKE_HOLD, then ease back to the gait position. The kind is the one latched
-   * at the strike's start.
+   * target. Backhand: cock across the chest, then sweep out around the side in a wide arc toward the target's bearing
+   * (as far round as BACKHAND_END_MAX; the torso's turn carries it the rest). Both hold on the target for
+   * STRIKE_HOLD, then ease back to the gait position. The kind is the one latched at the strike's start.
    */
   private strikePose(t: number, sx: number, gait: THREE.Vector3, out: THREE.Vector3): void {
     const T = G.stats.meleeTiming;
     if (this.strikeKind === 'slam') {
       mirror(SLAM_RAISE, sx, _raise);
-      if (t < T.windup) out.lerpVectors(gait, _raise, t / T.windup);
+      if (t < T.windup) out.lerpVectors(gait, _raise, smooth(0, 1, t / T.windup));
       else if (t < T.impact) {
         const u = (t - T.windup) / (T.impact - T.windup);
         out.lerpVectors(_raise, _aim, u * u);
@@ -861,13 +1081,15 @@ export class GolemBody implements MonsterBody {
     mirror(BACKHAND_COCK, sx, _raise);
     const a0 = Math.atan2(_raise.x, _raise.z);
     const r0 = Math.hypot(_raise.x, _raise.z);
-    const a1 = sx * G.fist.backhandCenter;
-    _end.set(Math.sin(a1) * BACKHAND_R + _lunge.x, FIST_R + 30, Math.cos(a1) * BACKHAND_R + _lunge.z);
-    if (t < T.windup) out.lerpVectors(gait, _raise, t / T.windup);
+    const a1 = sx * Math.max(BACKHAND_END_MIN, Math.min(BACKHAND_END_MAX, Math.abs(Math.atan2(_aim.x, _aim.z))));
+    _end.set(Math.sin(a1) * BACKHAND_SWEEP_R + _lunge.x, FIST_R + 30, Math.cos(a1) * BACKHAND_SWEEP_R + _lunge.z);
+    if (t < T.windup) out.lerpVectors(gait, _raise, smooth(0, 1, t / T.windup));
     else if (t < T.impact) {
-      const u = (t - T.windup) / (T.impact - T.windup);
+      // Accelerating through the sweep: fastest at impact.
+      const v = (t - T.windup) / (T.impact - T.windup);
+      const u = 0.4 * v + 0.6 * v * v;
       const a = a0 + (a1 - a0) * u;
-      const r = r0 + (BACKHAND_R - r0) * u;
+      const r = r0 + (BACKHAND_SWEEP_R - r0) * u;
       out.set(Math.sin(a) * r + _lunge.x, _raise.y + (_end.y - _raise.y) * u, Math.cos(a) * r + _lunge.z);
     } else out.lerpVectors(_end, gait, strikeReturn(t, T, STRIKE_HOLD));
   }
