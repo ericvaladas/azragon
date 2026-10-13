@@ -13,6 +13,9 @@ const SEGS = 7;
 const CORE_PER = SEGS + (SEGS - 1) + 1 + 4 * 6 + 5;
 /** Smoke shell around the arm bones and the palm. */
 const HALO_PER = SEGS + 1;
+/** How opaque the arm's bones and their smoky shell are: a ghostly, half see-through limb. */
+const CORE_OPACITY = 0.62;
+const HALO_OPACITY = 0.3;
 /** Hand scale; dimensions below are in metres before it. */
 const HS = 2;
 const PALM = { len: HAND_DIM.palmLen, width: HAND_DIM.palmWidth, thick: HAND_DIM.thick };
@@ -100,10 +103,15 @@ export class ShadowHands {
   constructor(scene: THREE.Scene) {
     // Bones taper toward their far end, so each one reads as a separate bone and each finger ends in a point.
     const bone = faceted(new THREE.CylinderGeometry(0.55, 1, 1, 5));
-    this.core = new THREE.InstancedMesh(bone, toonMat(0xffffff), MAX * CORE_PER);
+    // Ghostly: the bones themselves are see-through (the city reads through the arm); they still write depth, so the
+    // limb never doubles up over itself, and the opaque flyer drawn before them shows through the fist.
+    const coreMat = toonMat(0xffffff);
+    coreMat.transparent = true;
+    coreMat.opacity = CORE_OPACITY;
+    this.core = new THREE.InstancedMesh(bone, coreMat, MAX * CORE_PER);
     this.halo = new THREE.InstancedMesh(
       bone,
-      new THREE.MeshBasicMaterial({ color: CONFIG.golem.colors.handSmoke, transparent: true, opacity: 0.45, depthWrite: false, side: THREE.BackSide }),
+      new THREE.MeshBasicMaterial({ color: CONFIG.golem.colors.handSmoke, transparent: true, opacity: HALO_OPACITY, depthWrite: false, side: THREE.BackSide }),
       MAX * HALO_PER,
     );
     this.halo.renderOrder = 1;
