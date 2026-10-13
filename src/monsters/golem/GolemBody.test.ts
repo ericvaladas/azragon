@@ -32,3 +32,21 @@ describe('GolemBody strike kind', () => {
     }
   });
 });
+
+describe('GolemBody dispose', () => {
+  it('frees every material it made (body, torso and its shadow), not just the geometry', () => {
+    const body = new GolemBody();
+    const mats = new Set<THREE.Material>();
+    body.root.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (!m.isMesh) return;
+      for (const mat of Array.isArray(m.material) ? m.material : [m.material]) mats.add(mat);
+      if (m.customDepthMaterial) mats.add(m.customDepthMaterial);
+    });
+    expect(mats.size).toBeGreaterThanOrEqual(3);
+    const freed = new Set<THREE.Material>();
+    for (const m of mats) m.addEventListener('dispose', () => freed.add(m));
+    body.dispose();
+    expect(freed.size).toBe(mats.size);
+  });
+});

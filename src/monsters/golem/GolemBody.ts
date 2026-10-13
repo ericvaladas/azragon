@@ -424,6 +424,8 @@ export class GolemBody implements MonsterBody {
   private launchMounts: { obj: THREE.Object3D; pos: THREE.Vector3; quat: THREE.Quaternion }[] = [];
   /** The torso's own material (the body's, plus the spine bend in its vertex shader), and the bend (rad) it draws. */
   private torsoMat: THREE.MeshToonMaterial;
+  /** The torso's shadow material, with the same spine bend. */
+  private depthMat!: THREE.MeshDepthMaterial;
   private bendU = { value: 0 };
   private bend = 0;
   /** Per side: pivot step progress (0 on its gait, 1 re-planted), its world plant, and the turn it was planted for. */
@@ -764,7 +766,7 @@ export class GolemBody implements MonsterBody {
     const trunk = this.mesh(this.shell, this.keep(merge(torso)), this.torsoMat);
     trunk.receiveShadow = false;
     // Its shadow bends with it.
-    const depth = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking });
+    const depth = (this.depthMat = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking }));
     depth.onBeforeCompile = (sh) => {
       sh.uniforms['uSpineBend'] = this.bendU;
       sh.vertexShader = sh.vertexShader
@@ -1474,6 +1476,9 @@ export class GolemBody implements MonsterBody {
 
   dispose(): void {
     for (const g of this.geos) g.dispose();
+    this.bodyMat.dispose();
+    this.torsoMat.dispose();
+    this.depthMat.dispose();
   }
 }
 
