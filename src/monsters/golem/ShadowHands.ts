@@ -3,7 +3,7 @@ import { CONFIG } from '../../config';
 import type { Target } from '../../combat';
 import type { Particles } from '../../systems/Particles';
 import { faceted, toonMat } from '../../render/toon';
-import { armJoints, fingerPoints, fistPoint, HAND_DIM, HAND_T, handBase, handFrame, handPhase, thumbPoints } from './handMath';
+import { armJointsTo, dragPoint, fingerPoints, fistPoint, HAND_DIM, HAND_T, handBase, handFrame, handPhase, thumbPoints } from './handMath';
 
 /** Hands alive at once (Shadow Hands+ grabs up to four flyers per strike; strikes can overlap). */
 const MAX = 10;
@@ -172,28 +172,29 @@ export class ShadowHands {
       const life = 1 - fade;
 
       // The point the fist closes on: arcing over the live flyer and down onto it while lunging, then (crushing,
-      // shaking) dragged down to the pool.
+      // shaking) dragged down into the ground out beyond the pool, the arm arching over after it.
       _base.copy(h.base).setY(-25 - 90 * fade);
       if (!h.decided) fistPoint(h.base, h.target.position, ph.rise, _a);
       else {
         const from = h.released ? h.target.position : h.held;
-        _a.copy(from).lerp(_c.copy(h.base).setY(-30), ph.drag);
+        dragPoint(h.base, from, ph.drag, _a);
         if (h.t < HAND_T.hold) _a.x += Math.sin(h.t * 65) * 3;
         // The wreck goes down with the hand (purely visual: the flyer is already destroyed).
         if (!h.released && !h.target.isAlive() && ph.drag < 1) h.target.position.copy(_a);
       }
 
       // Hand frame: F along the hand toward the fingertips, S across the knuckles, N out of the palm. Overhand: it
-      // rolls palm-down as it comes over the flyer and stays so while it drags the wreck down; the wrist sits above
-      // the prize (−N), the arm bowed up over it.
-      handFrame(h.base, h.decided ? h.held : h.target.position, h.decided ? 1 : ph.rise, _f, _s, _n);
-      const bend = 0.2 + 0.12 * ph.rise * (1 - ph.drag) + 0.3 * ph.drag + 0.04 * Math.sin(h.t * 5 + h.seed);
+      // rolls palm-down as it comes over the flyer, then tips on over to point down as it drags the wreck into the
+      // ground; the wrist sits above the prize (−N). The wrist is rigid: the forearm runs straight into the hand.
+      handFrame(h.base, h.decided ? h.held : h.target.position, h.decided ? 1 : ph.rise, _f, _s, _n, ph.drag);
+      const bend = 0.4 + 0.1 * ph.drag + 0.04 * Math.sin(h.t * 5 + h.seed);
       const twist = h.twist + 0.05 * Math.sin(h.t * 3.7 + h.seed);
       _w.copy(_a).addScaledVector(_f, -HOLD_FWD * HS).addScaledVector(_n, -HOLD_IN * HS);
 
-      // Arm: a bowed, trembling chain of tapering bones with knobbed joints.
-      const J = armJoints(_base, _w, bend, twist, h.joints);
-      for (let k = 1; k < SEGS; k++) {
+      // Arm: a bowed, trembling chain of tapering bones with knobbed joints, hooking over to arrive along the hand
+      // (the elbow, the forearm's start, keeps still so the wrist stays straight).
+      const J = armJointsTo(_base, _w, _f, bend, twist, h.joints);
+      for (let k = 1; k < SEGS - 1; k++) {
         const s = h.seed + k * 1.9;
         J[k]!.x += Math.sin(h.t * 11 + s) * 5;
         J[k]!.y += Math.sin(h.t * 13 + s * 1.3) * 4;

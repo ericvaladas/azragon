@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { SWAT_TIMES } from '../../monster/tailSwat';
-import { armJoints, BECKON_T, beckonLift, beckonPull, beckonResume, fingerPoints, fistPoint, HAND_DIM, jointCurl, thumbPoints, HAND_T, handBase, handFrame, handPhase, WENDIGO_SWAT } from './handMath';
+import { armJointsTo, BECKON_T, dragPoint, beckonLift, beckonPull, beckonResume, fingerPoints, fistPoint, HAND_DIM, jointCurl, thumbPoints, HAND_T, handBase, handFrame, handPhase, WENDIGO_SWAT } from './handMath';
 
 describe('handPhase', () => {
   it("reaches the flyer exactly at the Wendigo's anti-air impact, fist closed", () => {
@@ -75,29 +75,6 @@ describe('handBase', () => {
     expect(high.z).toBeCloseTo(860);
     const over = handBase(new THREE.Vector3(0, 300, 0), new THREE.Vector3(), 0.5, new THREE.Vector3());
     expect(Math.hypot(over.x, over.z)).toBeCloseTo(210);
-  });
-});
-
-describe('armJoints', () => {
-  const pts = () => Array.from({ length: 7 }, () => new THREE.Vector3());
-  it('runs from the base to the wrist, bowed up at the middle by bend × length', () => {
-    const base = new THREE.Vector3(0, 0, 0);
-    const wrist = new THREE.Vector3(300, 400, 0);
-    const j = armJoints(base, wrist, 0.2, 0, pts());
-    expect(j[0]!.distanceTo(base)).toBeCloseTo(0);
-    expect(j[6]!.distanceTo(wrist)).toBeCloseTo(0);
-    // The curve's middle sits half the control offset off the line: 0.5 × 0.2 × 500 = 50 m, on the up side.
-    const mid = j[3]!;
-    const dir = wrist.clone().normalize();
-    const off = mid.clone().sub(dir.clone().multiplyScalar(mid.dot(dir)));
-    expect(off.length()).toBeCloseTo(50);
-    expect(off.y).toBeGreaterThan(0);
-  });
-  it('twists sideways and survives a degenerate (zero-length) arm', () => {
-    const j = armJoints(new THREE.Vector3(), new THREE.Vector3(0, 0, 400), 0, 0.25, pts());
-    expect(Math.abs(j[3]!.x)).toBeCloseTo(50);
-    const z = armJoints(new THREE.Vector3(5, 0, 5), new THREE.Vector3(5, 0, 5), 0.3, 0.1, pts());
-    for (const p of z) expect(p.toArray()).toEqual([5, 0, 5]);
   });
 });
 
@@ -250,5 +227,60 @@ describe('fist grasp', () => {
     expect(handPhase(HAND_T.hold).squeeze).toBeGreaterThan(0.8);
     expect(handPhase(HAND_T.hold, true).squeeze).toBe(0);
     expect(handPhase(HAND_T.hold + 0.3, true).grip).toBe(0);
+  });
+});
+
+describe('rigid wrist', () => {
+  it('runs the forearm (the last arm bone) straight into the hand at every phase, the arm hooking over the flyer', () => {
+    const F = new THREE.Vector3();
+    const S = new THREE.Vector3();
+    const N = new THREE.Vector3();
+    const a = new THREE.Vector3();
+    const w = new THREE.Vector3();
+    const J = Array.from({ length: 8 }, () => new THREE.Vector3());
+    for (const [bx, bz, fy] of [[0, 600, 300], [300, 400, 150], [-200, 500, 450]] as const) {
+      const base = new THREE.Vector3(bx, -25, bz);
+      const flyer = new THREE.Vector3(40, fy, 200);
+      for (let t = 0.02; t < HAND_T.total; t += 0.02) {
+        const ph = handPhase(t);
+        if (t < HAND_T.impact) fistPoint(base, flyer, ph.rise, a);
+        else dragPoint(base, flyer, ph.drag, a);
+        handFrame(base, flyer, t < HAND_T.impact ? ph.rise : 1, F, S, N, ph.drag);
+        w.copy(a).addScaledVector(F, -HAND_DIM.holdFwd * 2).addScaledVector(N, -HAND_DIM.holdIn * 2);
+        for (const bend of [0.4, 0.5]) {
+          armJointsTo(base, w, F, bend, 0.08, J);
+          expect(J[0]!.distanceTo(base)).toBeLessThan(1e-6);
+          expect(J[7]!.distanceTo(w)).toBeLessThan(1e-6);
+          const fore = J[7]!.clone().sub(J[6]!).normalize();
+          expect(fore.angleTo(F)).toBeLessThan((3 * Math.PI) / 180);
+          // A smooth arm, its bones even; no joint folds back on itself (the last, the elbow, bends most).
+          const seg = J[1]!.distanceTo(J[0]!);
+          for (let k = 1; k < 7; k++) {
+            const u = J[k]!.clone().sub(J[k - 1]!);
+            const v = J[k + 1]!.clone().sub(J[k]!);
+            expect(u.angleTo(v)).toBeLessThan(k < 6 ? 0.85 : 1.4);
+            if (k < 5) expect(Math.abs(v.length() - seg)).toBeLessThan(0.25 * seg);
+          }
+        }
+      }
+    }
+  });
+
+  it('drags its prize down into the ground out beyond the pool, toward the flyer, the hand tipping on over', () => {
+    const base = new THREE.Vector3(0, -25, 600);
+    const held = new THREE.Vector3(40, 300, 200);
+    expect(dragPoint(base, held, 0, new THREE.Vector3()).distanceTo(held)).toBeLessThan(1e-9);
+    const end = dragPoint(base, held, 1, new THREE.Vector3());
+    expect(end.y).toBeLessThan(0);
+    const out = Math.hypot(end.x - base.x, end.z - base.z);
+    expect(out).toBeGreaterThan(100);
+    expect(out).toBeLessThan(Math.hypot(held.x - base.x, held.z - base.z));
+    const F = new THREE.Vector3();
+    const S = new THREE.Vector3();
+    const N = new THREE.Vector3();
+    handFrame(base, held, 1, F, S, N, 1);
+    expect(F.y).toBeLessThan(-0.99);
+    handFrame(base, held, 1, F, S, N, 0);
+    expect(N.y).toBeLessThan(-0.6);
   });
 });

@@ -223,17 +223,34 @@ export function fistPoint(base: THREE.Vector3, target: THREE.Vector3, rise: numb
   return out;
 }
 
+/** How far (m) out from its pool, toward the flyer, the hand plunges its prize into the ground. */
+const PLUNGE = 170;
+
+/**
+ * Where the fist holding its prize is `drag` (0..1, handPhase) of the way through dragging it down: from where it
+ * closed (`held`) down into the ground PLUNGE out from the pool at `base`, toward the flyer, so the arm arches up out
+ * of its pool, over, and down into the ground with it.
+ */
+export function dragPoint(base: THREE.Vector3, held: THREE.Vector3, drag: number, out: THREE.Vector3): THREE.Vector3 {
+  _h.set(held.x - base.x, 0, held.z - base.z);
+  if (_h.lengthSq() < 1e-6) _h.set(0, 0, 1);
+  _h.normalize();
+  return out.set(base.x + _h.x * PLUNGE, -30, base.z + _h.z * PLUNGE).lerp(held, 1 - drag);
+}
+
 /**
  * Hand frame at `rise` for an arm from its pool at `base` reaching for `target` (unit vectors): F along the hand
  * toward the fingertips, S across the knuckles, N out of the palm (S × F = N). The hand bursts out of the pool
  * reaching up, palm toward the flyer, and rolls over as it rises until, over the flyer, the fingers point on past it
- * and down and the palm faces down: an overhand grip, the fingers curling down around the prize.
+ * and down and the palm faces down: an overhand grip, the fingers curling down around the prize. As it drags the
+ * prize down (`down`) it tips on over to point straight down into the pool, palm toward the pool's middle.
  */
-export function handFrame(base: THREE.Vector3, target: THREE.Vector3, rise: number, F: THREE.Vector3, S: THREE.Vector3, N: THREE.Vector3): void {
+export function handFrame(base: THREE.Vector3, target: THREE.Vector3, rise: number, F: THREE.Vector3, S: THREE.Vector3, N: THREE.Vector3, down = 0): void {
   _h.set(target.x - base.x, 0, target.z - base.z);
   if (_h.lengthSq() < 1e-6) _h.set(0, 0, 1);
   _h.normalize();
-  const p = -1.25 + 1.9 * smooth(clamp01((rise - 0.15) / 0.7));
+  // Dragging its prize down (`down` 0..1), the hand tips on over until it points straight down into the pool.
+  const p = -1.25 + 1.9 * smooth(clamp01((rise - 0.15) / 0.7)) + (Math.PI / 2 - 0.65) * smooth(clamp01(down));
   const c = Math.cos(p);
   const s = Math.sin(p);
   F.set(_h.x * c, -s, _h.z * c);
@@ -247,11 +264,19 @@ const _up = new THREE.Vector3();
 const _side = new THREE.Vector3();
 const _ctrl = new THREE.Vector3();
 
+const _p1 = new THREE.Vector3();
+const _p2 = new THREE.Vector3();
+const DENSE = 64;
+const _dense = Array.from({ length: DENSE + 1 }, () => new THREE.Vector3());
+const _arc = new Array<number>(DENSE + 1).fill(0);
+
 /**
- * Joints of an arm from `base` to `wrist` (out[0] = base, out[n] = wrist): a quadratic curve bowed up and away
- * from the straight line by `bend` × its length (an elbow), and sideways by `twist` × its length.
+ * Joints of an arm from `base` to `wrist` (out[0] = base, out[n] = wrist) that arrives along the hand's direction F
+ * (unit), so the wrist never bends: a cubic curve bowed up and away from the straight line by `bend` × its length (a
+ * raised elbow) and sideways by `twist`, its end tangent along F (it hooks over and comes down onto whatever the
+ * hand holds; the forearm's approach runs back `approach` × its length along F), the last bone laid exactly along F.
  */
-export function armJoints(base: THREE.Vector3, wrist: THREE.Vector3, bend: number, twist: number, out: THREE.Vector3[]): THREE.Vector3[] {
+export function armJointsTo(base: THREE.Vector3, wrist: THREE.Vector3, F: THREE.Vector3, bend: number, twist: number, out: THREE.Vector3[], approach = 0.65): THREE.Vector3[] {
   const n = out.length - 1;
   _d.subVectors(wrist, base);
   const len = _d.length();
@@ -260,18 +285,42 @@ export function armJoints(base: THREE.Vector3, wrist: THREE.Vector3, bend: numbe
     return out;
   }
   _d.divideScalar(len);
-  // "Up" across the line: world up with the line's own direction taken out.
   _up.set(0, 1, 0).addScaledVector(_d, -_d.y);
   if (_up.lengthSq() < 1e-6) _up.set(1, 0, 0);
   _up.normalize();
   _side.crossVectors(_d, _up);
+  // The quadratic's bowed control, two-thirds of the way out from the base; the far one back along F from the wrist.
   _ctrl.addVectors(base, wrist).multiplyScalar(0.5).addScaledVector(_up, bend * len).addScaledVector(_side, twist * len);
-  for (let k = 0; k <= n; k++) {
-    const u = k / n;
-    const a = (1 - u) * (1 - u);
-    const b = 2 * (1 - u) * u;
-    const c = u * u;
-    out[k]!.set(a * base.x + b * _ctrl.x + c * wrist.x, a * base.y + b * _ctrl.y + c * wrist.y, a * base.z + b * _ctrl.z + c * wrist.z);
+  _p1.copy(base).lerp(_ctrl, 2 / 3);
+  _p2.copy(wrist).addScaledVector(F, -approach * len);
+  // Sample the curve finely, then lay the joints at equal arc lengths along it, so the bones are even and the bend
+  // is spread through the arm rather than bunched at the wrist.
+  let total = 0;
+  for (let i = 0; i <= DENSE; i++) {
+    const u = i / DENSE;
+    const a = (1 - u) ** 3;
+    const b = 3 * (1 - u) ** 2 * u;
+    const c = 3 * (1 - u) * u * u;
+    const e = u ** 3;
+    _dense[i]!.set(
+      a * base.x + b * _p1.x + c * _p2.x + e * wrist.x,
+      a * base.y + b * _p1.y + c * _p2.y + e * wrist.y,
+      a * base.z + b * _p1.z + c * _p2.z + e * wrist.z,
+    );
+    if (i > 0) total += _dense[i]!.distanceTo(_dense[i - 1]!);
+    _arc[i] = total;
   }
+  let i = 1;
+  for (let k = 0; k <= n; k++) {
+    const want = (total * k) / n;
+    while (i < DENSE && _arc[i]! < want) i++;
+    const span = _arc[i]! - _arc[i - 1]!;
+    out[k]!.lerpVectors(_dense[i - 1]!, _dense[i]!, span > 1e-9 ? (want - _arc[i - 1]!) / span : 0);
+  }
+  out[0]!.copy(base);
+  out[n]!.copy(wrist);
+  const last = out[n]!.distanceTo(out[n - 1]!);
+  out[n - 1]!.copy(wrist).addScaledVector(F, -last);
   return out;
 }
+
