@@ -98,6 +98,12 @@ describe('reach recruitment', () => {
     expect(reachTwist(-0.9, -0.5, 1.6, 0.7)).toBeLessThan(-0.3);
   });
 
+  it('turns the body most of the way round (up to the cap) for a target dead behind the shoulder', () => {
+    const t = reachTwist(Math.PI + 0.3, -0.55, 1.55, 1.5);
+    expect(t).toBeGreaterThan(1.25);
+    expect(t).toBeLessThan(1.5);
+  });
+
   it('never twists past the cap, however far behind the target is', () => {
     for (const b of [2, 2.5, Math.PI, 4]) expect(Math.abs(reachTwist(b, -0.5, 1.6, 0.7))).toBeLessThan(0.7);
     expect(reachTwist(Math.PI, -0.5, 1.6, 0.7)).toBeGreaterThan(0.6);

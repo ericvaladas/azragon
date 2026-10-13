@@ -8,6 +8,7 @@ import { merge, piece, rng, SHAPES, type V3 } from './golemParts';
 import { clawRaise } from './handMath';
 import { SWING, limbPlanted, limbSwing } from './knuckleGait';
 import { clampShoulder, reachTwist, softCap, springStep, type ShoulderLimits } from './shoulder';
+import { bendAngleAt, bendPoint, outwardBearing, pivotStep, stepToward } from './spine';
 
 const G = CONFIG.golem;
 const C = G.colors;
@@ -71,18 +72,51 @@ const NOVA_TIME = 0.6;
 const SHOULDER_LIM: ShoulderLimits = { back: 0.26, tilt: 0.45, medial: 0.6, raise: 0.95 };
 /**
  * Reach recruitment. The shoulder alone sweeps a hand from SWEEP_LO (across the chest) to SWEEP_HI rad (out and a
- * little back) of horizontal bearing from the shoulder; beyond that the torso turns (yaw, about the hips) toward the
- * hand, capped at TWIST_MAX, rolling the strike shoulder down ROLL_PER_TWIST rad per rad, shifting the body
- * SHIFT_PER_TWIST units toward that side and crouching CROUCH_PER_TWIST. The torso reads the strike RECRUIT_LEAD s
- * ahead, so it leads the arm.
+ * little back) of horizontal bearing from the shoulder; beyond that the front of the body turns toward the hand, up
+ * to TWIST_MAX (so a target dead astern comes round beside the shoulder): the spine bends sideways (SPINE_Z0..Z1)
+ * while the hips counter-rotate HIP_COUNTER of the turn. The body rolls the strike shoulder down ROLL_PER_TWIST rad
+ * per rad, shifts SHIFT_PER_TWIST units toward that side and crouches CROUCH_PER_TWIST, all eased off past
+ * RECRUIT_SOFT rad of turn. The torso reads the strike RECRUIT_LEAD s ahead, so it leads the arm.
  */
 const SWEEP_LO = -0.55;
 const SWEEP_HI = 1.55;
-const TWIST_MAX = 0.7;
+const TWIST_MAX = 1.5;
+const HIP_COUNTER = 0.12;
+const SPINE_Z0 = -150;
+const SPINE_Z1 = 150;
 const ROLL_PER_TWIST = 0.4;
 const SHIFT_PER_TWIST = 30;
 const CROUCH_PER_TWIST = 50;
+const RECRUIT_SOFT = 0.7;
 const RECRUIT_LEAD = 0.1;
+/**
+ * Pivot step: when the turn (target) passes STEP_ON rad the planted hand on the far side lifts and re-plants under
+ * the turned shoulders, over STEP_TIME s; it steps back once the turn falls below STEP_OFF.
+ */
+const STEP_ON = 0.7;
+const STEP_OFF = 0.35;
+const STEP_TIME = 0.24;
+/** The spine bend, run in the torso's vertex shader (the same map as spine.ts bendPoint, for the shoulders and head). */
+const SPINE_BEND_GLSL = `
+uniform float uSpineBend;
+vec3 spineBend(vec3 p) {
+  float s = p.z - (${SPINE_Z0.toFixed(1)});
+  if (s <= 0.0 || uSpineBend == 0.0) return p;
+  float L = ${(SPINE_Z1 - SPINE_Z0).toFixed(1)};
+  float k = uSpineBend / L;
+  float th = k * min(s, L);
+  float sh = sin(th * 0.5);
+  vec3 o = vec3(p.x * cos(th) + 2.0 * sh * sh / k, p.y, ${SPINE_Z0.toFixed(1)} + sin(th) / k - p.x * sin(th));
+  if (s > L) o += (s - L) * vec3(sin(uSpineBend), 0.0, cos(uSpineBend));
+  return o;
+}
+vec3 spineBendNormal(vec3 p, vec3 n) {
+  float th = uSpineBend * clamp((p.z - (${SPINE_Z0.toFixed(1)})) / ${(SPINE_Z1 - SPINE_Z0).toFixed(1)}, 0.0, 1.0);
+  float c = cos(th);
+  float s = sin(th);
+  return vec3(n.x * c + n.z * s, n.y, -n.x * s + n.z * c);
+}
+`;
 /** The hips' midpoint (torso space): the torso turns about it, so the haunches stay over the hind hooves. */
 const HIPS = new THREE.Vector3(0, HIP.y, HIP.z);
 /** How far (units) a shoulder slides (scapula) toward a hand that is nearly out of reach. */
@@ -92,7 +126,7 @@ const PROTRACT = 26;
  * the radius it reaches for (past the arm's reach, so the arm sweeps through nearly straight).
  */
 const BACKHAND_END_MIN = 1.35;
-const BACKHAND_END_MAX = 2.35;
+const BACKHAND_END_MAX = Math.PI - 0.05;
 const BACKHAND_SWEEP_R = 580;
 /** Shadow Hands: how far from the shoulder the lifted claw reaches toward the flyer. */
 const BECKON_REACH = 400;
@@ -231,10 +265,13 @@ const _tmp = new THREE.Vector3();
 const _world = new THREE.Vector3();
 const _lunge = new THREE.Vector3();
 const _rel = new THREE.Matrix4();
-const _relInv = new THREE.Matrix4();
-const _qInv = new THREE.Quaternion();
 const _lead = new THREE.Vector3();
 const _clamp = new THREE.Vector3();
+const _armQ = new THREE.Quaternion();
+const _armQInv = new THREE.Quaternion();
+const _qy = new THREE.Quaternion();
+const _look = new THREE.Vector3();
+const _Y = new THREE.Vector3(0, 1, 0);
 const _ca = new THREE.Color();
 const _cb = new THREE.Color();
 
@@ -357,6 +394,16 @@ export class GolemBody implements MonsterBody {
   private bodyMat: THREE.MeshToonMaterial;
   private geos: THREE.BufferGeometry[] = [];
   private launchPts: THREE.Object3D[] = [];
+  /** Launch point mounts and their unbent torso-space poses, carried along the spine bend each frame. */
+  private launchMounts: { obj: THREE.Object3D; pos: THREE.Vector3; quat: THREE.Quaternion }[] = [];
+  /** The torso's own material (the body's, plus the spine bend in its vertex shader), and the bend (rad) it draws. */
+  private torsoMat: THREE.MeshToonMaterial;
+  private bendU = { value: 0 };
+  private bend = 0;
+  /** Per side: pivot step progress (0 on its gait, 1 re-planted), its world plant, and the turn it was planted for. */
+  private stepS = [0, 0];
+  private stepAt = [new THREE.Vector3(), new THREE.Vector3()];
+  private stepTwist = [0, 0];
   /** The skull and antlers, turned toward `lookAt` (Dread Gaze) and eased back to rest; yaw is root-relative. */
   private headPivot = new THREE.Group();
   private headYaw = 0;
@@ -375,11 +422,22 @@ export class GolemBody implements MonsterBody {
   private footAt = [new THREE.Vector3(), new THREE.Vector3()];
   private handPlanted = [false, false];
   private footPlanted = [false, false];
+  /** Per side: the hand is posed (striking, slamming, reaching), not walking. */
+  private handPosed = [false, false];
   /** Per side: 0..1, how far a sweeping hand reaches out horizontally (at its height) toward the arm's full length. */
   private extend = [0, 0];
 
   constructor() {
     this.bodyMat = toonMat(0xffffff, { vertexColors: true });
+    this.torsoMat = this.bodyMat.clone();
+    this.torsoMat.onBeforeCompile = (sh) => {
+      sh.uniforms['uSpineBend'] = this.bendU;
+      sh.vertexShader = sh.vertexShader
+        .replace('#include <common>', `#include <common>\n${SPINE_BEND_GLSL}`)
+        .replace('#include <beginnormal_vertex>', '#include <beginnormal_vertex>\nobjectNormal = spineBendNormal(position, objectNormal);')
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\ntransformed = spineBend(transformed);');
+    };
+    this.torsoMat.customProgramCacheKey = () => 'wendigo-spine';
     const { box, spike } = SHAPES;
     const torso: THREE.BufferGeometry[] = [];
     const rand = rng(13);
@@ -648,11 +706,23 @@ export class GolemBody implements MonsterBody {
       mouth.position.set(0, 50, 0);
       pt.add(mouth);
       this.launchPts.push(mouth);
+      this.launchMounts.push({ obj: pt, pos: pt.position.clone(), quat: pt.quaternion.clone() });
       this.shell.add(pt);
     }
 
     // The torso casts shadows but takes none: the mane and antlers would otherwise drown the trunk in shade.
-    this.mesh(this.shell, this.keep(merge(torso)), this.bodyMat).receiveShadow = false;
+    const trunk = this.mesh(this.shell, this.keep(merge(torso)), this.torsoMat);
+    trunk.receiveShadow = false;
+    // Its shadow bends with it.
+    const depth = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking });
+    depth.onBeforeCompile = (sh) => {
+      sh.uniforms['uSpineBend'] = this.bendU;
+      sh.vertexShader = sh.vertexShader
+        .replace('#include <common>', `#include <common>\n${SPINE_BEND_GLSL}`)
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\ntransformed = spineBend(transformed);');
+    };
+    depth.customProgramCacheKey = () => 'wendigo-spine-depth';
+    trunk.customDepthMaterial = depth;
     this.headPivot.position.copy(HEAD_PIVOT);
     this.shell.add(this.headPivot);
     this.mesh(this.headPivot, this.keep(merge(skull).translate(-HEAD_PIVOT.x, -HEAD_PIVOT.y, -HEAD_PIVOT.z)), this.bodyMat).receiveShadow = false;
@@ -848,6 +918,7 @@ export class GolemBody implements MonsterBody {
       if (f.roaring) want.set(sx * 90, 430 + Math.sin(f.time * 14 + side * Math.PI) * 45, 250);
       if (f.airborne) want.set(sx * 230, -30, 260);
       const posed = striking || nova >= 0 || beckoning || f.roaring || f.airborne;
+      this.handPosed[side] = posed;
       this.handPlanted[side] = !posed && g.lift * m < 1e-3;
     }
     for (let side = 0; side < 2; side++) {
@@ -863,6 +934,7 @@ export class GolemBody implements MonsterBody {
     // settling after (springs). The monster's heading and path never change; this is all pose inside the root.
     let twistT = 0;
     let leanT = 0;
+    let strikeEnv = 0;
     if (f.melee && !f.roaring && !f.airborne && f.pose.collapse === 0) {
       const side = f.melee.side;
       const sx = side === 0 ? 1 : -1;
@@ -871,6 +943,7 @@ export class GolemBody implements MonsterBody {
       twistT += sx * reachTwist(this.outBearing(_lead, sx), SWEEP_LO, SWEEP_HI, TWIST_MAX);
       // 0 → 1 through the windup, held to impact and the hold, then back to 0 by the end.
       const env = t < T.windup ? smooth(0, 1, t / T.windup) : 1 - strikeReturn(t, T, hold);
+      strikeEnv = env;
       const u = Math.min(1, Math.max(0, (t - T.windup) / (T.impact - T.windup)));
       if (this.strikeKind === 'slam') {
         // Turn into the target; rear back as the claw rises, then drive the shoulders down onto it.
@@ -896,7 +969,9 @@ export class GolemBody implements MonsterBody {
       const rise = Math.asin(Math.max(-1, Math.min(1, (want.y - _tmp.y) / Math.max(1, want.distanceTo(_tmp)))));
       leanT -= 0.12 * summon + softCap(Math.max(0, rise - 0.5), 0.25);
     }
-    springStep(this.twist, Math.max(-TWIST_MAX, Math.min(TWIST_MAX, twistT)), TWIST_SPRING.omega, TWIST_SPRING.zeta, f.dt);
+    const twistGoal = Math.max(-TWIST_MAX, Math.min(TWIST_MAX, twistT));
+    springStep(this.twist, twistGoal, TWIST_SPRING.omega, TWIST_SPRING.zeta, f.dt);
+    this.pivotSteps(f, twistGoal, onFootLand);
     springStep(this.lean, leanT, LEAN_SPRING.omega, LEAN_SPRING.zeta, f.dt);
 
     // Pose the body; if the turn would overstretch a planted limb (skating it), soften the turn until it reaches.
@@ -926,8 +1001,9 @@ export class GolemBody implements MonsterBody {
       k = lo;
       this.poseBody(base, k);
     }
-    _relInv.copy(_rel).invert();
-    _qInv.copy(this.body.quaternion).invert();
+    // The arms' frame: the body's turn plus the spine's bend at the shoulders.
+    _armQ.copy(this.body.quaternion).multiply(_qy.setFromAxisAngle(_Y, bendAngleAt(SHOULDER.z, this.bend, SPINE_Z0, SPINE_Z1)));
+    _armQInv.copy(_armQ).invert();
 
     // Arms: two-bone IK from a shoulder that slides toward a far hand; a posed arm is held to the shoulder's range.
     for (let side = 0; side < 2; side++) {
@@ -935,12 +1011,12 @@ export class GolemBody implements MonsterBody {
       const arm = this.limbArms[side]!;
       const planted = this.handPlanted[side]!;
       _fist.copy(this.handAt[side]!);
-      mirror(SHOULDER, sx, _sh);
-      _tmp.copy(_fist).applyMatrix4(_relInv).sub(_sh);
+      this.torsoToRoot(mirror(SHOULDER, sx, _sh), _sh);
+      _tmp.subVectors(_fist, _sh).applyQuaternion(_armQInv);
       const need = smooth(0.78, 1.02, _tmp.length() / ARM_REACH);
       _tmp.normalize();
-      _tmp.set(_tmp.x, _tmp.y * 0.3, Math.max(-0.2, _tmp.z)).normalize();
-      _sh.addScaledVector(_tmp, PROTRACT * need).applyMatrix4(_rel);
+      _tmp.set(_tmp.x, _tmp.y * 0.3, Math.max(-0.2, _tmp.z)).normalize().applyQuaternion(_armQ);
+      _sh.addScaledVector(_tmp, PROTRACT * need);
       _tmp.subVectors(_fist, _sh);
       const ext = this.extend[side]!;
       if (ext > 0) {
@@ -960,7 +1036,7 @@ export class GolemBody implements MonsterBody {
         _fist.set(_sh.x + (_fist.x - _sh.x) * k, HAND_FLOOR, _sh.z + (_fist.z - _sh.z) * k);
       }
       // Elbows out and back (torso space), so they turn with the body; outside the arm's range, so never inverts.
-      _ref.set(sx * 260, -40, -260).applyQuaternion(this.body.quaternion);
+      _ref.set(sx * 260, -40, -260).applyQuaternion(_armQ);
       _pole.copy(_sh).add(_ref);
       solveTwoBone(_sh, _fist, UPPER, FORE, _pole, _elbow);
       if (!planted) {
@@ -983,7 +1059,7 @@ export class GolemBody implements MonsterBody {
       placeLimb(arm.upper, _sh, _elbow, _ref);
       placeLimb(arm.fore, _elbow, _fist, _ref);
       arm.fist.position.copy(_fist);
-      if (m > 0.3 && planted && limbPlanted(f.prevCycle, f.cycle, side === 0 ? 0 : 2)) {
+      if (m > 0.3 && planted && this.stepS[side] === 0 && limbPlanted(f.prevCycle, f.cycle, side === 0 ? 0 : 2)) {
         onFootLand(_world.copy(this.gaitAt[side]!).setY(0).applyMatrix4(this.root.matrixWorld));
       }
     }
@@ -994,7 +1070,7 @@ export class GolemBody implements MonsterBody {
       const leg = this.legs[side]!;
       const foot = this.footAt[side]!;
       _hock.copy(foot).add(HOCK);
-      mirror(HIP, sx, _hip).applyMatrix4(_rel);
+      this.torsoToRoot(mirror(HIP, sx, _hip), _hip);
       _pole.copy(_hip).add(_ref.set(sx * 30, 0, 300));
       solveTwoBone(_hip, _hock, THIGH, SHIN, _pole, _knee);
       placeLimb(leg.thigh, _hip, _knee, _ref);
@@ -1004,33 +1080,49 @@ export class GolemBody implements MonsterBody {
     }
 
     // Dread Gaze: the skull turns (within limits) to stare at the target; the body's heading never changes for it.
-    // Its turn is eased in root space, so it holds on its target while the torso turns under it; with no target the
-    // neck takes back HEAD_COUNTER of the torso's turn and pitch, so the skull stays roughly ahead.
-    const tw = this.body.rotation.y;
+    // It rides the end of the bent neck; its turn is eased in root space, so it holds on its target while the torso
+    // turns under it. With no gaze target it looks back over its shoulder at a strike or a flyer it reaches for, and
+    // otherwise the neck takes back HEAD_COUNTER of the torso's turn and pitch, so the skull stays roughly ahead.
+    const frontYaw = this.body.rotation.y + this.bend;
+    bendPoint(HEAD_PIVOT, this.bend, SPINE_Z0, SPINE_Z1, this.headPivot.position);
     const counterPitch = -HEAD_COUNTER * this.lean.x * k;
-    let yaw = (1 - HEAD_COUNTER) * tw;
+    let yaw = (1 - HEAD_COUNTER) * frontYaw;
     let pitch = 0;
+    this.shell.updateMatrixWorld(true);
     if (f.lookAt && f.pose.collapse === 0) {
-      this.shell.updateMatrixWorld(true);
-      this.shell.worldToLocal(_sum.copy(f.lookAt)).sub(HEAD_PIVOT);
+      this.shell.worldToLocal(_sum.copy(f.lookAt)).sub(this.headPivot.position).applyAxisAngle(_Y, -this.bend);
       const horiz = Math.hypot(_sum.x, _sum.z);
-      yaw = Math.max(-GAZE_YAW, Math.min(GAZE_YAW, Math.atan2(_sum.x, _sum.z))) + tw;
+      yaw = Math.max(-GAZE_YAW, Math.min(GAZE_YAW, Math.atan2(_sum.x, _sum.z))) + frontYaw;
       // At rest the skull already looks ~0.45 rad below level; pitch only makes up the difference.
       pitch = Math.max(-GAZE_UP, Math.min(GAZE_DOWN, Math.atan2(-_sum.y, horiz) - 0.45)) - counterPitch;
+    } else if (f.pose.collapse === 0) {
+      const w = f.melee && this.strikeKind === 'backhand' ? strikeEnv : summonSide >= 0 ? summon : 0;
+      if (w > 0) {
+        _look.copy(this.headPivot.position).applyMatrix4(this.shell.matrix).applyMatrix4(this.body.matrix);
+        const tgt = f.melee && this.strikeKind === 'backhand' ? _aim : this.root.worldToLocal(_tmp.copy(f.antiAir!.target));
+        const want = frontYaw + Math.max(-GAZE_YAW, Math.min(GAZE_YAW, angleWrap(Math.atan2(tgt.x - _look.x, tgt.z - _look.z) - frontYaw)));
+        yaw += (want - yaw) * w;
+      }
     }
     const kh = 1 - Math.exp(-(f.lookAt ? GAZE_RATE : GAZE_RATE * 0.5) * f.dt);
     this.headYaw += (yaw - this.headYaw) * kh;
     this.headPitch += (pitch - this.headPitch) * kh;
     this.headPivot.rotation.set(
       Math.max(-GAZE_UP, Math.min(GAZE_DOWN, this.headPitch + counterPitch)),
-      Math.max(-GAZE_YAW, Math.min(GAZE_YAW, this.headYaw - tw)),
+      this.bend + Math.max(-GAZE_YAW, Math.min(GAZE_YAW, this.headYaw - frontYaw)),
       0,
       'YXZ',
     );
+    // Launch points ride the bent back.
+    for (const L of this.launchMounts) {
+      bendPoint(L.pos, this.bend, SPINE_Z0, SPINE_Z1, L.obj.position);
+      L.obj.quaternion.setFromAxisAngle(_Y, bendAngleAt(L.pos.z, this.bend, SPINE_Z0, SPINE_Z1)).multiply(L.quat);
+    }
 
     // The body is matte: its emissive carries only the hit flash and the level-up glow.
     if (f.flash) this.bodyMat.emissive.setHex(0xffffff);
     else this.bodyMat.emissive.setHex(CONFIG.levelUp.color).multiplyScalar(f.glow);
+    this.torsoMat.emissive.copy(this.bodyMat.emissive);
   }
 
   /**
@@ -1039,18 +1131,60 @@ export class GolemBody implements MonsterBody {
    */
   private poseBody(base: { y: number; pitch: number; roll: number }, k: number): void {
     const tw = this.twist.x * k;
+    // The hips counter-rotate a little; the spine bends the rest of the way, so the front turns by tw in all.
+    const hipYaw = -HIP_COUNTER * tw;
+    this.bend = tw - hipYaw;
+    this.bendU.value = this.bend;
+    const soft = softCap(tw, RECRUIT_SOFT);
     // Keep the hips' midpoint where the unrecruited pose has it: offset by R₀·HIPS − R·HIPS (about PIVOT).
     this.body.rotation.set(base.pitch, 0, base.roll, 'YXZ');
     _ly.subVectors(HIPS, PIVOT).applyQuaternion(this.body.quaternion);
-    this.body.rotation.set(base.pitch + this.lean.x * k, tw, base.roll - ROLL_PER_TWIST * tw, 'YXZ');
+    this.body.rotation.set(base.pitch + this.lean.x * k, hipYaw, base.roll - ROLL_PER_TWIST * soft, 'YXZ');
     _lx.subVectors(HIPS, PIVOT).applyQuaternion(this.body.quaternion);
     this.body.position
-      .set(PIVOT.x + SHIFT_PER_TWIST * tw, base.y - CROUCH_PER_TWIST * Math.abs(tw), PIVOT.z)
+      .set(PIVOT.x + SHIFT_PER_TWIST * soft, base.y - CROUCH_PER_TWIST * Math.abs(soft), PIVOT.z)
       .add(_lunge)
       .add(_ly.sub(_lx));
     this.body.updateMatrix();
     this.root.updateMatrixWorld(true);
     _rel.multiplyMatrices(this.body.matrix, this.shell.matrix);
+  }
+
+  /** Torso-space point p (unbent) to root space through the spine's bend and the body's pose. */
+  private torsoToRoot(p: THREE.Vector3, out: THREE.Vector3): THREE.Vector3 {
+    return bendPoint(p, this.bend, SPINE_Z0, SPINE_Z1, out).applyMatrix4(_rel);
+  }
+
+  /**
+   * Pivot steps: while the turn (`goal`, + left) is past STEP_ON, the planted hand on the far side lifts and
+   * re-plants under the turned shoulders (a world-fixed spot, so it never skates as the body walks on), then steps
+   * back onto its gait once the turn eases. Overrides that hand's `handAt` and planted flag.
+   */
+  private pivotSteps(f: BodyFrame, goal: number, onFootLand: (p: THREE.Vector3) => void): void {
+    this.root.updateMatrixWorld();
+    for (let side = 0; side < 2; side++) {
+      const sx = side === 0 ? 1 : -1;
+      const support = !this.handPosed[side] && !f.airborne && f.pose.collapse === 0 && (goal > 0 ? side === 1 : side === 0);
+      const was = this.stepS[side]!;
+      const on = support && Math.abs(goal) > (was > 0 ? STEP_OFF : STEP_ON);
+      if (on && was < 1) {
+        // In the air: aim the plant under the deepest turn so far (its rest spot, carried through that turn).
+        if (was === 0 || Math.abs(goal) > Math.abs(this.stepTwist[side]!)) this.stepTwist[side] = goal;
+        const tw = this.stepTwist[side]!;
+        bendPoint(mirror(FIST_AT, sx, _look), tw * (1 + HIP_COUNTER), SPINE_Z0, SPINE_Z1, _look);
+        _look.sub(HIPS).applyAxisAngle(_Y, -HIP_COUNTER * tw).add(HIPS).setY(FIST_AT.y);
+        this.root.localToWorld(this.stepAt[side]!.copy(_look));
+      }
+      const s = stepToward(was, on, f.dt, STEP_TIME);
+      this.stepS[side] = s;
+      if (s <= 0) continue;
+      const ph = pivotStep(s);
+      this.root.worldToLocal(_look.copy(this.stepAt[side]!));
+      this.handAt[side]!.lerpVectors(this.gaitAt[side]!, _look, ph.blend);
+      this.handAt[side]!.y += ph.lift * FIST_LIFT;
+      this.handPlanted[side] = s >= 1;
+      if (was < 1 && s >= 1) onFootLand(_world.copy(this.stepAt[side]!).setY(0));
+    }
   }
 
   /** Turn the arm being posed (`_elbow`, `_fist`) by q about its shoulder `_sh`. */
@@ -1064,10 +1198,10 @@ export class GolemBody implements MonsterBody {
     let worst = -Infinity;
     for (let side = 0; side < 2; side++) {
       const sx = side === 0 ? 1 : -1;
-      if (this.handPlanted[side]) worst = Math.max(worst, mirror(SHOULDER, sx, _sh).applyMatrix4(_rel).distanceTo(this.handAt[side]!) - PLANTED_REACH);
+      if (this.handPlanted[side]) worst = Math.max(worst, this.torsoToRoot(mirror(SHOULDER, sx, _sh), _sh).distanceTo(this.handAt[side]!) - PLANTED_REACH);
       if (this.footPlanted[side]) {
         _hock.copy(this.footAt[side]!).add(HOCK);
-        worst = Math.max(worst, mirror(HIP, sx, _hip).applyMatrix4(_rel).distanceTo(_hock) - (THIGH + SHIN - 2));
+        worst = Math.max(worst, this.torsoToRoot(mirror(HIP, sx, _hip), _hip).distanceTo(_hock) - (THIGH + SHIN - 2));
       }
     }
     return worst;
@@ -1078,17 +1212,20 @@ export class GolemBody implements MonsterBody {
    * sx, in the current torso frame. Returns the angle (rad) it moved.
    */
   private holdToShoulder(d: THREE.Vector3, sx: number): number {
-    d.applyQuaternion(_qInv);
+    d.applyQuaternion(_armQInv);
     d.x *= sx;
     const moved = clampShoulder(d, SHOULDER_LIM, d);
     d.x *= sx;
-    d.applyQuaternion(this.body.quaternion);
+    d.applyQuaternion(_armQ);
     return moved;
   }
 
-  /** Horizontal bearing (rad) of root-space point p from side sx's resting shoulder (plus the lunge): 0 ahead, + outward. */
+  /**
+   * Horizontal bearing (rad) of root-space point p from side sx's resting shoulder (plus the lunge): 0 ahead, +
+   * outward; behind the shoulder past π (outwardBearing), so a target astern turns the body toward it.
+   */
   private outBearing(p: THREE.Vector3, sx: number): number {
-    return Math.atan2(sx * (p.x - sx * SHOULDER.x - _lunge.x), p.z - SHOULDER.z - _lunge.z);
+    return outwardBearing(sx * (p.x - sx * SHOULDER.x - _lunge.x), p.z - SHOULDER.z - _lunge.z);
   }
 
   /**
@@ -1115,15 +1252,28 @@ export class GolemBody implements MonsterBody {
     const r0 = Math.hypot(_raise.x, _raise.z);
     const a1 = sx * Math.max(BACKHAND_END_MIN, Math.min(BACKHAND_END_MAX, Math.abs(Math.atan2(_aim.x, _aim.z))));
     // Along the sweep at progress u (backhandSweep: 1 is contact, past 1 the carry-through), round the body.
+    // The sweep's bearing at progress u, never round past dead astern (the carry-through stops there).
+    const angAt = (u: number) => sx * Math.min(BACKHAND_END_MAX, sx * (a0 + (a1 - a0) * u));
     const at = (u: number, o: THREE.Vector3) => {
-      const a = a0 + (a1 - a0) * u;
+      const a = angAt(u);
       const k = Math.min(1, u);
       const r = r0 + (BACKHAND_SWEEP_R - r0) * k;
       return o.set(Math.sin(a) * r + _lunge.x, _raise.y + (FIST_R + 30 - _raise.y) * k, Math.cos(a) * r + _lunge.z);
     };
     if (t < T.windup) out.lerpVectors(gait, _raise, smooth(0, 1, t / T.windup));
     else if (t < T.impact + hold) at(backhandSweep(t, T, hold), out);
-    else out.lerpVectors(at(backhandSweep(T.end, T, hold), _end), gait, strikeReturn(t, T, hold));
+    else {
+      // Home the way it came, round the outside (never back under the body), onto the walking hand.
+      const peak = backhandSweep(T.end, T, hold);
+      at(peak, _end);
+      const r = strikeReturn(t, T, hold);
+      const ae = angAt(peak);
+      const re = Math.hypot(_end.x - _lunge.x, _end.z - _lunge.z);
+      const ag = Math.atan2(gait.x, gait.z);
+      const a = ae + (ag - ae) * r;
+      const rr = re + (Math.hypot(gait.x, gait.z) - re) * r;
+      out.set(Math.sin(a) * rr + _lunge.x * (1 - r), _end.y + (gait.y - _end.y) * r, Math.cos(a) * rr + _lunge.z * (1 - r));
+    }
   }
 
   /** The latched strike's timeline: the backhand's own, slower one, or the kind's meleeTiming for a slam. */
@@ -1157,4 +1307,9 @@ export class GolemBody implements MonsterBody {
   dispose(): void {
     for (const g of this.geos) g.dispose();
   }
+}
+
+/** a wrapped into (−π, π]. */
+function angleWrap(a: number): number {
+  return a - Math.PI * 2 * Math.round(a / (Math.PI * 2));
 }
