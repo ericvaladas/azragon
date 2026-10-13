@@ -71,7 +71,7 @@ Make the Magma Golem the fourth and last playable monster.
 |---|---|---|
 | Auto melee | **Molten Fist** | The fists are also the Golem's front feet, so attacks fit into the walk:<br>• **Ahead:** a ground target within reach, in front, becomes the target of the next fist plant. That fist swings onto it as a heavy slam: splash damage to ground enemies and buildings around the impact, with a magma splash.<br>• **Side or rear:** for a ground target outside the front arc, the nearer arm makes a sweeping backhand. It hits every ground enemy and building in an arc on that side, within reach.<br>• **Standing still:** the nearer fist slams the target directly.<br>The walk never stops or turns for a strike. |
 | Auto ranged | **Magma Lob** | A glowing magma bomb arcs from a back vent to the ranged target (range about 1400 m).<br>• Landing deals splash damage to ground enemies and buildings.<br>• It leaves a **lava pool** that burns ground enemies for a few seconds. This reuses the acid-pool system, recoloured.<br>• Ground targets only, like the Kraken's Hurl.<br>• The extra-projectile upgrade adds one more bomb per volley, from another vent. |
-| Anti-air | **Vent Burst** | A magma geyser jets from a shoulder vent at a jet or blimp within reach. It uses the same anti-air timing and damage path as Tail Swat, Snap Bite and Tentacle Lash. |
+| Anti-air | **Vent Burst** | Thin whip-like fire tendrils flare from the Golem's back like solar flares. The one nearest a jet or blimp within reach cocks back and whips out onto it. It uses the same anti-air timing and damage path as Tail Swat, Snap Bite and Tentacle Lash. |
 
 ## Signature upgrades
 

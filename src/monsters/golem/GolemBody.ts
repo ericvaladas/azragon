@@ -4,6 +4,7 @@ import { faceted, toonMat } from '../../render/toon';
 import { placeSegment, solveTwoBone } from '../../monster/ik';
 import type { BodyFrame, MonsterBody } from '../types';
 import { fistKind, lungeAmount, lungeWeight, strikeReturn, strikeStarted, type FistKind } from './fist';
+import { FireTendrils } from './FireTendrils';
 import { SWING, limbPlanted, limbSwing } from './knuckleGait';
 
 const G = CONFIG.golem;
@@ -47,7 +48,16 @@ const BACK_VENTS: readonly (readonly [number, number, number])[] = [
   [-85, 690, -75],
   [0, 682, -185],
 ];
-/** Shoulder vent (torso space, left side; mirrored): Vent Burst geysers rise from here. */
+/** Fire tendrils (torso space): roots on the back hump, each rising away from the hump's centre. */
+const TENDRIL_ROOTS: readonly THREE.Vector3[] = [
+  new THREE.Vector3(140, 650, -20),
+  new THREE.Vector3(-140, 650, -20),
+  new THREE.Vector3(50, 700, -10),
+  new THREE.Vector3(-50, 700, -10),
+  new THREE.Vector3(0, 685, -130),
+];
+const HUMP_CENTRE = new THREE.Vector3(0, 520, -40);
+/** Shoulder vent (torso space, left side; mirrored). */
 const SHOULDER_VENT = new THREE.Vector3(205, 665, 60);
 /** Glowing magma seams between the plates (torso space): x, y, z, width, height, depth, roll (rad). */
 const SEAMS: readonly (readonly [number, number, number, number, number, number, number])[] = [
@@ -89,8 +99,6 @@ const _pole = new THREE.Vector3();
 const _aim = new THREE.Vector3();
 const _raise = new THREE.Vector3();
 const _end = new THREE.Vector3();
-const _vent = new THREE.Vector3();
-const _tip = new THREE.Vector3();
 const _tmp = new THREE.Vector3();
 const _world = new THREE.Vector3();
 const _lunge = new THREE.Vector3();
@@ -105,8 +113,8 @@ type Leg = { thigh: THREE.Mesh; shin: THREE.Mesh; foot: THREE.Mesh };
 
 /**
  * The Magma Golem: a hunched basalt hulk split by glowing magma seams, a molten core in its cracked chest,
- * a small sunk head, huge arms it knuckle-walks on and short thick legs. Back vents lob magma; shoulder vents
- * geyser at flyers. Faces +Z; +X is its left.
+ * a small sunk head, huge arms it knuckle-walks on and short thick legs. Back vents lob magma; fire tendrils
+ * flare from its back and whip at flyers. Faces +Z; +X is its left.
  */
 export class GolemBody implements MonsterBody {
   readonly root = new THREE.Group();
@@ -121,7 +129,7 @@ export class GolemBody implements MonsterBody {
   private coreMat: THREE.MeshToonMaterial;
   private eyeMat: THREE.MeshToonMaterial;
   private seams: THREE.InstancedMesh;
-  private geyser: THREE.Mesh;
+  private flares = new FireTendrils(TENDRIL_ROOTS, HUMP_CENTRE);
   private geos: THREE.BufferGeometry[] = [];
   private vents: THREE.Object3D[] = [];
   private ventMats: THREE.MeshToonMaterial[] = [];
@@ -226,10 +234,8 @@ export class GolemBody implements MonsterBody {
       });
     }
 
-    // Vent Burst geyser: a bright magma column, shown only while it strikes.
-    this.geyser = new THREE.Mesh(cyl, new THREE.MeshBasicMaterial({ color: C.magma }));
-    this.geyser.visible = false;
-    this.root.add(this.geyser);
+    // Fire tendrils licking up from the back; Vent Burst whips one at a flyer.
+    this.root.add(this.flares.mesh);
   }
 
   private keep<T extends THREE.BufferGeometry>(g: T): T {
@@ -338,15 +344,10 @@ export class GolemBody implements MonsterBody {
       if (m > 0.3 && limbPlanted(f.prevCycle, f.cycle, limb)) onFootLand(_world.copy(_foot).setY(0).applyMatrix4(this.root.matrixWorld));
     }
 
-    // Vent Burst: a magma geyser from the shoulder vent on the flyer's side, reaching it at full weight.
-    if (f.antiAir && f.antiAir.weight > 0) {
-      this.root.worldToLocal(_aim.copy(f.antiAir.target));
-      mirror(SHOULDER_VENT, _aim.x >= 0 ? 1 : -1, _vent).applyMatrix4(_rel);
-      _tip.lerpVectors(_vent, _aim, Math.min(1, f.antiAir.weight));
-      placeSegment(this.geyser, _vent, _tip);
-      this.geyser.scale.x = this.geyser.scale.z = 34 + 16 * f.antiAir.weight;
-      this.geyser.visible = true;
-    } else this.geyser.visible = false;
+    // Fire tendrils: solar-flare whips on the back; for Vent Burst the nearest one cocks back and cracks onto the flyer.
+    const lashAt = f.antiAir ? this.root.worldToLocal(_aim.copy(f.antiAir.target)) : null;
+    const hot = Math.max(f.heat, f.roaring ? 1 : 0);
+    this.flares.update(f.dt, f.time, _rel, this.root.matrixWorld, lashAt, f.antiAir ? Math.min(1, f.antiAir.weight) : 0, hot, f.pose.collapse);
 
     // Glow: seams, core and eyes pulse at rest and blaze with Molten Core heat.
     for (const mat of this.tintMats) {
@@ -417,5 +418,6 @@ export class GolemBody implements MonsterBody {
   dispose(): void {
     for (const g of this.geos) g.dispose();
     this.seams.dispose();
+    this.flares.dispose();
   }
 }
