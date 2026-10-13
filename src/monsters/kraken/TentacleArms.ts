@@ -17,10 +17,12 @@ export class TentacleArms {
   readonly strikes: (ArmStrike | null)[] = new Array<ArmStrike | null>(ARM_COUNT).fill(null);
   /** Seconds into the Whirlpool spin, or -1. */
   spinT = -1;
+  /** Arm reserved for the anti-air lash (set by the body while a flyer is lashed), or -1. */
+  lashArm = -1;
   private cooldown: number[] = new Array<number>(ARM_COUNT).fill(0);
 
   isFree(i: number): boolean {
-    return this.roles[i] === 'free' && this.strikes[i] === null && this.cooldown[i]! <= 0 && this.spinT < 0;
+    return this.roles[i] === 'free' && this.strikes[i] === null && this.cooldown[i]! <= 0 && this.spinT < 0 && this.lashArm !== i;
   }
 
   freeArms(): number[] {
@@ -76,5 +78,6 @@ export class TentacleArms {
     this.cooldown.fill(0);
     this.roles.fill('free');
     this.spinT = -1;
+    this.lashArm = -1;
   }
 }

@@ -150,21 +150,28 @@ export class KrakenBody implements MonsterBody {
     this.mantle.scale.set(breathe, 1 / breathe, breathe);
     this.root.updateMatrixWorld(true);
 
-    // Lash: the free arm whose anchor points most nearly at the flyer.
+    // Lash: the free arm whose anchor points most nearly at the flyer, kept for the whole swing
+    // (reserved in `arms.lashArm` so no strike can take it) while it stays free in the crawl.
     let lashArm = -1;
     if (f.antiAir) {
-      this.root.worldToLocal(_tmp.copy(f.antiAir.target));
-      const bearing = Math.atan2(_tmp.x, _tmp.z);
-      let best = Infinity;
-      for (let i = 0; i < ARM_COUNT; i++) {
-        if (armRole(i, f.cycle, moving) !== 'free' || this.arms.strikes[i]) continue;
-        const d = Math.abs(angleDelta(armAngle(i), bearing));
-        if (d < best) {
-          best = d;
-          lashArm = i;
+      const kept = this.arms.lashArm;
+      if (kept >= 0 && armRole(kept, f.cycle, moving) === 'free' && !this.arms.strikes[kept]) {
+        lashArm = kept;
+      } else {
+        this.root.worldToLocal(_tmp.copy(f.antiAir.target));
+        const bearing = Math.atan2(_tmp.x, _tmp.z);
+        let best = Infinity;
+        for (let i = 0; i < ARM_COUNT; i++) {
+          if (armRole(i, f.cycle, moving) !== 'free' || this.arms.strikes[i]) continue;
+          const d = Math.abs(angleDelta(armAngle(i), bearing));
+          if (d < best) {
+            best = d;
+            lashArm = i;
+          }
         }
       }
     }
+    this.arms.lashArm = lashArm;
 
     for (let i = 0; i < ARM_COUNT; i++) {
       const role = armRole(i, f.cycle, moving);
@@ -258,7 +265,7 @@ export class KrakenBody implements MonsterBody {
 
       this.tipsLocal[i]!.copy(_tip);
       this.root.localToWorld(this.arms.tips[i]!.copy(_tip));
-      if (moving && armPlanted(f.prevCycle, f.cycle, i)) onFootLand(_tmp.copy(this.arms.tips[i]!).setY(0));
+      if (moving && !this.arms.strikes[i] && this.arms.spinT < 0 && i !== lashArm && armPlanted(f.prevCycle, f.cycle, i)) onFootLand(_tmp.copy(this.arms.tips[i]!).setY(0));
     }
     this.segments.instanceMatrix.needsUpdate = true;
 

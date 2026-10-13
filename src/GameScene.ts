@@ -949,7 +949,9 @@ export class GameScene {
       if (g) this.leapTo(g.clone());
       return;
     }
-    const target = this.pickTarget(x, y);
+    let target = this.pickTarget(x, y);
+    // A hurler cannot hit flyers, so a tap on one is a plain move tap.
+    if (target?.airborne && this.monster.kind.ranged === 'hurl') target = null;
     if (target) {
       this.order = { kind: 'attack', target };
       this.markers.setTarget(target);
@@ -1042,6 +1044,10 @@ export class GameScene {
         : this.enemyTargets();
       const auto = nearestInRange(pos, rangedPool, this.ms.rangedRange);
       const autoMelee = nearestInRange(pos, this.enemyTargets().filter((t) => !t.airborne), this.ms.meleeRange);
+      if (this.order?.kind === 'attack' && this.order.target.airborne && m.kind.ranged === 'hurl') {
+        this.order = null;
+        this.markers.setTarget(null);
+      }
       const order: BrainOrder =
         this.order?.kind === 'attack' ? { kind: 'attack', target: this.toBrain(this.order.target) } : this.order;
       const d = decide({

@@ -70,4 +70,16 @@ describe('TentacleArms', () => {
     expect(a.freeArms()).toEqual([0, 1, 2, 3, 4, 5, 6, 7]);
     expect(a.strikes.every((s) => s === null)).toBe(true);
   });
+
+  it('an arm reserved for the anti-air lash is not free; clear() releases it', () => {
+    const a = new TentacleArms();
+    a.lashArm = 2;
+    expect(a.isFree(2)).toBe(false);
+    expect(a.freeArms()).toEqual([0, 1, 3, 4, 5, 6, 7]);
+    a.start(2, 'slam', new THREE.Vector3(), null, 1, T);
+    expect(a.strikes[2]).toBeNull();
+    a.clear();
+    expect(a.lashArm).toBe(-1);
+    expect(a.isFree(2)).toBe(true);
+  });
 });
