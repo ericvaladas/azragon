@@ -134,7 +134,7 @@ export const CONFIG = {
   kaiju: {
     stats: {
       maxHp: 1250,
-      moveSpeed: 110,
+      moveSpeed: 140,
       turnRate: 1.9,
       damageMult: 1.15,
       strideLength: 300,
@@ -153,6 +153,11 @@ export const CONFIG = {
       /** Measured standing bounding box (world m) — re-measure in Step 6 after any model change. */
       size: { width: 180, length: 617, height: 385 },
     },
+    /**
+     * Neck aiming for Plasma Breath: reach either side of the body (rad), turn speed (rad/s), how close the
+     * head must be to fire (rad), and how long a charged breath waits for the head before giving up (s).
+     */
+    neck: { limit: 1.6, turnRate: 3.5, aimTolerance: 0.1, maxWait: 1.2 },
     /** Claw Rake: half-angle (rad) of the forward arc. */
     rakeHalfAngle: 0.9,
     /** Plasma Breath: charge (s), beam on-screen time (s), beam half-width (m), visual sweep (rad), fan per extra beam (rad), beam cap, building damage per hit. */

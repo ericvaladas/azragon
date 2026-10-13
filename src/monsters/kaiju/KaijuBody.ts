@@ -5,6 +5,7 @@ import { placeSegment, solveTwoBone } from '../../monster/ik';
 import type { BodyFrame, MonsterBody } from '../types';
 import { bipedFoot, bipedLanded } from './bipedGait';
 import { rakeSwing } from './rake';
+import { neckAim, stepNeck } from './neck';
 
 const K = CONFIG.kaiju;
 const C = K.colors;
@@ -57,6 +58,10 @@ export class KaijuBody implements MonsterBody {
   private tintMats: THREE.MeshToonMaterial[];
   private plateMat: THREE.MeshToonMaterial;
   private geos: THREE.BufferGeometry[] = [];
+  /** Current neck yaw relative to the body, eased toward the breath aim; and how far it still is from it. */
+  private neckYaw = 0;
+  private neckPitch = 0;
+  private aimErr = 0;
 
   constructor() {
     const scale = toonMat(C.scale);
@@ -173,8 +178,24 @@ export class KaijuBody implements MonsterBody {
       arm.pivot.rotation.set(swing, 0, -arm.side * Math.max(0, -swing) * 0.5);
     }
 
-    let pitch = Math.sin(f.time * 0.9) * 0.05;
-    let turn = 0;
+    // Aim the head (not the body) at the breath target, at the neck's own turn speed.
+    const N = K.neck;
+    let wantYaw = 0;
+    let wantPitch = 0;
+    this.aimErr = 0;
+    if (f.lookAt) {
+      body.worldToLocal(_tmp.copy(f.lookAt)).sub(NECK_BASE);
+      const aim = neckAim(_tmp.x, _tmp.z, N.limit);
+      wantYaw = aim.yaw;
+      wantPitch = Math.max(-0.4, Math.min(0.8, -Math.atan2(_tmp.y, Math.hypot(_tmp.x, _tmp.z))));
+      this.aimErr = aim.error;
+    }
+    this.neckYaw = stepNeck(this.neckYaw, wantYaw, N.turnRate, f.dt);
+    this.neckPitch = stepNeck(this.neckPitch, wantPitch, N.turnRate, f.dt);
+    if (f.lookAt) this.aimErr += Math.abs(wantYaw - this.neckYaw);
+
+    let pitch = Math.sin(f.time * 0.9) * 0.05 + this.neckPitch;
+    let turn = this.neckYaw;
     let reach = 0;
     let jaw = 0.06 + Math.max(0, Math.sin(f.time * 0.7)) * 0.05;
     if (f.roaring) {
@@ -186,7 +207,7 @@ export class KaijuBody implements MonsterBody {
       // Snap Bite: the neck turns and stretches toward the flyer, jaws wide.
       const w = Math.max(0, f.antiAir.weight);
       body.worldToLocal(_tmp.copy(f.antiAir.target)).sub(NECK_BASE);
-      turn = Math.max(-0.9, Math.min(0.9, Math.atan2(_tmp.x, _tmp.z))) * w;
+      turn = THREE.MathUtils.lerp(turn, Math.max(-0.9, Math.min(0.9, Math.atan2(_tmp.x, _tmp.z))), w);
       const up = Math.atan2(_tmp.y, Math.hypot(_tmp.x, _tmp.z));
       pitch = THREE.MathUtils.lerp(pitch, -Math.max(-0.4, Math.min(1.0, up)), w);
       reach = 80 * w;
@@ -213,6 +234,10 @@ export class KaijuBody implements MonsterBody {
       else mat.emissive.setHex(CONFIG.levelUp.color).multiplyScalar(f.glow);
     }
     this.plateMat.emissiveIntensity = f.flash ? 3 : 0.35 + 2.2 * (f.roaring ? 1 : f.charge);
+  }
+
+  aimError(): number {
+    return this.aimErr;
   }
 
   rangedOrigin(out: THREE.Vector3): THREE.Vector3 {

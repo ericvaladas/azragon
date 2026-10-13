@@ -24,6 +24,8 @@ export class Monster {
   glow = 0;
   /** Ranged charge 0..1, shown by bodies that telegraph it (Kaiju plates). */
   charge = 0;
+  /** World point the head should turn toward (Kaiju breath), or null. */
+  lookAt: THREE.Vector3 | null = null;
   /** Extra body pose offsets driven by attacks, abilities, the intro, and death. */
   readonly pose = { dip: 0, pitch: 0, collapse: 0 };
   onLeapLand: (p: THREE.Vector3) => void = () => {};
@@ -54,7 +56,7 @@ export class Monster {
   private strikePoint = new THREE.Vector3();
   private frame: BodyFrame = {
     dt: 0, time: 0, cycle: 0, prevCycle: 0, motion: 0, pose: this.pose,
-    melee: null, antiAir: null, roaring: false, charge: 0, flash: false, glow: 0,
+    melee: null, antiAir: null, roaring: false, lookAt: null, charge: 0, flash: false, glow: 0,
   };
   private meleeFrame = { t: 0, side: 0, target: this.strikePoint };
   private antiAirFrame = { weight: 0, target: new THREE.Vector3() };
@@ -93,6 +95,11 @@ export class Monster {
 
   set visible(v: boolean) {
     this.body.root.visible = v;
+  }
+
+  /** How far (rad) the head is from facing `lookAt` (as of the last animate). */
+  aimError(): number {
+    return this.body.aimError();
   }
 
   /** World point ranged attacks leave from (stinger tip, jaws). */
@@ -134,6 +141,7 @@ export class Monster {
     this.dashT = -1;
     this.crouch = false;
     this.charge = 0;
+    this.lookAt = null;
   }
 
   /** Dash: charge in a straight line along the ground to `to`. */
@@ -246,6 +254,7 @@ export class Monster {
       f.antiAir = this.antiAirFrame;
     } else f.antiAir = null;
     f.roaring = this.roarT >= 0;
+    f.lookAt = this.lookAt;
     f.charge = this.charge;
     f.flash = this.flashT > 0;
     f.glow = this.glow;

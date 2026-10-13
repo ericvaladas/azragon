@@ -78,6 +78,11 @@ export class InsectBody implements MonsterBody {
     return this.model.stingerTip.getWorldPosition(out);
   }
 
+  /** The Insect aims with its whole body. */
+  aimError(): number {
+    return 0;
+  }
+
   dispose(): void {
     this.model.root.traverse((o) => {
       const m = o as THREE.Mesh;

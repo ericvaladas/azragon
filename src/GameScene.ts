@@ -20,6 +20,7 @@ import { pickEnemy } from './systems/tap';
 import { Particles } from './systems/Particles';
 import { BreathBeam } from './systems/BreathBeam';
 import { arcTargets, inArc, linePoints, lineTargets } from './systems/sweep';
+import { canAim } from './monsters/kaiju/neck';
 import { Projectiles, type Hit } from './systems/Projectiles';
 import { spikeTargets } from './systems/projectileMath';
 import { EnemyRegistry } from './enemies/EnemyRegistry';
@@ -426,6 +427,7 @@ export class GameScene {
   private startDying(): void {
     this.breath.clear();
     this.monster.charge = 0;
+    this.monster.lookAt = null;
     this.monster.alive = false;
     this.order = null;
     this.markers.setTarget(null);
@@ -487,7 +489,10 @@ export class GameScene {
           for (const p of ringOnRoads(c, CONFIG.opening.count, CONFIG.opening.radius, ROAD_ORIGIN, CONFIG.world.blockSize)) this.enemies.get<TankFleet>('tank').spawnAt(p.x, p.z, this.ctx);
         }
         this.updateMonster(dt);
-        this.breath.update(dt, this.monster.rangedOrigin(this.jaws), this.monster.position, this.ms.rangedRange, this.onBreathFire);
+        // The head turns to the breath's aim; the breath fires once the head is on target.
+        this.monster.lookAt = this.breath.busy ? this.breath.aimPoint : null;
+        const headOnTarget = this.monster.aimError() < CONFIG.kaiju.neck.aimTolerance;
+        this.breath.update(dt, this.monster.rangedOrigin(this.jaws), this.monster.position, this.ms.rangedRange, headOnTarget, this.onBreathFire);
         const melting = this.passives.meltdown(this.monster.hp / this.monster.maxHp).active;
         this.monster.charge = Math.max(this.breath.charge, melting ? 0.5 : 0);
         if (this.monster.hp <= 0 && this.monster.alive) this.startDying();
@@ -977,7 +982,9 @@ export class GameScene {
     const s = this.progression.stats;
     const pos = { x: m.position.x, z: m.position.z };
     if (!m.busy) {
-      const auto = nearestInRange(pos, this.enemyTargets(), this.ms.rangedRange);
+      // A breather only picks targets its neck can reach, so the body never has to turn away from its path.
+      const rangedPool = m.kind.ranged === 'breath' ? this.enemyTargets().filter((t) => this.canBreatheAt(t)) : this.enemyTargets();
+      const auto = nearestInRange(pos, rangedPool, this.ms.rangedRange);
       const autoMelee = nearestInRange(pos, this.enemyTargets().filter((t) => !t.airborne), this.ms.meleeRange);
       const order: BrainOrder =
         this.order?.kind === 'attack' ? { kind: 'attack', target: this.toBrain(this.order.target) } : this.order;
@@ -996,16 +1003,13 @@ export class GameScene {
         this.order = null;
         this.markers.setTarget(null);
       }
-      // A breath in progress turns the monster to its aim so the beam leaves the mouth forward.
-      const breathing = this.breath.busy;
-      if (breathing) m.faceToward(this.breath.aimPoint, dt);
-      else if (d.moveTo) m.moveToward(d.moveTo, dt, s.moveSpeedMult);
+      if (d.moveTo) m.moveToward(d.moveTo, dt, s.moveSpeedMult);
       else if (d.face) m.faceToward(d.face, dt);
       // An arc melee only strikes forward: turn to a target outside the arc first.
       const shape = m.kind.melee;
       const outsideArc =
         d.attack === 'melee' && d.meleeAt !== null && shape.kind === 'arc' && !inArc(pos, m.yaw, Infinity, shape.halfAngle, d.meleeAt);
-      if (outsideArc && !breathing && !d.moveTo && !d.face && d.meleeAt) m.faceToward(d.meleeAt, dt);
+      if (outsideArc && !d.moveTo && !d.face && d.meleeAt) m.faceToward(d.meleeAt, dt);
       if (d.attack === 'melee' && d.meleeAt && !outsideArc) {
         const plan = strikePlan(pos, m.yaw, d.meleeAt, this.ms.meleeRange);
         m.startMelee(s.cooldownMult, plan.leg, plan.point);
@@ -1023,9 +1027,15 @@ export class GameScene {
     else this.fireSpikes(target);
   }
 
+  /** The Kaiju's neck can turn to `t` without the body turning. */
+  private canBreatheAt(t: Target): boolean {
+    const m = this.monster;
+    return canAim({ x: m.position.x, z: m.position.z }, m.yaw, t.position, CONFIG.kaiju.neck.limit);
+  }
+
   /** Plasma Breath: start charging at the target; hits land when it fires (onBreathFire). */
   private breathAt(target: Target | null): void {
-    if (!target || this.breath.busy) return;
+    if (!target || this.breath.busy || !this.canBreatheAt(target)) return;
     this.breath.start(target.position, 1 + this.progression.stats.extraSpikes);
     this.monster.consumeRanged(this.rangedCdMult());
   }

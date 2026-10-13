@@ -16,19 +16,19 @@ describe('BreathBeam', () => {
     expect(beam.busy).toBe(true);
     let t = 0;
     while (t < B.charge - 0.05) {
-      beam.update(0.05, jaws, O, 1300, (_f, ends) => fired.push(ends.map((e) => e.clone())));
+      beam.update(0.05, jaws, O, 1300, true, (_f, ends) => fired.push(ends.map((e) => e.clone())));
       t += 0.05;
     }
     expect(fired).toHaveLength(0);
     expect(beam.charge).toBeGreaterThan(0.5);
-    beam.update(0.1, jaws, O, 1300, (_f, ends) => fired.push(ends.map((e) => e.clone())));
+    beam.update(0.1, jaws, O, 1300, true, (_f, ends) => fired.push(ends.map((e) => e.clone())));
     expect(fired).toHaveLength(1);
     expect(fired[0]).toHaveLength(3);
     for (const e of fired[0]!) expect(Math.hypot(e.x, e.z)).toBeLessThanOrEqual(1300 + 1e-6);
     // A ground aim: the middle beam runs the whole lane to full range.
     expect(fired[0]![1]!.z).toBeCloseTo(1300);
     beam.start(new THREE.Vector3(500, 0, 0), 1);
-    for (let i = 0; i < 20; i++) beam.update(0.05, jaws, O, 1300, () => fired.push([]));
+    for (let i = 0; i < 20; i++) beam.update(0.05, jaws, O, 1300, true, () => fired.push([]));
     expect(fired).toHaveLength(1);
     expect(beam.busy).toBe(false);
   });
@@ -36,7 +36,7 @@ describe('BreathBeam', () => {
     const beam = new BreathBeam(new THREE.Scene());
     let end: THREE.Vector3 | null = null;
     beam.start(new THREE.Vector3(0, 500, 600), 1);
-    for (let i = 0; i < 20; i++) beam.update(0.05, new THREE.Vector3(0, 300, 0), O, 1300, (_f, ends) => (end = ends[0]!.clone()));
+    for (let i = 0; i < 20; i++) beam.update(0.05, new THREE.Vector3(0, 300, 0), O, 1300, true, (_f, ends) => (end = ends[0]!.clone()));
     const e = end as unknown as THREE.Vector3;
     expect(e.x).toBeCloseTo(0);
     expect(e.z).toBeGreaterThanOrEqual(600);
@@ -47,7 +47,7 @@ describe('BreathBeam', () => {
     const beam = new BreathBeam(new THREE.Scene());
     let n = 0;
     beam.start(new THREE.Vector3(0, 0, 500), 99);
-    for (let i = 0; i < 20; i++) beam.update(0.05, new THREE.Vector3(0, 300, 0), O, 1300, (_f, ends) => (n = ends.length));
+    for (let i = 0; i < 20; i++) beam.update(0.05, new THREE.Vector3(0, 300, 0), O, 1300, true, (_f, ends) => (n = ends.length));
     expect(n).toBe(B.maxLines);
     beam.start(new THREE.Vector3(0, 0, 500), 1);
     beam.clear();
@@ -60,7 +60,7 @@ describe('BreathBeam', () => {
       const beam = new BreathBeam(new THREE.Scene());
       let got: { from: THREE.Vector3; end: THREE.Vector3 } | null = null;
       beam.start(aim, 1);
-      for (let i = 0; i < 20; i++) beam.update(0.05, jaws, O, 1300, (f, ends) => (got = { from: f.clone(), end: ends[0]!.clone() }));
+      for (let i = 0; i < 20; i++) beam.update(0.05, jaws, O, 1300, true, (f, ends) => (got = { from: f.clone(), end: ends[0]!.clone() }));
       return got as unknown as { from: THREE.Vector3; end: THREE.Vector3 };
     };
     const cases: [number, number][] = [[400, 0], [0, -300], [-500, 100]];
@@ -73,4 +73,24 @@ describe('BreathBeam', () => {
       if (x === 400) expect(lineTargets(O, r.end, B.halfWidth, [target])).toHaveLength(0);
     }
   });
+
+  it('holds the charged breath until the head is on target, and gives up if it never gets there', () => {
+    const W = CONFIG.kaiju.neck.maxWait;
+    const beam = new BreathBeam(new THREE.Scene());
+    const jaws = new THREE.Vector3(0, 300, 0);
+    let fired = 0;
+    beam.start(new THREE.Vector3(0, 0, 600), 1);
+    for (let t = 0; t < B.charge + 0.2; t += 0.05) beam.update(0.05, jaws, { x: 0, z: 0 }, 1300, false, () => fired++);
+    expect(fired).toBe(0);
+    expect(beam.busy).toBe(true);
+    beam.update(0.05, jaws, { x: 0, z: 0 }, 1300, true, () => fired++);
+    expect(fired).toBe(1);
+
+    const stuck = new BreathBeam(new THREE.Scene());
+    stuck.start(new THREE.Vector3(0, 0, 600), 1);
+    for (let t = 0; t < B.charge + W + 0.2; t += 0.05) stuck.update(0.05, jaws, { x: 0, z: 0 }, 1300, false, () => fired++);
+    expect(fired).toBe(1);
+    expect(stuck.busy).toBe(false);
+  });
 });
+

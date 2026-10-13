@@ -8,7 +8,7 @@ export const KAIJU: MonsterKind = {
   id: 'kaiju',
   name: 'Reptile Kaiju',
   blurb: 'Walking extinction. Armoured, unstoppable, breathes plasma.',
-  pips: { toughness: 4, power: 4, speed: 2 },
+  pips: { toughness: 4, power: 4, speed: 3 },
   moves: [
     { icon: '🦖', label: 'Claw Rake' },
     { icon: '🔥', label: 'Plasma Breath' },

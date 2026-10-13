@@ -15,6 +15,7 @@ function stubBody(): MonsterBody & { frames: number } {
       this.frames++;
     },
     rangedOrigin: (out) => out.set(1, 2, 3),
+    aimError: () => 0,
     dispose() {},
   };
 }

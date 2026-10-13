@@ -64,10 +64,19 @@ export class BreathBeam {
   }
 
   /**
-   * Advance by dt. `from` is the jaws this frame; `origin` is the monster's XZ, from which `range` is measured. On the frame the charge completes, `onFire` gets the jaws
-   * and each beam's end: fanned around the aim, at most `range` away horizontally, stopping at the ground.
+   * Advance by dt. `from` is the jaws this frame; `origin` is the monster's XZ, from which `range` is measured.
+   * The breath fires on the first frame after the charge completes with `ready` true (the head is on target);
+   * if the head never gets there within CONFIG.kaiju.neck.maxWait, the breath fizzles. On firing, `onFire` gets
+   * the jaws and each beam's end: fanned around the aim, at most `range` away horizontally, stopping at the ground.
    */
-  update(dt: number, from: THREE.Vector3, origin: { x: number; z: number }, range: number, onFire: (from: THREE.Vector3, ends: readonly THREE.Vector3[]) => void): void {
+  update(
+    dt: number,
+    from: THREE.Vector3,
+    origin: { x: number; z: number },
+    range: number,
+    ready: boolean,
+    onFire: (from: THREE.Vector3, ends: readonly THREE.Vector3[]) => void,
+  ): void {
     if (this.phase === 'idle') {
       this.charge = Math.max(0, this.charge - dt * 4);
       return;
@@ -76,6 +85,10 @@ export class BreathBeam {
     if (this.phase === 'charge') {
       this.charge = Math.min(1, this.t / B.charge);
       if (this.t < B.charge) return;
+      if (!ready) {
+        if (this.t >= B.charge + CONFIG.kaiju.neck.maxWait) this.clear();
+        return;
+      }
       this.phase = 'fire';
       this.t = 0;
       this.from.copy(from);

@@ -4,13 +4,12 @@ import { KAIJU } from './kind';
 import { INSECT } from '../insect/kind';
 
 describe('KAIJU kind', () => {
-  it('is tougher and harder-hitting but slower than the Insect', () => {
+  it('is tougher and harder-hitting than the Insect, but turns slower', () => {
     expect(KAIJU.stats).toEqual(CONFIG.kaiju.stats);
     expect(KAIJU.stats.maxHp).toBeGreaterThan(INSECT.stats.maxHp);
     expect(KAIJU.stats.damageMult).toBeGreaterThan(INSECT.stats.damageMult);
-    expect(KAIJU.stats.moveSpeed).toBeLessThan(INSECT.stats.moveSpeed);
     expect(KAIJU.stats.turnRate).toBeLessThan(INSECT.stats.turnRate);
-    expect(KAIJU.pips).toEqual({ toughness: 4, power: 4, speed: 2 });
+    expect(KAIJU.pips).toEqual({ toughness: 4, power: 4, speed: 3 });
   });
   it('rakes, breathes, and bites', () => {
     expect(KAIJU.melee).toEqual({ kind: 'arc', halfAngle: CONFIG.kaiju.rakeHalfAngle });

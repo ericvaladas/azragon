@@ -53,6 +53,8 @@ export type BodyFrame = {
   /** Active anti-air strike: reach weight (tailSwat curve) toward the world target. */
   antiAir: { weight: number; target: THREE.Vector3 } | null;
   roaring: boolean;
+  /** World point the head should turn toward (breath aim), or null to face forward. */
+  lookAt: THREE.Vector3 | null;
   /** Ranged charge 0..1 (Kaiju plates). */
   charge: number;
   flash: boolean;
@@ -66,6 +68,8 @@ export interface MonsterBody {
   animate(f: BodyFrame, onFootLand: (p: THREE.Vector3) => void): void;
   /** World point ranged attacks leave from. */
   rangedOrigin(out: THREE.Vector3): THREE.Vector3;
+  /** How far (rad) the head still is from facing the last `lookAt` point; 0 for bodies that aim with the whole body. */
+  aimError(): number;
   dispose(): void;
 }
 
