@@ -220,18 +220,20 @@ export const CONFIG = {
   },
   /** The Wendigo (id `golem`). Stats feed its MonsterKind; fist and lob tune its attacks; colours its body and effects. */
   golem: {
+    /** The Wendigo's size: its body is drawn at this scale (inside the monster scale), and its body-size stats match. */
+    scale: 0.9,
     stats: {
       maxHp: 1450,
       moveSpeed: 110,
       turnRate: 1.6,
       damageMult: 1.2,
       /** One knuckle-walk cycle (all four limbs) covers this many model units. */
-      strideLength: 340,
-      bodyRadius: 170 * MONSTER_SCALE,
-      footRadius: 75,
+      strideLength: 306,
+      bodyRadius: 153 * MONSTER_SCALE,
+      footRadius: 67.5,
       footDamage: 160,
       /** Fist reach (world m) — also the brain's melee range for attack orders. */
-      meleeRange: 360,
+      meleeRange: 324,
       meleeRadius: 110,
       meleeDamage: 95,
       meleeCooldown: 1.2,
@@ -239,9 +241,9 @@ export const CONFIG = {
       rangedRange: 1400,
       rangedDamage: 90,
       rangedCooldown: 2.0,
-      headHeight: 480,
+      headHeight: 432,
       /** Measured standing bounding box (world m). */
-      size: { width: 415, length: 453, height: 413 },
+      size: { width: 425, length: 408, height: 371 },
     },
     /**
      * Rending Claws: targets within `frontHalf` (rad) of dead ahead take a slam; others a backhand whose hit arc

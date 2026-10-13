@@ -399,6 +399,11 @@ type Leg = { thigh: THREE.Mesh; shin: THREE.Mesh; foot: THREE.Mesh };
  */
 export class GolemBody implements MonsterBody {
   readonly root = new THREE.Group();
+  /**
+   * Everything of the Wendigo hangs off this, scaled by CONFIG.golem.scale inside the root (which Monster scales for
+   * every monster), so all the posing below stays in the same model units at any size.
+   */
+  private frame = new THREE.Group();
   /** Pivots at PIVOT; `shell` (offset by −PIVOT) holds the torso parts in root-like coordinates. */
   private body = new THREE.Group();
   private shell = new THREE.Group();
@@ -753,14 +758,16 @@ export class GolemBody implements MonsterBody {
 
     this.shell.position.copy(PIVOT).multiplyScalar(-1);
     this.body.add(this.shell);
-    this.root.add(this.body);
+    this.frame.scale.setScalar(G.scale);
+    this.frame.add(this.body);
+    this.root.add(this.frame);
 
     // Limbs (root space; placed by IK every frame). Limb space: Y runs from the joint nearer the body (−len/2) to
     // the far one (+len/2); +Z is the IK bend side.
     const limb = (build: (parts: THREE.BufferGeometry[]) => void, len: number) => {
       const parts: THREE.BufferGeometry[] = [];
       build(parts);
-      return this.mesh(this.root, this.keep(merge(parts).scale(1, 1 / len, 1)), this.bodyMat);
+      return this.mesh(this.frame, this.keep(merge(parts).scale(1, 1 / len, 1)), this.bodyMat);
     };
     /** Clumps of fur hanging down a limb (toward +Y) from heights y0..y1, round its +Z side within ±spread rad. */
     const limbFur = (p: THREE.BufferGeometry[], y0: number, y1: number, r: number, spread: number, count: number, len: number) => {
@@ -870,7 +877,8 @@ export class GolemBody implements MonsterBody {
 
   animate(f: BodyFrame, onFootLand: (p: THREE.Vector3) => void): void {
     const m = f.motion;
-    const S = G.stats.strideLength;
+    // The stride in the frame's model units (the stat is the world stride before the monster scale).
+    const S = G.stats.strideLength / G.scale;
     let T: { windup: number; impact: number; end: number } = G.stats.meleeTiming;
     let hold = STRIKE_HOLD;
     // Half the distance a planted limb slides back during stance, so it stays still on the ground.
@@ -887,7 +895,7 @@ export class GolemBody implements MonsterBody {
     _lunge.set(0, 0, 0);
     if (f.melee) {
       this.root.updateMatrixWorld();
-      this.root.worldToLocal(_aim.copy(f.melee.target));
+      this.frame.worldToLocal(_aim.copy(f.melee.target));
       _aim.y = FIST_R;
       if (strikeStarted(this.meleePrevT, f.melee.t)) this.strikeKind = fistKind(Math.atan2(_aim.x, _aim.z), G.fist.frontHalf);
       this.meleePrevT = f.melee.t;
@@ -906,7 +914,7 @@ export class GolemBody implements MonsterBody {
     this.root.updateMatrixWorld();
     let airSide = -1;
     if (f.antiAir && !f.airborne && !f.roaring) {
-      this.root.worldToLocal(_sum.copy(f.antiAir.target));
+      this.frame.worldToLocal(_sum.copy(f.antiAir.target));
       airSide = _sum.x >= 0 ? 0 : 1;
       const b = this.beckons[airSide]!;
       if (strikeStarted(this.airPrevT, f.antiAir.t)) b.lift = beckonResume(b.lift >= 0 ? beckonLift(b.lift) : 0);
@@ -928,7 +936,7 @@ export class GolemBody implements MonsterBody {
       if (lift > summon) {
         summon = lift;
         summonSide = side;
-        this.root.worldToLocal(_sum.copy(b.at));
+        this.frame.worldToLocal(_sum.copy(b.at));
       }
       b.lift += f.dt;
       if (side !== airSide) b.grab += f.dt;
@@ -963,7 +971,7 @@ export class GolemBody implements MonsterBody {
         // Reach from the shoulder up toward the flyer, hauling down toward its ground point as the hand drags it
         // (the shoulder's range and the torso's rear and turn shape it).
         mirror(SHOULDER, sx, _raise);
-        this.root.worldToLocal(_end.copy(bk.at));
+        this.frame.worldToLocal(_end.copy(bk.at));
         _tmp.subVectors(_end, _raise).normalize();
         _ref.copy(_end).setY(0).sub(_raise).normalize();
         _tmp.lerp(_ref, beckonPull(bk.grab)).normalize();
@@ -1130,7 +1138,7 @@ export class GolemBody implements MonsterBody {
       placeLimb(arm.fore, _elbow, _fist, _ref);
       arm.fist.position.copy(_fist);
       if (m > 0.3 && planted && this.stepS[side] === 0 && limbPlanted(f.prevCycle, f.cycle, side === 0 ? 0 : 2)) {
-        onFootLand(_world.copy(this.gaitAt[side]!).setY(0).applyMatrix4(this.root.matrixWorld));
+        onFootLand(_world.copy(this.gaitAt[side]!).setY(0).applyMatrix4(this.frame.matrixWorld));
       }
     }
 
@@ -1146,7 +1154,7 @@ export class GolemBody implements MonsterBody {
       placeLimb(leg.thigh, _hip, _knee, _ref);
       placeLimb(leg.shin, _knee, _hock, _ref);
       leg.foot.position.copy(foot);
-      if (m > 0.3 && limbPlanted(f.prevCycle, f.cycle, side === 0 ? 3 : 1)) onFootLand(_world.copy(foot).setY(0).applyMatrix4(this.root.matrixWorld));
+      if (m > 0.3 && limbPlanted(f.prevCycle, f.cycle, side === 0 ? 3 : 1)) onFootLand(_world.copy(foot).setY(0).applyMatrix4(this.frame.matrixWorld));
     }
 
     // Dread Gaze: the skull turns (within limits) to stare at the target; the body's heading never changes for it.
@@ -1169,7 +1177,7 @@ export class GolemBody implements MonsterBody {
       const w = f.melee && this.strikeKind === 'backhand' ? strikeEnv : summonSide >= 0 ? summon : 0;
       if (w > 0) {
         _look.copy(this.headPivot.position).applyMatrix4(this.shell.matrix).applyMatrix4(this.body.matrix);
-        const tgt = f.melee && this.strikeKind === 'backhand' ? _aim : this.root.worldToLocal(_tmp.copy(this.beckons[summonSide]!.at));
+        const tgt = f.melee && this.strikeKind === 'backhand' ? _aim : this.frame.worldToLocal(_tmp.copy(this.beckons[summonSide]!.at));
         const want = frontYaw + Math.max(-GAZE_YAW, Math.min(GAZE_YAW, angleWrap(Math.atan2(tgt.x - _look.x, tgt.z - _look.z) - frontYaw)));
         yaw += (want - yaw) * w;
       }
@@ -1243,13 +1251,13 @@ export class GolemBody implements MonsterBody {
         const tw = this.stepTwist[side]!;
         bendPoint(mirror(FIST_AT, sx, _look), tw * (1 + HIP_COUNTER), SPINE_Z0, SPINE_Z1, _look);
         _look.sub(HIPS).applyAxisAngle(_Y, -HIP_COUNTER * tw).add(HIPS).setY(FIST_AT.y);
-        this.root.localToWorld(this.stepAt[side]!.copy(_look));
+        this.frame.localToWorld(this.stepAt[side]!.copy(_look));
       }
       const s = stepToward(was, on, f.dt, STEP_TIME);
       this.stepS[side] = s;
       if (s <= 0) continue;
       const ph = pivotStep(s);
-      this.root.worldToLocal(_look.copy(this.stepAt[side]!));
+      this.frame.worldToLocal(_look.copy(this.stepAt[side]!));
       this.handAt[side]!.lerpVectors(this.gaitAt[side]!, _look, ph.blend);
       this.handAt[side]!.y += ph.lift * FIST_LIFT;
       this.handPlanted[side] = s >= 1;
