@@ -3,7 +3,7 @@ import { CONFIG } from '../../config';
 import type { Target } from '../../combat';
 import type { Particles } from '../../systems/Particles';
 import { faceted, toonMat } from '../../render/toon';
-import { armJoints, HAND_T, handBase, handPhase } from './handMath';
+import { armJoints, fistPoint, HAND_T, handBase, handFrame, handPhase } from './handMath';
 
 /** Hands alive at once (Shadow Hands+ grabs up to four flyers per strike; strikes can overlap). */
 const MAX = 10;
@@ -50,7 +50,6 @@ const _w = new THREE.Vector3();
 const _c = new THREE.Vector3();
 const _p = new THREE.Vector3();
 const _e = new THREE.Vector3();
-const _d = new THREE.Vector3();
 const _fd = new THREE.Vector3();
 const _cd = new THREE.Vector3();
 const _base = new THREE.Vector3();
@@ -174,9 +173,10 @@ export class ShadowHands {
       const fade = ph.fade;
       const life = 1 - fade;
 
-      // The point the fist closes on: the live flyer while lunging, then (crushing, shaking) dragged down to the pool.
+      // The point the fist closes on: arcing over the live flyer and down onto it while lunging, then (crushing,
+      // shaking) dragged down to the pool.
       _base.copy(h.base).setY(-25 - 90 * fade);
-      if (!h.decided) _a.copy(h.base).setY(40).lerp(h.target.position, ph.rise);
+      if (!h.decided) fistPoint(h.base, h.target.position, ph.rise, _a);
       else {
         const from = h.released ? h.target.position : h.held;
         _a.copy(from).lerp(_c.copy(h.base).setY(-30), ph.drag);
@@ -185,18 +185,12 @@ export class ShadowHands {
         if (!h.released && !h.target.isAlive() && ph.drag < 1) h.target.position.copy(_a);
       }
 
-      // Hand frame: F along the hand (from the arm's elbow toward the fist), S across the knuckles, N the palm side.
-      const len = Math.max(1, _a.distanceTo(_base));
-      const bend = 0.2 + 0.3 * ph.drag + 0.04 * Math.sin(h.t * 5 + h.seed);
+      // Hand frame: F along the hand toward the fingertips, S across the knuckles, N out of the palm. Overhand: it
+      // rolls palm-down as it comes over the flyer and stays so while it drags the wreck down; the wrist sits above
+      // the prize (−N), the arm bowed up over it.
+      handFrame(h.base, h.decided ? h.held : h.target.position, h.decided ? 1 : ph.rise, _f, _s, _n);
+      const bend = 0.2 + 0.12 * ph.rise * (1 - ph.drag) + 0.3 * ph.drag + 0.04 * Math.sin(h.t * 5 + h.seed);
       const twist = h.twist + 0.05 * Math.sin(h.t * 3.7 + h.seed);
-      _d.subVectors(_a, _base).divideScalar(len);
-      _c.copy(_up).addScaledVector(_d, -_d.y).normalize();
-      _c.multiplyScalar(bend * len).add(_p.addVectors(_a, _base).multiplyScalar(0.5));
-      _f.subVectors(_a, _c).normalize();
-      _s.crossVectors(_f, _up);
-      if (_s.lengthSq() < 1e-6) _s.set(1, 0, 0);
-      _s.normalize();
-      _n.crossVectors(_s, _f).normalize();
       _w.copy(_a).addScaledVector(_f, -HOLD_FWD * HS).addScaledVector(_n, -HOLD_IN * HS);
 
       // Arm: a bowed, trembling chain of tapering bones with knobbed joints.

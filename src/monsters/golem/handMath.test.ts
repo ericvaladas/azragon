@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { SWAT_TIMES } from '../../monster/tailSwat';
-import { armJoints, clawRaise, HAND_T, handBase, handPhase, WENDIGO_SWAT } from './handMath';
+import { armJoints, clawRaise, fistPoint, HAND_T, handBase, handFrame, handPhase, WENDIGO_SWAT } from './handMath';
 
 describe('handPhase', () => {
   it("reaches the flyer exactly at the Wendigo's anti-air impact, fist closed", () => {
@@ -132,6 +132,54 @@ describe('clawRaise', () => {
       if (t <= T.impact) expect(v).toBeGreaterThanOrEqual(prev - 1e-12);
       if (t >= T.impact + T.hold) expect(v).toBeLessThanOrEqual(prev + 1e-12);
       prev = v;
+    }
+  });
+});
+
+describe('overhand grip', () => {
+  const base = new THREE.Vector3(0, 0, 600);
+  it('arcs the closing point up over the flyer and drops onto it exactly at impact', () => {
+    for (const alt of [150, 300, 450]) {
+      const flyer = new THREE.Vector3(40, alt, 200);
+      const at = (t: number) => fistPoint(base, flyer, handPhase(t).rise, new THREE.Vector3());
+      expect(at(HAND_T.impact).distanceTo(flyer)).toBeLessThan(1e-6);
+      // Just before the grab the hand is above the flyer, coming down onto it.
+      expect(at(HAND_T.impact - 0.04).y).toBeGreaterThan(flyer.y + 10);
+      expect(at(HAND_T.impact - 0.01).y).toBeGreaterThan(flyer.y);
+      // It starts low, at the pool.
+      expect(at(0).y).toBeLessThan(60);
+    }
+  });
+  it('turns the palm down over the flyer: back of the hand to the sky, fingers forward and down', () => {
+    const flyer = new THREE.Vector3(40, 300, 200);
+    const F = new THREE.Vector3();
+    const S = new THREE.Vector3();
+    const N = new THREE.Vector3();
+    handFrame(base, flyer, 1, F, S, N);
+    expect(N.y).toBeLessThan(-0.6);
+    expect(F.y).toBeLessThan(0);
+    // Fingers reach on past the flyer, away from the pool.
+    const out = new THREE.Vector3(flyer.x - base.x, 0, flyer.z - base.z).normalize();
+    expect(F.dot(out)).toBeGreaterThan(0.5);
+    // An orthonormal, right-handed frame (S × F = N), so the palm slab and fingers stay unsheared.
+    expect(F.length()).toBeCloseTo(1);
+    expect(S.length()).toBeCloseTo(1);
+    expect(F.dot(N)).toBeCloseTo(0);
+    expect(new THREE.Vector3().crossVectors(S, F).distanceTo(N)).toBeLessThan(1e-6);
+  });
+  it('bursts out of the pool reaching up, palm toward the flyer, and rolls over smoothly as it rises', () => {
+    const flyer = new THREE.Vector3(40, 300, 200);
+    const F = new THREE.Vector3();
+    const S = new THREE.Vector3();
+    const N = new THREE.Vector3();
+    handFrame(base, flyer, 0, F, S, N);
+    expect(F.y).toBeGreaterThan(0.8);
+    const prev = new THREE.Vector3();
+    handFrame(base, flyer, 0, prev, S, N);
+    for (let r = 0.02; r <= 1.0001; r += 0.02) {
+      handFrame(base, flyer, r, F, S, N);
+      expect(F.angleTo(prev)).toBeLessThan(0.12);
+      prev.copy(F);
     }
   });
 });

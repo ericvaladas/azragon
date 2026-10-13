@@ -98,6 +98,42 @@ export function handBase(flyer: THREE.Vector3, monster: THREE.Vector3, rand: num
   return out.set(flyer.x + (dx * c - dz * s) * off, 0, flyer.z + (dx * s + dz * c) * off);
 }
 
+/** How high (m) the closing hand arcs over the flyer before it drops onto it (overhand). */
+const HOVER = 80;
+
+/**
+ * Where the fist closes at `rise` (handPhase) for a flyer at `target`, the arm rising from its pool at `base`: out of
+ * the pool toward the flyer, arcing up over it (HOVER) and dropping down onto it exactly at rise 1, so it grabs from
+ * above.
+ */
+export function fistPoint(base: THREE.Vector3, target: THREE.Vector3, rise: number, out: THREE.Vector3): THREE.Vector3 {
+  out.set(base.x, 40, base.z).lerp(target, rise);
+  // Over the top: up as it reaches out, then down onto the flyer, still falling (linearly) as it arrives.
+  const g = (1 - rise) / 0.18;
+  const over = smooth(clamp01((rise - 0.2) / 0.4)) * (g >= 1 ? 1 : 1 - (1 - g) * (1 - g));
+  out.y += HOVER * over;
+  return out;
+}
+
+/**
+ * Hand frame at `rise` for an arm from its pool at `base` reaching for `target` (unit vectors): F along the hand
+ * toward the fingertips, S across the knuckles, N out of the palm (S × F = N). The hand bursts out of the pool
+ * reaching up, palm toward the flyer, and rolls over as it rises until, over the flyer, the fingers point on past it
+ * and down and the palm faces down: an overhand grip, the fingers curling down around the prize.
+ */
+export function handFrame(base: THREE.Vector3, target: THREE.Vector3, rise: number, F: THREE.Vector3, S: THREE.Vector3, N: THREE.Vector3): void {
+  _h.set(target.x - base.x, 0, target.z - base.z);
+  if (_h.lengthSq() < 1e-6) _h.set(0, 0, 1);
+  _h.normalize();
+  const p = -1.25 + 1.9 * smooth(clamp01((rise - 0.15) / 0.7));
+  const c = Math.cos(p);
+  const s = Math.sin(p);
+  F.set(_h.x * c, -s, _h.z * c);
+  N.set(-_h.x * s, -c, -_h.z * s);
+  S.crossVectors(F, N);
+}
+
+const _h = new THREE.Vector3();
 const _d = new THREE.Vector3();
 const _up = new THREE.Vector3();
 const _side = new THREE.Vector3();
