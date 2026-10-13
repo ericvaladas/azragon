@@ -34,8 +34,8 @@ type Hand = {
   /** Where the fist closed (world); the wreck is dragged down from here. */
   held: THREE.Vector3;
   t: number;
-  /** Decided once at impact: the flyer survived, so the hand lets go and sinks back empty. */
-  released: boolean;
+  /** Decided once at impact: the flyer survived, so the fist (still shut) sinks back on empty air and leaves it be. */
+  survived: boolean;
   decided: boolean;
   seed: number;
   twist: number;
@@ -86,7 +86,8 @@ function raggedDisc(): THREE.BufferGeometry {
 /**
  * Shadow Hands (the Wendigo's anti-air): for each flyer grabbed, a long, jointed, near-black arm bursts out of a
  * roiling pool of shadow on the ground beyond it, lunges up onto it on the shared anti-air clock, closes its bony
- * fingers, drags the wreck down into the pool and dissolves into smoke. A surviving flyer is let go.
+ * fingers, drags the wreck down into the ground and dissolves into smoke. The fist never opens once shut: a surviving
+ * flyer flies on, the fist sinking clenched on empty air.
  * Three draw calls at most (bones, their smoky shell, the pools); everything is pooled.
  */
 export class ShadowHands {
@@ -126,14 +127,14 @@ export class ShadowHands {
   grab(target: Target, monster: THREE.Vector3): void {
     if (this.hands.length >= MAX) return;
     const h = this.spare.pop() ?? {
-      target, base: new THREE.Vector3(), held: new THREE.Vector3(), t: 0, released: false, decided: false, seed: 0, twist: 0,
+      target, base: new THREE.Vector3(), held: new THREE.Vector3(), t: 0, survived: false, decided: false, seed: 0, twist: 0,
       joints: Array.from({ length: SEGS + 1 }, () => new THREE.Vector3()),
     };
     h.target = target;
     handBase(target.position, monster, Math.random(), h.base);
     h.held.copy(target.position);
     h.t = 0;
-    h.released = false;
+    h.survived = false;
     h.decided = false;
     h.seed = Math.random() * 100;
     h.twist = (Math.random() < 0.5 ? -1 : 1) * (0.06 + Math.random() * 0.06);
@@ -161,13 +162,14 @@ export class ShadowHands {
         this.hands.splice(i, 1);
         continue;
       }
-      // At the impact (the anti-air damage has just landed) the fist either holds a wreck or lets a survivor go.
+      // At the impact (the anti-air damage has just landed) the fist either holds a wreck or, shut on empty air, leaves a
+      // survivor to fly on.
       if (!h.decided && h.t >= HAND_T.impact) {
         h.decided = true;
-        h.released = h.target.isAlive();
+        h.survived = h.target.isAlive();
         h.held.copy(h.target.position);
       }
-      const ph = handPhase(h.t, h.released);
+      const ph = handPhase(h.t, h.survived);
       const fade = ph.fade;
       const life = 1 - fade;
 
@@ -176,11 +178,11 @@ export class ShadowHands {
       _base.copy(h.base).setY(-25 - 90 * fade);
       if (!h.decided) fistPoint(h.base, h.target.position, ph.rise, _a);
       else {
-        const from = h.released ? h.target.position : h.held;
-        dragPoint(h.base, from, ph.drag, _a);
+        // From where the fist closed: a survivor is left to fly on, the fist sinking shut on empty air.
+        dragPoint(h.base, h.held, ph.drag, _a);
         if (h.t < HAND_T.hold) _a.x += Math.sin(h.t * 65) * 3;
         // The wreck goes down with the hand (purely visual: the flyer is already destroyed).
-        if (!h.released && !h.target.isAlive() && ph.drag < 1) h.target.position.copy(_a);
+        if (!h.survived && !h.target.isAlive() && ph.drag < 1) h.target.position.copy(_a);
       }
 
       // Hand frame: F along the hand toward the fingertips, S across the knuckles, N out of the palm. Overhand: it

@@ -46,10 +46,10 @@ describe('handPhase', () => {
     expect(handPhase(HAND_T.total).fade).toBe(1);
     expect(handPhase(HAND_T.total).pool).toBe(0);
   });
-  it('opens its fist again when the flyer survived', () => {
-    const t = HAND_T.hold + 0.3;
-    expect(handPhase(t).grip).toBeCloseTo(1);
-    expect(handPhase(t, true).grip).toBe(0);
+  it('never opens its fist once it has grabbed: shut from just after impact to the end, whether the flyer survived or not', () => {
+    for (const survived of [false, true]) {
+      for (let t = HAND_T.impact + HAND_T.close; t <= HAND_T.total; t += 0.01) expect(handPhase(t, survived).grip).toBeGreaterThan(0.999);
+    }
   });
 });
 
@@ -223,11 +223,11 @@ describe('fist grasp', () => {
     expect(Math.hypot(b[3]!.y - hold.y, b[3]!.z - hold.z)).toBeLessThan(Math.hypot(a[3]!.y - hold.y, a[3]!.z - hold.z) + 1e-9);
     expect(jointCurl(1, 1, 1)[1]).toBeGreaterThan(jointCurl(1, 0, 1)[1]);
   });
-  it('squeezes only while it holds a wreck, and the grip opens again on a survivor', () => {
+  it('squeezes only while it holds a wreck, but stays shut on a survivor too', () => {
     expect(handPhase(HAND_T.impact - 0.01).squeeze).toBe(0);
     expect(handPhase(HAND_T.hold).squeeze).toBeGreaterThan(0.8);
     expect(handPhase(HAND_T.hold, true).squeeze).toBe(0);
-    expect(handPhase(HAND_T.hold + 0.3, true).grip).toBe(0);
+    expect(handPhase(HAND_T.hold + 0.3, true).grip).toBeCloseTo(1);
   });
 });
 

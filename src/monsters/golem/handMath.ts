@@ -150,15 +150,18 @@ export type HandPhase = {
   fade: number;
   /** 0..1: the shadow pool's size. */
   pool: number;
-  /** 0..1: the crush, the fist clenched tighter on the wreck it holds (0 when it lets a survivor go). */
+  /** 0..1: the crush, the fist clenched tighter on the wreck it holds (0 when the flyer survived). */
   squeeze: number;
 };
 
 const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
 const smooth = (x: number) => x * x * (3 - 2 * x);
 
-/** Pose weights at `t` seconds into a grab. The grip opens again while dragging when the flyer survived (`released`). */
-export function handPhase(t: number, released = false): HandPhase {
+/**
+ * Pose weights at `t` seconds into a grab. Once shut the fist never opens again, to the end; when the flyer survived
+ * (`survived`) it stays clenched on empty air, without the squeeze.
+ */
+export function handPhase(t: number, survived = false): HandPhase {
   const T = HAND_T;
   // Out of the pool slowly (a quarter of the way), then a fast lunge that decelerates onto the flyer.
   let rise: number;
@@ -172,13 +175,12 @@ export function handPhase(t: number, released = false): HandPhase {
   if (t < T.emerge) grip = 0.35 * (1 - t / T.emerge);
   else if (t < T.impact - 0.06) grip = 0;
   else grip = smooth(clamp01((t - (T.impact - 0.06)) / T.close));
-  if (released && t > T.hold) grip *= 1 - clamp01((t - T.hold) / 0.27);
   // The drag accelerates (ease-in): a slow first pull, then a yank into the ground.
   const d = clamp01((t - T.hold) / (T.drag - T.hold));
   const drag = d * d * d;
   const fade = smooth(clamp01((t - T.drag) / (T.total - T.drag)));
   const pool = smooth(clamp01(t / T.emerge)) * (1 - fade);
-  const squeeze = released ? 0 : smooth(clamp01((t - T.impact - 0.06) / 0.12)) * (1 - smooth(clamp01((t - T.drag) / 0.25)));
+  const squeeze = survived ? 0 : smooth(clamp01((t - T.impact - 0.06) / 0.12)) * (1 - smooth(clamp01((t - T.drag) / 0.25)));
   return { rise, grip, drag, fade, pool, squeeze };
 }
 
