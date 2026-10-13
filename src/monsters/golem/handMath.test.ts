@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { SWAT_TIMES } from '../../monster/tailSwat';
-import { armJoints, clawRaise, fistPoint, HAND_T, handBase, handFrame, handPhase, WENDIGO_SWAT } from './handMath';
+import { armJoints, BECKON_T, beckonLift, beckonPull, beckonResume, fistPoint, HAND_T, handBase, handFrame, handPhase, WENDIGO_SWAT } from './handMath';
 
 describe('handPhase', () => {
   it("reaches the flyer exactly at the Wendigo's anti-air impact, fist closed", () => {
@@ -111,31 +111,6 @@ describe('WENDIGO_SWAT', () => {
   });
 });
 
-describe('clawRaise', () => {
-  const T = WENDIGO_SWAT;
-  it('lifts from rest to full reach exactly at impact, holds, and is back at rest by the end', () => {
-    expect(clawRaise(0)).toBe(0);
-    expect(clawRaise(T.impact)).toBeCloseTo(1);
-    expect(clawRaise(T.impact + T.hold * 0.5)).toBeCloseTo(1);
-    expect(clawRaise(T.total)).toBe(0);
-    expect(clawRaise(-1)).toBe(0);
-    expect(clawRaise(T.total + 1)).toBe(0);
-  });
-  it('is still well short of full reach through the wind-up (no early snap)', () => {
-    expect(clawRaise(T.windup)).toBeLessThan(0.45);
-  });
-  it('moves smoothly: no jump from one frame to the next, rising then falling', () => {
-    let prev = 0;
-    for (let t = 0; t <= T.total + 1e-9; t += 1 / 120) {
-      const v = clawRaise(t);
-      expect(Math.abs(v - prev)).toBeLessThan(0.06);
-      if (t <= T.impact) expect(v).toBeGreaterThanOrEqual(prev - 1e-12);
-      if (t >= T.impact + T.hold) expect(v).toBeLessThanOrEqual(prev + 1e-12);
-      prev = v;
-    }
-  });
-});
-
 describe('overhand grip', () => {
   const base = new THREE.Vector3(0, 0, 600);
   it('arcs the closing point up over the flyer and drops onto it exactly at impact', () => {
@@ -180,6 +155,49 @@ describe('overhand grip', () => {
       handFrame(base, flyer, r, F, S, N);
       expect(F.angleTo(prev)).toBeLessThan(0.12);
       prev.copy(F);
+    }
+  });
+});
+
+describe('beckon (the Wendigo claw over a whole Shadow Hands grab)', () => {
+  it('rises slowly: at most half the old claw speed (full reach in 0.29 s before), the rise easing in', () => {
+    expect(beckonLift(0)).toBe(0);
+    expect(BECKON_T.rise).toBeGreaterThanOrEqual(2 * WENDIGO_SWAT.impact);
+    expect(beckonLift(BECKON_T.rise)).toBeCloseTo(1);
+    expect(beckonLift(0.1)).toBeLessThan(0.05);
+    let prev = 0;
+    for (let t = 0; t <= BECKON_T.end + 0.2; t += 1 / 120) {
+      const v = beckonLift(t);
+      expect(Math.abs(v - prev)).toBeLessThan(0.02);
+      if (t <= BECKON_T.rise) expect(v).toBeGreaterThanOrEqual(prev - 1e-12);
+      prev = v;
+    }
+  });
+  it('lingers, then lowers slowly back to the walk over the whole grab', () => {
+    expect(BECKON_T.end).toBeGreaterThanOrEqual(HAND_T.total - 0.05);
+    expect(beckonLift((BECKON_T.rise + BECKON_T.lower) / 2)).toBeCloseTo(1);
+    expect(beckonLift(BECKON_T.end)).toBe(0);
+    expect(beckonLift(BECKON_T.end + 1)).toBe(0);
+  });
+  it('tugs as the shadow hand clenches on the flyer, then hauls down with its drag', () => {
+    expect(beckonPull(HAND_T.impact - 0.01)).toBe(0);
+    expect(beckonPull(HAND_T.impact + 0.15)).toBeGreaterThan(0.15);
+    expect(beckonPull(HAND_T.hold)).toBeLessThan(0.3);
+    expect(beckonPull(HAND_T.drag)).toBeCloseTo(1);
+    let prev = 0;
+    for (let t = 0; t <= HAND_T.total; t += 1 / 120) {
+      const v = beckonPull(t);
+      expect(v).toBeGreaterThanOrEqual(prev - 1e-12);
+      expect(v - prev).toBeLessThan(0.03);
+      prev = v;
+    }
+  });
+  it('picks up a new grab from wherever the claw already is (no snap)', () => {
+    for (const lift of [0, 0.2, 0.5, 0.9, 1]) {
+      const t = beckonResume(lift);
+      expect(t).toBeGreaterThanOrEqual(0);
+      expect(t).toBeLessThanOrEqual(BECKON_T.rise);
+      expect(beckonLift(t)).toBeCloseTo(lift, 2);
     }
   });
 });

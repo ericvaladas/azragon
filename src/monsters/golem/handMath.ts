@@ -21,6 +21,45 @@ export const HAND_T = (() => {
   return { emerge, impact, hold, drag, total: drag + 0.6, close: 0.16 };
 })();
 
+/**
+ * The Wendigo's beckoning claw over a whole Shadow Hands grab (s, on its own clock, not the swat's): it lifts slowly
+ * toward the flyer, reaching full stretch by RISE (as though drawing the hand up out of the ground), lingers, and
+ * lowers back to the walk from LOWER to END, the end of the grab.
+ */
+export const BECKON_T = { rise: 0.95, lower: 1.2, end: HAND_T.total };
+
+/** 0..1: how far the beckoning claw is lifted toward the flyer `t` s into its gesture. */
+export function beckonLift(t: number): number {
+  const B = BECKON_T;
+  if (t <= 0 || t >= B.end) return 0;
+  const up = Math.pow(smooth(Math.min(1, t / B.rise)), 1.3);
+  return up * (1 - smooth(clamp01((t - B.lower) / (B.end - B.lower))));
+}
+
+/**
+ * 0..1: how far the beckoning claw hauls down toward the ground `t` s into the grab (HAND_T clock): a tug as the
+ * shadow hand clenches on the flyer at IMPACT, then down with the hand's drag, all the way by DRAG.
+ */
+export function beckonPull(t: number): number {
+  const T = HAND_T;
+  if (t < T.impact) return 0;
+  const d = clamp01((t - T.hold) / (T.drag - T.hold));
+  return 0.2 * smooth(clamp01((t - T.impact) / 0.14)) + 0.8 * d * d * d;
+}
+
+/** The gesture time on the rise at which the claw is lifted `lift` (0..1): a new grab picks up from there. */
+export function beckonResume(lift: number): number {
+  if (lift <= 0) return 0;
+  let lo = 0;
+  let hi = BECKON_T.rise;
+  for (let i = 0; i < 30; i++) {
+    const mid = (lo + hi) / 2;
+    if (Math.pow(smooth(mid / BECKON_T.rise), 1.3) < lift) lo = mid;
+    else hi = mid;
+  }
+  return (lo + hi) / 2;
+}
+
 export type HandPhase = {
   /** 0..1: how far the hand has travelled from the pool to the flyer (1 from IMPACT on). */
   rise: number;
@@ -36,19 +75,6 @@ export type HandPhase = {
 
 const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
 const smooth = (x: number) => x * x * (3 - 2 * x);
-
-/**
- * 0..1: how far the Wendigo's own claw has lifted toward the flyer `t` s into its anti-air strike. A slow, heavy
- * lift (still under half way at the end of the wind-up) that arrives at full reach exactly at impact, holds, then
- * eases back down to the walk by the end.
- */
-export function clawRaise(t: number): number {
-  const T = WENDIGO_SWAT;
-  if (t <= 0 || t >= T.total) return 0;
-  if (t < T.impact) return Math.pow(smooth(t / T.impact), 1.5);
-  if (t < T.impact + T.hold) return 1;
-  return 1 - smooth(clamp01((t - T.impact - T.hold) / T.recover));
-}
 
 /** Pose weights at `t` seconds into a grab. The grip opens again while dragging when the flyer survived (`released`). */
 export function handPhase(t: number, released = false): HandPhase {

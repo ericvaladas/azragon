@@ -5,7 +5,7 @@ import { solveTwoBone } from '../../monster/ik';
 import type { BodyFrame, MonsterBody } from '../types';
 import { backhandSweep, fistKind, lungeAmount, lungeWeight, strikeReturn, strikeStarted, type FistKind } from './fist';
 import { merge, piece, rng, SHAPES, type V3 } from './golemParts';
-import { clawRaise } from './handMath';
+import { BECKON_T, beckonLift, beckonPull, beckonResume } from './handMath';
 import { SWING, limbPlanted, limbSwing } from './knuckleGait';
 import { clampShoulder, reachTwist, softCap, springStep, type ShoulderLimits } from './shoulder';
 import { bendAngleAt, bendPoint, outwardBearing, pivotStep, stepToward } from './spine';
@@ -128,8 +128,11 @@ const PROTRACT = 26;
 const BACKHAND_END_MIN = 1.35;
 const BACKHAND_END_MAX = Math.PI - 0.05;
 const BACKHAND_SWEEP_R = 580;
-/** Shadow Hands: how far from the shoulder the lifted claw reaches toward the flyer. */
+/** Shadow Hands: how far from the shoulder the lifted claw reaches toward the flyer, and when its gesture is over. */
 const BECKON_REACH = 400;
+const BECKON_END = BECKON_T.end;
+/** How fast (1/s) the beckoning claw's reach swings round to a new flyer. */
+const BECKON_TURN = 4;
 /** Body springs: natural frequency (rad/s) and damping; underdamped, so the torso overshoots and settles. */
 const TWIST_SPRING = { omega: 18, zeta: 0.5 };
 const LEAN_SPRING = { omega: 13, zeta: 0.5 };
@@ -422,6 +425,13 @@ export class GolemBody implements MonsterBody {
   private footAt = [new THREE.Vector3(), new THREE.Vector3()];
   private handPlanted = [false, false];
   private footPlanted = [false, false];
+  /**
+   * Per side: the beckoning claw's gesture (Shadow Hands): `lift` its clock (s, −1 when idle), `grab` the grab's own
+   * clock (the anti-air strike's, carried on after it ends), the flyer it reaches for (world), and the direction
+   * (root space) the claw reaches in, eased so a new flyer draws it round rather than snapping it.
+   */
+  private beckons = [0, 1].map(() => ({ lift: -1, grab: -1, at: new THREE.Vector3(), dir: new THREE.Vector3(), aimed: false }));
+  private airPrevT = -1;
   /** Per side: the hand is posed (striking, slamming, reaching), not walking. */
   private handPosed = [false, false];
   /** Per side: 0..1, how far a sweeping hand reaches out horizontally (at its height) toward the arm's full length. */
@@ -877,13 +887,37 @@ export class GolemBody implements MonsterBody {
       lean = LUNGE_LEAN * k;
     } else this.meleePrevT = -1;
 
-    // Shadow Hands: the claw on the flyer's side lifts slowly toward it, beckoning, reaching full stretch as the hand strikes.
-    let summonSide = -1;
-    let summon = 0;
+    // Shadow Hands: the claw on the flyer's side beckons, a slow gesture over the hand's whole grab (its own clock,
+    // carried on after the anti-air strike ends); a new grab picks it up from wherever the claw already is.
+    this.root.updateMatrixWorld();
+    let airSide = -1;
     if (f.antiAir && !f.airborne && !f.roaring) {
       this.root.worldToLocal(_sum.copy(f.antiAir.target));
-      summonSide = _sum.x >= 0 ? 0 : 1;
-      summon = clawRaise(f.antiAir.t);
+      airSide = _sum.x >= 0 ? 0 : 1;
+      const b = this.beckons[airSide]!;
+      if (strikeStarted(this.airPrevT, f.antiAir.t)) b.lift = beckonResume(b.lift >= 0 ? beckonLift(b.lift) : 0);
+      b.grab = f.antiAir.t;
+      b.at.copy(f.antiAir.target);
+      this.airPrevT = f.antiAir.t;
+    } else this.airPrevT = -1;
+    let summonSide = -1;
+    let summon = 0;
+    for (let side = 0; side < 2; side++) {
+      const b = this.beckons[side]!;
+      if (b.lift < 0) continue;
+      if (f.airborne || f.roaring || f.pose.collapse > 0 || b.lift >= BECKON_END) {
+        b.lift = b.grab = -1;
+        b.aimed = false;
+        continue;
+      }
+      const lift = beckonLift(b.lift);
+      if (lift > summon) {
+        summon = lift;
+        summonSide = side;
+        this.root.worldToLocal(_sum.copy(b.at));
+      }
+      b.lift += f.dt;
+      if (side !== airSide) b.grab += f.dt;
     }
 
     // Where each hand wants to be (root space): creep on it, or strike, slam (Withering Ring), claw at the sky
@@ -908,12 +942,22 @@ export class GolemBody implements MonsterBody {
         else if (nova < 0.65) want.lerpVectors(_raise, _end, (nova - 0.5) / 0.15);
         else want.lerpVectors(_end, gait, smooth(0, 1, (nova - 0.65) / 0.35));
       }
-      const beckoning = side === summonSide && !striking && nova < 0 && summon > 0;
+      const bk = this.beckons[side]!;
+      const lift = bk.lift >= 0 ? beckonLift(bk.lift) : 0;
+      const beckoning = !striking && nova < 0 && lift > 0;
       if (beckoning) {
-        // Reach from the shoulder up toward the flyer (the shoulder's range and the torso's rear and turn shape it).
+        // Reach from the shoulder up toward the flyer, hauling down toward its ground point as the hand drags it
+        // (the shoulder's range and the torso's rear and turn shape it).
         mirror(SHOULDER, sx, _raise);
-        _raise.addScaledVector(_tmp.subVectors(_sum, _raise).normalize(), BECKON_REACH);
-        want.lerp(_raise, summon);
+        this.root.worldToLocal(_end.copy(bk.at));
+        _tmp.subVectors(_end, _raise).normalize();
+        _ref.copy(_end).setY(0).sub(_raise).normalize();
+        _tmp.lerp(_ref, beckonPull(bk.grab)).normalize();
+        if (!bk.aimed) bk.dir.copy(_tmp);
+        else bk.dir.lerp(_tmp, 1 - Math.exp(-BECKON_TURN * f.dt)).normalize();
+        bk.aimed = true;
+        _raise.addScaledVector(bk.dir, BECKON_REACH);
+        want.lerp(_raise, lift);
       }
       if (f.roaring) want.set(sx * 90, 430 + Math.sin(f.time * 14 + side * Math.PI) * 45, 250);
       if (f.airborne) want.set(sx * 230, -30, 260);
@@ -1099,7 +1143,7 @@ export class GolemBody implements MonsterBody {
       const w = f.melee && this.strikeKind === 'backhand' ? strikeEnv : summonSide >= 0 ? summon : 0;
       if (w > 0) {
         _look.copy(this.headPivot.position).applyMatrix4(this.shell.matrix).applyMatrix4(this.body.matrix);
-        const tgt = f.melee && this.strikeKind === 'backhand' ? _aim : this.root.worldToLocal(_tmp.copy(f.antiAir!.target));
+        const tgt = f.melee && this.strikeKind === 'backhand' ? _aim : this.root.worldToLocal(_tmp.copy(this.beckons[summonSide]!.at));
         const want = frontYaw + Math.max(-GAZE_YAW, Math.min(GAZE_YAW, angleWrap(Math.atan2(tgt.x - _look.x, tgt.z - _look.z) - frontYaw)));
         yaw += (want - yaw) * w;
       }
