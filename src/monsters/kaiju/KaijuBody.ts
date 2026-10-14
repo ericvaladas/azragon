@@ -8,7 +8,6 @@ import { rakeSwing } from './rake';
 import { neckAim, stepNeck } from './neck';
 import { tailSwing } from './tailSweep';
 import { kaijuLeap, type KaijuLeapPose } from './leapPose';
-import { SHAPES, at, between, merge, scaleRows, taper } from './kaijuParts';
 
 const K = CONFIG.kaiju;
 const C = K.colors;
@@ -56,8 +55,6 @@ const _tmp = new THREE.Vector3();
 const _world = new THREE.Vector3();
 
 type Leg = { side: 1 | -1; hip: THREE.Vector3; thigh: THREE.Mesh; shin: THREE.Mesh; foot: THREE.Mesh };
-/** Tail plates: the glowing back plates carry on down the tail, one riding the top of each segment. */
-const TAIL_SPIKE = 0.8;
 type Arm = { side: 1 | -1; pivot: THREE.Object3D };
 
 /**
@@ -73,7 +70,6 @@ export class KaijuBody implements MonsterBody {
   private jaw = new THREE.Object3D();
   private mouth = new THREE.Object3D();
   private tailSegs: THREE.Mesh[] = [];
-  private tailSpikes: THREE.Mesh[] = [];
   private tailPts = TAIL_BASE.map((p) => p.clone());
   private tintMats: THREE.MeshToonMaterial[];
   private plateMat: THREE.MeshToonMaterial;
@@ -92,22 +88,14 @@ export class KaijuBody implements MonsterBody {
     const scale = toonMat(C.scale);
     const dark = toonMat(C.scaleDark);
     const belly = toonMat(C.belly);
+    const claw = toonMat(C.claw);
     const eye = toonMat(C.eye, { emissive: C.eye });
     this.plateMat = toonMat(C.plate, { emissive: C.plate });
-    const skin = toonMat(0xffffff, { vertexColors: true });
-    this.tintMats = [scale, dark, belly, skin];
+    this.tintMats = [scale, dark, belly];
     const box = this.keep(faceted(new THREE.BoxGeometry(1, 1, 1)));
     const blob = this.keep(faceted(new THREE.IcosahedronGeometry(1, 1)));
     const cone = this.keep(faceted(new THREE.ConeGeometry(0.5, 1, 4)));
     const cyl = this.keep(faceted(new THREE.CylinderGeometry(0.5, 0.6, 1, 6)));
-    /** One merged, vertex-coloured mesh of detail parts under `parent`. */
-    const detail = (parent: THREE.Object3D, parts: THREE.BufferGeometry[]) => {
-      const m = new THREE.Mesh(this.keep(merge(parts)), skin);
-      m.castShadow = true;
-      m.receiveShadow = true;
-      parent.add(m);
-      return m;
-    };
     const add = (parent: THREE.Object3D, geo: THREE.BufferGeometry, mat: THREE.Material, pos: [number, number, number], size: [number, number, number], rotX = 0) => {
       const m = new THREE.Mesh(geo, mat);
       m.position.set(...pos);
@@ -123,89 +111,32 @@ export class KaijuBody implements MonsterBody {
     add(this.body, blob, scale, [0, 300, -40], [120, 105, 140]);
     add(this.body, blob, scale, [0, 410, 30], [125, 150, 115], 0.35);
     add(this.body, blob, belly, [0, 375, 70], [95, 130, 90], 0.35);
-    {
-      // Dragon scales over the back, shoulders and flanks; banded plates down the belly.
-      const parts: THREE.BufferGeometry[] = [];
-      scaleRows(parts, [C.scaleLight, C.scaleDark], [0, 410, 30], [125, 150, 115], 0.35, 7, 12, [0.25, 2.2], [0.75, Math.PI * 2 - 0.75], 34);
-      scaleRows(parts, [C.scaleLight, C.scaleDark], [0, 300, -40], [120, 105, 140], 0, 5, 12, [0.35, 2.0], [0.9, Math.PI * 2 - 0.9], 32);
-      scaleRows(parts, C.scale, [0, 410, 30], [125, 150, 115], 0.35, 1, 6, [0.2, 0.3], [0, Math.PI * 2], 40);
-      for (let i = 0; i < 7; i++) {
-        const th = 0.95 + i * 0.22;
-        const tilt = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), 0.35);
-        const p = new THREE.Vector3(0, Math.cos(th) * 130, Math.sin(th) * 90).applyQuaternion(tilt).add(new THREE.Vector3(0, 375, 70));
-        const w = Math.sin(th) * 150;
-        at(parts, SHAPES.box, C.scaleDark, [p.x, p.y, p.z + 1], [w, 4, 10], [0.35 + th - Math.PI / 2, 0, 0]);
-      }
-      detail(this.body, parts);
-    }
 
     // Neck → head → hinged jaw; `mouth` is where the breath leaves.
     this.neck.position.copy(NECK_BASE);
     add(this.neck, box, scale, [0, 35, 30], [72, 80, 100], -0.5);
-    {
-      const parts: THREE.BufferGeometry[] = [];
-      scaleRows(parts, C.scaleLight, [0, 35, 30], [40, 48, 56], -0.5, 4, 8, [0.3, 1.7], [0.9, Math.PI * 2 - 0.9], 26);
-      detail(this.neck, parts);
-    }
     const head = new THREE.Object3D();
     head.position.set(0, 85, 75);
     this.neck.add(head);
-    {
-      // Skull and a long tapering snout, an angry brow over the eyes, nostrils, a row of upper teeth,
-      // cheek spikes swept back and a short crest at the back of the skull.
-      const parts: THREE.BufferGeometry[] = [];
-      at(parts, taper([92, 76], [80, 64], 100), C.scale, [0, 4, 25], [1, 1, 1]);
-      at(parts, taper([72, 54], [46, 36], 100), C.scale, [0, -8, 115], [1, 1, 1]);
-      at(parts, taper([34, 10], [18, 8], 92), C.scaleDark, [0, 18, 112], [1, 1, 1], [0.1, 0, 0]);
-      for (const sd of [1, -1]) {
-        at(parts, SHAPES.box, C.scaleDark, [sd * 33, 31, 64], [30, 12, 44], [0.28, sd * 0.3, sd * -0.2]);
-        at(parts, SHAPES.box, C.scaleDark, [sd * 13, 9, 162], [10, 7, 8]);
-        at(parts, SHAPES.spike, C.scaleDark, [sd * 46, -16, -8], [12, 46, 12], [-Math.PI / 2 + 0.25, sd * 0.45, 0]);
-        at(parts, SHAPES.spike, C.scaleDark, [sd * 24, 38, -12], [12, 34, 12], [-0.85, 0, sd * -0.35]);
-        for (let z = 78; z <= 158; z += 13) at(parts, SHAPES.spike, C.claw, [sd * (31 - (z - 78) * 0.13), -32 + (z - 78) * 0.07, z], [7, 16, 7], [Math.PI, 0, 0]);
-      }
-      at(parts, SHAPES.spike, C.scaleDark, [0, 44, -4], [14, 44, 14], [-0.95, 0, 0]);
-      scaleRows(parts, C.scaleDark, [0, 4, 25], [46, 38, 50], 0, 2, 7, [0.35, 0.95], [Math.PI * 0.55, Math.PI * 1.45], 20);
-      detail(head, parts);
-    }
-    add(head, box, eye, [41, 19, 70], [12, 10, 18]);
-    add(head, box, eye, [-41, 19, 70], [12, 10, 18]);
+    add(head, box, scale, [0, 0, 30], [90, 70, 110]);
+    add(head, box, dark, [0, -8, 110], [64, 46, 90]);
+    add(head, box, eye, [38, 22, 80], [16, 10, 16]);
+    add(head, box, eye, [-38, 22, 80], [16, 10, 16]);
     this.jaw.position.set(0, -30, 40);
     head.add(this.jaw);
-    {
-      // Lower jaw: scaled sides over a pale underjaw, a row of lower teeth.
-      const parts: THREE.BufferGeometry[] = [];
-      at(parts, taper([64, 24], [40, 16], 120), C.scale, [0, -8, 62], [1, 1, 1]);
-      at(parts, taper([52, 8], [30, 6], 112), C.belly, [0, -21, 60], [1, 1, 1]);
-      for (const sd of [1, -1]) for (let z = 40; z <= 112; z += 14) at(parts, SHAPES.spike, C.claw, [sd * (24 - (z - 40) * 0.1), 10, z], [7, 15, 7]);
-      detail(this.jaw, parts);
-    }
+    add(this.jaw, box, belly, [0, -8, 60], [58, 18, 110]);
+    for (const x of [-20, 0, 20]) add(this.jaw, cone, claw, [x, 6, 105], [10, 18, 10]);
     this.mouth.position.set(0, -20, 165);
     head.add(this.mouth);
     this.body.add(this.neck);
 
     // Short clawed arms, hanging forward-down from the shoulders.
     for (const side of [1, -1] as const) {
-      // Upper arm hanging down and a little back from the shoulder, elbow bent so the forearm comes forward,
-      // and a three-fingered hand with its claws curled down.
       const pivot = new THREE.Object3D();
       pivot.position.set(side * 100, 440, 105);
-      const parts: THREE.BufferGeometry[] = [];
-      const elbow: [number, number, number] = [side * 16, -62, -10];
-      const wrist: [number, number, number] = [side * 8, -80, 50];
-      at(parts, SHAPES.blob, C.scale, [side * 4, -6, 0], [30, 30, 30]);
-      between(parts, SHAPES.limb, C.scale, [0, 0, 0], elbow, 34, 34);
-      at(parts, SHAPES.blob, C.scaleDark, elbow, [19, 19, 19]);
-      between(parts, SHAPES.limb, C.scaleDark, elbow, wrist, 26, 26);
-      at(parts, SHAPES.box, C.scaleDark, [wrist[0], wrist[1] - 4, wrist[2] + 10], [30, 14, 26], [0.5, 0, 0]);
-      for (const dx of [-11, 0, 11]) {
-        const knuckle: [number, number, number] = [wrist[0] + dx, wrist[1] - 10, wrist[2] + 24];
-        const tip: [number, number, number] = [wrist[0] + dx * 1.1, wrist[1] - 30, wrist[2] + 34];
-        between(parts, SHAPES.limb, C.scaleDark, knuckle, tip, 9, 9);
-        at(parts, SHAPES.spike, C.claw, [tip[0], tip[1] - 8, tip[2] + 2], [8, 22, 8], [Math.PI - 0.35, 0, 0]);
-      }
-      scaleRows(parts, C.scaleLight, [side * 8, -32, -5], [19, 36, 19], 0.15, 3, 6, [0.5, 2.6], [0, Math.PI * 2], 13);
-      detail(pivot, parts);
+      add(pivot, box, dark, [0, -30, 35], [30, 30, 90], 0.7);
+      add(pivot, box, scale, [0, -80, 85], [26, 26, 80], 1.2);
+      for (const dx of [-10, 0, 10]) add(pivot, cone, claw, [dx, -112, 118], [9, 34, 9], 2.0);
       this.body.add(pivot);
       this.shortArms.push({ side, pivot });
     }
@@ -236,42 +167,16 @@ export class KaijuBody implements MonsterBody {
     for (let i = 0; i < TAIL_BASE.length - 1; i++) {
       const r = 95 - i * 15;
       this.tailSegs.push(add(this.body, cyl, i % 2 ? dark : scale, [0, 0, 0], [r, 1, r]));
-      this.tailSpikes.push(add(this.body, cone, this.plateMat, [0, 0, 0], [r * 0.4, r * 1.1, r * 0.8]));
     }
 
     // Legs (root space; placed by IK each frame).
     for (const side of [1, -1] as const) {
-      // Built at true size, then scaled so the IK's stretch (width, bone length, depth) brings it back.
-      const thighParts: THREE.BufferGeometry[] = [];
-      at(thighParts, SHAPES.blob, C.scale, [0, 8, 4], [42, 96, 46]);
-      scaleRows(thighParts, [C.scaleLight, C.scaleDark], [0, 8, 4], [42, 96, 46], 0, 6, 9, [0.45, 2.7], [0, Math.PI * 2], 22);
-      const thighGeo = merge(thighParts).scale(1 / 70, 1 / THIGH, 1 / 75);
-      const shinParts: THREE.BufferGeometry[] = [];
-      at(shinParts, SHAPES.limb, C.scaleDark, [0, 0, 0], [50, SHIN, 50]);
-      scaleRows(shinParts, C.scale, [0, 0, 0], [26, SHIN * 0.5, 26], 0, 6, 7, [0.4, 2.7], [0, Math.PI * 2], 16);
-      at(shinParts, SHAPES.spike, C.scaleDark, [0, SHIN * 0.42, 22], [14, 30, 14], [0.9, 0, 0]);
-      const shinGeo = merge(shinParts).scale(1 / 50, 1 / SHIN, 1 / 50);
-      const footParts: THREE.BufferGeometry[] = [];
-      at(footParts, SHAPES.box, C.scaleDark, [0, 0, -12], [74, 30, 86]);
-      for (const dx of [-24, 0, 24]) {
-        at(footParts, SHAPES.box, C.scaleDark, [dx, -3, 40], [20, 22, 34], [0.1, dx * 0.006, 0]);
-        at(footParts, SHAPES.spike, C.claw, [dx * 1.05, -6, 64], [10, 24, 10], [Math.PI / 2 + 0.35, 0, 0]);
-      }
-      at(footParts, SHAPES.spike, C.claw, [0, -2, -60], [10, 20, 10], [-Math.PI / 2 - 0.3, 0, 0]);
-      const limb = (geo: THREE.BufferGeometry, size: [number, number, number]) => {
-        const m = new THREE.Mesh(this.keep(geo), skin);
-        m.scale.set(...size);
-        m.castShadow = true;
-        m.receiveShadow = true;
-        this.root.add(m);
-        return m;
-      };
       this.legs.push({
         side,
         hip: new THREE.Vector3(side * 70, 300, -30),
-        thigh: limb(thighGeo, [70, 1, 75]),
-        shin: limb(shinGeo, [50, 1, 50]),
-        foot: limb(merge(footParts), [1, 1, 1]),
+        thigh: add(this.root, box, scale, [0, 0, 0], [70, 1, 75]),
+        shin: add(this.root, cyl, dark, [0, 0, 0], [50, 1, 50]),
+        foot: add(this.root, box, dark, [0, 0, 0], [70, 30, 110]),
       });
     }
     this.root.add(this.body);
@@ -381,17 +286,7 @@ export class KaijuBody implements MonsterBody {
         p.y = THREE.MathUtils.lerp(p.y, 25, Math.max(0, w) * k);
       }
     }
-    for (let i = 0; i < this.tailSegs.length; i++) {
-      const a = this.tailPts[i]!;
-      const b = this.tailPts[i + 1]!;
-      placeSegment(this.tailSegs[i]!, a, b);
-      // The spike rides the top of the segment, raked back along it.
-      const spike = this.tailSpikes[i]!;
-      const r = this.tailSegs[i]!.scale.x;
-      spike.position.lerpVectors(a, b, 0.45);
-      spike.position.y += r * TAIL_SPIKE;
-      spike.rotation.set(-0.8, Math.atan2(b.x - a.x, b.z - a.z) + Math.PI, 0, 'YXZ');
-    }
+    for (let i = 0; i < this.tailSegs.length; i++) placeSegment(this.tailSegs[i]!, this.tailPts[i]!, this.tailPts[i + 1]!);
 
     for (const mat of this.tintMats) {
       if (f.flash) mat.emissive.setHex(0xffffff);
