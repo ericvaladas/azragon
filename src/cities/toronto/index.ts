@@ -9,6 +9,8 @@ import { CASA_LOMA, casaLomaGeometry } from './casaLoma';
 import { SCOTIABANK_ARENA, scotiabankArenaGeometry } from './scotiabankArena';
 import { FINANCIAL_LOTS } from './financial';
 import { YONGE_DUNDAS_LOTS } from './yongeDundas';
+import { UOFT_HALLS } from './uoft';
+import { DISTILLERY_LOTS } from './distillery';
 import { NATHAN_PHILLIPS } from './square';
 
 export const TORONTO: CityStyle = {
@@ -42,7 +44,7 @@ export const TORONTO: CityStyle = {
     { id: 'casa-loma', x: CASA_LOMA_SITE.x, z: CASA_LOMA_SITE.z, w: CASA_LOMA.w, d: CASA_LOMA.d, h: CASA_LOMA.h, build: casaLomaGeometry },
     { id: 'scotiabank-arena', x: SCOTIABANK_ARENA_SITE.x, z: SCOTIABANK_ARENA_SITE.z, w: SCOTIABANK_ARENA.w, d: SCOTIABANK_ARENA.d, h: SCOTIABANK_ARENA.h, build: scotiabankArenaGeometry },
   ],
-  specialLots: [...YONGE_DUNDAS_LOTS, ...FINANCIAL_LOTS],
+  specialLots: [...YONGE_DUNDAS_LOTS, ...FINANCIAL_LOTS, ...UOFT_HALLS, ...DISTILLERY_LOTS],
   overlays: [NATHAN_PHILLIPS],
   river: DON,
   bay: TORONTO_LAKE,

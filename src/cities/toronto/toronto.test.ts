@@ -13,6 +13,8 @@ import { ROGERS_CENTRE, rogersCentreGeometry } from './rogersCentre';
 import { CITY_HALL, cityHallGeometry } from './cityHall';
 import { FIRST_CANADIAN_PLACE, FINANCIAL_LOTS, GOLD, ROYAL_BANK_PLAZA } from './financial';
 import { YD_BLOCK, YONGE_DUNDAS_LOTS } from './yongeDundas';
+import { UOFT_HALLS } from './uoft';
+import { DISTILLERY_CHIMNEY, DISTILLERY_LOTS } from './distillery';
 import { NATHAN_PHILLIPS, SQUARE_LAYOUT, SQUARE_PX, letterRects, squareRects } from './square';
 import { LATIN_FONT } from '../../world/latinFont';
 import { overlayPainter } from '../../world/pixelTextures';
@@ -368,11 +370,12 @@ describe('hand-placed lots', () => {
     }
   });
 
-  it('generates every hand-placed lot exactly, with no random building overlapping one', () => {
+  it('generates every downtown hand-placed lot exactly, with no random building overlapping one', () => {
     const all: BuildingSpec[] = [];
     for (const r of chunksInRadius(-200, 1200, 1200)) all.push(...generateChunk(TORONTO, 1337, r.cx, r.cz).buildings);
-    const isSpecial = (b: BuildingSpec) => TORONTO.specialLots.some((s) => s.x === b.x && s.z === b.z && s.h === b.h);
-    expect(all.filter(isSpecial)).toHaveLength(TORONTO.specialLots.length);
+    const downtown = [...YONGE_DUNDAS_LOTS, ...FINANCIAL_LOTS];
+    const isSpecial = (b: BuildingSpec) => downtown.some((s) => s.x === b.x && s.z === b.z && s.h === b.h);
+    expect(all.filter(isSpecial)).toHaveLength(downtown.length);
     const overlaps = (a: BuildingSpec, b: BuildingSpec) => Math.abs(a.x - b.x) * 2 < a.w + b.w && Math.abs(a.z - b.z) * 2 < a.d + b.d;
     for (const s of all.filter(isSpecial)) for (const b of all.filter((b) => !isSpecial(b))) expect(overlaps(s, b)).toBe(false);
   });
@@ -524,6 +527,88 @@ describe('Chinatown and Kensington Market', () => {
         expect(hsl(b.color).l, name).toBeGreaterThan(0.4);
       }
     }
+  });
+});
+
+describe('U of T and the Distillery District (hand-placed lots)', () => {
+  const W = CONFIG.world;
+  const blockOf = (v: number) => Math.floor(v / PITCH);
+  const area = (b: { x: number; z: number }) => AREAS.find((a) => 'ci0' in a && blockOf(b.x) >= a.ci0 && blockOf(b.x) <= a.ci1 && blockOf(b.z) >= a.cj0 && blockOf(b.z) <= a.cj1)?.name;
+  const hsl = (c: number) => {
+    const o = { h: 0, s: 0, l: 0 };
+    new THREE.Color(c).getHSL(o, THREE.SRGBColorSpace);
+    return o;
+  };
+  const chunksOf = (lots: readonly BuildingSpec[]) => {
+    const keys = new Map<string, [number, number]>();
+    for (const b of lots) keys.set(`${Math.floor(b.x / 800)},${Math.floor(b.z / 800)}`, [Math.floor(b.x / 800), Math.floor(b.z / 800)]);
+    return [...keys.values()].map(([cx, cz]) => generateChunk(TORONTO, 1337, cx, cz));
+  };
+
+  it('lists the halls and the Distillery among the special lots, all kept through the crash, on land, off the islands and out of the crater', () => {
+    for (const b of [...UOFT_HALLS, ...DISTILLERY_LOTS]) expect(TORONTO.specialLots).toContain(b);
+    for (const b of TORONTO.specialLots) {
+      const ci = blockOf(b.x), cj = blockOf(b.z);
+      expect(b.keep).toBe(true);
+      expect(isWater(TORONTO, ci, cj), `${b.x},${b.z}`).toBe(false);
+      expect(isIsland(TORONTO, ci, cj), `${b.x},${b.z}`).toBe(false);
+      expect(Math.hypot(PITCH * (ci + 0.5), PITCH * (cj + 0.5)), `${b.x},${b.z}`).toBeGreaterThanOrEqual(W.clearRadius + PITCH / 2);
+    }
+  });
+
+  it('stands a few warm stone college halls, 20–35 m, on the U of T lawns', () => {
+    expect(UOFT_HALLS.length).toBeGreaterThanOrEqual(4);
+    for (const b of UOFT_HALLS) {
+      expect(area(b)).toBe('U of T');
+      expect(blockDistrict(TORONTO, PITCH * (blockOf(b.x) + 0.5), PITCH * (blockOf(b.z) + 0.5))).toBe('park');
+      expect(b.h).toBeGreaterThanOrEqual(20);
+      expect(b.h).toBeLessThanOrEqual(35);
+      const c = hsl(b.color);
+      expect(c.s).toBeLessThan(0.35);
+      expect(c.l).toBeGreaterThan(0.5);
+      expect(c.l).toBeLessThan(0.85);
+    }
+    expect(new Set(UOFT_HALLS.map((b) => `${blockOf(b.x)},${blockOf(b.z)}`)).size).toBeGreaterThanOrEqual(3);
+  });
+
+  it('generates the halls on their park blocks, with no park tree inside a hall', () => {
+    const chunks = chunksOf(UOFT_HALLS);
+    const all = chunks.flatMap((c) => c.buildings);
+    for (const h of UOFT_HALLS) expect(all).toContainEqual(h);
+    for (const c of chunks) for (const t of c.trees) for (const h of UOFT_HALLS) {
+      expect(Math.abs(t.x - h.x) * 2 < h.w + 2 && Math.abs(t.z - h.z) * 2 < h.d + 2, `tree ${t.x},${t.z}`).toBe(false);
+    }
+    // The halls' blocks keep their park pads and their trees.
+    for (const h of UOFT_HALLS) {
+      const x = PITCH * (blockOf(h.x) + 0.5), z = PITCH * (blockOf(h.z) + 0.5);
+      expect(chunks.some((c) => c.parks.some((p) => p.x === x && p.z === z))).toBe(true);
+    }
+  });
+
+  it('builds the Distillery District of red-brick Victorian warehouses (10–20 m) and one tall slender brick chimney, nothing random among them', () => {
+    const sheds = DISTILLERY_LOTS.filter((b) => b !== DISTILLERY_CHIMNEY);
+    expect(DISTILLERY_LOTS).toContain(DISTILLERY_CHIMNEY);
+    expect(sheds.length).toBeGreaterThanOrEqual(6);
+    for (const b of DISTILLERY_LOTS) {
+      expect(area(b)).toBe('Distillery District');
+      expect(districtAt(PITCH * (blockOf(b.x) + 0.5), PITCH * (blockOf(b.z) + 0.5))).toBe('office');
+      const c = hsl(b.color);
+      expect(c.h < 30 / 360 || c.h > 340 / 360, `${b.color.toString(16)}`).toBe(true);
+      expect(c.s).toBeGreaterThan(0.3);
+      expect(c.l).toBeLessThan(0.5);
+    }
+    for (const b of sheds) {
+      expect(b.h).toBeGreaterThanOrEqual(10);
+      expect(b.h).toBeLessThanOrEqual(20);
+    }
+    expect(Math.max(DISTILLERY_CHIMNEY.w, DISTILLERY_CHIMNEY.d)).toBeLessThanOrEqual(8);
+    expect(DISTILLERY_CHIMNEY.h).toBeGreaterThanOrEqual(40);
+    const overlaps = (a: BuildingSpec, b: BuildingSpec) => Math.abs(a.x - b.x) * 2 < a.w + b.w && Math.abs(a.z - b.z) * 2 < a.d + b.d;
+    for (const s of sheds) expect(overlaps(s, DISTILLERY_CHIMNEY)).toBe(false);
+    const blocks = new Set(DISTILLERY_LOTS.map((b) => `${blockOf(b.x)},${blockOf(b.z)}`));
+    const built = chunksOf(DISTILLERY_LOTS).flatMap((c) => c.buildings).filter((b) => blocks.has(`${blockOf(b.x)},${blockOf(b.z)}`));
+    expect(built).toHaveLength(DISTILLERY_LOTS.length);
+    for (const b of built) expect(DISTILLERY_LOTS).toContainEqual(b);
   });
 });
 

@@ -283,7 +283,7 @@ function craneAt(style: CityStyle, seed: number, i: number, j: number): CraneSpe
  * lanes. Beside an avenue the inset adds an AVENUE_PAVEMENT band, lined with a row of street trees in every built
  * block off the crash site (not water, landmark or park cells; a tree inside a building's footprint is skipped).
  * Landmarks claim their block (the chunk holding the landmark's centre, or a long landmark's `from` end, owns it); special lots replace the random lots
- * they overlap; the crash site is never a park. Per-chunk caps thin the random buildings (never special lots), then
+ * they overlap (in a park block, they stand on the green and no park tree grows inside one); the crash site is never a park. Per-chunk caps thin the random buildings (never special lots), then
  * their signs, then the trees (other trees before avenue rows). Port cells are paved quays of container blocks and
  * warehouses with cranes along the water (no warehouse on a crane's sea side, nothing in its portal), and no trees. With a
  * lawn colour, residential cells off the crater (and off the island) also get a lawn pad. Island cells use the style's islandRules (its centre park
@@ -360,18 +360,20 @@ export function generateChunk(style: CityStyle, seed: number, cx: number, cz: nu
       if (crane) cranes.push(crane);
       if (district === 'residential' && style.colors.lawn !== undefined && !craterSite && !island) lawns.push({ x: bx, z: bz });
 
+      const blockSpecials = style.specialLots.filter((s) => blockOf(s.x) === bi && blockOf(s.z) === bj);
+      for (const s of blockSpecials) specials.push({ ...s, signs: s.signs.map((g) => ({ ...g })) });
       if (district === 'park') {
+        // A special lot in a park (a college hall on its lawn) stands among the trees: none grows inside it.
         parks.push({ x: bx, z: bz });
         const count = Math.round(range(rng, style.parkTrees[0], style.parkTrees[1]));
         for (let t = 0; t < count; t++) {
-          trees.push({ x: ix + range(rng, -iw / 2, iw / 2), z: iz + range(rng, -id / 2, id / 2), s: range(rng, 14, 26) });
+          const tree = { x: ix + range(rng, -iw / 2, iw / 2), z: iz + range(rng, -id / 2, id / 2), s: range(rng, 14, 26) };
+          if (!blockSpecials.some((s) => overlaps(s, { ...tree, w: 0, d: 0 }, 6))) trees.push(tree);
         }
         continue;
       }
 
-      const blockSpecials = style.specialLots.filter((s) => blockOf(s.x) === bi && blockOf(s.z) === bj);
       const firstBuilding = buildings.length;
-      for (const s of blockSpecials) specials.push({ ...s, signs: s.signs.map((g) => ({ ...g })) });
 
       const n = rules.lots;
       const lotW = iw / n;
