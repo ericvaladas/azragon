@@ -1,7 +1,10 @@
 import { CONFIG } from '../config';
 import { hash2 } from '../cities/noise';
-import type { CityStyle, Shoreline } from '../cities/types';
+import type { CityStyle, DistrictId, RiverSpec, Shoreline } from '../cities/types';
 import type { Vec2 } from '../util/math';
+
+/** The water a city lays: its river, bay and island. */
+export type Waters = Shoreline & { river?: RiverSpec };
 
 export const PITCH = CONFIG.world.blockSize;
 export const AVENUE_EVERY = 5;
@@ -22,12 +25,18 @@ const cellCentre = (ci: number, cj: number): Vec2 => ({ x: PITCH * ci + PITCH / 
 /** Radius of the island's rounded corners. */
 const ISLAND_CORNER = 150;
 
-/** True when the centre of cell (ci, cj) lies within the river's half width (vertical distance) of its centreline. */
-export function isRiver(style: CityStyle, ci: number, cj: number): boolean {
+/** True when the centre of cell (ci, cj) lies within the river's half width of its centreline (measured across its axis). */
+export function isRiver(style: Waters, ci: number, cj: number): boolean {
   const r = style.river;
   if (!r) return false;
-  const { x: xc, z: zc } = cellCentre(ci, cj);
-  return Math.abs(zc - (r.z0 + r.amp * Math.sin(xc / r.wavelength))) < r.halfWidth;
+  const { x, z } = cellCentre(ci, cj);
+  const [along, across] = r.axis === 'z' ? [z, x] : [x, z];
+  return Math.abs(across - (r.c0 + r.amp * Math.sin(along / r.wavelength))) < r.halfWidth;
+}
+
+/** The axis of the segments that bridge the river: they cross it, so they run across its axis. */
+export function bridgeAxis(style: CityStyle): Axis {
+  return style.river?.axis === 'z' ? 'x' : 'z';
 }
 
 /** True when cell (ci, cj) lies on the island: a rounded rectangle aligned to the bay axes. */
@@ -55,11 +64,24 @@ export function isBay(style: Shoreline, ci: number, cj: number): boolean {
 }
 
 /** River water outside the bay: only these cells carry bridges. */
-const isRiverOnly = (style: CityStyle, ci: number, cj: number): boolean => isRiver(style, ci, cj) && !isBay(style, ci, cj);
+const isRiverOnly = (style: Waters, ci: number, cj: number): boolean => isRiver(style, ci, cj) && !isBay(style, ci, cj);
 
 /** True for any water cell: river or bay. */
-export function isWater(style: CityStyle, ci: number, cj: number): boolean {
+export function isWater(style: Waters, ci: number, cj: number): boolean {
   return isRiver(style, ci, cj) || isBay(style, ci, cj);
+}
+
+/** True for a land cell within the river's bankPark blocks (Chebyshev) of river water outside the bay. */
+export function isRiverBank(style: Waters, ci: number, cj: number): boolean {
+  const n = style.river?.bankPark ?? 0;
+  if (n <= 0 || isWater(style, ci, cj)) return false;
+  for (let di = -n; di <= n; di++) for (let dj = -n; dj <= n; dj++) if (isRiverOnly(style, ci + di, cj + dj)) return true;
+  return false;
+}
+
+/** The district a block at (x, z) is built as: the style's, except river bank blocks, which are park. */
+export function blockDistrict(style: CityStyle, x: number, z: number): DistrictId {
+  return isRiverBank(style, Math.floor(x / PITCH), Math.floor(z / PITCH)) ? 'park' : style.districtAt(x, z);
 }
 
 /** The road segment on the lattice, or null where none exists (removed street, water, or island). */
@@ -71,7 +93,7 @@ export function segmentAt(style: CityStyle, axis: Axis, i: number, j: number): S
   const b = isWater(style, i, j);
   const seg = (bridge: boolean): Segment => ({ axis, i, j, avenue, width: lineWidth(axis === 'x' ? j : i), bridge });
   // Only river-on-both-sides bridges; bay water, or river meeting bay, has no segment.
-  if (a && b) return avenue && axis === 'z' && isRiverOnly(style, ai, aj) && isRiverOnly(style, i, j) ? seg(true) : null;
+  if (a && b) return avenue && axis === bridgeAxis(style) && isRiverOnly(style, ai, aj) && isRiverOnly(style, i, j) ? seg(true) : null;
   if (a || b || avenue) return seg(false);
   const mx = axis === 'x' ? PITCH * i + PITCH / 2 : PITCH * i;
   const mz = axis === 'x' ? PITCH * j : PITCH * j + PITCH / 2;

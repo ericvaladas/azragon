@@ -1,9 +1,11 @@
 import * as THREE from 'three';
 import { CONFIG } from '../config';
 import { mulberry32 } from '../util/rng';
-import type { CityStyle, GroundOverlay } from '../cities/types';
+import type { CityStyle, GlyphSet, GroundOverlay } from '../cities/types';
 import { lineWidth, PITCH } from './roads';
+import { SIGN_WORDS, latinBoardRects } from './latinFont';
 import { FACADE_COUNT } from '../cities/types';
+import { SQUARE_PX, squareRects, type PaintRect } from '../cities/toronto/square';
 
 function hex(c: number): string {
   return `#${c.toString(16).padStart(6, '0')}`;
@@ -283,13 +285,49 @@ export function screenTexture(): THREE.CanvasTexture {
   return finish(c);
 }
 
+/** An n × n decal of solid rectangles (canvas row 0 at the decal's −z edge), transparent elsewhere (use with alphaTest). */
+function paintRects(n: number, rects: readonly PaintRect[]): THREE.CanvasTexture {
+  const c = document.createElement('canvas');
+  c.width = n;
+  c.height = n;
+  const g = c.getContext('2d')!;
+  for (const r of rects) {
+    g.fillStyle = hex(r.color);
+    g.fillRect(r.x, r.y, r.w, r.h);
+  }
+  return finish(c);
+}
+
+/** Nathan Phillips Square: paving, the reflecting pool and the TORONTO strip. */
+export function squareTexture(): THREE.CanvasTexture {
+  return paintRects(SQUARE_PX, squareRects());
+}
+
+/** The texture painter of each ground decal id. */
+const OVERLAY_PAINTERS: Readonly<Record<string, (ov: GroundOverlay) => THREE.CanvasTexture>> = {
+  scramble: scrambleTexture,
+  'nathan-phillips': squareTexture,
+};
+
+/** The painter for overlay `id`; an id with no painter is a programming error. */
+export function overlayPainter(id: string): (ov: GroundOverlay) => THREE.CanvasTexture {
+  const paint = OVERLAY_PAINTERS[id];
+  if (!paint) throw new Error(`no overlay texture for '${id}'`);
+  return paint;
+}
+
+/** The texture of ground decal `ov`, chosen by its id. */
+export function overlayTexture(ov: GroundOverlay): THREE.CanvasTexture {
+  return overlayPainter(ov.id)(ov);
+}
+
 /** Everything the city draws with a texture; injectable so City can be built in tests without a DOM. */
 export type CityTextures = {
   ground(style: CityStyle): THREE.Texture;
   crater(): THREE.Texture;
   facades(): THREE.Texture;
   screen(): THREE.Texture;
-  signs(): THREE.Texture;
+  signs(glyphs: GlyphSet): THREE.Texture;
   overlay(ov: GroundOverlay): THREE.Texture;
   road(style: CityStyle): THREE.Texture;
 };
@@ -299,16 +337,33 @@ export const canvasCityTextures: CityTextures = {
   crater: craterTexture,
   facades: facadeAtlas,
   screen: screenTexture,
-  signs: () => signAtlas(),
-  overlay: scrambleTexture,
+  signs: (glyphs) => signAtlas(glyphs),
+  overlay: overlayTexture,
   road: roadTexture,
 };
 
 /**
- * Facade material hook: each building instance picks an atlas cell (attribute aFacade) and the cell repeats by the
- * building's size, one per FACADE_TILE metres, so tall towers get more floors rather than stretched windows.
+ * A facade texel is a window when its linear blue exceeds its red by this much: the bluish window inks of the atlas
+ * (office bands, balcony and shop windows) pass, pale glass panes, mullions, whites and greys do not.
  */
-export function patchFacadeShader(sh: { vertexShader: string; fragmentShader: string }): void {
+export const WINDOW_CHROMA = 0.145;
+
+/** Whether an atlas ink counts as a lit window (the shader's test, on the CPU). */
+export function isWindowTexel(hex: number): boolean {
+  const c = new THREE.Color(hex);
+  return c.b - c.r >= WINDOW_CHROMA;
+}
+
+/**
+ * Facade material hook: each building instance picks an atlas cell (attribute aFacade) and the cell repeats by the
+ * building's size, one per FACADE_TILE metres, so tall towers get more floors rather than stretched windows. With
+ * `glow`, window texels (see WINDOW_CHROMA) also emit the shared uniform's colour: lit windows at no extra draw call.
+ */
+export function patchFacadeShader(
+  sh: { uniforms?: Record<string, { value: unknown }>; vertexShader: string; fragmentShader: string },
+  glow?: { value: THREE.Color },
+): void {
+  if (glow && sh.uniforms) sh.uniforms['uWindowGlow'] = glow;
   sh.vertexShader = sh.vertexShader
     .replace('#include <common>', '#include <common>\nattribute float aFacade;\nvarying float vFacade;\nvarying vec2 vFacadeUv;')
     .replace(
@@ -318,12 +373,15 @@ export function patchFacadeShader(sh: { vertexShader: string; fragmentShader: st
   float across = abs(normal.x) > 0.5 ? length(instanceMatrix[2].xyz) : length(instanceMatrix[0].xyz);
   vFacadeUv = vec2(uv.x * across / ${FACADE_TILE.w.toFixed(1)}, uv.y * length(instanceMatrix[1].xyz) / ${FACADE_TILE.h.toFixed(1)});`,
     );
+  const glowDecl = glow ? '\nuniform vec3 uWindowGlow;' : '';
+  const glowAdd = glow ? `\n  totalEmissiveRadiance += uWindowGlow * step(${WINDOW_CHROMA.toFixed(3)}, facadeTexel.b - facadeTexel.r);` : '';
   sh.fragmentShader = sh.fragmentShader
-    .replace('#include <common>', '#include <common>\nvarying float vFacade;\nvarying vec2 vFacadeUv;')
+    .replace('#include <common>', `#include <common>\nvarying float vFacade;\nvarying vec2 vFacadeUv;${glowDecl}`)
     .replace(
       '#include <map_fragment>',
       `vec2 facadeUv = vec2((fract(vFacadeUv.x) + vFacade) / ${FACADE_COUNT.toFixed(1)}, fract(vFacadeUv.y));
-  diffuseColor *= texture2D(map, facadeUv);`,
+  vec4 facadeTexel = texture2D(map, facadeUv);
+  diffuseColor *= facadeTexel;${glowAdd}`,
     );
 }
 
@@ -333,10 +391,11 @@ const rect = (x: number, y: number, w: number, h: number): readonly [number, num
 export const SIGN_RECTS = [rect(0, 0, 12, 48), rect(12, 0, 12, 48), rect(24, 0, 12, 48), rect(36, 0, 28, 16), rect(36, 16, 28, 16), rect(36, 32, 28, 16)] as const;
 
 /**
- * Sign atlas. Vertical boards: dark panels with a white frame and a column of blocky, kanji-like white glyphs; the
- * per-sign tint turns the white into neon. Billboards: small full-colour pictures (drawn untinted).
+ * Sign atlas. Vertical boards: bright panels (tinted to the sign colour) with a dark frame and a column of dark
+ * glyphs: blocky kanji-like strokes, or a Latin word (SIGN_WORDS). Billboards: small full-colour pictures (drawn
+ * untinted): Tokyo's drink can, anime face and logo, or Latin logos and lettering.
  */
-export function signAtlas(): THREE.CanvasTexture {
+export function signAtlas(glyphs: GlyphSet = 'kanji'): THREE.CanvasTexture {
   const c = document.createElement('canvas');
   c.width = SA;
   c.height = SA;
@@ -344,7 +403,6 @@ export function signAtlas(): THREE.CanvasTexture {
   const rng = mulberry32(CONFIG.world.seed + 11);
   for (let k = 0; k < 3; k++) {
     const x0 = k * 12;
-    // A bright board (tinted to the sign colour) with a dark frame and dark lettering.
     g.fillStyle = '#ffffff';
     g.fillRect(x0, 0, 12, 48);
     g.fillStyle = '#26222e';
@@ -352,6 +410,10 @@ export function signAtlas(): THREE.CanvasTexture {
     g.fillRect(x0, 47, 12, 1);
     g.fillRect(x0, 0, 1, 48);
     g.fillRect(x0 + 11, 0, 1, 48);
+    if (glyphs === 'latin') {
+      for (const r of latinBoardRects(SIGN_WORDS[k]!, x0)) g.fillRect(r.x, r.y, r.w, r.h);
+      continue;
+    }
     // Glyphs: 8 × 8 cells stacked down the board, each a few strokes.
     for (let y = 3; y + 8 <= 46; y += 9) {
       const gx = x0 + 2;
@@ -362,6 +424,13 @@ export function signAtlas(): THREE.CanvasTexture {
       if (rng() < 0.5) g.fillRect(gx + 1, y + 7, 6, 1);
     }
   }
+  if (glyphs === 'latin') latinBillboards(g);
+  else kanjiBillboards(g);
+  return finish(c);
+}
+
+/** Tokyo's billboards (cells 3–5): a drink can on yellow, an anime face on pink, a logo and text on deep blue. */
+function kanjiBillboards(g: CanvasRenderingContext2D): void {
   // Billboard 3: a drink can on yellow with a red band of text.
   g.fillStyle = '#ffd23a';
   g.fillRect(36, 0, 28, 16);
@@ -398,5 +467,40 @@ export function signAtlas(): THREE.CanvasTexture {
   g.fillRect(50, 40, 8, 2);
   g.fillStyle = '#35e8ff';
   g.fillRect(50, 44, 11, 1);
-  return finish(c);
+}
+
+/** Latin billboards (cells 3–5): simple logo shapes beside blocky lettering. */
+function latinBillboards(g: CanvasRenderingContext2D): void {
+  // Billboard 3: a red leaf-like star on white, red lettering bars.
+  g.fillStyle = '#f4f1ea';
+  g.fillRect(36, 0, 28, 16);
+  g.fillStyle = '#d8322a';
+  g.fillRect(41, 3, 2, 10);
+  g.fillRect(38, 6, 8, 3);
+  g.fillRect(39, 4, 6, 2);
+  g.fillRect(48, 4, 13, 3);
+  g.fillRect(48, 9, 9, 2);
+  // Billboard 4: a coffee cup with steam on deep red, cream lettering.
+  g.fillStyle = '#8a1c22';
+  g.fillRect(36, 16, 28, 16);
+  g.fillStyle = '#f2e6cf';
+  g.fillRect(39, 22, 7, 7);
+  g.fillRect(46, 24, 2, 3);
+  g.fillRect(41, 18, 1, 3);
+  g.fillRect(43, 18, 1, 3);
+  g.fillRect(50, 20, 11, 2);
+  g.fillRect(50, 24, 8, 2);
+  g.fillRect(50, 28, 10, 1);
+  // Billboard 5: a white ring logo on blue, white and amber lettering.
+  g.fillStyle = '#1f4fa8';
+  g.fillRect(36, 32, 28, 16);
+  g.fillStyle = '#ffffff';
+  g.fillRect(39, 35, 8, 10);
+  g.fillStyle = '#1f4fa8';
+  g.fillRect(41, 37, 4, 6);
+  g.fillStyle = '#ffffff';
+  g.fillRect(50, 36, 11, 2);
+  g.fillRect(50, 40, 7, 2);
+  g.fillStyle = '#ffc23a';
+  g.fillRect(50, 44, 11, 1);
 }

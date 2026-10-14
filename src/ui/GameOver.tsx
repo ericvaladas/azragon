@@ -4,7 +4,7 @@ export function GameOver({ stats, onRestart, onChangeMonster }: { stats: RunStat
   const t = `${Math.floor(stats.timeSec / 60)}:${String(stats.timeSec % 60).padStart(2, '0')}`;
   return (
     <div className="overlay gameover">
-      <div className="overlay-title">Repelled</div>
+      <div className="overlay-title">Game Over</div>
       <div className="stats">
         <div><span>Survived</span><b>{t}</b></div>
         <div><span>Kills</span><b>{stats.kills}</b></div>

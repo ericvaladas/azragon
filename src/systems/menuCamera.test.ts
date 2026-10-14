@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import { CONFIG } from '../config';
-import { frameHeight, selectPose, titlePose } from './menuCamera';
+import { frameHeight, rosterFrameHeight, selectPose, titlePose } from './menuCamera';
 
 const pose = () => ({ pos: new THREE.Vector3(), look: new THREE.Vector3() });
 
@@ -39,5 +39,12 @@ describe('frameHeight', () => {
     expect(frameHeight({ width: 484, length: 451, height: 344 })).toBe(344);
     expect(frameHeight({ width: 180, length: 617, height: 385 })).toBe(385);
     expect(frameHeight({ width: 760, length: 760, height: 300 })).toBeCloseTo(760 * 0.55);
+  });
+});
+
+describe('rosterFrameHeight', () => {
+  it('frames every monster by the biggest one, so the select camera holds still between picks', () => {
+    const sizes = [{ width: 484, length: 451, height: 344 }, { width: 760, length: 760, height: 300 }, { width: 180, length: 617, height: 385 }];
+    expect(rosterFrameHeight(sizes)).toBeCloseTo(760 * 0.55);
   });
 });

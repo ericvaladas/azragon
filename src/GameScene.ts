@@ -5,7 +5,7 @@ import { Chevrons } from './systems/Chevrons';
 import { edgeArrow } from './systems/edgeArrows';
 import { Lighting } from './render/Lighting';
 import { PixelRenderer } from './render/PixelRenderer';
-import { createSky } from './render/Sky';
+import { createSky, skyColors } from './render/Sky';
 import { clampDelta, yawTo, type Vec2 } from './util/math';
 import { resolveHit, type DamageSource, type Target } from './combat';
 import { City, CRATER_RADIUS } from './world/City';
@@ -34,7 +34,8 @@ import { Artillery } from './enemies/Artillery';
 import { LaserTrucks } from './enemies/LaserTrucks';
 import { OrbitalLaser } from './enemies/OrbitalLaser';
 import { mulberry32 } from './util/rng';
-import { pickCity } from './cities';
+import { forcedCity, pickCity } from './cities';
+import type { CityStyle } from './cities/types';
 import { Progression, expToNext } from './systems/Progression';
 import { healOnKill, regen } from './monster/vitals';
 import { DebugOverlay } from './systems/DebugOverlay';
@@ -56,18 +57,21 @@ import { decide, nearestInRange, type BrainOrder, type BrainTarget } from './mon
 import { assignStrikes } from './monsters/kraken/strikes';
 import type { ArmStrike } from './monsters/kraken/TentacleArms';
 import { INSECT } from './monsters/insect/kind';
-import { backhandYaw, bearingTo, fistKind, type FistKind } from './monsters/golem/fist';
-import { auraOn, coolHeat, coreDamageMult, heatAfterHit } from './monsters/golem/heat';
-import { ShadowHands } from './monsters/golem/ShadowHands';
-import { WitherAura } from './monsters/golem/WitherAura';
-import { RotRing } from './monsters/golem/RotRing';
-import { burnIntensity, GAZE, gazing } from './monsters/golem/gaze';
+import { backhandYaw, bearingTo, fistKind, type FistKind } from './monsters/wendigo/fist';
+import { auraOn, coolHeat, coreDamageMult, heatAfterHit } from './monsters/wendigo/heat';
+import { ShadowHands } from './monsters/wendigo/ShadowHands';
+import { WitherAura } from './monsters/wendigo/WitherAura';
+import { RotRing } from './monsters/wendigo/RotRing';
+import { burnIntensity, GAZE, gazing } from './monsters/wendigo/gaze';
 import { KINDS, ROSTER_ORDER, isMonsterId, rosterEntries } from './monsters/roster';
 import { loadPick, savePick, type PickStore } from './monsters/pick';
 import type { MonsterKind } from './monsters/types';
 import { flowNext } from './menuFlow';
 import { Splasher } from './systems/splash';
-import { frameHeight, selectPose, titlePose } from './systems/menuCamera';
+import { rosterFrameHeight, selectPose, titlePose } from './systems/menuCamera';
+
+/** The select camera frames every monster the same, by the biggest one. */
+const SELECT_FRAME = rosterFrameHeight(Object.values(KINDS).map((k) => k.stats.size));
 
 type Order = { kind: 'move'; to: Vec2 } | { kind: 'attack'; target: Target } | null;
 
@@ -109,6 +113,8 @@ export class GameScene {
   private enemies: EnemyRegistry;
   private ctx!: WorldContext;
   private rng = mulberry32(CONFIG.world.seed + 7);
+  /** Runs started; a dev `?city=` list is followed in this order. */
+  private runs = 0;
   private progression = new Progression(mulberry32(CONFIG.world.seed + 13));
   private runTime = 0;
   private openingDone = false;
@@ -137,6 +143,8 @@ export class GameScene {
   private wither: WitherAura;
   private rotRing: RotRing;
   /** Dread Gaze and Evil Eye: targets burning with black fire until it flares. */
+  /** The Insect's ranged target (the one its spikes go to): its tail aims the stinger there. */
+  private spikeAim: Target | null = null;
   private gazes: { target: Target; at: THREE.Vector3; t: number; dur: number; damage: number; eye: boolean; lit: boolean; flared: boolean }[] = [];
   /** Rending Claws in flight: its kind and side (+1 left/+X, −1 right), both latched when the strike starts. */
   private fistStrike: FistKind = 'slam';
@@ -152,10 +160,14 @@ export class GameScene {
 
   constructor(private container: HTMLDivElement, private store: PickStore | null = null) {
     this.pixel = new PixelRenderer(container);
-    this.lighting = new Lighting(this.scene);
-    this.lighting.attachSky(createSky(this.scene));
+    const style = this.cityFor(0);
+    this.lighting = new Lighting(this.scene, style.atmosphere);
+    const sky = createSky(this.scene, style.atmosphere);
+    this.lighting.attachSky(sky);
 
-    this.city = new City(this.scene, pickCity(this.rng), CONFIG.world.seed, this.onTargetDestroyed);
+    this.city = new City(this.scene, style, CONFIG.world.seed, this.onTargetDestroyed);
+    // From here on every city.reset(style) swaps sky, fog, lights and window glow with the city.
+    this.city.attachAtmosphere({ fog: this.scene.fog as THREE.Fog, sky: skyColors(sky), hemi: this.lighting.hemi, sun: this.lighting.sun, sunDir: this.lighting.sunDir });
     this.monster = new Monster(this.scene, INSECT);
     this.progression.setPool(this.monster.kind);
     this.rig = new CameraRig(this.camera);
@@ -198,7 +210,7 @@ export class GameScene {
     this.monster.onFootLand = (p) => {
       this.particles.ring('dust', p, 60, 7);
       this.splasher.at(p);
-      if (this.monster.kind.id === 'golem') {
+      if (this.monster.kind.id === 'wendigo') {
         // Dark dust and crumbs of rot kicked up from under the claws and hooves.
         this.particles.emit('shade', this.tmpV.copy(p).setY(10), 3, 0.9);
         this.particles.emit('rot', this.tmpV.copy(p).setY(10), 3, 0.8);
@@ -243,6 +255,7 @@ export class GameScene {
         this.pressAbility(id);
         return true;
       },
+      escape: () => this.togglePause(),
       konami: this.cheatLevelUp,
     });
 
@@ -291,8 +304,31 @@ export class GameScene {
     if (this.state === 'paused') this.setState(this.stateBeforePause);
   }
 
+  /** Escape: open the pause menu mid-run (also over the level-up cards), or close it. True when it did either. */
+  togglePause(): boolean {
+    if (this.state === 'paused') {
+      this.resume();
+      return true;
+    }
+    if (this.state !== 'playing' && this.state !== 'levelup') return false;
+    this.pause();
+    return true;
+  }
+
+  /** Pause menu → Exit Game: abandon the run and go back to the title screen. */
+  exitToTitle(): void {
+    if (flowNext(this.state, 'exit') === null) return;
+    this.resetRun();
+    this.enterTitle();
+  }
+
+  /** The city for run `run`: in dev builds the `?city=` list's entry when it names a known city, else a random pick. */
+  private cityFor(run: number): CityStyle {
+    return (import.meta.env.DEV ? forcedCity(location.search, run) : null) ?? pickCity(this.rng);
+  }
+
   private resetRun(): void {
-    this.city.reset(pickCity(this.rng));
+    this.city.reset(this.cityFor(this.runs++));
     this.projectiles.clear();
     this.breath.clear();
     this.monster.body.arms?.clear();
@@ -326,6 +362,7 @@ export class GameScene {
     this.brood.clear();
     this.markers.setAim(null, 0);
     this.dyingT = 0;
+    this.spikeAim = null;
   }
 
   /** Game over → Play Again: same monster, fresh world, the intro replays. */
@@ -402,7 +439,7 @@ export class GameScene {
     this.acid.setColor(kind.fx.pool, kind.fx.poolOpacity, kind.fx.poolLift);
     this.novaWave.setColor(kind.fx.nova);
     // The Roar shockwave: the Wendigo's is a ring of shadow; every other monster keeps the stinger yellow.
-    this.shockwave.setColor(kind.id === 'golem' ? CONFIG.golem.colors.shade : CONFIG.palette.stinger);
+    this.shockwave.setColor(kind.id === 'wendigo' ? CONFIG.wendigo.colors.shade : CONFIG.palette.stinger);
     this.breath.clear();
   }
 
@@ -457,7 +494,7 @@ export class GameScene {
   private emitOffer(): void {
     const all = this.cheatLevels > 0;
     const offers = this.progression.offer(all);
-    this.events.emit('levelUpOffer', { seq: this.progression.offerSeq, offers, all });
+    this.events.emit('levelUpOffer', { seq: this.progression.offerSeq, level: this.progression.choosingLevel, offers, all });
   }
 
     private emitThreats(): void {
@@ -565,7 +602,9 @@ export class GameScene {
         this.tentacleSlams();
         this.monster.body.arms?.update(dt, CONFIG.kraken.arms.spinTime, this.onArmImpact);
         // The head turns to the breath's aim; the breath fires once the head is on target.
-        this.monster.lookAt = this.breath.busy ? this.breath.aimPoint : this.gazeLook();
+        // (The Insect aims its tail at its ranged target the same way.)
+        const aim = this.spikeAim?.isAlive() ? this.spikeAim.position : null;
+        this.monster.lookAt = this.breath.busy ? this.breath.aimPoint : (this.gazeLook() ?? aim);
         const headOnTarget = this.monster.aimError() < CONFIG.kaiju.neck.aimTolerance;
         this.breath.update(dt, this.monster.rangedOrigin(this.jaws), this.monster.position, this.ms.rangedRange, headOnTarget, this.onBreathFire);
         const melting = this.passives.meltdown(this.monster.hp / this.monster.maxHp).active;
@@ -601,7 +640,7 @@ export class GameScene {
       const dm = this.dmgMult();
       this.acid.update(dt, this.enemyTargets(), dm);
       // The Wendigo's patches of black fire keep burning.
-      if (this.monster.kind.id === 'golem') {
+      if (this.monster.kind.id === 'wendigo') {
         for (let n = Math.floor(dt * Math.min(70, this.acid.count * 22) + Math.random()); n > 0 && this.acid.randomPoint(this.tmpV); n--) {
           this.particles.emit(Math.random() < 0.2 ? 'hexember' : Math.random() < 0.15 ? 'shade' : 'hexfire', this.tmpV, 1, 0.25);
         }
@@ -628,7 +667,7 @@ export class GameScene {
     if (shown === 'title' || shown === 'select') {
       if (!frozen) this.menuT += realDt;
       if (shown === 'title') titlePose(this.menuT, this.menuPose);
-      else selectPose(this.menuT, frameHeight(this.ms.size), this.camera.aspect, this.menuPose);
+      else selectPose(this.menuT, SELECT_FRAME, this.camera.aspect, this.menuPose);
       this.camera.position.copy(this.menuPose.pos);
       this.camera.lookAt(this.menuPose.look);
     } else if (!this.intro.active) {
@@ -712,7 +751,7 @@ export class GameScene {
       this.particles.ring('dust', p, L.landRadius, 26);
       this.particles.emit('debris', p.clone().setY(20), 16, 1.6);
       this.rig.addTrauma(0.55);
-      if (this.monster.kind.id === 'golem') {
+      if (this.monster.kind.id === 'wendigo') {
         this.particles.ring('rot', p, 220, 18);
         this.particles.ring('shade', p, 260, 14);
       }
@@ -733,7 +772,7 @@ export class GameScene {
       }
       this.particles.ring('dust', p, R.radius * 0.5, 30);
       this.rig.addTrauma(0.7);
-      if (this.monster.kind.id === 'golem') {
+      if (this.monster.kind.id === 'wendigo') {
         // A black miasma bursts off its back and rolls out with the shockwave.
         for (let i = 0; i < 3; i++) this.particles.emit('shade', this.monster.launchOrigin(this.tmpV), 8, 1.4);
         this.particles.emit('shade', this.bodyPoint(560), 16, 1.8);
@@ -972,7 +1011,7 @@ export class GameScene {
     for (const t of footTargets({ x: p.x, z: p.z }, radius, this.enemyTargets())) t.applyDamage(dmg);
     this.particles.ring(this.monster.kind.fx.particle, p, radius * 0.6, 24);
     // Withering Ring: black smoke and rot roll out across the ground in widening bands.
-    if (this.monster.kind.id === 'golem') {
+    if (this.monster.kind.id === 'wendigo') {
       this.rotRing.start(p, radius);
       for (const k of [0.25, 0.55, 0.85]) {
         this.particles.ring('shade', p, radius * k, 22);
@@ -1182,7 +1221,7 @@ export class GameScene {
    */
   private fistImpact(p: THREE.Vector3): void {
     const m = this.monster;
-    const F = CONFIG.golem.fist;
+    const F = CONFIG.wendigo.fist;
     const s = this.progression.stats;
     const from = { x: m.position.x, z: m.position.z };
     const dmg = this.ms.meleeDamage * this.dmgMult();
@@ -1252,6 +1291,11 @@ export class GameScene {
         : groundOnly ? this.enemyTargets().filter((t) => !t.airborne && Math.hypot(t.position.x - pos.x, t.position.z - pos.z) > reach)
         : this.enemyTargets();
       const auto = nearestInRange(pos, rangedPool, this.ms.rangedRange);
+      if (m.kind.ranged === 'spikes') {
+        const o = this.order?.kind === 'attack' ? this.order.target : null;
+        const orderedInRange = o && o.isAlive() && Math.hypot(o.position.x - pos.x, o.position.z - pos.z) <= this.ms.rangedRange ? o : null;
+        this.spikeAim = orderedInRange ?? auto;
+      } else this.spikeAim = null;
       const autoMelee = nearestInRange(pos, this.enemyTargets().filter((t) => !t.airborne), this.ms.meleeRange);
       if (this.order?.kind === 'attack' && this.order.target.airborne && groundOnly) {
         this.order = null;
@@ -1286,10 +1330,10 @@ export class GameScene {
         // Rending Claws: slam or backhand is decided once, here at the start, and the body is told it (so the pose
         // is the strike the damage uses); the backhand swings on its own slower timeline.
         if (shape.kind === 'fist') {
-          this.fistStrike = fistKind(bearingTo(pos, m.yaw, plan.point), CONFIG.golem.fist.frontHalf);
+          this.fistStrike = fistKind(bearingTo(pos, m.yaw, plan.point), CONFIG.wendigo.fist.frontHalf);
           this.fistSide = plan.leg === FRONT_LEFT ? 1 : -1;
         }
-        if (shape.kind === 'fist') m.startMelee(s.cooldownMult, plan.leg, plan.point, this.fistStrike === 'backhand' ? CONFIG.golem.fist.backhandTiming : undefined, this.fistStrike);
+        if (shape.kind === 'fist') m.startMelee(s.cooldownMult, plan.leg, plan.point, this.fistStrike === 'backhand' ? CONFIG.wendigo.fist.backhandTiming : undefined, this.fistStrike);
         else m.startMelee(s.cooldownMult, plan.leg, plan.point);
       }
       if (d.attack === 'ranged') this.fireRanged(d.attackOn === 'order' && this.order?.kind === 'attack' ? this.order.target : auto);
@@ -1340,7 +1384,7 @@ export class GameScene {
 
   /**
    * Dread Gaze: the Wendigo looks at the target and its nearest ground neighbours (1 + extra-projectile upgrades);
-   * each one bursts into black fire, which flares and does the damage after CONFIG.golem.gaze.delay. Nothing travels.
+   * each one bursts into black fire, which flares and does the damage after CONFIG.wendigo.gaze.delay. Nothing travels.
    */
   private gazeAt(target: Target | null): void {
     if (!target || target.airborne) return;
@@ -1351,7 +1395,7 @@ export class GameScene {
       .filter((t) => t.isAlive() && !t.airborne && Math.hypot(t.position.x - from.x, t.position.z - from.z) <= this.ms.rangedRange)
       .sort((a, b) => a.position.distanceToSquared(target.position) - b.position.distanceToSquared(target.position));
     const dmg = this.ms.rangedDamage * this.dmgMult();
-    for (const t of spikeTargets(target, others, count)) this.curse(t, CONFIG.golem.gaze.delay, dmg, false);
+    for (const t of spikeTargets(target, others, count)) this.curse(t, CONFIG.wendigo.gaze.delay, dmg, false);
     m.consumeRanged(this.rangedCdMult());
   }
 
@@ -1382,7 +1426,7 @@ export class GameScene {
       }
       if (!g.flared && g.t >= g.dur) {
         g.flared = true;
-        this.blackFlare(g.at.clone().setY(0), g.eye ? this.passives.mortarSplash() : CONFIG.golem.gaze.splash, g.damage, !g.eye);
+        this.blackFlare(g.at.clone().setY(0), g.eye ? this.passives.mortarSplash() : CONFIG.wendigo.gaze.splash, g.damage, !g.eye);
       }
       if (!gazing(g.t, g.dur)) this.gazes.splice(i, 1);
     }
@@ -1402,7 +1446,7 @@ export class GameScene {
       this.particles.emit('hexfire', t.position, 4, 0.5);
       t.applyDamage(damage);
     }
-    if (patch && this.state === 'playing') this.acid.add(p, CONFIG.golem.gaze.poolRadius, CONFIG.golem.gaze.poolLife);
+    if (patch && this.state === 'playing') this.acid.add(p, CONFIG.wendigo.gaze.poolRadius, CONFIG.wendigo.gaze.poolLife);
     this.particles.ring('hexfire', p, r, 16);
     this.particles.emit('hexfire', this.tmpV.copy(p).setY(15), 12, 1);
     this.particles.emit('hexember', this.tmpV, 8, 1);

@@ -2,10 +2,12 @@ import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import { CONFIG } from '../config';
 import { TOKYO } from '../cities/tokyo';
+import { TORONTO } from '../cities/toronto';
 import type { CityStyle } from '../cities/types';
+import type { AtmosphereTargets } from '../render/atmosphere';
 import { City, CRATER_RADIUS, SlotPool, patchFoamShader } from './City';
 import { chunksInRadius, CRANE_PORTAL, generateChunk } from './chunks';
-import { craneGeometry } from './crane';
+import { DEFAULT_CRANE_COLORS, craneGeometry } from './crane';
 import { isWater, PITCH } from './roads';
 import type { CityTextures } from './pixelTextures';
 import type { Target } from '../combat';
@@ -636,5 +638,135 @@ describe('City: the Rainbow Bridge (a span landmark)', () => {
     const t = hits(city, span.from, 2)!;
     city.blast({ x: 0, z: 0 }, CRATER_RADIUS, true, CRATER_RADIUS * CONFIG.intro.impact.outer);
     expect(t.isAlive()).toBe(true);
+  });
+});
+
+describe('City atmosphere', () => {
+  const DUSK: CityStyle = {
+    ...TOKYO,
+    id: 'dusk',
+    atmosphere: { ...TOKYO.atmosphere, fog: 0xe9a985, skyZenith: 0x4b4a8c, sun: 0xffa25a, sunIntensity: 2, sunDir: { x: -0.9, y: 0.3, z: 0.2 }, windowGlow: { color: 0xffc46b, strength: 0.5 } },
+  };
+  const targets = (): Omit<AtmosphereTargets, 'windowGlow'> => ({
+    fog: new THREE.Fog(0x000000, 1, 2),
+    sky: { zenith: new THREE.Color(), horizon: new THREE.Color() },
+    hemi: new THREE.HemisphereLight(),
+    sun: new THREE.DirectionalLight(),
+    sunDir: new THREE.Vector3(),
+  });
+  const snap = (city: City, t: Omit<AtmosphereTargets, 'windowGlow'>) => ({
+    fog: t.fog.color.getHex(), near: t.fog.near, far: t.fog.far, zenith: t.sky.zenith.getHex(), horizon: t.sky.horizon.getHex(),
+    hemi: t.hemi.color.getHex(), ground: t.hemi.groundColor.getHex(), hemiI: t.hemi.intensity,
+    sun: t.sun.color.getHex(), sunI: t.sun.intensity, dir: t.sunDir.toArray(), glow: city.windowGlow.getHex(),
+  });
+
+  it("starts with no window glow for Tokyo, before anything is attached", () => {
+    const { city } = make();
+    expect(city.windowGlow.getHex()).toBe(0);
+  });
+
+  it("applies the style's atmosphere when attached and on every reset: Tokyo → dusk → Tokyo restores everything", () => {
+    const { city } = make();
+    const t = targets();
+    city.attachAtmosphere(t);
+    const tokyo = snap(city, t);
+    expect(tokyo.fog).toBe(CONFIG.palette.fog);
+    expect([tokyo.near, tokyo.far]).toEqual([CONFIG.fog.near, CONFIG.fog.far]);
+    city.reset(DUSK);
+    const dusk = snap(city, t);
+    expect(dusk.fog).toBe(0xe9a985);
+    expect(dusk.zenith).toBe(0x4b4a8c);
+    expect(dusk.sun).toBe(0xffa25a);
+    expect(dusk.dir[0]).toBeLessThan(0);
+    expect(dusk.glow).not.toBe(0);
+    city.reset(TOKYO);
+    expect(snap(city, t)).toEqual(tokyo);
+  });
+});
+
+describe('City style switch', () => {
+  const vertexHexes = (g: THREE.BufferGeometry) => {
+    const a = g.getAttribute('color');
+    const out = new Set<number>();
+    for (let i = 0; i < a.count; i++) out.add(new THREE.Color(a.getX(i), a.getY(i), a.getZ(i)).getHex());
+    return out;
+  };
+  const LATIN: CityStyle = {
+    ...TOKYO,
+    id: 'latin',
+    glyphs: 'latin',
+    colors: { ...TOKYO.colors, water: 0x3d8fa8 },
+    cranes: { colors: { main: 0x2255aa, band: 0xffffff, machinery: 0x444444 } },
+  };
+
+  it('rebuilds the sign atlas for the glyph set, repaints cranes and water on reset, and restores Tokyo after', () => {
+    const asked: string[] = [];
+    const textures: CityTextures = { ...STUB, signs: (g) => (asked.push(g), new THREE.Texture()) };
+    const city = new City(new THREE.Scene(), TOKYO, CONFIG.world.seed, () => {}, textures);
+    const m = city as unknown as { waterMesh: THREE.InstancedMesh; craneMesh: THREE.InstancedMesh };
+    const water = () => (m.waterMesh.material as THREE.MeshToonMaterial).color.getHex();
+    expect(water()).toBe(0x3f8fc9);
+    expect(vertexHexes(m.craneMesh.geometry).has(DEFAULT_CRANE_COLORS.main)).toBe(true);
+    city.reset(LATIN);
+    expect(water()).toBe(0x3d8fa8);
+    expect(vertexHexes(m.craneMesh.geometry).has(0x2255aa)).toBe(true);
+    city.reset(TOKYO);
+    expect(asked).toEqual(['kanji', 'latin', 'kanji']);
+    expect(water()).toBe(0x3f8fc9);
+    const hexes = vertexHexes(m.craneMesh.geometry);
+    expect(hexes.has(DEFAULT_CRANE_COLORS.main)).toBe(true);
+    expect(hexes.has(0x2255aa)).toBe(false);
+  });
+});
+
+describe('City (Toronto)', () => {
+  const targets = (): Omit<AtmosphereTargets, 'windowGlow'> => ({
+    fog: new THREE.Fog(0x000000, 1, 2),
+    sky: { zenith: new THREE.Color(), horizon: new THREE.Color() },
+    hemi: new THREE.HemisphereLight(),
+    sun: new THREE.DirectionalLight(),
+    sunDir: new THREE.Vector3(),
+  });
+
+  it('loads every landmark, and keeps them and every hand-placed lot standing through the crash blast', () => {
+    const { city } = make(TORONTO);
+    expect(city.landmarkCount()).toBe(TORONTO.landmarks.length);
+    const at = (x: number, z: number): Target | null => {
+      let t: Target | null = null;
+      city.forEachStandingInRadius({ x, z }, 2, (b) => { if (b.position.x === x && b.position.z === z) t = b; });
+      return t;
+    };
+    const targets = [...TORONTO.landmarks, ...TORONTO.specialLots].map((s) => at(s.x, s.z));
+    for (const t of targets) expect(t).not.toBeNull();
+    city.blast({ x: 0, z: 0 }, CRATER_RADIUS, true, CRATER_RADIUS * CONFIG.intro.impact.outer);
+    for (const t of targets) expect(t!.isAlive()).toBe(true);
+  });
+
+  it('switches Tokyo → Toronto → Tokyo, restoring atmosphere, glyphs, water, cranes and the road network exactly', () => {
+    const asked: string[] = [];
+    const textures: CityTextures = { ...STUB, signs: (g) => (asked.push(g), new THREE.Texture()) };
+    const city = new City(new THREE.Scene(), TOKYO, CONFIG.world.seed, () => {}, textures);
+    const t = targets();
+    city.attachAtmosphere(t);
+    const water = () => ((city as unknown as { waterMesh: THREE.InstancedMesh }).waterMesh.material as THREE.MeshToonMaterial).color.getHex();
+    const snap = () => ({
+      fog: t.fog.color.getHex(), near: t.fog.near, far: t.fog.far, zenith: t.sky.zenith.getHex(), horizon: t.sky.horizon.getHex(),
+      hemi: t.hemi.color.getHex(), hemiI: t.hemi.intensity, sun: t.sun.color.getHex(), sunI: t.sun.intensity, dir: t.sunDir.toArray(),
+      glow: city.windowGlow.getHex(), water: water(), roads: city.roadNetworkCount(), cranes: city.craneCount(), landmarks: city.landmarkCount(),
+    });
+    const tokyo = snap();
+    city.reset(TORONTO);
+    const toronto = snap();
+    expect(toronto.fog).toBe(TORONTO.atmosphere.fog);
+    expect(toronto.near).toBe(TORONTO.atmosphere.fogNear ?? CONFIG.fog.near);
+    expect(toronto.sun).toBe(TORONTO.atmosphere.sun);
+    expect(toronto.dir[0]).toBeLessThan(0);
+    expect(toronto.glow).not.toBe(0);
+    expect(toronto.water).toBe(TORONTO.colors.water);
+    expect(toronto.cranes).toBe(0);
+    expect(toronto.landmarks).toBe(TORONTO.landmarks.length);
+    city.reset(TOKYO);
+    expect(snap()).toEqual(tokyo);
+    expect(asked).toEqual(['kanji', 'latin', 'kanji']);
   });
 });

@@ -115,10 +115,13 @@ export function blackAt(t: number): number {
   return 1 - u * u * (3 - 2 * u);
 }
 
-/** Fog for a camera this high: pushed out while it looks down from altitude (so the city shows), the game's fog near the ground. */
-export function introFog(camY: number, out: { near: number; far: number }): { near: number; far: number } {
-  out.near = Math.max(CONFIG.fog.near, camY * 1.1);
-  out.far = Math.max(CONFIG.fog.far, camY * 2.6);
+/**
+ * Fog for a camera this high: pushed out while it looks down from altitude (so the city shows), the city's fog
+ * (`base`, CONFIG.fog by default) near the ground.
+ */
+export function introFog(camY: number, out: { near: number; far: number }, base: { near: number; far: number } = CONFIG.fog): { near: number; far: number } {
+  out.near = Math.max(base.near, camY * 1.1);
+  out.far = Math.max(base.far, camY * 2.6);
   return out;
 }
 

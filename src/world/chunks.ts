@@ -2,7 +2,7 @@ import { CONFIG } from '../config';
 import { mulberry32, pick, range } from '../util/rng';
 import type { BuildingSpec, CityStyle, DistrictRules, LandmarkSpec, SignDef, YardRules } from '../cities/types';
 import { hash2 } from '../cities/noise';
-import { AVENUE_WIDTH, PITCH, isBay, isIsland, isWater, lineWidth, segmentAt, type Axis, type Segment } from './roads';
+import { AVENUE_WIDTH, PITCH, isBay, blockDistrict, isIsland, isWater, lineWidth, segmentAt, type Axis, type Segment } from './roads';
 
 export type { BuildingSpec } from '../cities/types';
 export type TreeSpec = { x: number; z: number; s: number };
@@ -70,7 +70,8 @@ function wallEnds(style: CityStyle, i: number, j: number, di: number, dj: number
 /**
  * `roads`: existing segments whose start node lies in the chunk. `nodes`: the chunk's intersections that have at
  * least one incident segment. `water`: the chunk's water cells (river and bay). `quays`: the chunk's port cells, by
- * centre, drawn as paving pads. `cranes`: gantry cranes on the chunk's coastal port cells. `seaWall`: one entry per land-cell edge that borders
+ * centre, drawn as paving pads. `lawns`: the chunk's residential cells off the crater, by centre, when the style has a
+ * lawn colour (drawn as green pads under the houses). `cranes`: gantry cranes on the chunk's coastal port cells. `seaWall`: one entry per land-cell edge that borders
  * a bay cell, emitted by the chunk owning the land cell.
  */
 export type ChunkContent = {
@@ -78,6 +79,7 @@ export type ChunkContent = {
   trees: TreeSpec[];
   parks: ParkSpec[];
   quays: ParkSpec[];
+  lawns: ParkSpec[];
   cranes: CraneSpec[];
   landmarks: LandmarkSpec[];
   roads: Segment[];
@@ -138,8 +140,10 @@ export function maxLoadedChunks(): number {
   }
   return max;
 }
-/** Per-chunk caps, so a full load of the densest districts still fits the pools. */
-export const BUILDINGS_PER_CHUNK = Math.floor(CONFIG.world.maxBuildings / maxLoadedChunks());
+/** Per-chunk caps, so a full load of the densest districts still fits the pools. Buildings: the base cap (Tokyo's). */
+export const BUILDINGS_PER_CHUNK = CONFIG.world.buildingsPerChunk;
+/** A city's per-chunk building cap: the base cap times its buildingCapScale. */
+export const buildingsPerChunk = (style: CityStyle): number => Math.floor(BUILDINGS_PER_CHUNK * (style.buildingCapScale ?? 1));
 export const SIGNS_PER_CHUNK = Math.floor(CONFIG.world.maxSigns / maxLoadedChunks());
 export const TREES_PER_CHUNK = Math.floor(CONFIG.world.maxTrees / maxLoadedChunks());
 
@@ -253,7 +257,7 @@ const coastal = (style: CityStyle, i: number, j: number): boolean => !isWater(st
  * the water.
  */
 function craneAt(style: CityStyle, seed: number, i: number, j: number): CraneSpec | null {
-  if (!coastal(style, i, j) || !style.bay) return null;
+  if (style.cranes === false || !coastal(style, i, j) || !style.bay) return null;
   const h = hash2(i, j, seed + 57);
   for (let di = -1; di <= 1; di++) for (let dj = -1; dj <= 1; dj++) {
     if ((di || dj) && coastal(style, i + di, j + dj) && hash2(i + di, j + dj, seed + 57) <= h) return null;
@@ -279,9 +283,10 @@ function craneAt(style: CityStyle, seed: number, i: number, j: number): CraneSpe
  * lanes. Beside an avenue the inset adds an AVENUE_PAVEMENT band, lined with a row of street trees in every built
  * block off the crash site (not water, landmark or park cells; a tree inside a building's footprint is skipped).
  * Landmarks claim their block (the chunk holding the landmark's centre, or a long landmark's `from` end, owns it); special lots replace the random lots
- * they overlap; the crash site is never a park. Per-chunk caps thin the random buildings (never special lots), then
+ * they overlap (in a park block, they stand on the green and no park tree grows inside one); the crash site is never a park. Per-chunk caps thin the random buildings (never special lots), then
  * their signs, then the trees (other trees before avenue rows). Port cells are paved quays of container blocks and
- * warehouses with cranes along the water (no warehouse on a crane's sea side, nothing in its portal), and no trees. Island cells use the style's islandRules (its centre park
+ * warehouses with cranes along the water (no warehouse on a crane's sea side, nothing in its portal), and no trees. With a
+ * lawn colour, residential cells off the crater (and off the island) also get a lawn pad. Island cells use the style's islandRules (its centre park
  * aside) and get no street, avenue or lane trees. Same inputs, same chunk.
  */
 export function generateChunk(style: CityStyle, seed: number, cx: number, cz: number): ChunkContent {
@@ -294,6 +299,7 @@ export function generateChunk(style: CityStyle, seed: number, cx: number, cz: nu
   const avenueTrees: TreeSpec[] = [];
   const parks: ParkSpec[] = [];
   const quays: ParkSpec[] = [];
+  const lawns: ParkSpec[] = [];
   const cranes: CraneSpec[] = [];
   const landmarks: LandmarkSpec[] = [];
   const water: WaterSpec[] = [];
@@ -339,31 +345,35 @@ export function generateChunk(style: CityStyle, seed: number, cx: number, cz: nu
       if (landmark) {
         if (!craterSite) landmarks.push(landmark);
         // A landmark in a park stands on the park's green (Tokyo Tower in Shiba Park); one in the port on the quay.
-        const district = style.districtAt(bx, bz);
+        const district = blockDistrict(style, bx, bz);
         if (!craterSite && district === 'park') parks.push({ x: bx, z: bz });
         if (!craterSite && district === 'port') quays.push({ x: bx, z: bz });
         continue;
       }
-      let district = style.districtAt(bx, bz);
+      let district = blockDistrict(style, bx, bz);
       if (craterSite && district === 'park') district = 'office';
       const island = isIsland(style, bi, bj);
-      const rules = island && district !== 'park' && style.islandRules ? style.islandRules : style.districts[district];
+      const rules = island && district !== 'park' && style.islandRules ? style.islandRules : (style.blockRules?.(bx, bz) ?? style.districts[district]);
+      const palette = style.blockColors?.(bx, bz) ?? rules.colors;
       const crane = district === 'port' ? craneAt(style, seed, bi, bj) : null;
       if (district === 'port') quays.push({ x: bx, z: bz });
       if (crane) cranes.push(crane);
+      if (district === 'residential' && style.colors.lawn !== undefined && !craterSite && !island) lawns.push({ x: bx, z: bz });
 
+      const blockSpecials = style.specialLots.filter((s) => blockOf(s.x) === bi && blockOf(s.z) === bj);
+      for (const s of blockSpecials) specials.push({ ...s, signs: s.signs.map((g) => ({ ...g })) });
       if (district === 'park') {
+        // A special lot in a park (a college hall on its lawn) stands among the trees: none grows inside it.
         parks.push({ x: bx, z: bz });
         const count = Math.round(range(rng, style.parkTrees[0], style.parkTrees[1]));
         for (let t = 0; t < count; t++) {
-          trees.push({ x: ix + range(rng, -iw / 2, iw / 2), z: iz + range(rng, -id / 2, id / 2), s: range(rng, 14, 26) });
+          const tree = { x: ix + range(rng, -iw / 2, iw / 2), z: iz + range(rng, -id / 2, id / 2), s: range(rng, 14, 26) };
+          if (!blockSpecials.some((s) => overlaps(s, { ...tree, w: 0, d: 0 }, 6))) trees.push(tree);
         }
         continue;
       }
 
-      const blockSpecials = style.specialLots.filter((s) => blockOf(s.x) === bi && blockOf(s.z) === bj);
       const firstBuilding = buildings.length;
-      for (const s of blockSpecials) specials.push({ ...s, signs: s.signs.map((g) => ({ ...g })) });
 
       const n = rules.lots;
       const lotW = iw / n;
@@ -394,7 +404,7 @@ export function generateChunk(style: CityStyle, seed: number, cx: number, cz: nu
         const bd = lotD * range(rng, rules.footprint[0], rules.footprint[1]);
         const h = rules.height[0] + (rules.height[1] - rules.height[0]) * Math.pow(rng(), rules.heightCurve);
         const facade = pick(rules.facades, rng);
-        const color = pick(rules.colors, rng);
+        const color = pick(palette, rng);
         const central = Math.abs(r.lx - midX) <= 200 && Math.abs(r.lz - midZ) <= 200;
         const signs = makeSigns(rules, style, bw, bd, h, central && !billboardPlaced, rng);
         if (signs.some((s) => s.kind === 'billboard')) billboardPlaced = true;
@@ -457,8 +467,8 @@ export function generateChunk(style: CityStyle, seed: number, cx: number, cz: nu
         const [ai, aj] = axis === 'x' ? [i, j - 1] : [i - 1, j];
         // The island has no streets at all, so its lattice lines are no lanes.
         if (isWater(style, ai, aj) || isWater(style, i, j) || isIsland(style, ai, aj) || isIsland(style, i, j)) continue;
-        const da = style.districtAt((ai + 0.5) * pitch + ROAD_ORIGIN, (aj + 0.5) * pitch + ROAD_ORIGIN);
-        const db = style.districtAt((i + 0.5) * pitch + ROAD_ORIGIN, (j + 0.5) * pitch + ROAD_ORIGIN);
+        const da = blockDistrict(style, (ai + 0.5) * pitch + ROAD_ORIGIN, (aj + 0.5) * pitch + ROAD_ORIGIN);
+        const db = blockDistrict(style, (i + 0.5) * pitch + ROAD_ORIGIN, (j + 0.5) * pitch + ROAD_ORIGIN);
         if ((!lane(da) && !lane(db)) || da === 'port' || db === 'port') continue;
         for (const f of [0.25, 0.5, 0.75]) {
           const x = (axis === 'x' ? i + f : i) * pitch + ROAD_ORIGIN;
@@ -470,7 +480,7 @@ export function generateChunk(style: CityStyle, seed: number, cx: number, cz: nu
   }
 
   // Caps: thin random buildings evenly (deterministic), never special lots; then trim signs.
-  const room = Math.max(0, BUILDINGS_PER_CHUNK - specials.length);
+  const room = Math.max(0, buildingsPerChunk(style) - specials.length);
   let kept = buildings;
   if (buildings.length > room) {
     const order = buildings.map((_, k) => ({ k, r: rng() })).sort((a, b) => a.r - b.r).slice(0, room).map((o) => o.k).sort((a, b) => a - b);
@@ -498,7 +508,7 @@ export function generateChunk(style: CityStyle, seed: number, cx: number, cz: nu
   };
   const keptAvenue = thin(avenueTrees, TREES_PER_CHUNK);
   const keptTrees = [...keptAvenue, ...thin(trees, TREES_PER_CHUNK - keptAvenue.length)];
-  return { buildings: out, trees: keptTrees, parks, quays, cranes, landmarks, roads, nodes, water, seaWall };
+  return { buildings: out, trees: keptTrees, parks, quays, lawns, cranes, landmarks, roads, nodes, water, seaWall };
 }
 
 /** Chunks to load (within loadRadius, nearest first) and to unload (beyond unloadRadius). */

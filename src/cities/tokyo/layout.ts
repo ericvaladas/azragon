@@ -2,6 +2,9 @@ import { CONFIG } from '../../config';
 import { hash2, valueNoise } from '../noise';
 import type { BaySpec, DistrictId, IslandSpec } from '../types';
 import { isIsland } from '../../world/roads';
+import { coastDistance } from '../coast';
+
+export { coastDistance } from '../coast';
 
 /** World metres; north is +Z, west is +X, east is −X. The crash is at the origin. */
 export const SHIBUYA_CROSSING = { x: 200, z: 1000 } as const;
@@ -15,13 +18,6 @@ export const TOKYO_BAY: BaySpec = { dir: { x: -Math.SQRT1_2, z: -Math.SQRT1_2 },
 export const TOKYO_ISLAND: IslandSpec = { center: { x: -2613, z: -1913 }, halfAlong: 350, halfAcross: 450 };
 /** The port: land within this many metres of the coastline (along the bay's dir). */
 export const PORT_DEPTH = 600;
-
-/** Metres from (x, z) to the coastline along the bay's dir: positive inland, negative out in the bay. */
-export function coastDistance(bay: BaySpec, x: number, z: number): number {
-  const along = x * bay.dir.x + z * bay.dir.z;
-  const across = -x * bay.dir.z + z * bay.dir.x;
-  return bay.offset + bay.amp * Math.sin(across / bay.wavelength) - along;
-}
 
 /** Inside this radius the districts are laid by hand (CORE_REGIONS); beyond it, noise. */
 export const CORE_RADIUS = 4000;

@@ -53,6 +53,11 @@ export function isSkipKey(e: { key: string; repeat: boolean; metaKey: boolean; c
   return !e.repeat && !e.metaKey && !e.ctrlKey && !e.altKey && !NOT_SKIP.has(e.key) && !FUNCTION_KEY.test(e.key);
 }
 
+/** The pause-menu key: Escape on its own (not held down, no modifier). */
+export function isEscKey(e: { key: string; repeat: boolean; metaKey: boolean; ctrlKey: boolean; altKey: boolean }): boolean {
+  return e.key === 'Escape' && !e.repeat && !e.metaKey && !e.ctrlKey && !e.altKey;
+}
+
 /** Select-screen keys: browse with arrows (or A/D), confirm with Enter/Space; no repeats or shortcuts. */
 export function menuKey(e: { code: string; repeat: boolean; metaKey: boolean; ctrlKey: boolean; altKey: boolean }): 'left' | 'right' | 'confirm' | null {
   if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return null;

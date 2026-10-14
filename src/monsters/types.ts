@@ -5,9 +5,9 @@ import type { TentacleArms } from './kraken/TentacleArms';
 import type { SwatTiming } from '../monster/tailSwat';
 
 /** Playable creatures (widened as each one is built). */
-export type MonsterId = 'insect' | 'kaiju' | 'kraken' | 'golem';
+export type MonsterId = 'insect' | 'kaiju' | 'kraken' | 'wendigo';
 /** Everything the select carousel shows, including creatures still to come. */
-export type RosterId = 'insect' | 'kaiju' | 'kraken' | 'golem';
+export type RosterId = 'insect' | 'kaiju' | 'kraken' | 'wendigo';
 
 export type MonsterStats = {
   maxHp: number;
@@ -124,7 +124,7 @@ export type MonsterKind = PoolSpec & {
   blurb: string;
   /** Select-screen ratings, 1..5. */
   pips: { toughness: number; power: number; speed: number };
-  moves: readonly { icon: string; label: string }[];
+  moves: readonly { label: string }[];
   stats: MonsterStats;
   melee: MeleeShape;
   /** `gaze`: Dread Gaze (Wendigo): it looks at the target, which bursts into black fire; nothing travels. */
@@ -133,8 +133,6 @@ export type MonsterKind = PoolSpec & {
   antiAir: 'tail' | 'bite' | 'lash' | 'hands';
   /** Fraction of a leap this kind spends crouched on the ground before liftoff (lands at the same moment); 0 when absent. */
   leapCrouch?: number;
-  /** Dash speed multiplier: the same range, covered over CONFIG.abilities.dash.duration / dashSpeed; 1 when absent. */
-  dashSpeed?: number;
   /** Spine Shield intercept-rate multiplier for this kind's version of it; 1 when absent. */
   interceptRate?: number;
   /** This kind's own anti-air timeline (impact, end); the shared SWAT_TIMES when absent. */

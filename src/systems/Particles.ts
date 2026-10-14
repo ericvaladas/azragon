@@ -11,7 +11,7 @@ export type ParticleKind = 'dust' | 'debris' | 'fire' | 'smoke' | 'spark' | 'aci
 type Preset = { color: number; life: number; size0: number; size1: number; speed: number; up: number; gravity: number; drag: number; stretch?: number; fadeFrom?: number };
 
 const P = CONFIG.palette;
-const W = CONFIG.golem.colors;
+const W = CONFIG.wendigo.colors;
 export const PRESETS: Record<ParticleKind, Preset> = {
   dust: { color: P.dust, life: 1.3, size0: 22, size1: 70, speed: 110, up: 40, gravity: -15, drag: 2.2 },
   debris: { color: P.debris, life: 1.6, size0: 12, size1: 8, speed: 160, up: 260, gravity: 420, drag: 0.3 },

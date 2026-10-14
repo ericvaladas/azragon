@@ -2,10 +2,15 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { faceted, painted } from '../render/toon';
 import { CRANE_PORTAL } from './chunks';
+import type { CityStyle, CraneColors } from '../cities/types';
 
-const RED = 0xd23a2c;
-const WHITE = 0xf2f0ea;
-const GREY = 0x6f757b;
+/** Today's crane paint: bold red and white bands, grey machinery (Tokyo, and any style that leaves `cranes` unset). */
+export const DEFAULT_CRANE_COLORS: CraneColors = { main: 0xd23a2c, band: 0xf2f0ea, machinery: 0x6f757b };
+
+/** The style's crane paint (the default when unset or when it has no cranes). */
+export function craneColors(style: CityStyle): CraneColors {
+  return style.cranes ? style.cranes.colors : DEFAULT_CRANE_COLORS;
+}
 
 /** A box from (x0, y0, z0) to (x1, y1, z1). */
 const box = (x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, color: number) =>
@@ -39,7 +44,8 @@ const APEX_Y = 95;
  * 80 m past the front legs along +Z (about 60 m out over the water from its quay), held by stays from an A-frame apex,
  * with a counterweight on the back reach.
  */
-export function craneGeometry(): THREE.BufferGeometry {
+export function craneGeometry(colors: CraneColors = DEFAULT_CRANE_COLORS): THREE.BufferGeometry {
+  const RED = colors.main, WHITE = colors.band, GREY = colors.machinery;
   const parts: THREE.BufferGeometry[] = [];
   const band = 14.5;
   const h = LEG / 2;

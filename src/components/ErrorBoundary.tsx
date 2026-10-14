@@ -36,7 +36,6 @@ export class ErrorBoundary extends Component<Props, State> {
     if (this.state.hasError) {
       return (
         <div className="error-screen">
-          <div className="error-icon">⚠️</div>
           <h2 className="error-title">Something went wrong</h2>
           <p className="error-message">
             {this.state.error?.message || 'An unexpected error occurred'}

@@ -31,3 +31,8 @@ export function selectPose(t: number, monsterHeight: number, aspect: number, out
 export function frameHeight(size: { width: number; length: number; height: number }): number {
   return Math.max(size.height, size.width * 0.55);
 }
+
+/** One framing height for the whole roster (the biggest monster's), so switching picks never moves the camera. */
+export function rosterFrameHeight(sizes: readonly { width: number; length: number; height: number }[]): number {
+  return Math.max(...sizes.map(frameHeight));
+}

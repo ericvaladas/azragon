@@ -1,3 +1,4 @@
+import { CONFIG } from '../../config';
 import type { CityStyle } from '../types';
 import { TOKYO_DISTRICTS, TOKYO_ISLAND_RULES } from './districts';
 import { districtAt, SHIBUYA_CROSSING, TOKYO_BAY, TOKYO_ISLAND, SKYTREE_SITE, TMG_SITE, TOKYO_TOWER_SITE } from './layout';
@@ -19,6 +20,7 @@ export const TOKYO: CityStyle = {
     roof: 0xd4d6d8,
     tree: 0x4c8f39,
     quay: 0xb9b2a4,
+    water: 0x3f8fc9,
   },
   // Magenta, cyan, warm white, yellow, violet: no reds (they belong to threats).
   signColors: [0xff3fb4, 0x35e8ff, 0xfff4d6, 0xffd23a, 0x7a5cff],
@@ -33,11 +35,25 @@ export const TOKYO: CityStyle = {
   ],
   specialLots: SHIBUYA_LOTS,
   overlays: [SCRAMBLE],
-  river: { z0: 1300, amp: 180, wavelength: 900, halfWidth: 130 },
+  river: { c0: 1300, amp: 180, wavelength: 900, halfWidth: 130 },
   bay: TOKYO_BAY,
   island: TOKYO_ISLAND,
   islandRules: TOKYO_ISLAND_RULES,
   // The port matches office and residential (what the coast was before it), so the network there keeps its streets.
   roadRemoval: { highrise: 0.15, neon: 0.15, office: 0.3, residential: 0.3, park: 0.5, port: 0.3 },
   keepNodes: [SHIBUYA_CROSSING],
+  // Today's midday, exactly: the palette and fog in CONFIG, the light intensities and sun direction Lighting used.
+  atmosphere: {
+    skyZenith: CONFIG.palette.skyZenith,
+    skyHorizon: CONFIG.palette.skyHorizon,
+    fog: CONFIG.palette.fog,
+    hemiSky: CONFIG.palette.hemiSky,
+    hemiGround: CONFIG.palette.hemiGround,
+    hemiIntensity: 1.1,
+    sun: CONFIG.palette.sun,
+    sunIntensity: 2.2,
+    sunDir: { x: 0.45, y: 0.8, z: 0.35 },
+    windowGlow: { color: 0xffd27a, strength: 0 },
+  },
+  glyphs: 'kanji',
 };

@@ -84,8 +84,13 @@ export type LandmarkSpec = { id: string; x: number; z: number; w: number; d: num
 /** A ground decal drawn over the road texture, `size` m square, centred on (x, z). */
 export type GroundOverlay = { id: string; x: number; z: number; size: number };
 
-/** A winding river: centreline z = z0 + amp · sin(x / wavelength); cells within halfWidth (vertical) are water. */
-export type RiverSpec = { z0: number; amp: number; wavelength: number; halfWidth: number };
+/**
+ * A winding river. Along axis 'x' (the default: it runs east–west) the centreline is z = c0 + amp · sin(x / wavelength);
+ * along 'z' (north–south) it is x = c0 + amp · sin(z / wavelength). Cells whose centre lies within halfWidth of the
+ * centreline, measured across the axis, are water. With `bankPark`, land blocks within that many blocks of river
+ * water (Chebyshev distance) are park.
+ */
+export type RiverSpec = { axis?: 'x' | 'z'; c0: number; amp: number; wavelength: number; halfWidth: number; bankPark?: number };
 
 /**
  * A coastline: cells whose centre c has dot(c, dir) > offset + amp · sin(dot(c, perp) / wavelength) are sea, with
@@ -97,6 +102,31 @@ export type BaySpec = { dir: { x: number; z: number }; offset: number; amp: numb
 export type IslandSpec = { center: { x: number; z: number }; halfAlong: number; halfAcross: number };
 /** Shape of the coast and island only (what the water tests read). */
 export type Shoreline = { bay?: BaySpec; island?: IslandSpec };
+
+/**
+ * A city's time of day. Colours are hex (sRGB). `sunDir` points from the ground toward the sun (normalised when
+ * applied); fog distances default to CONFIG.fog's. Window glow is added to the facade's window texels as emissive
+ * colour × strength (0 = none).
+ */
+export type Atmosphere = {
+  skyZenith: number;
+  skyHorizon: number;
+  fog: number;
+  fogNear?: number;
+  fogFar?: number;
+  hemiSky: number;
+  hemiGround: number;
+  hemiIntensity: number;
+  sun: number;
+  sunIntensity: number;
+  sunDir: { x: number; y: number; z: number };
+  windowGlow: { color: number; strength: number };
+};
+
+/** Lettering on vertical signs: Tokyo's blocky kanji-like strokes, or Latin capitals. */
+export type GlyphSet = 'kanji' | 'latin';
+/** Gantry crane paint: the bold bands (main and band alternate) and the grey machinery. */
+export type CraneColors = { main: number; band: number; machinery: number };
 
 export type CityStyle = {
   id: string;
@@ -112,6 +142,10 @@ export type CityStyle = {
     tree: number;
     /** Port quay paving, drawn as a pad over each port cell. */
     quay: number;
+    /** River and bay water. */
+    water: number;
+    /** Lawn under every residential block (a full-block pad), when set; unset means no lawns. */
+    lawn?: number;
   };
   /** Neon sign colours (never near the threat reds). */
   signColors: readonly number[];
@@ -135,4 +169,16 @@ export type CityStyle = {
   roadRemoval: Readonly<Record<DistrictId, number>>;
   /** Lattice nodes (world x, z) whose four segments always exist (e.g. the Shibuya Crossing). */
   keepNodes: readonly { x: number; z: number }[];
+  /** Sky, fog, lights and window glow; City.reset applies it. */
+  atmosphere: Atmosphere;
+  /** The sign atlas's lettering. */
+  glyphs: GlyphSet;
+  /** Facade tints for the random buildings of the block at (x, z), replacing its district's; unset or undefined keeps the district's. */
+  blockColors?(x: number, z: number): readonly number[] | undefined;
+  /** Rules for the random buildings of the block at (x, z), replacing its district's; unset or undefined keeps the district's. */
+  blockRules?(x: number, z: number): DistrictRules | undefined;
+  /** Multiplier on CONFIG.world.buildingsPerChunk for this city's per-chunk building cap; unset is 1. */
+  buildingCapScale?: number;
+  /** Port cranes: their paint, or false for none; unset is today's red and white. */
+  cranes?: { colors: CraneColors } | false;
 };

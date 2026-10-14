@@ -95,15 +95,21 @@ export const CONFIG = {
     loadRadius: 4800,
     unloadRadius: 5600,
     chunksPerFrame: 3,
-    maxBuildings: 12000,
+    /** Random buildings per chunk (Tokyo's cap); a city's buildingCapScale multiplies it. */
+    buildingsPerChunk: 64,
+    /** Building pool: the largest city cap (Toronto's 80) × maxLoadedChunks (185) = 14800, rounded up. */
+    maxBuildings: 15000,
     /** Tree cones; a per-chunk cap (maxTrees / maxLoadedChunks) keeps a full load inside the pool. */
     maxTrees: 37000,
     /** Pool size for neon sign boxes across all loaded chunks. */
     maxSigns: 12000,
     /** Pool size for animated video-screen signs across all loaded chunks. */
     maxScreens: 60,
-    /** Pool size for park ground pads across all loaded chunks. */
-    maxParks: 2000,
+    /**
+     * Pool size for ground pads (park greens, port quays, residential lawns) across all loaded chunks. A cell holds at
+     * most one pad, so maxLoadedChunks (185) × 16 cells = 2960 always fits.
+     */
+    maxParks: 3000,
     /** Gantry crane pool (scenery along the coast): a full load peaks at 19 (swept ±12 km), so 32 leaves headroom. */
     maxCranes: 32,
     /** Sea-wall edges and foam strips: a full load peaks at 110 (swept 200 m grid, x -6000..4000, z -6000..4000), so 128 leaves 16% headroom. */
@@ -242,8 +248,8 @@ export const CONFIG = {
       chunk: 0x8a8378,
     },
   },
-  /** The Wendigo (id `golem`). Stats feed its MonsterKind; fist and lob tune its attacks; colours its body and effects. */
-  golem: {
+  /** The Wendigo (id `wendigo`). Stats feed its MonsterKind; fist and lob tune its attacks; colours its body and effects. */
+  wendigo: {
     /** The Wendigo's size: its body is drawn at this scale (inside the monster scale), and its body-size stats match. */
     scale: 0.9,
     stats: {
@@ -358,9 +364,9 @@ export const CONFIG = {
   abilities: {
     /** Cooldown multiplier by rank (Dash/Roar ranks come from level-up picks; Leap is always rank 1). */
     rankCooldown: [1, 1, 0.8, 0.65],
-    dash: { cooldown: 10, range: 900, duration: 0.6, crushRadius: 95 },
+    dash: { cooldown: 10, range: 900, duration: 1.2, crushRadius: 95 },
     /** `peak` is the height of a full-range leap; shorter leaps arc lower in proportion, down to `minPeak` × peak. */
-    leap: { cooldown: 8, range: 1600, duration: 1.4, peak: 340, minPeak: 0.2, landRadius: 260, damage: 150 },
+    leap: { cooldown: 8, range: 1280, duration: 1.4, peak: 340, minPeak: 0.2, landRadius: 260, damage: 150 },
     roar: { cooldown: 20, radius: 600, duration: 1.2, damage: 120, buildingDamage: 300 },
   },
   laser: {

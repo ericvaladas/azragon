@@ -3,20 +3,16 @@ import type { RosterEntry } from '../monsters/roster';
 
 type Props = { entries: RosterEntry[]; index: number; onStep(delta: number): void; onPlay(): void };
 
-function Pips({ label, n }: { label: string; n: number }) {
+/** A stroked chevron on a 24-unit grid. */
+function Chevron({ points }: { points: string }) {
   return (
-    <div className="pip-row">
-      <span>{label}</span>
-      <div className="pips">
-        {[0, 1, 2, 3, 4].map((i) => (
-          <i key={i} className={i < n ? 'on' : ''} />
-        ))}
-      </div>
-    </div>
+    <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.75" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points={points} />
+    </svg>
   );
 }
 
-/** Carousel over the 3D diorama: arrows or swipe to browse, stats and moves, PLAY. */
+/** Carousel over the 3D diorama: pick by look alone — arrows or swipe to browse, PLAY. */
 export function MonsterSelect({ entries, index, onStep, onPlay }: Props) {
   const e = entries[index]!;
   const swipeX = useRef<number | null>(null);
@@ -34,38 +30,17 @@ export function MonsterSelect({ entries, index, onStep, onPlay }: Props) {
         if (Math.abs(dx) > 50) onStep(dx < 0 ? 1 : -1);
       }}
     >
-      <div className="select-header">
-        <button className="select-arrow" aria-label="Previous monster" onClick={() => onStep(-1)}>‹</button>
-        <div className="select-name" key={e.id}>{e.name}</div>
-        <button className="select-arrow" aria-label="Next monster" onClick={() => onStep(1)}>›</button>
-      </div>
-      {!e.available && <div className="select-silhouette">{e.silhouette}</div>}
-      <div className="select-panel" key={`panel-${e.id}`}>
-        <div className="select-blurb">{e.blurb}</div>
-        {e.available && e.pips ? (
-          <>
-            <Pips label="Toughness" n={e.pips.toughness} />
-            <Pips label="Power" n={e.pips.power} />
-            <Pips label="Speed" n={e.pips.speed} />
-            <div className="select-moves">
-              {e.moves.map((m) => (
-                <span key={m.label}>
-                  <b>{m.icon}</b> {m.label}
-                </span>
-              ))}
-            </div>
-          </>
-        ) : (
-          <div className="select-soon">Coming soon</div>
-        )}
-        <button className="btn-primary select-play" disabled={!e.available} onClick={onPlay}>
+      <button className="select-arrow select-prev" aria-label="Previous monster" onClick={() => onStep(-1)}><Chevron points="15 6 9 12 15 18" /></button>
+      <button className="select-arrow select-next" aria-label="Next monster" onClick={() => onStep(1)}><Chevron points="9 6 15 12 9 18" /></button>
+      <div className="select-footer">
+        <div className="select-dots">
+          {entries.map((x, i) => (
+            <span key={x.id} className={i === index ? 'on' : ''} />
+          ))}
+        </div>
+        <button className="btn-primary select-play" aria-label={`Play as ${e.name}`} disabled={!e.available} onClick={onPlay}>
           Play
         </button>
-      </div>
-      <div className="select-dots">
-        {entries.map((x, i) => (
-          <span key={x.id} className={i === index ? 'on' : ''} />
-        ))}
       </div>
     </div>
   );

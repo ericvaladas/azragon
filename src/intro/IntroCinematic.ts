@@ -7,6 +7,7 @@ import { Shockwave } from '../systems/Shockwave';
 import { faceted, toonMat } from '../render/toon';
 import { PodModel } from './PodModel';
 import { SpaceScene } from './SpaceScene';
+import { fogDistances } from '../render/atmosphere';
 import { heatColor } from './spaceMath';
 import { CUT_TIME, EMERGE_TIME, FALL_PITCH, IMPACT_TIME, INTRO_LENGTH, blackAt, cameraPath, flashAt, silhouetteAt, introFog, monsterCrouch, podLengthFor, podPath, podSpin, shakeAt } from './timeline';
 
@@ -76,6 +77,7 @@ export class IntroCinematic {
   start(): void {
     this.podLength = podLengthFor(this.host.monster.kind.stats.size);
     this.pod.setLength(this.podLength);
+    this.space.setSun(this.host.city.style.atmosphere.sun);
     this.active = true;
     this.t = 0;
     this.trailT = 0;
@@ -165,7 +167,7 @@ export class IntroCinematic {
     h.camera.position.copy(_pose.pos).add(_p.set(Math.sin(t * 43) * amp, Math.sin(t * 61 + 1) * amp, Math.sin(t * 53 + 2) * amp));
     h.camera.up.copy(_pose.up);
     h.camera.lookAt(_pose.look);
-    introFog(h.camera.position.y, h.scene.fog as THREE.Fog);
+    introFog(h.camera.position.y, h.scene.fog as THREE.Fog, fogDistances(h.city.style.atmosphere));
   }
 
   /** A random point within `r` of `c` horizontally, `up` above it (written to the shared scratch vector). */
@@ -264,8 +266,9 @@ export class IntroCinematic {
     this.blackEl.style.opacity = '0';
     this.host.camera.up.set(0, 1, 0);
     const fog = this.host.scene.fog as THREE.Fog;
-    fog.near = CONFIG.fog.near;
-    fog.far = CONFIG.fog.far;
+    const base = fogDistances(this.host.city.style.atmosphere);
+    fog.near = base.near;
+    fog.far = base.far;
     const m = this.host.monster;
     m.position.set(0, 0, 0);
     m.pose.dip = 0;

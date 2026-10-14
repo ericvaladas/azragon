@@ -7,6 +7,8 @@ import { bipedFoot, bipedLanded } from './bipedGait';
 import { rakeSwing } from './rake';
 import { neckAim, stepNeck } from './neck';
 import { tailSwing } from './tailSweep';
+import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
+import { kaijuLeap, type KaijuLeapPose } from './leapPose';
 
 const K = CONFIG.kaiju;
 const C = K.colors;
@@ -14,6 +16,14 @@ const THIGH = 170;
 const SHIN = 190;
 const LIFT = 80;
 const FOOT_X = 115;
+/** The arms hang this much (rad) lower at the shoulder than they were modelled, so they don't jut out. */
+const ARM_DROP = 0.35;
+/** How big the head is (skull, jaw, teeth, eyes and brows together). */
+const HEAD_SCALE = 1.25;
+/** Leap: how far (model units) the body sinks in its crouch, and how high the feet tuck up in the air. */
+const LEAP_SINK = 150;
+const LEAP_TUCK = 150;
+const STANDING: KaijuLeapPose = { sink: 0, pitch: 0, tuck: 0, arms: 0, tail: 0 };
 /** Walking tail wag: sideways swing at the tip (model units) and the phase lag per segment (rad). */
 const TAIL_WAG = 230;
 const TAIL_LAG = 0.45;
@@ -35,12 +45,12 @@ const PLATES: readonly (readonly [number, number, number, number, number, number
   [0, 420, -118, 52, 80, -1.0],
   [0, 372, -160, 42, 60, -1.1],
 ];
-/** Launch vents on the back, beside the spine between the plates (body space): x, y, z. */
+/** Launch vents on the back, beside the spine between the plates (body space): x, y, z — sunk into the torso's surface. */
 const VENTS: readonly (readonly [number, number, number])[] = [
-  [52, 548, -8],
-  [-52, 548, -8],
-  [50, 478, -78],
-  [-50, 478, -78],
+  [42, 523, -1],
+  [-42, 523, -1],
+  [40, 464, -56],
+  [-40, 464, -56],
 ];
 const _hip = new THREE.Vector3();
 const _foot = new THREE.Vector3();
@@ -48,6 +58,52 @@ const _knee = new THREE.Vector3();
 const _pole = new THREE.Vector3();
 const _tmp = new THREE.Vector3();
 const _world = new THREE.Vector3();
+
+/**
+ * The head (head space): a hull over points on two ovals, a rounded cranium flowing into a narrower snout, so it
+ * comes out a smoothly faceted egg with a muzzle.
+ */
+/** Points on an oval (centre `c`, radii `r`), for a smoothly faceted hull. */
+function oval(pts: THREE.Vector3[], c: THREE.Vector3, r: THREE.Vector3): void {
+  for (let i = 0; i <= 6; i++) {
+    const th = (i / 6) * Math.PI;
+    const n = i === 0 || i === 6 ? 1 : 10;
+    for (let j = 0; j < n; j++) {
+      const ph = (j / n) * Math.PI * 2;
+      pts.push(new THREE.Vector3(Math.sin(th) * Math.sin(ph) * r.x, Math.cos(th) * r.y, Math.sin(th) * Math.cos(ph) * r.z).add(c));
+    }
+  }
+}
+
+function headPoints(): THREE.Vector3[] {
+  const pts: THREE.Vector3[] = [];
+  oval(pts, new THREE.Vector3(0, 2, 25), new THREE.Vector3(46, 36, 58));
+  oval(pts, new THREE.Vector3(0, -8, 96), new THREE.Vector3(32, 23, 40));
+  return pts;
+}
+
+/**
+ * The neck (neck space, origin at its pivot): a rounded taper from a thick base centred on the pivot — so however
+ * the head turns, the base turns in place, buried in the torso, and never pulls away from it — up into the head.
+ */
+function neckPoints(): THREE.Vector3[] {
+  const pts: THREE.Vector3[] = [];
+  oval(pts, new THREE.Vector3(0, 0, 4), new THREE.Vector3(44, 44, 46));
+  oval(pts, new THREE.Vector3(0, 48, 39), new THREE.Vector3(32, 32, 34));
+  return pts;
+}
+
+/**
+ * The lower jaw (jaw space, origin at its hinge): a slim rounded oval tucked under the snout, running back into a
+ * knob centred on the hinge and tucked up inside the skull — so when the jaw drops open it turns about the knob
+ * and stays joined to the head.
+ */
+function jawPoints(): THREE.Vector3[] {
+  const pts: THREE.Vector3[] = [];
+  oval(pts, new THREE.Vector3(0, -4, 54), new THREE.Vector3(22, 9, 36));
+  oval(pts, new THREE.Vector3(0, 2, 2), new THREE.Vector3(24, 16, 16));
+  return pts;
+}
 
 type Leg = { side: 1 | -1; hip: THREE.Vector3; thigh: THREE.Mesh; shin: THREE.Mesh; foot: THREE.Mesh };
 type Arm = { side: 1 | -1; pivot: THREE.Object3D };
@@ -109,19 +165,20 @@ export class KaijuBody implements MonsterBody {
 
     // Neck → head → hinged jaw; `mouth` is where the breath leaves.
     this.neck.position.copy(NECK_BASE);
-    add(this.neck, box, scale, [0, 35, 30], [72, 80, 100], -0.5);
+    add(this.neck, this.keep(faceted(new ConvexGeometry(neckPoints()))), scale, [0, 0, 0], [1, 1, 1]);
     const head = new THREE.Object3D();
-    head.position.set(0, 85, 75);
+    head.position.set(0, 57, 50);
+    head.scale.setScalar(HEAD_SCALE);
     this.neck.add(head);
-    add(head, box, scale, [0, 0, 30], [90, 70, 110]);
-    add(head, box, dark, [0, -8, 110], [64, 46, 90]);
-    add(head, box, eye, [38, 22, 80], [16, 10, 16]);
-    add(head, box, eye, [-38, 22, 80], [16, 10, 16]);
+    add(head, this.keep(faceted(new ConvexGeometry(headPoints()))), scale, [0, 0, 0], [1, 1, 1]);
+    // Eyes: glowing rectangles set into the sides of the skull.
+    add(head, box, eye, [30, 15, 56], [16, 10, 16]);
+    add(head, box, eye, [-30, 15, 56], [16, 10, 16]);
     this.jaw.position.set(0, -30, 40);
     head.add(this.jaw);
-    add(this.jaw, box, belly, [0, -8, 60], [58, 18, 110]);
-    for (const x of [-20, 0, 20]) add(this.jaw, cone, claw, [x, 6, 105], [10, 18, 10]);
-    this.mouth.position.set(0, -20, 165);
+    add(this.jaw, this.keep(faceted(new ConvexGeometry(jawPoints()))), belly, [0, 0, 0], [1, 1, 1]);
+    for (const x of [-11, 0, 11]) add(this.jaw, cone, claw, [x, 8, 78], [8, 15, 8]);
+    this.mouth.position.set(0, -20, 140);
     head.add(this.mouth);
     this.body.add(this.neck);
 
@@ -183,20 +240,22 @@ export class KaijuBody implements MonsterBody {
   }
 
   animate(f: BodyFrame, onFootLand: (p: THREE.Vector3) => void): void {
-    const m = f.motion;
+    // Mid-leap the feet stop stepping: planted through the crouch, tucked up in the air.
+    const m = f.leap ? 0 : f.motion;
+    const lp = f.leap ? kaijuLeap(f.leap.t, f.leap.duration, f.leap.crouch) : STANDING;
     // Weight shifts over the planted foot once per stride; the tail swings the other way.
     // Leg 0 (+X) swings while sin(2π·cycle) > 0, so the weight sits toward −X (over leg 1) then, and vice versa.
     const shift = -Math.sin(f.cycle * Math.PI * 2);
     const body = this.body;
-    body.position.set(shift * 16 * m, (1 - Math.abs(shift)) * 10 * m + Math.sin(f.time * 1.3) * 6 - f.pose.dip - f.pose.collapse * 230, 0);
-    body.rotation.set(f.pose.pitch + f.pose.collapse * 0.5, 0, -shift * 0.05 * m - f.pose.collapse * 0.3);
+    body.position.set(shift * 16 * m, (1 - Math.abs(shift)) * 10 * m + Math.sin(f.time * 1.3) * 6 - f.pose.dip - f.pose.collapse * 230 - lp.sink * LEAP_SINK, 0);
+    body.rotation.set(f.pose.pitch + f.pose.collapse * 0.5 + lp.pitch, 0, -shift * 0.05 * m - f.pose.collapse * 0.3);
     this.root.updateMatrixWorld(true);
 
     for (let i = 0; i < 2; i++) {
       const leg = this.legs[i]!;
       const fs = bipedFoot(f.cycle, i);
       _hip.copy(leg.hip).applyMatrix4(body.matrix);
-      _foot.set(leg.side * FOOT_X * (1 + f.pose.collapse * 0.5), fs.lift * LIFT * m, fs.stride * (K.stats.strideLength / 2) * m);
+      _foot.set(leg.side * FOOT_X * (1 + f.pose.collapse * 0.5), fs.lift * LIFT * m + lp.tuck * LEAP_TUCK, fs.stride * (K.stats.strideLength / 2) * m + lp.tuck * 40);
       _pole.copy(_hip).add(_tmp.set(leg.side * 20, 0, 300)); // knees bend forward
       solveTwoBone(_hip, _foot, THIGH, SHIN, _pole, _knee);
       placeSegment(leg.thigh, _hip, _knee);
@@ -208,9 +267,10 @@ export class KaijuBody implements MonsterBody {
     for (let i = 0; i < 2; i++) {
       const arm = this.shortArms[i]!;
       let swing = Math.sin(f.time * 1.3 + i) * 0.06 - shift * arm.side * 0.12 * m;
+      swing += lp.arms;
       if (f.melee && f.melee.side === i) swing = rakeSwing(f.melee.t, K.stats.meleeTiming);
       // While slashing forward (negative swing) the arm also sweeps across the body.
-      arm.pivot.rotation.set(swing, 0, -arm.side * Math.max(0, -swing) * 0.5);
+      arm.pivot.rotation.set(swing + ARM_DROP, 0, -arm.side * Math.max(0, -swing) * 0.5);
     }
 
     // Aim the head (not the body) at the breath target, at the neck's own turn speed.
@@ -262,7 +322,7 @@ export class KaijuBody implements MonsterBody {
       const wag = -lagged * TAIL_WAG * Math.pow(k, 1.2) * m;
       this.tailPts[i]!.set(
         base.x + Math.sin(f.time * 1.1 - i * 0.6) * 30 * k + wag,
-        base.y + Math.sin(f.time * 1.7 + i) * 8 * k + Math.abs(lagged) * 18 * k * m + (f.roaring ? 40 * k : 0),
+        base.y + Math.sin(f.time * 1.7 + i) * 8 * k + Math.abs(lagged) * 18 * k * m + (f.roaring ? 40 * k : 0) + lp.tail * 110 * k,
         base.z + Math.abs(wag) * 0.25,
       );
     }

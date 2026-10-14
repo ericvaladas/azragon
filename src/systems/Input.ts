@@ -1,5 +1,5 @@
 import { KonamiTracker } from './konami';
-import { abilityKey, canTap, classifyGesture, isSkipKey, menuKey, pinchToWheel } from './tap';
+import { abilityKey, canTap, classifyGesture, isSkipKey, menuKey, pinchToWheel, isEscKey } from './tap';
 
 export type InputHandlers = {
   tap(x: number, y: number): void;
@@ -12,6 +12,8 @@ export type InputHandlers = {
   skipKey(): boolean;
   /** Select-screen browse/confirm key; return true when the menu used it. */
   menuKey(k: 'left' | 'right' | 'confirm'): boolean;
+  /** Escape pressed; return true when it opened or closed the pause menu. */
+  escape(): boolean;
   /** The Konami code was just completed. */
   konami(): void;
   };
@@ -133,6 +135,10 @@ export class Input {
 
   private onKey = (e: KeyboardEvent) => {
     if (!e.metaKey && !e.ctrlKey && !e.altKey && this.konami.push(e)) this.h.konami();
+    if (isEscKey(e) && this.h.escape()) {
+      e.preventDefault();
+      return;
+    }
     const mk = menuKey(e);
     if (mk && this.h.menuKey(mk)) {
       e.preventDefault();

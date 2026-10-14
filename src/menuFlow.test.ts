@@ -9,6 +9,12 @@ describe('flowNext', () => {
     expect(flowNext('gameover', 'playAgain')).toBe('intro');
     expect(flowNext('gameover', 'changeMonster')).toBe('select');
   });
+  it('leaves a paused run for the title screen (Exit Game), and only from the pause menu', () => {
+    expect(flowNext('paused', 'exit')).toBe('title');
+    expect(flowNext('playing', 'exit')).toBeNull();
+    expect(flowNext('gameover', 'exit')).toBeNull();
+    expect(flowNext('title', 'exit')).toBeNull();
+  });
   it('rejects events from any other state', () => {
     expect(flowNext('select', 'start')).toBeNull();
     expect(flowNext('title', 'play')).toBeNull();
