@@ -1,3 +1,8 @@
+/* A large, bright game cursor, so it never gets lost against the city. Hotspot at the arrow's tip. */
+:root {
+  --cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath d='M3 2 L3 26 L9.5 20 L14 30 L18.5 28 L14 18.5 L23 18.5 Z' fill='%239be22d' stroke='%230b0f08' stroke-width='2' stroke-linejoin='round'/%3E%3C/svg%3E") 3 2, auto;
+}
+
 /* Base reset */
 * {
   box-sizing: border-box;
@@ -7,6 +12,7 @@
 
 html,
 body {
+  cursor: var(--cursor);
   font-family: 'Chakra Petch', system-ui, sans-serif;
   background: #000000;
   color: var(--color-text, #ffffff);
@@ -55,7 +61,7 @@ body {
   width: 100%;
   height: 100%;
   touch-action: none;
-  cursor: default;
+  cursor: var(--cursor);
 }
 
 .scene-container canvas {
@@ -105,7 +111,7 @@ body {
   padding: 16px;
   width: 100%;
   max-width: 320px;
-  cursor: pointer;
+  cursor: var(--cursor);
   color: #ffffff;
   background: var(--color-primary);
 }
@@ -253,7 +259,7 @@ body {
   font: inherit;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  cursor: pointer;
+  cursor: var(--cursor);
   animation: card-in 260ms ease-out both;
   transition: transform 100ms ease-out;
 }
@@ -282,7 +288,7 @@ body {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  cursor: pointer;
+  cursor: var(--cursor);
 }
 .btn-primary:active { transform: scale(0.95); }
 
@@ -312,7 +318,7 @@ body {
   background: rgba(0, 0, 0, 0.85);
   color: var(--color-text);
   font: inherit;
-  cursor: pointer;
+  cursor: var(--cursor);
   overflow: hidden;
   touch-action: none;
   transition: transform 100ms ease-out;
@@ -409,7 +415,7 @@ body {
 .select-arrow {
   position: absolute; top: 50%; transform: translateY(-50%);
   width: 52px; height: 52px; border-radius: 50%; border: 0;
-  background: rgba(0, 0, 0, 0.75); color: var(--color-text); padding: 0; cursor: pointer;
+  background: rgba(0, 0, 0, 0.75); color: var(--color-text); padding: 0; cursor: var(--cursor);
   display: flex; align-items: center; justify-content: center;
 }
 .select-prev { left: 6%; }
@@ -421,7 +427,7 @@ body {
   display: flex; flex-direction: column; align-items: center; gap: 14px;
 }
 .select-play { min-width: 200px; }
-.select-play:disabled { opacity: 0.35; filter: grayscale(0.5); cursor: default; }
+.select-play:disabled { opacity: 0.35; filter: grayscale(0.5); cursor: var(--cursor); }
 .select-dots { display: flex; justify-content: center; gap: 8px; }
 .select-dots span { width: 8px; height: 8px; border-radius: 50%; background: rgba(255, 255, 255, 0.25); }
 .select-dots span.on { background: var(--color-primary); }
@@ -429,7 +435,7 @@ body {
 .btn-secondary {
   min-height: 44px; padding: 10px 24px; border-radius: 4px; border: 2px solid rgba(255, 255, 255, 0.18);
   background: rgba(0, 0, 0, 0.4); color: var(--color-text); font: inherit; font-weight: 700;
-  text-transform: uppercase; letter-spacing: 0.08em; cursor: pointer;
+  text-transform: uppercase; letter-spacing: 0.08em; cursor: var(--cursor);
 }
 .btn-secondary:active { transform: scale(0.95); }
 
