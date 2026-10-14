@@ -91,14 +91,20 @@ New pure module `src/world/shore.ts`:
   blocked; else `(prev.x, next.z)` if not blocked; else `prev`.
 - `landingSpot(style, from, to, radius)`: returns `to` if not blocked; otherwise walks back from `to` toward `from` in
   20 m steps and returns the first unblocked point (or `from`).
+- `shoreStep(style, prev, next, radius)`: `slideAlongShore` plus whether the shore changed the move.
+- `shoreStopped(prev, next, pos)`: true when the shore held a frame's move dead at `prev`.
 
 **How GameScene uses it** (radius = the monster's body radius, `CONFIG.monster.bodyRadius`):
 
 - **Walking:** after each `moveToward` step, apply `slideAlongShore` from the previous position.
+- **Tap to move:** the tapped ground point passes through `landingSpot` (from the monster) at tap time, so a tap on
+  the bay walks to the last land on the line back to the monster; the tap marker shows the clamped point. As a safety
+  net, a move order is dropped on any frame where `shoreStopped` holds, so the monster never walks on the spot at the
+  water's edge.
 - **Dash:** each frame of the dash, apply `slideAlongShore`. A dash into the wall stops at it.
 - **Leap:** the target from `leapTarget` passes through `landingSpot` before `startLeap`. The leap flies over water;
   only the landing is constrained.
-- **Knockback and any other code that sets the monster's position** go through `slideAlongShore`.
+- **Any other code that moves the monster on foot** goes through `slideAlongShore`.
 - **The river is never blocking.**
 
 ## Rainbow Bridge (a long landmark)
@@ -114,11 +120,13 @@ New pure module `src/world/shore.ts`:
 
 **Long-landmark support:**
 
-- `LandmarkSpec` gains an optional `span: { from: Vec2; to: Vec2; halfWidth: number }`. For a long landmark:
+- `LandmarkSpec` gains an optional `span: { from; to; halfWidth; deckY; towers? }` (`towers`: metres along the span).
+  For a long landmark:
   - **Damage:** `forEachStandingInRadius` and the radius-based damage measure the distance to the segment `from → to`
     (minus `halfWidth`), not to the centre. In practice the monster hits it from the shore end; ranged attacks and the
     leap or Roar shockwave reach further.
-  - **Picking:** `pickBuilding` intersects an oriented box along the span.
+  - **Picking:** `pickBuilding` intersects oriented boxes in the span's frame: the deck from the ground to 10 m over
+    its top, and each tower (±15 m along) up to the landmark's full height.
   - **Placement:** the "inside one block" rule is replaced by "the anchorages are on land (shore and island)". The
     deck may cross water and roads.
 - **Ownership:** owned by the chunk containing its `from` point. It loads and unloads with that chunk, and while
@@ -127,7 +135,9 @@ New pure module `src/world/shore.ts`:
 **Destruction:**
 
 - HP and EXP by height, as for any landmark.
-- The collapse tilts and drops the deck and cables into the bay, with large splashes along the span.
+- The collapse tilts and drops the deck and cables into the bay, with large splashes along the span: one every 80 m
+  over water, each `t` m out queued for `t / length × collapseTime` and fired from `City.update`, so the spray runs
+  from the shore end out to the island while the deck falls and the per-frame splash budget reaches the whole span.
 - It stays destroyed after streaming out and back.
 
 **Crash blast:** it is exempt from the crash blast (it is a landmark and far away).
@@ -167,7 +177,10 @@ New pure module `src/world/shore.ts`:
   - Along each sea-wall edge, a strip of white foam on the water just outside the wall, 12 m wide.
   - Its opacity pulses slowly (shader time uniform), and it is drawn as one instanced mesh.
 - **Splashes** (new particle style `splash`): white spray up, plus a flat expanding ring (the existing `ring` helper).
-  - `splashIfWater(p)` (GameScene) emits a splash when `p` is in a water cell. It is called from:
+  - `Splasher` (`src/systems/splash.ts`): `at(p, size)` emits a splash when `p` is open water (`openWater`: a water
+    cell, and clear of the paved strip — half the edge line's road width plus the 8 m sea wall — along every land
+    edge, river banks included); `footprint(x, z, size)` splashes at the first open-water sample of a square
+    footprint. At most `SPLASH_PER_FRAME` (40) particles a frame. It is called from:
     - debris and rubble impacts from collapses whose building borders water;
     - projectile and shell misses that land in water;
     - swatted or downed flyers that fall into water;
@@ -181,12 +194,13 @@ New pure module `src/world/shore.ts`:
 | `src/cities/types.ts` | `CityStyle.bay?`, `CityStyle.island?`, `DistrictId 'port'`, `LandmarkSpec.span?` |
 | `src/cities/tokyo/` | Bay and island values; port district rules; `rainbowBridge.ts` geometry; island district rule |
 | `src/world/roads.ts` | `isBay`, `isIsland`; `isWater` covers both; `segmentAt` bay/island rules |
-| `src/world/shore.ts` (new) | `inBay`, `blockedAt`, `slideAlongShore`, `landingSpot` |
+| `src/world/shore.ts` (new) | `inBay`, `blockedAt`, `slideAlongShore`, `landingSpot`, `shoreStep`, `shoreStopped` |
 | `src/world/chunks.ts` | Port lots; crane spots; sea-wall and foam edges; island buildings without roads; quay pads |
 | `src/world/City.ts` | Sea-wall, foam and crane instanced meshes; quay pads (reusing the per-instance park pad colour); long-landmark targeting and picking; `blockedAt` covers the island; collapse of the bridge with splashes |
 | `src/world/pixelTextures.ts` | The container facade cell (the atlas grows by one cell) |
 | `src/systems/Particles.ts` | The `splash` preset, drawn in its own 200-particle layer |
-| `src/GameScene.ts` | Shore collision for walking, dash and leap; `splashIfWater` hooks |
+| `src/systems/splash.ts` (new) | `Splasher` (`at`, `footprint`, per-frame budget) and `openWater` |
+| `src/GameScene.ts` | Shore collision for walking, dash and leap; tap targets clamped to land; `Splasher` hooks |
 
 **Draw calls added:** main pass: sea wall 1, foam 1, cranes 1, Rainbow Bridge 1 (when in view). Shadow pass: sea
 wall 1, cranes 1, Rainbow Bridge 1 (shadow casters; foam casts none). So +5 at play start (bridge out of view) and
@@ -216,8 +230,9 @@ park-pad mesh.
 - **Rainbow Bridge:**
   - its anchorages are on land;
   - it is hit by attacks near the shore end and not by attacks 400 m away from its line;
-  - it is picked by a ray at the deck;
-  - it collapses (with splashes requested along the span);
+  - it is picked by a ray at the deck and at a tower top;
+  - it collapses, with splashes along the span staggered from the shore out, and a real `Splasher` under its 40-a-frame
+    budget still emits over the island half;
   - it stays destroyed after streaming out and back;
   - it survives the crash blast;
   - it is owned by exactly one chunk.
@@ -227,7 +242,10 @@ park-pad mesh.
   - cranes stand only on land cells bordering the bay;
   - no signs or billboards in the port.
 - **Sea wall:** every land and bay edge has a wall piece; no wall stands inland; pools fit a full load.
-- **Splashes:** `splashIfWater` emits only for points in water.
+- **Splashes:** `Splasher.at` emits only for open-water points (not land, not the bank road or sea wall);
+  `footprint` splashes only when it touches open water; the per-frame budget holds.
+- **Tap to move:** a bay tap clamped with `landingSpot` is on land and reachable; an unclamped one is stopped dead by
+  the shore (`shoreStopped`).
 
 **Visual checks:**
 
