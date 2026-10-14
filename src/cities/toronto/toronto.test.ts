@@ -29,13 +29,13 @@ describe('TORONTO', () => {
     const D = TORONTO.districts;
     for (const d of DISTRICTS) expect(D[d]).toBeDefined();
     expect(D.park.lots).toBe(0);
-    expect(D.highrise.height).toEqual([150, 300]);
+    expect(D.highrise.height).toEqual([110, 220]);
     expect(D.neon.height).toEqual([15, 30]);
-    expect(D.office.height).toEqual([40, 100]);
+    expect(D.office.height).toEqual([35, 80]);
     expect(D.residential.height).toEqual([10, 22]);
     expect(D.residential.trees).toBe(6);
     expect(D.residential.lots).toBe(4);
-    expect(D.port.height).toEqual([80, 160]);
+    expect(D.port.height).toEqual([60, 120]);
     expect(D.port.yard).toBeUndefined();
   });
 
@@ -310,12 +310,12 @@ describe('hand-placed lots', () => {
   const blockOf = (v: number) => Math.floor(v / CONFIG.world.blockSize);
   const dark = FINANCIAL_LOTS.filter((b) => b !== FIRST_CANADIAN_PLACE && !ROYAL_BANK_PLAZA.includes(b));
 
-  it('puts 8–10 deep slate glass towers 200–300 m tall in the Financial District, all kept through the crash', () => {
+  it('puts 8–10 deep slate glass towers 150–220 m tall in the Financial District, all kept through the crash', () => {
     expect(dark.length).toBeGreaterThanOrEqual(8);
     expect(dark.length).toBeLessThanOrEqual(10);
     for (const b of dark) {
-      expect(b.h).toBeGreaterThanOrEqual(200);
-      expect(b.h).toBeLessThanOrEqual(300);
+      expect(b.h).toBeGreaterThanOrEqual(150);
+      expect(b.h).toBeLessThanOrEqual(220);
       // Darker than the stone offices on average, but not black (glass.test.ts sets the floor).
       const sum = (hex: number) => { const c = new THREE.Color(hex); return c.r + c.g + c.b; };
       const office = TORONTO.districts.office.colors.map(sum);
@@ -624,3 +624,16 @@ describe('U of T and the Distillery District (hand-placed lots)', () => {
   });
 });
 
+
+describe('Toronto: generic towers stay below the real ones', () => {
+  it('keeps every generated and unnamed tower shorter than First Canadian Place and the Royal Bank Plaza', async () => {
+    const { FIRST_CANADIAN_PLACE, ROYAL_BANK_PLAZA, FINANCIAL_LOTS } = await import('./financial');
+    const { POCKET_RULES } = await import('./districts');
+    const real = new Set([FIRST_CANADIAN_PLACE, ...ROYAL_BANK_PLAZA]);
+    const generic = FINANCIAL_LOTS.filter((l) => !real.has(l));
+    expect(generic.length).toBeGreaterThan(0);
+    const tallestReal = Math.min(FIRST_CANADIAN_PLACE.h, Math.max(...ROYAL_BANK_PLAZA.map((b) => b.h)));
+    for (const l of generic) expect(l.h).toBeLessThan(tallestReal);
+    for (const max of [TORONTO.districts.highrise.height[1], TORONTO.districts.port.height[1], POCKET_RULES.height[1]]) expect(max).toBeLessThan(tallestReal);
+  });
+});

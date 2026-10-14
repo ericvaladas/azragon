@@ -7,15 +7,15 @@ export const GOLD = 0xd4a442;
 const WHITE = 0xf0eee8;
 const DARK_SIZE = 56;
 /**
- * Dark glass towers: block (ci, cj), lot (a, b) of its 2 × 2 grid, height. One in the centre block (−2, 7), two
+ * Unnamed glass towers (kept below the real ones): block (ci, cj), lot (a, b) of its 2 × 2 grid, height. One in the centre block (−2, 7), two
  * on opposite corners of each of its four neighbours (Ruling R4).
  */
 const DARK_TOWERS: readonly (readonly [number, number, number, number, number])[] = [
-  [-2, 7, 0, 1, 270],
-  [-3, 7, 0, 0, 240], [-3, 7, 1, 1, 210],
-  [-1, 7, 0, 0, 255], [-1, 7, 1, 1, 225],
-  [-2, 6, 0, 0, 205], [-2, 6, 1, 1, 245],
-  [-2, 8, 0, 0, 285], [-2, 8, 1, 1, 215],
+  [-2, 7, 0, 1, 200],
+  [-3, 7, 0, 0, 180], [-3, 7, 1, 1, 160],
+  [-1, 7, 0, 0, 190], [-1, 7, 1, 1, 170],
+  [-2, 6, 0, 0, 155], [-2, 6, 1, 1, 185],
+  [-2, 8, 0, 0, 215], [-2, 8, 1, 1, 160],
 ];
 
 /** First Canadian Place: the tallest, a white slab. */

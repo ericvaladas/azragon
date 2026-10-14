@@ -33,8 +33,8 @@ describe('Toronto tower pockets', () => {
     expect(pocketsIn(box).length).toBeGreaterThanOrEqual(1);
   });
 
-  it('builds pocket blocks as high-rise condos 60–150 m in pale colours, the whole block alike', () => {
-    expect(POCKET_RULES.height).toEqual([60, 150]);
+  it('builds pocket blocks as high-rise condos 45–110 m in pale colours, the whole block alike', () => {
+    expect(POCKET_RULES.height).toEqual([45, 110]);
     for (const box of Object.values(BOXES)) for (const [i, j] of pocketsIn(box)) {
       expect(districtAt(centre(i), centre(j))).toBe('highrise');
       expect(pocketAt(centre(i) - 99, centre(j) + 99)).toBe(true);
@@ -44,14 +44,14 @@ describe('Toronto tower pockets', () => {
     expect(TOKYO.blockRules).toBeUndefined();
   });
 
-  it('puts pocket towers in the generated chunks: 60–150 m, pocket colours', () => {
+  it('puts pocket towers in the generated chunks: 45–110 m, pocket colours', () => {
     const [i, j] = pocketsIn(BOXES.A)[0]!;
     const c = generateChunk(TORONTO, 1337, Math.floor(i / 4), Math.floor(j / 4));
     const towers = c.buildings.filter((b) => blockOf(b.x) === i && blockOf(b.z) === j);
     expect(towers.length).toBeGreaterThanOrEqual(1);
     for (const b of towers) {
-      expect(b.h).toBeGreaterThanOrEqual(60);
-      expect(b.h).toBeLessThanOrEqual(150);
+      expect(b.h).toBeGreaterThanOrEqual(45);
+      expect(b.h).toBeLessThanOrEqual(110);
       expect(POCKET_RULES.colors).toContain(b.color);
     }
   });
