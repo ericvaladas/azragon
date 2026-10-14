@@ -501,3 +501,95 @@ describe('foam shader patch', () => {
     expect(sh.fragmentShader).toContain('diffuseColor.a = 0.35 + 0.2 * sin(uFoamTime * 1.3 + vFoamPhase)');
   });
 });
+
+describe('City: the Rainbow Bridge (a span landmark)', () => {
+  const bridge = TOKYO.landmarks.find((l) => l.id === 'rainbow-bridge')!;
+  const span = bridge.span!;
+  const len = Math.hypot(span.to.x - span.from.x, span.to.z - span.from.z);
+  const u = { x: (span.to.x - span.from.x) / len, z: (span.to.z - span.from.z) / len };
+  /** The point `t` m along the span and `off` m to its side. */
+  const at = (t: number, off: number) => ({ x: span.from.x + u.x * t - u.z * off, z: span.from.z + u.z * t + u.x * off });
+  const hits = (city: City, p: { x: number; z: number }, r: number): Target | null => {
+    let t: Target | null = null;
+    city.forEachStandingInRadius(p, r, (b) => { if (b.position.x === bridge.x && b.position.z === bridge.z) t = b; });
+    return t;
+  };
+  const bridgeMesh = (scene: THREE.Scene) =>
+    scene.children.find((o) => (o as THREE.Mesh).isMesh && o.position.x === span.from.x && o.position.z === span.from.z) as THREE.Mesh;
+
+  it('is a landmark target with HP by height (about 160 m)', () => {
+    const { city } = make();
+    const t = hits(city, span.from, 2)!;
+    expect(t).not.toBeNull();
+    expect(t.kind).toBe('building');
+    expect((t as unknown as { maxHp: number }).maxHp).toBe(Math.round(bridge.h * CONFIG.world.buildingHpPerMetre));
+  });
+
+  it('is reached by the distance to its line: 40 m off it (shore end or mid-bay) with r = 60 hits, 400 m off misses', () => {
+    const { city } = make();
+    expect(hits(city, at(30, 40), 60)).not.toBeNull();
+    expect(hits(city, at(30, -40), 60)).not.toBeNull();
+    expect(hits(city, at(len / 2, 40), 60)).not.toBeNull();
+    expect(hits(city, at(30, 400), 60)).toBeNull();
+    expect(hits(city, at(len / 2, -400), 60)).toBeNull();
+    // Past the island end, along its line.
+    expect(hits(city, at(len + 400, 0), 60)).toBeNull();
+  });
+
+  it('is picked by a ray aimed down at mid-deck, and not by one 200 m beside it', () => {
+    const { city } = make();
+    const mid = at(len / 2, 0);
+    const down = new THREE.Vector3(0, -1, 0);
+    expect(city.pickBuilding(new THREE.Ray(new THREE.Vector3(mid.x, 1000, mid.z), down))).toBe(hits(city, span.from, 2));
+    const side = at(len / 2, 200);
+    expect(city.pickBuilding(new THREE.Ray(new THREE.Vector3(side.x, 1000, side.z), down))).toBeNull();
+  });
+
+  it('collapses into the bay: splashes along the span, sinks with a roll (the island end never rises), then is hidden', () => {
+    const { city, scene } = make();
+    const splashes: THREE.Vector3[] = [];
+    city.onSplash = (p) => splashes.push(p.clone());
+    hits(city, span.from, 2)!.applyDamage(1e9);
+    expect(splashes.length).toBeGreaterThan(8);
+    for (const p of splashes) {
+      const t = (p.x - span.from.x) * u.x + (p.z - span.from.z) * u.z;
+      expect(t).toBeGreaterThanOrEqual(0);
+      expect(t).toBeLessThanOrEqual(len + 1);
+      expect(Math.abs(-(p.x - span.from.x) * u.z + (p.z - span.from.z) * u.x)).toBeLessThan(1);
+    }
+    const mesh = bridgeMesh(scene);
+    const islandDeck = () => {
+      mesh.updateMatrixWorld(true);
+      return new THREE.Vector3(0, 50, len).applyMatrix4(mesh.matrixWorld);
+    };
+    const rest = islandDeck();
+    expect(rest.x).toBeCloseTo(span.to.x, 0);
+    expect(rest.z).toBeCloseTo(span.to.z, 0);
+    city.update(CONFIG.world.collapseTime * 0.5, new THREE.Vector3());
+    const mid = islandDeck();
+    expect(mid.y).toBeLessThan(rest.y);
+    expect(Math.hypot(mid.x - span.to.x, mid.z - span.to.z)).toBeLessThan(60);
+    city.update(CONFIG.world.collapseTime, new THREE.Vector3());
+    expect(mesh.visible).toBe(false);
+  });
+
+  it('stays destroyed after its chunk streams out and back', () => {
+    const { city, scene } = make();
+    hits(city, span.from, 2)!.applyDamage(1e9);
+    city.update(CONFIG.world.collapseTime * 2, new THREE.Vector3());
+    for (let i = 0; i < 200; i++) city.update(0.016, new THREE.Vector3(30000, 0, 0));
+    expect(city.landmarkCount()).toBe(0);
+    for (let i = 0; i < 200; i++) city.update(0.016, new THREE.Vector3());
+    expect(city.landmarkCount()).toBe(TOKYO.landmarks.length);
+    expect(hits(city, span.from, 2)).toBeNull();
+    // Its mesh is reloaded hidden (nothing visible stands at the shore anchorage).
+    expect(scene.children.some((o) => (o as THREE.Mesh).isMesh && o.visible && o.position.x === span.from.x && o.position.z === span.from.z)).toBe(false);
+  });
+
+  it('rides out the crash blast', () => {
+    const { city } = make();
+    const t = hits(city, span.from, 2)!;
+    city.blast({ x: 0, z: 0 }, CRATER_RADIUS, true, CRATER_RADIUS * CONFIG.intro.impact.outer);
+    expect(t.isAlive()).toBe(true);
+  });
+});

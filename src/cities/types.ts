@@ -59,8 +59,20 @@ export type SignDef = { kind: SignKind; lx: number; ly: number; lz: number; w: n
 /** One building: base centre (x, z), footprint w (x) × d (z), height h, facade atlas cell, tint, signs. */
 export type BuildingSpec = { x: number; z: number; w: number; d: number; h: number; facade: number; color: number; signs: SignDef[]; keep?: boolean };
 
-/** A destructible structure with its own mesh. `build` returns vertex-coloured geometry with its base centre at the origin, +Y up. */
-export type LandmarkSpec = { id: string; x: number; z: number; w: number; d: number; h: number; build(): THREE.BufferGeometry };
+/**
+ * A long landmark's line: from its shore end `from` to its far end `to`, `halfWidth` m to each side, its deck's top
+ * `deckY` m up (rays pick it up to 10 m above that). Its geometry is built in its own frame, running along local +Z
+ * from `from` (local z = 0) to `to` (local z = the span's length).
+ */
+export type LandmarkSpan = { from: { x: number; z: number }; to: { x: number; z: number }; halfWidth: number; deckY: number };
+
+/**
+ * A destructible structure with its own mesh. `build` returns vertex-coloured geometry with its base centre at the
+ * origin, +Y up. A long landmark (`span` set) is owned by the block holding `from`; its (x, z) and w × d are its
+ * footprint on the ground at that end (inside that block), and its mesh is placed at `from`, turned to the span's
+ * bearing.
+ */
+export type LandmarkSpec = { id: string; x: number; z: number; w: number; d: number; h: number; span?: LandmarkSpan; build(): THREE.BufferGeometry };
 
 /** A ground decal drawn over the road texture, `size` m square, centred on (x, z). */
 export type GroundOverlay = { id: string; x: number; z: number; size: number };

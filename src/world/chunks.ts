@@ -278,7 +278,7 @@ function craneAt(style: CityStyle, seed: number, i: number, j: number): CraneSpe
  * segment exists, so removed-street strips stay unbuilt; in residential and park blocks they become tree-lined
  * lanes. Beside an avenue the inset adds an AVENUE_PAVEMENT band, lined with a row of street trees in every built
  * block off the crash site (not water, landmark or park cells; a tree inside a building's footprint is skipped).
- * Landmarks claim their block (the chunk holding the landmark's centre owns it); special lots replace the random lots
+ * Landmarks claim their block (the chunk holding the landmark's centre, or a long landmark's `from` end, owns it); special lots replace the random lots
  * they overlap; the crash site is never a park. Per-chunk caps thin the random buildings (never special lots), then
  * their signs, then the trees (other trees before avenue rows). Port cells are paved quays of container blocks and
  * warehouses with cranes along the water (no warehouse on a crane's sea side, nothing in its portal), and no trees. Island cells use the style's islandRules (its centre park
@@ -331,11 +331,17 @@ export function generateChunk(style: CityStyle, seed: number, cx: number, cz: nu
       const iw = x1 - x0;
       const id = z1 - z0;
 
-      const landmark = style.landmarks.find((l) => blockOf(l.x) === bi && blockOf(l.z) === bj);
+      // A long landmark belongs to the block of its `from` end (the shore anchorage); its deck may cross other cells.
+      const landmark = style.landmarks.find((l) => {
+        const at = l.span?.from ?? l;
+        return blockOf(at.x) === bi && blockOf(at.z) === bj;
+      });
       if (landmark) {
         if (!craterSite) landmarks.push(landmark);
-        // A landmark in a park stands on the park's green (Tokyo Tower in Shiba Park).
-        if (!craterSite && style.districtAt(bx, bz) === 'park') parks.push({ x: bx, z: bz });
+        // A landmark in a park stands on the park's green (Tokyo Tower in Shiba Park); one in the port on the quay.
+        const district = style.districtAt(bx, bz);
+        if (!craterSite && district === 'park') parks.push({ x: bx, z: bz });
+        if (!craterSite && district === 'port') quays.push({ x: bx, z: bz });
         continue;
       }
       let district = style.districtAt(bx, bz);

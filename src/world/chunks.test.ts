@@ -648,3 +648,43 @@ describe('sea wall', () => {
     }
   });
 });
+
+describe('Rainbow Bridge (a span landmark)', () => {
+  const bridge = TOKYO.landmarks.find((l) => l.id === 'rainbow-bridge')!;
+  const span = bridge.span!;
+  const mid = { x: (span.from.x + span.to.x) / 2, z: (span.from.z + span.to.z) / 2 };
+  const near = chunksInRadius(mid.x, mid.z, 900);
+  const contents = near.map((r) => ({ r, c: generateChunk(TOKYO, 1337, r.cx, r.cz) }));
+
+  it('is owned by exactly one chunk, the one holding its shore anchorage', () => {
+    const owners = contents.filter(({ c }) => c.landmarks.some((l) => l.id === bridge.id));
+    expect(owners).toHaveLength(1);
+    const { r } = owners[0]!;
+    expect(Math.floor(span.from.x / CHUNK_SIZE)).toBe(r.cx);
+    expect(Math.floor(span.from.z / CHUNK_SIZE)).toBe(r.cz);
+  });
+
+  it('claims the anchorage block: no buildings or cranes on it, a quay pad under it (it is in the port)', () => {
+    const [bi, bj] = [blockCell(span.from.x), blockCell(span.from.z)];
+    expect(TOKYO.districtAt((bi + 0.5) * PITCH, (bj + 0.5) * PITCH)).toBe('port');
+    let pads = 0;
+    for (const { c } of contents) {
+      for (const b of c.buildings) expect(blockCell(b.x) === bi && blockCell(b.z) === bj).toBe(false);
+      for (const k of c.cranes) expect(blockCell(k.x) === bi && blockCell(k.z) === bj).toBe(false);
+      pads += c.quays.filter((q) => blockCell(q.x) === bi && blockCell(q.z) === bj).length;
+    }
+    expect(pads).toBe(1);
+  });
+
+  it('keeps every crane (portal and jib) clear of the deck', () => {
+    const len = Math.hypot(span.to.x - span.from.x, span.to.z - span.from.z);
+    const ux = (span.to.x - span.from.x) / len, uz = (span.to.z - span.from.z) / len;
+    // A crane's reach from its centre: the jib tip, 80 m past the front legs.
+    const reach = CRANE_PORTAL.halfAcross + 80;
+    for (const { c } of contents) for (const k of c.cranes) {
+      const t = Math.max(0, Math.min(len, (k.x - span.from.x) * ux + (k.z - span.from.z) * uz));
+      const d = Math.hypot(k.x - (span.from.x + ux * t), k.z - (span.from.z + uz * t));
+      expect(d).toBeGreaterThan(reach + span.halfWidth);
+    }
+  });
+});

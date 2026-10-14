@@ -4,6 +4,7 @@ import { districtAt, SHIBUYA_CROSSING, TOKYO_BAY, TOKYO_ISLAND, SKYTREE_SITE, TM
 import { SKYTREE, skytreeGeometry, TOKYO_TOWER, tokyoTowerGeometry } from './towers';
 import { SCRAMBLE, SHIBUYA_LOTS } from './shibuya';
 import { TMG, tmgGeometry } from './tmg';
+import { RAINBOW_BRIDGE_LANDMARK } from './rainbowBridge';
 
 export const TOKYO: CityStyle = {
   id: 'tokyo',
@@ -28,6 +29,7 @@ export const TOKYO: CityStyle = {
     { id: 'tmg', x: TMG_SITE.x, z: TMG_SITE.z, w: TMG.w, d: TMG.d, h: TMG.h, build: tmgGeometry },
     { id: 'tokyo-tower', x: TOKYO_TOWER_SITE.x, z: TOKYO_TOWER_SITE.z, w: TOKYO_TOWER.w, d: TOKYO_TOWER.d, h: TOKYO_TOWER.h, build: tokyoTowerGeometry },
     { id: 'skytree', x: SKYTREE_SITE.x, z: SKYTREE_SITE.z, w: SKYTREE.w, d: SKYTREE.d, h: SKYTREE.h, build: skytreeGeometry },
+    RAINBOW_BRIDGE_LANDMARK,
   ],
   specialLots: SHIBUYA_LOTS,
   overlays: [SCRAMBLE],

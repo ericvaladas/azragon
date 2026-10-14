@@ -6,6 +6,8 @@ import { TOKYO } from './index';
 import { SHIBUYA_CROSSING, SKYTREE_SITE, TMG_SITE, TOKYO_TOWER_SITE } from './layout';
 import { SKYTREE, skytreeGeometry, TOKYO_TOWER, tokyoTowerGeometry } from './towers';
 import { TMG, tmgGeometry } from './tmg';
+import { RAINBOW_BRIDGE, rainbowBridgeGeometry } from './rainbowBridge';
+import { isIsland, isWater } from '../../world/roads';
 
 const W = CONFIG.world;
 const INNER = W.blockSize - W.roadWidth;
@@ -49,8 +51,8 @@ describe('TOKYO', () => {
     expect(SKYTREE_SITE).toEqual({ x: -1900, z: 3100 });
   });
 
-  it('fits each landmark inside one block, clear of the roads', () => {
-    for (const l of TOKYO.landmarks) {
+  it('fits each landmark but the span (the bridge) inside one block, clear of the roads', () => {
+    for (const l of TOKYO.landmarks.filter((l) => !l.span)) {
       expect(blockOf(l.x - l.w / 2)).toBe(blockOf(l.x + l.w / 2));
       expect(blockOf(l.z - l.d / 2)).toBe(blockOf(l.z + l.d / 2));
       expect(l.w).toBeLessThanOrEqual(INNER);
@@ -106,5 +108,52 @@ describe('TOKYO', () => {
 
   it('draws the scramble markings over the crossing', () => {
     expect(TOKYO.overlays).toContainEqual(expect.objectContaining({ id: 'scramble', x: SHIBUYA_CROSSING.x, z: SHIBUYA_CROSSING.z }));
+  });
+});
+
+describe('Rainbow Bridge', () => {
+  const bridge = TOKYO.landmarks.find((l) => l.id === 'rainbow-bridge')!;
+  const cell = (p: { x: number; z: number }) => [blockOf(p.x), blockOf(p.z)] as const;
+
+  it('spans about 1000 m from a shore anchorage on land to an anchorage on the island', () => {
+    expect(bridge).toBeDefined();
+    const span = bridge.span!;
+    expect(span.from.x).toBeCloseTo(-1658, 0);
+    expect(span.from.z).toBeCloseTo(-958, 0);
+    // The landmark's (x, z) and footprint are its shore anchorage, in the same block as `from`.
+    expect(bridge.h).toBe(RAINBOW_BRIDGE.h);
+    expect(cell(bridge)).toEqual(cell(span.from));
+    expect(Math.hypot(bridge.x - span.from.x, bridge.z - span.from.z)).toBeLessThan(bridge.w);
+    expect(isWater(TOKYO, ...cell(span.from))).toBe(false);
+    expect(isIsland(TOKYO, ...cell(span.from))).toBe(false);
+    expect(isIsland(TOKYO, ...cell(span.to))).toBe(true);
+    const len = Math.hypot(span.to.x - span.from.x, span.to.z - span.from.z);
+    expect(len).toBeGreaterThan(950);
+    expect(len).toBeLessThan(1100);
+    // Along the bay's dir, straight out to sea.
+    const dir = TOKYO.bay!.dir;
+    expect(((span.to.x - span.from.x) * dir.x + (span.to.z - span.from.z) * dir.z) / len).toBeCloseTo(1, 3);
+  });
+
+  it('builds ~160 m towers and a deck ~50 m up, along local +Z from the shore anchorage, vertex-coloured', () => {
+    const len = RAINBOW_BRIDGE.length;
+    const g = rainbowBridgeGeometry(len);
+    g.computeBoundingBox();
+    const bb = g.boundingBox!;
+    expect(bb.min.y).toBeCloseTo(0);
+    expect(bb.max.y).toBeGreaterThan(150);
+    expect(bb.max.y).toBeLessThan(170);
+    expect(bb.min.z).toBeLessThan(0);
+    expect(bb.max.z).toBeGreaterThan(len);
+    expect(bb.max.x - bb.min.x).toBeLessThanOrEqual(2 * bridge.span!.halfWidth);
+    expect(g.getAttribute('color')).toBeDefined();
+    // Straight down onto the roadway at mid-span (between the towers): the deck top, about 50 m up.
+    const mesh = new THREE.Mesh(g, new THREE.MeshBasicMaterial());
+    const hit = new THREE.Raycaster(new THREE.Vector3(0, 500, len / 2), new THREE.Vector3(0, -1, 0)).intersectObject(mesh)[0]!;
+    expect(hit.point.y).toBeGreaterThan(45);
+    expect(hit.point.y).toBeLessThan(55);
+    // Over a tower (30% along), the ray meets the tower top first, about 160 m up.
+    const tower = new THREE.Raycaster(new THREE.Vector3(RAINBOW_BRIDGE.towerX, 500, len * 0.3), new THREE.Vector3(0, -1, 0)).intersectObject(mesh)[0]!;
+    expect(tower.point.y).toBeGreaterThan(150);
   });
 });
