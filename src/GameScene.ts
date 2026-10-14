@@ -460,13 +460,14 @@ export class GameScene {
   private startIntro(): void {
     this.intro.start();
     this.setState('intro');
+    this.events.emit('skipHint', true);
   }
 
-  /** Skip the rest of the intro (tap, click, or key). Public for scripted checks and the M4 menus. */
+  /** Skip (tap, click or key): jump to just before the reveal, or end the intro if that has happened. Public for scripted checks and the M4 menus. */
   skipIntro(): void {
     if (this.state !== 'intro') return;
-    this.intro.skip();
-    this.endIntro();
+    if (this.intro.skip()) this.endIntro();
+    else this.events.emit('skipHint', false);
   }
 
   /** The intro drove the camera; hand it back exactly on the default gameplay pose (no leftover trauma or drag). */
