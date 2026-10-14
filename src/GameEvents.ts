@@ -17,7 +17,7 @@ export type HudSnapshot = {
   levelingUp: boolean;
 };
 
-export type UpgradeOffer = { id: string; title: string; desc: string; icon: string };
+export type UpgradeOffer = { id: string; title: string; desc: string };
 
 export type RunStats = { timeSec: number; kills: number; buildings: number; level: number };
 

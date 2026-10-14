@@ -12,9 +12,9 @@ export const INSECT: MonsterKind = {
   blurb: 'Six-legged hive horror. Fast, venomous, relentless.',
   pips: { toughness: 3, power: 3, speed: 4 },
   moves: [
-    { icon: '🦵', label: 'Leg Strike' },
-    { icon: '🎯', label: 'Stinger Spikes' },
-    { icon: '🦂', label: 'Tail Swat' },
+    { label: 'Leg Strike' },
+    { label: 'Stinger Spikes' },
+    { label: 'Tail Swat' },
   ],
   stats: {
     maxHp: M.maxHp,

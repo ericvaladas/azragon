@@ -11,7 +11,6 @@ describe('roster', () => {
     expect(e[0]!.pips).toEqual(KINDS.insect.pips);
     expect(e[2]!.pips).toEqual(KINDS.kraken.pips);
     expect(e[3]!.pips).toEqual(KINDS.golem.pips);
-    for (const x of e) expect(x.silhouette.length).toBeGreaterThan(0);
     expect(ROSTER_ORDER).toHaveLength(4);
   });
   it('recognises only playable monster ids', () => {

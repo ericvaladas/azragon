@@ -138,7 +138,7 @@ describe('Progression abilities', () => {
 describe('Progression pools', () => {
   const pool: PoolSpec = {
     signatures: ['acid', 'nova'],
-    abilityText: { acid: { title: 'Radiant Wake', icon: '☢️', desc: () => 'glow' } },
+    abilityText: { acid: { title: 'Radiant Wake', desc: () => 'glow' } },
     upgradeText: { vitality: { title: 'Ironscale Hide' } },
   };
 

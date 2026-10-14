@@ -32,7 +32,6 @@ export function MonsterSelect({ entries, index, onStep, onPlay }: Props) {
     >
       <button className="select-arrow select-prev" aria-label="Previous monster" onClick={() => onStep(-1)}><Chevron points="15 6 9 12 15 18" /></button>
       <button className="select-arrow select-next" aria-label="Next monster" onClick={() => onStep(1)}><Chevron points="9 6 15 12 9 18" /></button>
-      {!e.available && <div className="select-silhouette">{e.silhouette}</div>}
       <div className="select-footer">
         <div className="select-dots">
           {entries.map((x, i) => (

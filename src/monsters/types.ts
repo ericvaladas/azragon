@@ -124,7 +124,7 @@ export type MonsterKind = PoolSpec & {
   blurb: string;
   /** Select-screen ratings, 1..5. */
   pips: { toughness: number; power: number; speed: number };
-  moves: readonly { icon: string; label: string }[];
+  moves: readonly { label: string }[];
   stats: MonsterStats;
   melee: MeleeShape;
   /** `gaze`: Dread Gaze (Wendigo): it looks at the target, which bursts into black fire; nothing travels. */
