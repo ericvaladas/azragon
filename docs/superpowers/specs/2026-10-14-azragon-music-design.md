@@ -106,10 +106,10 @@ The skip hint stays visible until the jump. After that, it hides. A second tap s
 
 ### Loading and memory
 
-- **Files:** the WAV masters are encoded with ffmpeg's `aac` encoder to `public/cdn-assets/audio/*.m4a` at 128 kb/s. That is about 9 MB in total, against 110 MB of WAVs. The Main 1 trim happens here. A script, `scripts/encode-music.sh`, records the exact ffmpeg commands. The WAV masters stay outside the repo.
+- **Files:** only compressed audio ships; no WAV file is in the repo or the build. The WAV masters are encoded with ffmpeg's `aac` encoder to `public/cdn-assets/audio/*.m4a` at 128 kb/s. That is about 9 MB in total, against 110 MB of WAVs. The Main 1 trim happens here. A script, `scripts/encode-music.sh`, records the exact ffmpeg commands. The WAV masters stay outside the repo.
 - **Loading:** `RundotGameAPI.cdn.fetchAsset('audio/<name>.m4a')`, then `arrayBuffer()`, then `decodeAudioData`. This is the SDK's documented path for CDN audio. Audio is not packed in StowKit, because StowKit audio doesn't give decoded buffers for clock scheduling. Loading never blocks the game. The Intro is fetched at boot, and Main 1 and Main 2 right after it.
 - **Encoder offset:** AAC adds priming samples at the start. Browsers that honour the MP4 edit list strip them. During implementation, a decoded file is checked in Chrome and Safari against the WAV, and any remaining offset is made a per-track config value, so the grid and loop points stay exact.
-- **Memory:** decoded PCM is large: 48 kHz stereo float is ≈23 MB per minute. That puts Intro at ≈46 MB, Main 1 at ≈80 MB and Main 2 at ≈93 MB. Only the playing track or tracks are kept decoded:
+- **Memory (RAM at runtime, not download size):** the browser decodes each compressed file into raw samples in memory before it can schedule it, and decoded PCM is large: 48 kHz stereo float is ≈23 MB per minute. That puts Intro at ≈46 MB, Main 1 at ≈80 MB and Main 2 at ≈93 MB. Only the playing track or tracks are kept decoded:
   - The compressed bytes of all three stay cached, about 9 MB.
   - The Intro and Main 1 are decoded when needed: the Intro at unlock, Main 1 when the cutscene starts.
   - Main 2 is decoded while Main 1 plays.
