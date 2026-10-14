@@ -28,8 +28,6 @@ export const CONFIG = {
     roof: 0x5d5a66,
     carapace: 0x7fd41e,
     carapaceDark: 0x4e8f12,
-    /** The Insect's back armour, pincers and face plates: deep enough to read as plating even in full sun. */
-    carapaceArmor: 0x2c5410,
     joint: 0x7a2fa8,
     stinger: 0xe8ff6a,
     eye: 0xffe14d,

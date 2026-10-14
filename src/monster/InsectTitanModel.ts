@@ -3,7 +3,6 @@ import { CONFIG } from '../config';
 import { faceted, toonMat } from '../render/toon';
 import { placeSegment } from './ik';
 import { tailSwatPoints } from './tailSwat';
-import { SHAPES, at, between, merge, plateOn, taper } from './insectParts';
 
 export type LegRig = {
   side: 1 | -1;
@@ -43,16 +42,7 @@ export class InsectTitanModel {
     const joint = toonMat(p.joint);
     const glow = toonMat(p.stinger, { emissive: p.stinger });
     const eye = toonMat(p.eye, { emissive: p.eye });
-    const detailMat = toonMat(0xffffff, { vertexColors: true });
-    this.materials = [shell, shellDark, joint, detailMat];
-    /** One merged, vertex-coloured mesh of detail parts under `parent`. */
-    const detail = (parent: THREE.Object3D, parts: THREE.BufferGeometry[]) => {
-      const m = new THREE.Mesh(merge(parts), detailMat);
-      m.castShadow = true;
-      m.receiveShadow = true;
-      parent.add(m);
-      return m;
-    };
+    this.materials = [shell, shellDark, joint];
 
     const add = (parent: THREE.Object3D, geo: THREE.BufferGeometry, mat: THREE.Material, pos: [number, number, number], scale?: [number, number, number]) => {
       const m = new THREE.Mesh(geo, mat);
@@ -68,82 +58,21 @@ export class InsectTitanModel {
     const blob = faceted(new THREE.IcosahedronGeometry(1, 1));
 
     add(this.body, box, shell, [0, 300, 0], [150, 110, 200]);
+    add(this.body, box, shellDark, [0, 360, 0], [110, 30, 170]);
     const abdomen = add(this.body, blob, shell, [0, 330, -210], [130, 105, 190]);
     abdomen.rotation.x = -0.25;
-    {
-      // Back armour: shingled plates down the thorax over a low keel, edge spikes; segmented bands across
-      // the abdomen, each in three angled plates that follow its curve.
-      const parts: THREE.BufferGeometry[] = [];
-      for (let i = 0; i < 3; i++) {
-        const z = 62 - i * 62;
-        at(parts, taper([136, 14], [118, 12], 74), p.carapaceArmor, [0, 360 + i * 2, z], [1, 1, 1], [-0.1, 0, 0]);
-        at(parts, SHAPES.spike, p.carapaceArmor, [0, 372 + i * 2, z - 18], [16, 26, 30], [-0.6, 0, 0]);
-        for (const sd of [1, -1]) at(parts, SHAPES.spike, p.carapaceArmor, [sd * 72, 352, z - 20], [10, 28, 10], [0, 0, -sd * 1.9]);
-      }
-      const C: [number, number, number] = [0, 330, -210];
-      const R: [number, number, number] = [130, 105, 190];
-      for (let i = 0; i < 6; i++) {
-        const u = 0.55 - i * 0.36;
-        const tone = p.carapaceArmor;
-        const along = 64 - i * 3;
-        plateOn(parts, tone, C, R, -0.25, u, 0, [88 - i * 6, 16, along], 3, 0.14);
-        for (const sd of [1, -1]) plateOn(parts, tone, C, R, -0.25, u, sd * 0.62, [70 - i * 5, 15, along * 0.92], 3, 0.14);
-      }
-      detail(this.body, parts);
-    }
-    {
-      // Head: a wedge that narrows and drops toward the front, a crest down the middle, brow and cheek plates,
-      // an upper lip between the mandibles, and short jointed antennae.
-      const parts: THREE.BufferGeometry[] = [];
-      at(parts, taper([106, 90], [58, 38], 112), p.carapace, [0, 292, 150], [1, 1, 1], [0.18, 0, 0]);
-      // A diamond faceplate that brings the face to a point between the eyes.
-      at(parts, SHAPES.spike, p.carapaceArmor, [0, 281, 214], [76, 44, 76], [Math.PI / 2 + 0.25, 0, Math.PI / 4]);
-      at(parts, taper([26, 14], [10, 8], 104), p.carapaceArmor, [0, 336, 148], [1, 1, 1], [0.24, 0, 0]);
-      at(parts, SHAPES.box, p.carapaceArmor, [0, 262, 207], [52, 16, 18], [0.2, 0, 0]);
-      for (const sd of [1, -1]) {
-        at(parts, SHAPES.box, p.carapaceArmor, [sd * 33, 323, 172], [42, 10, 44], [0.38, sd * 0.42, sd * -0.28]);
-        at(parts, SHAPES.box, p.carapaceArmor, [sd * 47, 280, 150], [12, 54, 76], [0.12, sd * 0.22, 0]);
-        const a0: [number, number, number] = [sd * 20, 328, 192];
-        const a1: [number, number, number] = [sd * 40, 392, 226];
-        const a2: [number, number, number] = [sd * 74, 432, 196];
-        between(parts, SHAPES.limb, p.carapaceArmor, a0, a1, 9, 9);
-        at(parts, SHAPES.blob, p.carapaceArmor, a1, [7, 7, 7]);
-        between(parts, SHAPES.limb, p.carapaceArmor, a1, a2, 7, 7);
-      }
-      detail(this.body, parts);
-    }
-    // Compound eyes: big faceted domes set back on the sides of the head, looking forward and out.
-    const eyeGeo = faceted(new THREE.IcosahedronGeometry(1, 0));
-    for (const sd of [1, -1]) {
-      const e = add(this.body, eyeGeo, eye, [sd * 43, 309, 184], [15, 19, 25]);
-      e.rotation.y = sd * 0.45;
-    }
+    for (let i = 0; i < 3; i++) add(this.body, box, shellDark, [0, 395 - i * 8, -140 - i * 70], [120 - i * 15, 18, 40]);
+    add(this.body, box, shell, [0, 290, 150], [110, 90, 100]);
+    add(this.body, box, eye, [36, 315, 202], [26, 18, 8]);
+    add(this.body, box, eye, [-36, 315, 202], [26, 18, 8]);
 
-    // Mandibles: curved, segmented pincers that taper to a sharp purple tip, toothed along the inner edge.
+    const mandibleGeo = faceted(new THREE.ConeGeometry(14, 100, 4)).rotateX(Math.PI / 2).translate(0, 0, 50);
     for (const side of [1, -1]) {
       const pivot = new THREE.Object3D();
       pivot.position.set(side * 32, 255, 195);
-      const parts: THREE.BufferGeometry[] = [];
-      const pts: [number, number, number][] = [
-        [0, 0, 0],
-        [side * 10, -4, 46],
-        [side * 8, -8, 90],
-        [side * -4, -10, 122],
-      ];
-      const widths = [30, 22, 15];
-      for (let i = 0; i < 3; i++) {
-        between(parts, SHAPES.limb, p.carapaceArmor, pts[i]!, pts[i + 1]!, widths[i]!, widths[i]! * 0.8);
-        if (i < 2) at(parts, SHAPES.blob, p.carapaceArmor, pts[i + 1]!, [widths[i + 1]! * 0.55, widths[i + 1]! * 0.5, widths[i + 1]! * 0.55]);
-      }
-      const tip = pts[3]!;
-      between(parts, SHAPES.spike, p.joint, tip, [tip[0] + side * -12, tip[1] - 2, tip[2] + 22], 12, 12);
-      for (const [k, len] of [[0.35, 20], [0.6, 17], [0.82, 14]] as const) {
-        const a = pts[1]!;
-        const b = pts[3]!;
-        const q: [number, number, number] = [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k];
-        at(parts, SHAPES.spike, p.joint, [q[0] - side * 8, q[1], q[2]], [8, len, 8], [0, 0, side * (Math.PI / 2)]);
-      }
-      detail(pivot, parts);
+      const m = new THREE.Mesh(mandibleGeo, shellDark);
+      m.castShadow = true;
+      pivot.add(m);
       this.body.add(pivot);
       this.mandibles.push(pivot);
     }
