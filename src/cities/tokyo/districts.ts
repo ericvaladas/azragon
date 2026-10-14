@@ -20,7 +20,7 @@ export const TOKYO_DISTRICTS: Record<DistrictId, DistrictRules> = {
     signs: 0.3, billboard: 0.05, trees: 4,
   },
   residential: {
-    lots: 3, fill: 0.55, minPerBlock: 2, height: [14, 34], heightCurve: 1.2, footprint: [0.65, 0.88],
+    lots: 3, fill: 0.55, minPerBlock: 2, height: [14, 34], heightCurve: 1.2, footprint: [0.8, 0.95],
     facades: [FACADE.balcony], colors: [0xf7f1e6, 0xf0dccb, 0xdde9e2, 0xf2e6ee, 0xe4e0d4],
     signs: 0, billboard: 0, trees: 6,
   },

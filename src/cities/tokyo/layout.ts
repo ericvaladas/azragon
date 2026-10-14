@@ -23,6 +23,10 @@ const CORE_REGIONS: readonly Region[] = [
   { district: 'neon', x0: 200, z0: 2000, x1: 600, z1: 3400 },
   { district: 'highrise', x0: 400, z0: 2000, x1: 2000, z1: 3400 },
   { district: 'highrise', x0: -1400, z0: 1600, x1: -800, z1: 2400 },
+  // The intro dive's line (due south of the crash): a station with neon streets amid office blocks, so the fall
+  // passes over a dense, lit city rather than low-rise housing.
+  { district: 'neon', x: 0, z: -2000, r: 340 },
+  { district: 'office', x0: -2400, z0: -3600, x1: 2400, z1: -900 },
   { district: 'residential', x0: 1600, z0: -4000, x1: 4000, z1: 1150 },
   { district: 'residential', x0: -4000, z0: -4000, x1: 4000, z1: -900 },
 ];

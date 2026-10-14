@@ -169,6 +169,8 @@ export function generateChunk(style: CityStyle, seed: number, cx: number, cz: nu
       const landmark = style.landmarks.find((l) => blockOf(l.x) === bi && blockOf(l.z) === bj);
       if (landmark) {
         if (!craterSite) landmarks.push(landmark);
+        // A landmark in a park stands on the park's green (Tokyo Tower in Shiba Park).
+        if (!craterSite && style.districtAt(bx, bz) === 'park') parks.push({ x: bx, z: bz });
         continue;
       }
       let district = style.districtAt(bx, bz);

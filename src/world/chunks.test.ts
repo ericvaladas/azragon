@@ -73,6 +73,17 @@ describe('generateChunk', () => {
     expect(owners).toBe(1);
   });
 
+  it('lays a park pad under a landmark standing in a park (Tokyo Tower in Shiba Park), but no trees on its block', () => {
+    const tower = TOKYO.landmarks.find((l) => l.id === 'tokyo-tower')!;
+    let pads = 0;
+    for (const r of chunksInRadius(tower.x, tower.z, CHUNK_SIZE)) {
+      const c = generateChunk(TOKYO, 1337, r.cx, r.cz);
+      pads += c.parks.filter((p) => blockCell(p.x) === blockCell(tower.x) && blockCell(p.z) === blockCell(tower.z)).length;
+      for (const t of c.trees) expect(Math.abs(t.x - tower.x) < tower.w / 2 && Math.abs(t.z - tower.z) < tower.d / 2).toBe(false);
+    }
+    expect(pads).toBe(1);
+  });
+
   it('places the Shibuya corner buildings exactly, and no random building overlaps them', () => {
     const found: BuildingSpec[] = [];
     const all: BuildingSpec[] = [];

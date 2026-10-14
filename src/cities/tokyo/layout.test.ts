@@ -24,6 +24,12 @@ describe('Tokyo layout', () => {
   it('sets Tokyo Tower in Shiba Park', () => {
     expect(districtAt(-500, 1500)).toBe('park');
   });
+  it('keeps the intro dive line (due south of the crash, under the falling pod) dense: no low-rise housing', () => {
+    for (let x = -1400; x <= 1400; x += 200) for (let z = -3400; z <= -200; z += 200) {
+      expect(['office', 'neon']).toContain(districtAt(x, z));
+    }
+    expect(districtAt(0, -2000)).toBe('neon');
+  });
   it('never makes the crash site a park', () => {
     const W = CONFIG.world;
     for (let x = -1000; x <= 1000; x += 100) for (let z = -1000; z <= 1000; z += 100) {
