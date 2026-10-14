@@ -110,7 +110,7 @@ export const CONFIG = {
     /** Intersection squares plus bridge deck slabs (at most 16 intersections per chunk), with 10% headroom over the swept peak. */
     maxNodes: 3300,
     /** River and bay cell quads (sized for a load centred on land). */
-    maxWater: 1500,
+    maxWater: 2400,
     blockSize: 200,
     roadWidth: 36,
     /** Crater around the origin (the pod's impact site; the decal is half a block wider), sized to the cocoon. */
