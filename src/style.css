@@ -386,21 +386,19 @@ body {
 /* Title: logo over the drifting city; taps fall through to the canvas. */
 .title-screen {
   position: absolute; inset: 0; pointer-events: none;
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 28px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
   animation: menu-in 350ms ease-out both;
 }
+/* Plain white, wide and heavy (Unbounded 900, an Akira-style extended face): no stroke, shadow or glow. */
 .title-logo {
-  margin: 0; font-weight: 700; font-size: clamp(56px, 16vw, 128px); letter-spacing: 0.08em; line-height: 1;
-  color: #ecffd8;
-  text-shadow: 4px 4px 0 #1b2a10, 8px 8px 0 rgba(0, 0, 0, 0.35), 0 0 28px rgba(155, 226, 45, 0.55);
+  margin: 0; font-family: 'Unbounded', 'Chakra Petch', sans-serif; font-weight: 900;
+  font-size: clamp(40px, 12vw, 112px); letter-spacing: 0.02em; line-height: 1; color: #ffffff;
 }
+/* The start hint sits at the bottom of the screen, plain text, steady. */
 .title-hint {
-  font-size: 15px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-text);
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
-  background: rgba(0, 0, 0, 0.55); padding: 8px 16px; border-radius: 4px;
-  animation: title-hint-blink 1.6s steps(2) infinite;
+  position: absolute; left: 0; right: 0; bottom: calc(var(--safe-bottom, 0px) + 40px); text-align: center;
+  font-size: 15px; letter-spacing: 0.14em; text-transform: uppercase; color: #ffffff;
 }
-@keyframes title-hint-blink { 50% { opacity: 0.55; } }
 
 /* Select: carousel UI over the 3D diorama. */
 .select-screen {
