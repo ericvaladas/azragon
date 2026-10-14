@@ -308,7 +308,7 @@ body {
   transition: transform 100ms ease-out;
 }
 .ability-btn:active { transform: scale(0.92); }
-.ability-btn.ready { border-color: var(--color-primary); box-shadow: 0 0 12px rgba(155, 226, 45, 0.55); }
+.ability-btn.ready { border-color: var(--color-primary); }
 .ability-btn.aiming { background: var(--color-primary); color: #0d1110; }
 .ability-btn.locked { opacity: 0.45; filter: grayscale(0.6); }
 .ability-label { font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; line-height: 64px; }
