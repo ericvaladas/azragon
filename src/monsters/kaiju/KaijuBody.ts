@@ -154,8 +154,8 @@ export class KaijuBody implements MonsterBody {
     this.neck.add(head);
     add(head, this.keep(faceted(new ConvexGeometry(headPoints()))), scale, [0, 0, 0], [1, 1, 1]);
     // Eyes: glowing rectangles set into the sides of the skull.
-    add(head, box, eye, [33, 15, 56], [16, 10, 16]);
-    add(head, box, eye, [-33, 15, 56], [16, 10, 16]);
+    add(head, box, eye, [30, 15, 56], [16, 10, 16]);
+    add(head, box, eye, [-30, 15, 56], [16, 10, 16]);
     this.jaw.position.set(0, -30, 40);
     head.add(this.jaw);
     add(this.jaw, this.keep(faceted(new ConvexGeometry(jawPoints()))), belly, [0, 0, 0], [1, 1, 1]);
