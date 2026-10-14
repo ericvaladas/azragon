@@ -8,15 +8,16 @@ export const FACADE = { glass: 0, office: 1, balcony: 2, shop: 3, container: 4 }
 export const FACADE_COUNT = 5;
 
 /**
- * A container yard (the port): each built lot holds either a pair of container stacks or one warehouse. Stacks are
- * `stack` m (w × d, turned 90° on a coin toss per lot), `tier` m × tiers[0]..tiers[1] tall, in the district's facades
- * and colours; a warehouse covers `warehouseFootprint` of its lot.
+ * A container yard (the port): each built lot holds either one container block or one warehouse. A block covers
+ * `block` of its lot (fractions w × d, turned 90° on a coin toss per lot), `tier` m × tiers[0]..tiers[1] tall, in the
+ * district's facades and colours, so the repeating facade reads as rows of containers; a warehouse covers
+ * `warehouseFootprint` of its lot.
  */
 export type YardRules = {
-  stack: readonly [number, number];
+  block: readonly [number, number];
   tier: number;
   tiers: readonly [number, number];
-  /** Chance a built lot is a warehouse instead of container stacks. */
+  /** Chance a built lot is a warehouse instead of a container block. */
   warehouse: number;
   warehouseFootprint: number;
   warehouseHeight: readonly [number, number];
@@ -47,7 +48,7 @@ export type DistrictRules = {
   billboard: number;
   /** Street trees per block. */
   trees: number;
-  /** Present for a container yard: lots hold container stacks and warehouses instead of `footprint` buildings. */
+  /** Present for a container yard: lots hold container blocks and warehouses instead of `footprint` buildings. */
   yard?: YardRules;
 };
 

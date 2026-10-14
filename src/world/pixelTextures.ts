@@ -107,11 +107,12 @@ export function facadeAtlas(): THREE.CanvasTexture {
       g.fillRect(x0 + x, y, 2, 2);
     }
   });
-  // 4: container sides: 1 px light and dark vertical ribs, crossed by a dark rail at every container joint (1 px =
-  // 1 m, so the rails repeat every 2.6 m, rounded down to the pixel, and each stack shows its tiers).
+  // 4: container sides: 1 px light and dark vertical ribs with a dark door seam at the cell's edge (so a block reads as
+  // a row of containers, one per FACADE_TILE.w), crossed by a dark rail at every container joint (1 px = 1 m, so the
+  // rails repeat every 2.6 m, rounded down to the pixel, and each block shows its tiers).
   cell(4, (x0) => {
     for (let x = 0; x < CELL_W; x++) {
-      g.fillStyle = x % 2 === 0 ? '#f4f4f4' : '#b4b4b4';
+      g.fillStyle = x === 0 ? '#5a5a5a' : x % 2 === 0 ? '#f4f4f4' : '#b4b4b4';
       g.fillRect(x0 + x, 0, 1, CELL_H);
     }
     g.fillStyle = '#5a5a5a';

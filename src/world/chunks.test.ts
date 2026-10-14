@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { AVENUE_PAVEMENT, BUILDINGS_PER_CHUNK, CHUNK_SIZE, DestroyedLog, SIGNS_PER_CHUNK, TREES_PER_CHUNK, blastTopples, chunkKey, chunksInRadius, generateChunk, maxLoadedChunks, planStreaming } from './chunks';
+import { AVENUE_PAVEMENT, BUILDINGS_PER_CHUNK, CHUNK_SIZE, CRANE_PORTAL, DestroyedLog, SIGNS_PER_CHUNK, TREES_PER_CHUNK, blastTopples, chunkKey, chunksInRadius, generateChunk, maxLoadedChunks, planStreaming } from './chunks';
 import type { BuildingSpec, ChunkContent } from './chunks';
 import { CONFIG } from '../config';
 import { TOKYO } from '../cities/tokyo';
@@ -448,7 +448,7 @@ describe('harbour and island', () => {
     expect(coast).toBeGreaterThan(20);
   });
 
-  it('fills the port with container stacks (container colours, ribbed facade, whole containers tall) and warehouses', () => {
+  it('fills the port with bold container blocks (container colours, ribbed facade, whole containers tall) and warehouses', () => {
     const stacks = portBuildings.filter((b) => b.facade === FACADE.container);
     const sheds = portBuildings.filter((b) => b.facade !== FACADE.container);
     expect(stacks.length).toBeGreaterThan(50);
@@ -459,7 +459,9 @@ describe('harbour and island', () => {
       expect(Math.abs(tiers - Math.round(tiers))).toBeLessThan(1e-9);
       expect(Math.round(tiers)).toBeGreaterThanOrEqual(2);
       expect(Math.round(tiers)).toBeLessThanOrEqual(4);
-      expect([`${b.w}x${b.d}`]).toContain(b.w > b.d ? `${yard.stack[0]}x${yard.stack[1]}` : `${yard.stack[1]}x${yard.stack[0]}`);
+      // Most of a lot (≈ 0.85 × 0.7 of 64–82 m); a block cut back behind a crane's portal keeps at least 20 m.
+      expect(Math.max(b.w, b.d)).toBeGreaterThan(44);
+      expect(Math.min(b.w, b.d)).toBeGreaterThanOrEqual(20);
     }
     for (const b of sheds) {
       expect(b.facade).toBe(yard.warehouseFacade);
@@ -488,14 +490,48 @@ describe('harbour and island', () => {
     expect(coast / cranes.length).toBeGreaterThanOrEqual(2);
     expect(coast / cranes.length).toBeLessThanOrEqual(4);
     const cells = cranes.map((k) => cellOf(k.x, k.z));
+    // A diagonal coast gets cranes facing both ways, not all along one axis.
+    expect(cranes.some((k) => Math.abs(Math.sin(k.yaw)) > 0.5)).toBe(true);
+    expect(cranes.some((k) => Math.abs(Math.cos(k.yaw)) > 0.5)).toBe(true);
     for (const [k, [i, j]] of cells.entries()) {
       expect(coastal(i, j), `crane in ${i},${j}`).toBe(true);
       const crane = cranes[k]!;
+      // It faces the bay: its sea edge is the bay side whose outward normal best matches the bay's dir.
+      const dir = TOKYO.bay!.dir;
+      const facing = Math.sin(crane.yaw) * dir.x + Math.cos(crane.yaw) * dir.z;
+      for (const [di, dj] of [[-1, 0], [1, 0], [0, -1], [0, 1]] as const) {
+        if (isBay(TOKYO, i + di, j + dj)) expect(facing).toBeGreaterThanOrEqual(di * dir.x + dj * dir.z - 1e-9);
+      }
       // The jib's tip is over a bay cell.
-      const tip = cellOf(crane.x + 50 * Math.sin(crane.yaw), crane.z + 50 * Math.cos(crane.yaw));
+      const tip = cellOf(crane.x + 80 * Math.sin(crane.yaw), crane.z + 80 * Math.cos(crane.yaw));
       expect(isBay(TOKYO, ...tip), `crane in ${i},${j}`).toBe(true);
       for (const [i2, j2] of cells.slice(k + 1)) expect(Math.max(Math.abs(i2 - i), Math.abs(j2 - j))).toBeGreaterThanOrEqual(2);
     }
+  });
+
+  it('never stands a crane leg in a building, and never puts a warehouse on the sea side of a crane cell', () => {
+    let cranes = 0;
+    for (let cx = -8; cx <= 4; cx++) for (let cz = -8; cz <= 4; cz++) {
+      const c = generateChunk(TOKYO, 1337, cx, cz);
+      for (const k of c.cranes) {
+        cranes++;
+        // The portal's footprint (legs and the span between them), axis-aligned: the jib points along x or z.
+        const alongX = Math.abs(Math.sin(k.yaw)) > 0.5;
+        const across = CRANE_PORTAL.halfAcross + CRANE_PORTAL.leg / 2, along = CRANE_PORTAL.halfAlong + CRANE_PORTAL.leg / 2;
+        const portal = { x: k.x, z: k.z, w: 2 * (alongX ? across : along), d: 2 * (alongX ? along : across) };
+        const [ci, cj] = cellOf(k.x, k.z);
+        for (const b of c.buildings) {
+          const hit = Math.abs(b.x - portal.x) * 2 < b.w + portal.w && Math.abs(b.z - portal.z) * 2 < b.d + portal.d;
+          expect(hit, `crane at ${k.x},${k.z} through building at ${b.x},${b.z}`).toBe(false);
+          // Sea side: the building's centre lies toward the jib from the cell centre.
+          const [bi, bj] = cellOf(b.x, b.z);
+          if (bi !== ci || bj !== cj) continue;
+          const seaward = (b.x - PITCH * (ci + 0.5)) * Math.sin(k.yaw) + (b.z - PITCH * (cj + 0.5)) * Math.cos(k.yaw) > 0;
+          if (seaward) expect(b.facade, `warehouse on the sea side of crane cell ${ci},${cj}`).toBe(FACADE.container);
+        }
+      }
+    }
+    expect(cranes).toBeGreaterThan(15);
   });
 
   it('fits a full load of cranes, quay and park pads, and buildings in the pools at three coast positions', () => {

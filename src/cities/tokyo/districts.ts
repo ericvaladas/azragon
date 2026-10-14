@@ -31,12 +31,12 @@ export const TOKYO_DISTRICTS: Record<DistrictId, DistrictRules> = {
     lots: 0, fill: 0, minPerBlock: 0, height: [0, 0], heightCurve: 1, footprint: [0, 0],
     facades: [FACADE.office], colors: [0xffffff], signs: 0, billboard: 0, trees: 0,
   },
-  // The harbour: container stacks (red, blue, orange, green, teal) and pale warehouses; no signs, no trees.
+  // The harbour: container blocks (red, blue, orange, green, teal) and pale warehouses; no signs, no trees.
   port: {
-    lots: 2, fill: 0.7, minPerBlock: 1, height: [5.2, 10.4], heightCurve: 1, footprint: [1, 1],
+    lots: 2, fill: 0.85, minPerBlock: 1, height: [5.2, 10.4], heightCurve: 1, footprint: [1, 1],
     facades: [FACADE.container], colors: CONTAINER_COLORS, signs: 0, billboard: 0, trees: 0,
     yard: {
-      stack: [30, 12], tier: 2.6, tiers: [2, 4], warehouse: 0.3, warehouseFootprint: 0.9, warehouseHeight: [12, 22],
+      block: [0.85, 0.7], tier: 2.6, tiers: [2, 4], warehouse: 0.3, warehouseFootprint: 0.9, warehouseHeight: [12, 22],
       warehouseFacade: FACADE.office, warehouseColors: [0xe4e6e8, 0xd5d9dc, 0xefe6d2, 0xe8dcc0],
     },
   },

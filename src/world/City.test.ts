@@ -4,7 +4,8 @@ import { CONFIG } from '../config';
 import { TOKYO } from '../cities/tokyo';
 import type { CityStyle } from '../cities/types';
 import { City, CRATER_RADIUS, SlotPool } from './City';
-import { chunksInRadius, generateChunk } from './chunks';
+import { chunksInRadius, CRANE_PORTAL, generateChunk } from './chunks';
+import { craneGeometry } from './crane';
 import { isWater, PITCH } from './roads';
 import type { CityTextures } from './pixelTextures';
 import type { Target } from '../combat';
@@ -441,5 +442,19 @@ describe('harbour', () => {
       found++;
     }
     expect(found).toBe(quays.size);
+  });
+});
+
+describe('crane geometry', () => {
+  it('is about 95 m tall, its portal legs where the generator keeps buildings out, jib 80 m past the front legs', () => {
+    const g = craneGeometry();
+    g.computeBoundingBox();
+    const bb = g.boundingBox!;
+    expect(bb.max.y).toBeGreaterThan(90);
+    expect(bb.max.y).toBeLessThan(100);
+    expect(bb.min.y).toBeCloseTo(0);
+    expect(bb.max.z).toBeCloseTo(CRANE_PORTAL.halfAcross + 80);
+    // Legs and sills stay inside the portal footprint the generator clears (plus the sills' few metres of foot).
+    expect(Math.max(-bb.min.x, bb.max.x)).toBeLessThanOrEqual(CRANE_PORTAL.halfAlong + CRANE_PORTAL.leg / 2 + 1);
   });
 });
