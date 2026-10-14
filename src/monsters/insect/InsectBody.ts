@@ -62,7 +62,8 @@ export class InsectBody implements MonsterBody {
       }
     }
 
-    const twitch = f.roaring ? 0.55 : 0.18 + Math.sin(f.time * 7) * 0.08;
+    // Mandibles: a slow working twitch; flung wide open on a roar.
+    const twitch = f.roaring ? -0.5 : 0.04 + Math.sin(f.time * 7) * 0.07;
     this.model.mandibles[0]!.rotation.y = -twitch;
     this.model.mandibles[1]!.rotation.y = twitch;
     if (f.antiAir) this.model.updateTail(f.time, body.worldToLocal(_swat.copy(f.antiAir.target)), f.antiAir.weight);
