@@ -64,7 +64,7 @@ Positions are world metres from the crash.
 ### Time of day: warm evening
 
 Each city now carries an `atmosphere` (see **Shared code changes**). Tokyo's atmosphere is today's exact values.
-Toronto's starting values are below; they are tuned in the visual checks.
+Toronto's values, as tuned in the visual checks, are below.
 
 | Setting | Toronto |
 |---|---|
