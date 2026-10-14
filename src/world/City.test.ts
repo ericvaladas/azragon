@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { CONFIG } from '../config';
 import { TOKYO } from '../cities/tokyo';
 import type { CityStyle } from '../cities/types';
-import { City, CRATER_RADIUS } from './City';
+import { City, CRATER_RADIUS, SlotPool } from './City';
 import type { CityTextures } from './pixelTextures';
 import type { Target } from '../combat';
 import { gameplayPose } from '../intro/timeline';
@@ -229,6 +229,18 @@ describe('road network', () => {
     for (let i = 0; i < 200; i++) city.update(0.016, new THREE.Vector3(30000, 0, 0));
     for (let i = 0; i < 200; i++) city.update(0.016, new THREE.Vector3());
     expect(city.roadNetworkCount()).toEqual(before);
+  });
+});
+
+describe('SlotPool', () => {
+  it('reset() frees every slot and clears its in-use marks', () => {
+    const pool = new SlotPool(new THREE.InstancedMesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial(), 8));
+    for (let i = 0; i < 5; i++) pool.take(new THREE.Matrix4());
+    expect(pool.inUse()).toBe(5);
+    expect(pool.highWater()).toBe(5);
+    pool.reset();
+    expect(pool.inUse()).toBe(0);
+    expect(pool.highWater()).toBe(0);
   });
 });
 

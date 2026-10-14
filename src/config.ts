@@ -96,7 +96,8 @@ export const CONFIG = {
     unloadRadius: 5600,
     chunksPerFrame: 3,
     maxBuildings: 12000,
-    maxTrees: 5000,
+    /** Tree cones; a per-chunk cap (maxTrees / maxLoadedChunks) keeps a full load inside the pool. */
+    maxTrees: 37000,
     /** Pool size for neon sign boxes across all loaded chunks. */
     maxSigns: 12000,
     /** Pool size for animated video-screen signs across all loaded chunks. */
@@ -106,8 +107,8 @@ export const CONFIG = {
     maxRubble: 2500,
     /** Road segment pool: at most 32 segments start in a chunk, times maxLoadedChunks (185), rounded up. */
     maxRoads: 6000,
-    /** Intersection squares plus bridge deck slabs (at most 16 intersections per chunk). */
-    maxNodes: 3000,
+    /** Intersection squares plus bridge deck slabs (at most 16 intersections per chunk), with 10% headroom over the swept peak. */
+    maxNodes: 3300,
     /** River cell quads. */
     maxWater: 800,
     blockSize: 200,

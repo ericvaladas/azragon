@@ -80,6 +80,7 @@ export function maxLoadedChunks(): number {
 /** Per-chunk caps, so a full load of the densest districts still fits the pools. */
 export const BUILDINGS_PER_CHUNK = Math.floor(CONFIG.world.maxBuildings / maxLoadedChunks());
 export const SIGNS_PER_CHUNK = Math.floor(CONFIG.world.maxSigns / maxLoadedChunks());
+export const TREES_PER_CHUNK = Math.floor(CONFIG.world.maxTrees / maxLoadedChunks());
 
 /** Width of the widest existing segment meeting node (i, j), or 0 when none does. */
 export function nodeSize(style: CityStyle, i: number, j: number): number {
@@ -126,7 +127,7 @@ function makeSigns(rules: DistrictRules, style: CityStyle, w: number, d: number,
  * segment exists, so removed-street strips stay unbuilt; in residential and park blocks they become tree-lined
  * lanes. Landmarks claim their block (the chunk holding the landmark's centre owns it); special lots replace the
  * random lots they overlap; the crash site is never a park. Per-chunk caps thin the random buildings (never special
- * lots) and then their signs. Same inputs, same chunk.
+ * lots), then their signs, then the trees. Same inputs, same chunk.
  */
 export function generateChunk(style: CityStyle, seed: number, cx: number, cz: number): ChunkContent {
   const w = CONFIG.world;
@@ -234,7 +235,9 @@ export function generateChunk(style: CityStyle, seed: number, cx: number, cz: nu
   const lane = (d: string) => d === 'residential' || d === 'park';
   for (let i = cx * w.chunkBlocks; i < (cx + 1) * w.chunkBlocks; i++) {
     for (let j = cz * w.chunkBlocks; j < (cz + 1) * w.chunkBlocks; j++) {
-      const size = nodeSize(style, i, j);
+      // A mid-river node (four water cells) only carries a bridge, whose deck runs straight through it.
+      const midRiver = isWater(style, i - 1, j - 1) && isWater(style, i, j - 1) && isWater(style, i - 1, j) && isWater(style, i, j);
+      const size = midRiver ? 0 : nodeSize(style, i, j);
       if (size > 0) nodes.push({ x: i * pitch + ROAD_ORIGIN, z: j * pitch + ROAD_ORIGIN, size });
       for (const axis of ['x', 'z'] as Axis[]) {
         const seg = segmentAt(style, axis, i, j);
@@ -277,7 +280,13 @@ export function generateChunk(style: CityStyle, seed: number, cx: number, cz: nu
     }
     for (const [b, ks] of drop) b.signs = b.signs.filter((_, k) => !ks.has(k));
   }
-  return { buildings: out, trees, parks, landmarks, roads, nodes, water };
+  // Tree cap: an over-full (park-heavy) chunk drops trees at random, so every loaded chunk fits the tree pool.
+  let keptTrees = trees;
+  if (trees.length > TREES_PER_CHUNK) {
+    const order = trees.map((_, k) => ({ k, r: rng() })).sort((a, b) => a.r - b.r).slice(0, TREES_PER_CHUNK).map((o) => o.k).sort((a, b) => a - b);
+    keptTrees = order.map((k) => trees[k]!);
+  }
+  return { buildings: out, trees: keptTrees, parks, landmarks, roads, nodes, water };
 }
 
 /** Chunks to load (within loadRadius, nearest first) and to unload (beyond unloadRadius). */

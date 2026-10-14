@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { BUILDINGS_PER_CHUNK, CHUNK_SIZE, DestroyedLog, SIGNS_PER_CHUNK, blastTopples, chunkKey, chunksInRadius, generateChunk, maxLoadedChunks, planStreaming } from './chunks';
+import { BUILDINGS_PER_CHUNK, CHUNK_SIZE, DestroyedLog, SIGNS_PER_CHUNK, TREES_PER_CHUNK, blastTopples, chunkKey, chunksInRadius, generateChunk, maxLoadedChunks, planStreaming } from './chunks';
 import type { BuildingSpec } from './chunks';
 import { CONFIG } from '../config';
 import { TOKYO } from '../cities/tokyo';
@@ -226,7 +226,8 @@ describe('road network in chunks', () => {
 
   it('fits a full load of roads, intersections (with bridge slabs) and water in the pools', () => {
     expect(32 * maxLoadedChunks()).toBeLessThanOrEqual(W.maxRoads);
-    for (const [x, z] of [[0, 0], [0, 1300], [4000, 1300], [-9000, 1500], [20000, 900]] as const) {
+    // (−7100, 1300) is the swept peak for intersections plus bridge slabs; keep 10% headroom over it.
+    for (const [x, z] of [[0, 0], [0, 1300], [4000, 1300], [-9000, 1500], [20000, 900], [-7100, 1300]] as const) {
       let roads = 0, nodes = 0, water = 0;
       for (const r of chunksInRadius(x, z, W.unloadRadius)) {
         const c = generateChunk(TOKYO, 1337, r.cx, r.cz);
@@ -235,9 +236,45 @@ describe('road network in chunks', () => {
         water += c.water.length;
       }
       expect(roads).toBeLessThanOrEqual(W.maxRoads);
-      expect(nodes).toBeLessThanOrEqual(W.maxNodes);
+      expect(nodes * 1.1).toBeLessThanOrEqual(W.maxNodes);
       expect(water).toBeLessThanOrEqual(W.maxWater);
     }
+  });
+
+  it('draws no intersection square at a mid-river node (all four cells water; the bridge deck runs through)', () => {
+    let midRiver = 0;
+    for (let cx = -20; cx <= 20; cx++) for (const cz of [1, 2, 3]) {
+      for (const n of generateChunk(TOKYO, 1337, cx, cz).nodes) {
+        const i = n.x / PITCH, j = n.z / PITCH;
+        expect(isWater(TOKYO, i - 1, j - 1) && isWater(TOKYO, i, j - 1) && isWater(TOKYO, i - 1, j) && isWater(TOKYO, i, j)).toBe(false);
+      }
+      for (let i = 4 * cx; i < 4 * cx + 4; i++) for (let j = 4 * cz; j < 4 * cz + 4; j++) {
+        if (isWater(TOKYO, i - 1, j - 1) && isWater(TOKYO, i, j - 1) && isWater(TOKYO, i - 1, j) && isWater(TOKYO, i, j)) midRiver++;
+      }
+    }
+    expect(midRiver).toBeGreaterThan(0);
+  });
+
+  it('caps trees per chunk, so a full load never runs the tree pool dry (near chunks keep their trees)', () => {
+    expect(TREES_PER_CHUNK * maxLoadedChunks()).toBeLessThanOrEqual(W.maxTrees);
+    // The origin, the swept tree peak (a park-heavy load) and the node peak by the river.
+    for (const [x, z] of [[0, 0], [7000, -2000], [-7100, 1300], [2500, -2500]] as const) {
+      let trees = 0;
+      for (const r of chunksInRadius(x, z, W.unloadRadius)) {
+        const n = generateChunk(TOKYO, 1337, r.cx, r.cz).trees.length;
+        expect(n).toBeLessThanOrEqual(TREES_PER_CHUNK);
+        trees += n;
+      }
+      expect(trees).toBeLessThanOrEqual(W.maxTrees);
+    }
+  });
+
+  it('thins only over-full chunks, deterministically, and keeps most of a park chunk\'s trees', () => {
+    const ALL_PARK: CityStyle = { ...TOKYO, districtAt: () => 'park', landmarks: [], specialLots: [], river: undefined };
+    const c = generateChunk(ALL_PARK, 1337, 30, 30);
+    expect(c.trees.length).toBe(TREES_PER_CHUNK);
+    expect(c.trees).toEqual(generateChunk(ALL_PARK, 1337, 30, 30).trees);
+    expect(TREES_PER_CHUNK).toBeGreaterThanOrEqual(16 * TOKYO.parkTrees[0] * 0.5);
   });
 });
 

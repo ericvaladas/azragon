@@ -69,7 +69,7 @@ type LoadedChunk = {
 const ZERO = new THREE.Matrix4().makeScale(0, 0, 0);
 
 /** Fixed-size slots of one instanced mesh: free slots are taken from a stack; released slots are zero-scaled. */
-class SlotPool {
+export class SlotPool {
   private free: number[] = [];
   private used: boolean[];
 
@@ -79,6 +79,7 @@ class SlotPool {
   }
 
   reset(): void {
+    this.used.fill(false);
     this.free = [];
     for (let i = this.used.length - 1; i >= 0; i--) this.free.push(i);
   }
