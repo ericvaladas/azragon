@@ -18,25 +18,21 @@ const LEG_Z = [90, 90, 0, 0, -90, -90];
 const FOOT_Z = [270, 270, 20, 20, -250, -250];
 type P3 = readonly [number, number, number];
 /**
- * The head as a hull over these points (body space, one side; mirrored in X): a mantis-like triangle seen from
- * the front — wide at the top, where the eyes sit on the corners, raked in to a point at the mouth — and a
- * flat wedge from the side. Few points, so it is a handful of big, sharp planes.
+ * The head as a hull over these points (body space, one side; mirrored in X): a broad, flat-topped crown at the
+ * back, sharp temple and brow corners, cheeks raked in to a pointed jaw, and a keel down the face.
  */
 const HEAD_POINTS: readonly P3[] = [
-  [0, 344, 104], [50, 336, 104], [22, 252, 110], [0, 246, 110],
-  [0, 352, 146], [64, 326, 150], [30, 250, 156],
-  [0, 338, 200], [58, 330, 190], [12, 246, 214], [0, 240, 216],
-  [10, 258, 224], [0, 262, 228],
+  // Back of the head.
+  [0, 342, 98], [34, 340, 98], [54, 312, 100], [56, 280, 100], [44, 250, 100], [0, 240, 100],
+  // Crown and temples (widest).
+  [0, 352, 132], [36, 348, 134], [62, 318, 146], [60, 284, 150], [48, 252, 150], [22, 238, 148], [0, 236, 146],
+  // Brow corners, eye sockets and cheeks.
+  [0, 344, 172], [30, 340, 176], [46, 326, 184], [54, 300, 180], [46, 266, 186], [28, 246, 186],
+  // Face: a keel down the middle, narrowing.
+  [0, 326, 204], [20, 316, 206], [28, 290, 208], [22, 262, 210], [0, 252, 210],
+  // The pointed jaw.
+  [12, 296, 226], [10, 272, 226], [0, 306, 222], [0, 266, 228],
 ];
-/** Dark armour on the head (one side, +X; mirrored): each a small hull. */
-const HEAD_ARMOR: readonly (readonly P3[])[] = [
-  // Brow crest blade, sweeping back and up from above the eye.
-  [[40, 340, 186], [54, 340, 180], [50, 332, 182], [62, 388, 100], [56, 382, 98], [54, 356, 140], [44, 350, 146]],
-  // Eye socket: an angular rim the eye sits in, on the head's top corner.
-  [[52, 340, 192], [70, 334, 172], [72, 316, 158], [64, 304, 168], [54, 310, 192], [64, 330, 152]],
-];
-/** The keel down the middle of the head (both sides at once). */
-const HEAD_KEEL: readonly P3[] = [[0, 362, 116], [9, 356, 120], [-9, 356, 120], [0, 342, 206], [7, 336, 202], [-7, 336, 202], [0, 330, 140]];
 
 const TAIL_BASE: THREE.Vector3[] = [
   new THREE.Vector3(0, 350, -380),
@@ -85,15 +81,13 @@ export class InsectTitanModel {
     const abdomen = add(this.body, blob, shell, [0, 330, -210], [130, 105, 190]);
     abdomen.rotation.x = -0.25;
     for (let i = 0; i < 3; i++) add(this.body, box, shellDark, [0, 395 - i * 8, -140 - i * 70], [120 - i * 15, 18, 40]);
-    const hull = (pts: readonly P3[], mirror: 1 | -1 = 1) => faceted(new ConvexGeometry(pts.map(([x, y, z]) => new THREE.Vector3(x * mirror, y, z))));
-    const mirrored = (pts: readonly P3[]) => pts.flatMap(([x, y, z]) => (x === 0 ? [[x, y, z] as P3] : [[x, y, z] as P3, [-x, y, z] as P3]));
-    add(this.body, hull(mirrored(HEAD_POINTS)), shell, [0, 0, 0]);
-    add(this.body, hull(HEAD_KEEL), shellDark, [0, 0, 0]);
-    for (const sd of [1, -1] as const) {
-      for (const piece of HEAD_ARMOR) add(this.body, hull(piece, sd), shellDark, [0, 0, 0]);
-      // Eyes: angular faceted gems set in the sockets, looking forward and out.
-      const e = add(this.body, faceted(new THREE.OctahedronGeometry(1, 0)), eye, [sd * 66, 324, 178], [13, 17, 25]);
-      e.rotation.set(0, sd * 0.55, sd * 0.25);
+    const mirrored = HEAD_POINTS.flatMap(([x, y, z]) => (x === 0 ? [new THREE.Vector3(x, y, z)] : [new THREE.Vector3(x, y, z), new THREE.Vector3(-x, y, z)]));
+    add(this.body, faceted(new ConvexGeometry(mirrored)), shell, [0, 0, 0]);
+    // Eyes: angular faceted gems set into the sides of the head, looking forward and out.
+    const eyeGeo = faceted(new THREE.OctahedronGeometry(1, 0));
+    for (const sd of [1, -1]) {
+      const e = add(this.body, eyeGeo, eye, [sd * 44, 306, 190], [10, 16, 22]);
+      e.rotation.set(0, sd * 0.55, sd * 0.2);
     }
 
     const mandibleGeo = faceted(new THREE.ConeGeometry(14, 100, 4)).rotateX(Math.PI / 2).translate(0, 0, 50);
