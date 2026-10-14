@@ -46,6 +46,7 @@ import { ShieldFx } from './systems/ShieldFx';
 import { InkFx } from './monsters/kraken/InkFx';
 import { shieldHitPoint } from './systems/shieldHit';
 import { dashTarget, leapTarget } from './monster/leap';
+import { landingSpot, slideAlongShore } from './world/shore';
 import { FRONT_LEFT, footTargets, strikePlan } from './monster/strike';
 import { mortarTargets, nearestWithin } from './systems/targeting';
 import { Passives } from './systems/Passives';
@@ -651,7 +652,8 @@ export class GameScene {
   /** Leap aim-ring placement: the ground point clamped to Leap range. */
   private aimPoint(ground: THREE.Vector3): { to: Vec2; radius: number } {
     const m = this.monster.position;
-    const to = leapTarget({ x: m.x, z: m.z }, { x: ground.x, z: ground.z }, CONFIG.abilities.leap.range);
+    const from = { x: m.x, z: m.z };
+    const to = landingSpot(this.city.style, from, leapTarget(from, { x: ground.x, z: ground.z }, CONFIG.abilities.leap.range), this.ms.bodyRadius);
     return { to, radius: CONFIG.abilities.leap.landRadius };
   }
 
@@ -679,7 +681,8 @@ export class GameScene {
 
     private leapTo(ground: THREE.Vector3): void {
       const m = this.monster;
-      const to = leapTarget({ x: m.position.x, z: m.position.z }, { x: ground.x, z: ground.z }, CONFIG.abilities.leap.range);
+      const from = { x: m.position.x, z: m.position.z };
+      const to = landingSpot(this.city.style, from, leapTarget(from, { x: ground.x, z: ground.z }, CONFIG.abilities.leap.range), this.ms.bodyRadius);
       if (!this.abilities.trigger('leap')) return;
             m.crouch = false;
       m.startLeap(to);
@@ -1278,6 +1281,12 @@ export class GameScene {
       if (d.attack === 'ranged') this.fireRanged(d.attackOn === 'order' && this.order?.kind === 'attack' ? this.order.target : auto);
     }
     m.tick(dt);
+    // The bay and the island are off limits on foot: walking, dashing and knockback all slide along the shore.
+    if (!m.airborne) {
+      const to = slideAlongShore(this.city.style, pos, { x: m.position.x, z: m.position.z }, this.ms.bodyRadius);
+      m.position.x = to.x;
+      m.position.z = to.z;
+    }
 
     if (!m.airborne) this.city.forEachStandingInRadius(pos, this.ms.bodyRadius, (t) => t.applyDamage(CONFIG.monster.contactDps * dt));
     m.hp = regen(m.hp, m.maxHp, CONFIG.monster.regenPerSec + s.regenBonus, dt);
