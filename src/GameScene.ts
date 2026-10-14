@@ -140,6 +140,8 @@ export class GameScene {
   private wither: WitherAura;
   private rotRing: RotRing;
   /** Dread Gaze and Evil Eye: targets burning with black fire until it flares. */
+  /** The Insect's ranged target (the one its spikes go to): its tail aims the stinger there. */
+  private spikeAim: Target | null = null;
   private gazes: { target: Target; at: THREE.Vector3; t: number; dur: number; damage: number; eye: boolean; lit: boolean; flared: boolean }[] = [];
   /** Rending Claws in flight: its kind and side (+1 left/+X, −1 right), both latched when the strike starts. */
   private fistStrike: FistKind = 'slam';
@@ -568,7 +570,9 @@ export class GameScene {
         this.tentacleSlams();
         this.monster.body.arms?.update(dt, CONFIG.kraken.arms.spinTime, this.onArmImpact);
         // The head turns to the breath's aim; the breath fires once the head is on target.
-        this.monster.lookAt = this.breath.busy ? this.breath.aimPoint : this.gazeLook();
+        // (The Insect aims its tail at its ranged target the same way.)
+        const aim = this.spikeAim?.isAlive() ? this.spikeAim.position : null;
+        this.monster.lookAt = this.breath.busy ? this.breath.aimPoint : (this.gazeLook() ?? aim);
         const headOnTarget = this.monster.aimError() < CONFIG.kaiju.neck.aimTolerance;
         this.breath.update(dt, this.monster.rangedOrigin(this.jaws), this.monster.position, this.ms.rangedRange, headOnTarget, this.onBreathFire);
         const melting = this.passives.meltdown(this.monster.hp / this.monster.maxHp).active;
@@ -1255,6 +1259,11 @@ export class GameScene {
         : groundOnly ? this.enemyTargets().filter((t) => !t.airborne && Math.hypot(t.position.x - pos.x, t.position.z - pos.z) > reach)
         : this.enemyTargets();
       const auto = nearestInRange(pos, rangedPool, this.ms.rangedRange);
+      if (m.kind.ranged === 'spikes') {
+        const o = this.order?.kind === 'attack' ? this.order.target : null;
+        const orderedInRange = o && o.isAlive() && Math.hypot(o.position.x - pos.x, o.position.z - pos.z) <= this.ms.rangedRange ? o : null;
+        this.spikeAim = orderedInRange ?? auto;
+      } else this.spikeAim = null;
       const autoMelee = nearestInRange(pos, this.enemyTargets().filter((t) => !t.airborne), this.ms.meleeRange);
       if (this.order?.kind === 'attack' && this.order.target.airborne && groundOnly) {
         this.order = null;

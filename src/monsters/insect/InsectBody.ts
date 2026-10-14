@@ -17,12 +17,19 @@ const _world = new THREE.Vector3();
 const _gait = new THREE.Vector3();
 const _target = new THREE.Vector3();
 const _swat = new THREE.Vector3();
+const _aimWant = new THREE.Vector3();
+/** How fast (per s) the tail swings onto a ranged target and relaxes off it again, and how fast it follows a switch. */
+const AIM_RATE = 5;
+const AIM_FOLLOW = 8;
 /** Foot offset (model units) for the cocked leg: high and pulled back. */
 const _strikeLift = new THREE.Vector3(0, 420, -80);
 
 /** The Insect Titan: six IK legs on a tripod gait, a leg strike, a swatting tail with the stinger. */
 export class InsectBody implements MonsterBody {
   private model = new InsectTitanModel();
+  /** The tail's aim: how far on (0..1), and the point (body space) it is easing toward. */
+  private aimW = 0;
+  private aim = new THREE.Vector3();
 
   get root(): THREE.Group {
     return this.model.root;
@@ -65,8 +72,16 @@ export class InsectBody implements MonsterBody {
     const twitch = f.roaring ? 0.55 : 0.18 + Math.sin(f.time * 7) * 0.08;
     this.model.mandibles[0]!.rotation.y = -twitch;
     this.model.mandibles[1]!.rotation.y = twitch;
-    if (f.antiAir) this.model.updateTail(f.time, body.worldToLocal(_swat.copy(f.antiAir.target)), f.antiAir.weight);
-    else this.model.updateTail(f.time);
+    // Ranged aim: the tail eases onto the target (and off again when there is none), following it as it switches.
+    if (f.lookAt) {
+      body.worldToLocal(_aimWant.copy(f.lookAt));
+      if (this.aimW <= 0) this.aim.copy(_aimWant);
+      else this.aim.lerp(_aimWant, 1 - Math.exp(-AIM_FOLLOW * f.dt));
+    }
+    this.aimW = THREE.MathUtils.clamp(this.aimW + (f.lookAt ? 1 : -1) * AIM_RATE * f.dt, 0, 1);
+    const aimW = this.aimW * this.aimW * (3 - 2 * this.aimW);
+    const swat = f.antiAir ? body.worldToLocal(_swat.copy(f.antiAir.target)) : null;
+    this.model.updateTail(f.time, swat, f.antiAir?.weight ?? 0, aimW > 0 ? this.aim : null, aimW);
 
     for (const m of this.model.materials) {
       if (f.flash) m.emissive.setHex(0xffffff);

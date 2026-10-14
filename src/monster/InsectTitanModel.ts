@@ -4,6 +4,7 @@ import { faceted, toonMat } from '../render/toon';
 import { placeSegment } from './ik';
 import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
 import { tailSwatPoints } from './tailSwat';
+import { tailAimPoints } from './tailAim';
 
 export type LegRig = {
   side: 1 | -1;
@@ -77,7 +78,7 @@ function elytronPoints(side: 1 | -1): THREE.Vector3[] {
 }
 
 /** How big the tail is: its curve (grown from where it joins the body), thickness and stinger. */
-const TAIL_SCALE = 1.1;
+const TAIL_SCALE = 1.2;
 const TAIL_ROOT = new THREE.Vector3(0, 350, -380);
 const TAIL_BASE: THREE.Vector3[] = [
   new THREE.Vector3(0, 350, -380),
@@ -177,12 +178,17 @@ export class InsectTitanModel {
   /**
    * Curl and sway the tail chain; the stinger and spike origin ride on the last point.
    * For Tail Swat, `swatTarget` (body space) and weight `w` bend the chain so the tip reaches the target.
+   * `aim` (body space) with weight `aimW` swings the tail round and points the stinger at the ranged target.
    */
-  updateTail(time: number, swatTarget: THREE.Vector3 | null = null, w = 0): void {
+  updateTail(time: number, swatTarget: THREE.Vector3 | null = null, w = 0, aim: THREE.Vector3 | null = null, aimW = 0): void {
     for (let i = 1; i < this.tailPts.length; i++) {
       const base = TAIL_BASE[i]!;
       const k = i / (this.tailPts.length - 1);
       this.tailPts[i]!.set(base.x + Math.sin(time * 1.3) * 25 * k, base.y + Math.sin(time * 2.1 + i) * 10 * k, base.z);
+    }
+    if (aim && aimW > 0) {
+      const aimed = tailAimPoints(this.tailPts, aim, aimW);
+      aimed.forEach((p, i) => this.tailPts[i]!.copy(p));
     }
     if (swatTarget && w !== 0) {
       const bent = tailSwatPoints(this.tailPts, swatTarget, w);
