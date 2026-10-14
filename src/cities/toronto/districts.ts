@@ -2,9 +2,10 @@ import { FACADE, type DistrictId, type DistrictRules } from '../types';
 
 /** Toronto's districts: brick midtown, warm stone offices, dark glass towers, pale condos on the lake. */
 export const TORONTO_DISTRICTS: Record<DistrictId, DistrictRules> = {
-  // The Financial District: dark blue-black and green-black glass (the hand-placed lots add gold and white).
+  // The Financial District and the Yonge corridor's nodes: dark blue-black and green-black glass (the Financial
+  // District's hand-placed lots add gold and white). Mostly 170–260 m, a few to 300.
   highrise: {
-    lots: 2, fill: 0.5, minPerBlock: 1, height: [200, 300], heightCurve: 1.2, footprint: [0.75, 0.92],
+    lots: 2, fill: 0.5, minPerBlock: 1, height: [150, 300], heightCurve: 1.3, footprint: [0.75, 0.92],
     facades: [FACADE.glass, FACADE.glass, FACADE.office], colors: [0x2b3a4a, 0x22302c, 0x313844, 0x1f2a35, 0x3a4a52],
     signs: 0, billboard: 0.02, trees: 2,
   },

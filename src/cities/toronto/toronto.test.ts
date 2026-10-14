@@ -23,7 +23,7 @@ describe('TORONTO', () => {
     const D = TORONTO.districts;
     for (const d of DISTRICTS) expect(D[d]).toBeDefined();
     expect(D.park.lots).toBe(0);
-    expect(D.highrise.height).toEqual([200, 300]);
+    expect(D.highrise.height).toEqual([150, 300]);
     expect(D.neon.height).toEqual([40, 90]);
     expect(D.office.height).toEqual([40, 100]);
     expect(D.residential.height).toEqual([10, 22]);

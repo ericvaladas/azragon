@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { CONFIG } from '../../config';
 import { DISTRICTS, type DistrictId } from '../types';
 import { coastDistance } from '../coast';
-import { CORE_RADIUS, DON, FINANCIAL, PORT_DEPTH, TORONTO_ISLANDS, TORONTO_LAKE, WATERFRONT, YONGE_DUNDAS, blockInterior, districtAt, lotCentre } from './layout';
+import { CORE_RADIUS, DON, FINANCIAL, PORT_DEPTH, TORONTO_ISLANDS, TORONTO_LAKE, WATERFRONT, YONGE_CORRIDOR, YONGE_DUNDAS, YONGE_NODES, blockInterior, districtAt, lotCentre } from './layout';
 import { TORONTO } from './index';
 import { AVENUE_WIDTH, PITCH, blockDistrict, isBay, isIsland, isRiver, isRiverBank, isWater, lineWidth, segmentAt } from '../../world/roads';
 import { inBay } from '../../world/shore';
@@ -114,11 +114,77 @@ describe('Toronto layout', () => {
   });
 
   it('fills behind and beside the crash with residential midtown, and never builds the crash site as park', () => {
-    for (const [x, z] of [[0, -1000], [-1500, 0], [900, -500], [-2000, -2000], [100, 100]] as const) expect(districtAt(x, z), `${x},${z}`).toBe('residential');
+    // Off the Yonge corridor (and in the crater, which the corridor skips) midtown is houses, some blocks parkettes.
+    for (const [x, z] of [[-700, -1000], [-1500, 0], [900, -500], [-2000, -2000], [100, 100]] as const) expect(['residential', 'park'], `${x},${z}`).toContain(districtAt(x, z));
+    expect(districtAt(100, 100)).toBe('residential');
     const W = CONFIG.world;
     for (let x = -1000; x <= 1000; x += 100) for (let z = -1000; z <= 1000; z += 100) {
       if (Math.hypot(x, z) < W.clearRadius + W.blockSize) expect(blockDistrict(TORONTO, x, z)).not.toBe('park');
     }
+  });
+
+  it('runs the Yonge tower corridor (|x| ≤ 300) from downtown (z 1000) north past the crash to z −6000: office and high-rise, the crater and Yonge-Dundas kept', () => {
+    expect(YONGE_CORRIDOR).toEqual({ halfWidth: 300, z0: -6000, z1: 1000 });
+    const crater = CONFIG.world.clearRadius + PITCH / 2;
+    let checked = 0;
+    for (let i = -2; i < 2; i++) for (let j = -30; j < 5; j++) {
+      const x = centre(i), z = centre(j);
+      const d = districtAt(x, z);
+      if (Math.hypot(x, z) < crater) expect(d, `crater ${x},${z}`).toBe('residential');
+      else if (x === YONGE_DUNDAS.x && z === YONGE_DUNDAS.z) expect(d).toBe('neon');
+      else {
+        expect(['office', 'highrise'], `${x},${z}`).toContain(d);
+        checked++;
+      }
+    }
+    expect(checked).toBeGreaterThan(100);
+    // Beyond the core too, where noise would otherwise decide.
+    for (const z of [-4500, -5100, -5500, -5900]) for (const x of [-300, -100, 100, 300]) expect(['office', 'highrise'], `${x},${z}`).toContain(districtAt(x, z));
+  });
+
+  it('raises three high-rise nodes on the corridor: Bloor-Yonge (z −1200), St. Clair (−2600) and Yonge-Eglinton (−4200, the largest)', () => {
+    expect(YONGE_NODES.map((n) => n.name)).toEqual(['Bloor-Yonge', 'St. Clair', 'Yonge-Eglinton']);
+    const blocks = YONGE_NODES.map((n) => {
+      let count = 0, zs = 0;
+      for (let i = -2; i < 2; i++) for (let j = -30; j < 5; j++) {
+        const x = centre(i), z = centre(j);
+        if (districtAt(x, z) !== 'highrise' || Math.abs(z - n.z) > 400) continue;
+        count++;
+        zs += z;
+      }
+      expect(Math.abs(zs / count - n.z), n.name).toBeLessThanOrEqual(150);
+      const along = new Set<number>();
+      for (let j = -30; j < 5; j++) if ([-2, -1, 0, 1].some((i) => districtAt(centre(i), centre(j)) === 'highrise' && Math.abs(centre(j) - n.z) <= 400)) along.add(j);
+      expect(along.size, n.name).toBeGreaterThanOrEqual(2);
+      expect(along.size, n.name).toBeLessThanOrEqual(3);
+      return count;
+    });
+    expect(blocks[2]).toBeGreaterThan(Math.max(blocks[0]!, blocks[1]!));
+    // Every other corridor block is office.
+    let high = 0;
+    for (let i = -2; i < 2; i++) for (let j = -30; j < 5; j++) if (districtAt(centre(i), centre(j)) === 'highrise') high++;
+    expect(high).toBe(blocks[0]! + blocks[1]! + blocks[2]!);
+  });
+
+  it('forces nothing off the corridor: at x = ±1500 midtown stays houses and parkettes', () => {
+    for (const x of [-1500, 1500]) for (let z = -3500; z <= 500; z += 200) expect(['residential', 'park'], `${x},${z}`).toContain(districtAt(x, z));
+  });
+
+  it('turns about one residential block in eight into a parkette, by a seeded hash, never in the crater', () => {
+    let homes = 0, parkettes = 0;
+    for (let i = -20; i < 20; i++) for (let j = -20; j < 11; j++) {
+      const x = centre(i), z = centre(j);
+      if (Math.hypot(x, z) > CORE_RADIUS || isWater(TORONTO, i, j) || isIsland(TORONTO, i, j)) continue;
+      const d = districtAt(x, z);
+      expect(districtAt(x, z)).toBe(d);
+      if (d === 'residential') homes++;
+      if (d === 'park') parkettes++;
+      if (Math.hypot(x, z) < CONFIG.world.clearRadius + PITCH / 2) expect(d).not.toBe('park');
+    }
+    expect(homes).toBeGreaterThan(400);
+    const share = parkettes / (homes + parkettes);
+    expect(share).toBeGreaterThanOrEqual(0.08);
+    expect(share).toBeLessThanOrEqual(0.17);
   });
 
   it('is deterministic', () => {
