@@ -35,13 +35,24 @@ const HEAD_POINTS: readonly P3[] = [
 ];
 
 /**
- * The pronotum: a shield over the thorax, overhanging its edges a little, its planes rising to a peak along a
- * ridge down the middle (one side; mirrored).
+ * The pronotum: a rounded dome over the thorax, rising to the same height as before and overhanging the thorax's
+ * edges a little. Points on the upper half of an ellipsoid (body space), so the hull comes out smoothly faceted.
  */
-const PRONOTUM: readonly P3[] = [
-  [0, 368, 116], [56, 360, 110], [82, 348, 60], [84, 346, -20], [76, 350, -96], [48, 360, -110], [0, 366, -112],
-  [0, 468, 4], [0, 420, 84], [0, 428, -76], [30, 392, 40], [36, 390, -52], [70, 340, 100], [78, 336, -100],
-];
+function pronotumPoints(): THREE.Vector3[] {
+  const c = new THREE.Vector3(0, 340, 0);
+  const r = new THREE.Vector3(86, 126, 116);
+  const pts: THREE.Vector3[] = [];
+  for (let i = 0; i <= 5; i++) {
+    const th = (i / 5) * (Math.PI / 2);
+    const n = i === 0 ? 1 : 12;
+    for (let j = 0; j < n; j++) {
+      const ph = (j / n) * Math.PI * 2;
+      pts.push(new THREE.Vector3(Math.sin(th) * Math.sin(ph) * r.x, Math.cos(th) * r.y, Math.sin(th) * Math.cos(ph) * r.z).add(c));
+    }
+  }
+  return pts;
+}
+
 /** Abdomen (body space): centre, radii, tilt about X — the elytra are built over its upper surface. */
 const ABDOMEN = { c: new THREE.Vector3(0, 330, -210), r: new THREE.Vector3(130, 105, 190), tilt: -0.25 };
 
@@ -109,7 +120,7 @@ export class InsectTitanModel {
 
     add(this.body, box, shell, [0, 300, 0], [150, 110, 200]);
     const mirror = (pts: readonly P3[]) => pts.flatMap(([x, y, z]) => (x === 0 ? [new THREE.Vector3(x, y, z)] : [new THREE.Vector3(x, y, z), new THREE.Vector3(-x, y, z)]));
-    add(this.body, faceted(new ConvexGeometry(mirror(PRONOTUM))), shellDark, [0, 0, 0]);
+    add(this.body, faceted(new ConvexGeometry(pronotumPoints())), shellDark, [0, 0, 0]);
     const abdomen = add(this.body, blob, shell, ABDOMEN.c.toArray(), ABDOMEN.r.toArray());
     abdomen.rotation.x = ABDOMEN.tilt;
     // Elytra: two wing cases over the abdomen, parted by a seam down the middle.
