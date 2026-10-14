@@ -61,7 +61,7 @@ first tap ─► INTRO (loops its loop region)
 
 ### Main 1's end
 
-The Main 1 file is trimmed at encode time to keep its hard stop plus a short part of the reverb tail. The end point is ≈207.9 s, tuned by ear. Main 2 is scheduled on the audio clock for the instant Main 1's buffer ends, so there's no gap.
+The Main 1 file is trimmed at encode time to keep its hard stop plus a short part of the reverb tail. The end point is ≈207.9 s, tuned by ear. When Main 1's buffer source ends (its `ended` event), Main 2's streamed element starts playing. The start may be a few tens of ms late, which falls inside Main 1's reverb tail.
 
 ## Skip to the reveal
 
@@ -89,7 +89,7 @@ The skip hint stays visible until the jump. After that, it hides. A second tap s
 | Unit | Responsibility | Depends on |
 |---|---|---|
 | `src/audio/musicPlan.ts` | Pure logic with no Web Audio: the event → action rules in the table above, Intro position-in-loop mapping, next-bar time | config only |
-| `src/audio/Music.ts` | Owns the `AudioContext`, gain nodes and buffer sources. Loads and decodes tracks, carries out the actions `musicPlan` returns, frees buffers | `musicPlan`, `RundotGameAPI.cdn` |
+| `src/audio/Music.ts` | Owns the `AudioContext`, gain nodes, buffer sources and the streamed Main 2 element. Loads and decodes tracks, carries out the actions `musicPlan` returns, frees buffers | `musicPlan`, `RundotGameAPI.cdn` |
 | `GameScene.ts` | Creates `Music`. Calls `music.unlock()` on the first gesture, `music.reveal()` from the intro's `onReveal`, and `music.enterMenu()` when the state becomes `select` or `title` | `Music` |
 | `IntroCinematic.ts` | New skip rule, `onReveal` callback | timeline |
 | `intro/timeline.ts` | Exports `SKIP_TO`, and helpers the skip needs (e.g. the cloud state at `t`) | config |
@@ -99,7 +99,9 @@ The skip hint stays visible until the jump. After that, it hides. A second tap s
 
 ### Playback
 
-- **Web Audio**, with `AudioBufferSourceNode` → per-track `GainNode` → master `GainNode` → destination. Buffer sources give sample-exact scheduling on the audio clock, which the bar-line start and the Main 1 → Main 2 handoff need. Fades are gain ramps on the audio clock.
+- **Intro and Main 1: decoded buffers.** `AudioBufferSourceNode` → per-track `GainNode` → master `GainNode` → destination. Buffer sources give sample-exact scheduling on the audio clock and custom loop points. The Intro's bar grid and loop region need them, and so does Main 1's start on the bar line.
+- **Main 2: streamed.** An `HTMLAudioElement` with `loop = true` → `MediaElementAudioSourceNode` → its own `GainNode` → master. The browser decodes it a little at a time, so it is never held fully decoded. It needs no exact timing: its start follows Main 1's `ended` event, and any tiny gap at the loop seam falls between its fade-out and its quiet start. The element's own `volume` is not used, because iOS ignores it. All volume goes through the gain node.
+- **Fades** are gain ramps on the audio clock, the same for both kinds.
 - **Unlock:** browsers block audio until a user gesture. `AudioContext.resume()` is called on the first `pointerdown` or `keydown` anywhere, and the Intro starts then. The loading screen and the title before the first tap are silent; that is unavoidable on web.
 - **Hidden tab or app:** the context is suspended while `document.hidden` and resumed when the page is visible. This is not a game-state change, so it doesn't break the "pause leaves music alone" rule.
 - **Volume:** a fixed master gain from config. A mute or volume control is out of scope.
@@ -107,15 +109,15 @@ The skip hint stays visible until the jump. After that, it hides. A second tap s
 ### Loading and memory
 
 - **Files:** only compressed audio ships; no WAV file is in the repo or the build. The WAV masters are encoded with ffmpeg's `aac` encoder to `public/cdn-assets/audio/*.m4a` at 128 kb/s. That is about 9 MB in total, against 110 MB of WAVs. The Main 1 trim happens here. A script, `scripts/encode-music.sh`, records the exact ffmpeg commands. The WAV masters stay outside the repo.
-- **Loading:** `RundotGameAPI.cdn.fetchAsset('audio/<name>.m4a')`, then `arrayBuffer()`, then `decodeAudioData`. This is the SDK's documented path for CDN audio. Audio is not packed in StowKit, because StowKit audio doesn't give decoded buffers for clock scheduling. Loading never blocks the game. The Intro is fetched at boot, and Main 1 and Main 2 right after it.
+- **Loading:** every track is fetched with `RundotGameAPI.cdn.fetchAsset('audio/<name>.m4a')`, the SDK's documented path for CDN audio. The Intro and Main 1 then go through `arrayBuffer()` and `decodeAudioData`. Main 2's blob gets an object URL that becomes the `<audio>` element's `src`. Audio is not packed in StowKit, because StowKit audio doesn't give decoded buffers for clock scheduling. Loading never blocks the game. The Intro is fetched at boot, and Main 1 and Main 2 right after it.
 - **Encoder offset:** AAC adds priming samples at the start. Browsers that honour the MP4 edit list strip them. During implementation, a decoded file is checked in Chrome and Safari against the WAV, and any remaining offset is made a per-track config value, so the grid and loop points stay exact.
-- **Memory (RAM at runtime, not download size):** the browser decodes each compressed file into raw samples in memory before it can schedule it, and decoded PCM is large: 48 kHz stereo float is ≈23 MB per minute. That puts Intro at ≈46 MB, Main 1 at ≈80 MB and Main 2 at ≈93 MB. Only the playing track or tracks are kept decoded:
+- **Memory (RAM at runtime, not download size):** to schedule a track exactly, the browser decodes the whole compressed file into raw samples in memory, and decoded PCM is large: 48 kHz stereo float is ≈23 MB per minute. That puts the Intro at ≈46 MB and Main 1 at ≈80 MB. Main 2 is streamed, so it is never fully decoded. Only the playing tracks are kept decoded:
   - The compressed bytes of all three stay cached, about 9 MB.
-  - The Intro and Main 1 are decoded when needed: the Intro at unlock, Main 1 when the cutscene starts.
-  - Main 2 is decoded while Main 1 plays.
-  - A buffer is dropped once its track has stopped and faded.
+  - The Intro is decoded at unlock, and Main 1 when the cutscene starts.
+  - A buffer is dropped once its track has stopped and faded. The Intro goes after the handoff, and Main 1 after it ends.
+  - Returning to monster select decodes the Intro again from the cached bytes.
 
-  The peak is two tracks at once, ≈170 MB in the Main 1 → Main 2 window. If phone testing shows that's too much, the fallback is to stream Main 2 through an `<audio>` element. It needs no exact scheduling: its start can be ~tens of ms late with no audible problem.
+  The peak is ≈126 MB, with the Intro and Main 1 both decoded, from the start of the cutscene until the handoff fade ends. While Main 2 loops, nothing is decoded.
 - **Not ready in time:** if the Intro isn't decoded at unlock, it starts when ready. If Main 1 isn't decoded at the reveal, it starts as soon as it is, without waiting for a bar line. A decode or fetch failure logs through `RundotGameAPI.error()`, and the game carries on silent.
 
 ## Testing
@@ -124,7 +126,7 @@ The skip hint stays visible until the jump. After that, it hides. A second tap s
   - every row of the event table, including Play Again's reveal while Main is playing and entering select while the Intro already plays;
   - loop-position mapping before and after the first loop;
   - next-bar time on and near a bar line (the `minLead` rule);
-  - the Main 1 → Main 2 handoff time.
+  - Main 1 ending starts Main 2.
 - **Timeline and skip tests:**
   - `SKIP_TO` is before `EMERGE_TIME`;
   - a skip from any `t < SKIP_TO` lands on `SKIP_TO`;
@@ -145,5 +147,5 @@ Sound effects, a volume or mute setting, more intensity layers, and music change
 ## Risks
 
 - **Suno drift.** Main 1 and Main 2 aren't on a fixed grid. The design avoids needing their grids.
-- **Phone memory** for decoded audio. See the fallback above.
+- **Phone memory** for decoded audio: ≈126 MB peak (Intro + Main 1). If phone testing shows that is too much, Main 1 can also be streamed, at the cost of a less exact bar-line start.
 - **`globe-geography` conflict.** That branch, unmerged, also changes the intro (`worldMap`). The skip work in `IntroCinematic` may need a small merge.
