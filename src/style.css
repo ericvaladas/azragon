@@ -134,10 +134,10 @@ body {
   contain: content;
 }
 /* Level in the top-left corner, time in the top-right, health centred between them. */
-.hud-top .bar-hp { flex: 0 1 560px; height: 30px; }
-.hud-top .bar-hp .bar-label { font-size: 12px; line-height: 28px; }
+.hud-top .bar-hp { flex: 0 1 560px; height: 20px; }
+.hud-top .bar-hp .bar-label { font-size: 11px; line-height: 18px; }
 /* All three share one height. */
-.hud-top .hud-level, .hud-top .hud-time { height: 30px; padding: 0 8px; display: flex; align-items: center; }
+.hud-top .hud-level, .hud-top .hud-time { height: 20px; padding: 0 6px; display: flex; align-items: center; font-size: 12px; }
 /* EXP along the bottom edge, its gains popping up just above it. */
 .hud-bottom {
   position: absolute;
