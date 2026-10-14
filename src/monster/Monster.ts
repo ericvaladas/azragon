@@ -154,6 +154,11 @@ export class Monster {
     return this.leapT >= 0 || this.roarT >= 0 || this.dashT >= 0;
   }
 
+  /** Stops a dash where the monster stands; the body settles out of the charge pose normally. */
+  endDash(): void {
+    this.dashT = -1;
+  }
+
   get dashing(): boolean {
     return this.dashT >= 0;
   }

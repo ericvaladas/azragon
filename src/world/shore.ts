@@ -1,5 +1,6 @@
 import type { CityStyle } from '../cities/types';
 import type { Vec2 } from '../util/math';
+import { leapTarget } from '../monster/leap';
 import { isBay, isIsland, PITCH } from './roads';
 
 const LANDING_STEP = 20;
@@ -49,4 +50,17 @@ export function landingSpot(style: CityStyle, from: Vec2, to: Vec2, radius: numb
     if (!blockedAt(style, p.x, p.z, radius)) return p;
   }
   return from;
+}
+/**
+ * One ground frame against the shore: the resolved position, and whether the shore changed the move. A dash that
+ * is `slid` has hit the wall and must end, because its next frame would otherwise jump back onto the straight line.
+ */
+export function shoreStep(style: CityStyle, prev: Vec2, next: Vec2, radius: number): { pos: Vec2; slid: boolean } {
+  const pos = slideAlongShore(style, prev, next, radius);
+  return { pos, slid: pos !== next };
+}
+
+/** Where a leap aimed at `ground` lands: clamped to `range`, then pulled back to the last land. */
+export function leapLanding(style: CityStyle, from: Vec2, ground: Vec2, range: number, radius: number): Vec2 {
+  return landingSpot(style, from, leapTarget(from, ground, range), radius);
 }

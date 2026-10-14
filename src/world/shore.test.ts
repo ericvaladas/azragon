@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { TOKYO } from '../cities/tokyo';
 import { isRiver, isBay } from './roads';
-import { blockedAt, inBay, landingSpot, slideAlongShore } from './shore';
+import { blockedAt, inBay, landingSpot, shoreStep, slideAlongShore } from './shore';
 import { leapPosition } from '../monster/leap';
 
 const R = 100;
@@ -52,9 +52,8 @@ describe('shore', () => {
     const start = p;
     for (let i = 0; i < 60; i++) {
       // 45 degrees seaward, 45 degrees along the coast
-      const step = pt(0, 0);
       const d = { x: (bay.dir.x - bay.dir.z) * 0.7071 * 30, z: (bay.dir.z + bay.dir.x) * 0.7071 * 30 };
-      p = slideAlongShore(TOKYO, p, { x: p.x + d.x + step.x, z: p.z + d.z + step.z }, R);
+      p = slideAlongShore(TOKYO, p, { x: p.x + d.x, z: p.z + d.z }, R);
       expect(blockedAt(TOKYO, p.x, p.z, R)).toBe(false);
     }
     const along = (q: { x: number; z: number }) => -q.x * bay.dir.z + q.z * bay.dir.x;
@@ -113,5 +112,33 @@ describe('shore', () => {
       expect(blockedAt(TOKYO, p.x, p.z, R)).toBe(false);
     }
     expect(Math.hypot(p.x - to.x, p.z - to.z)).toBeGreaterThan(500);
+  });
+
+  it('a shallow dash past a coast step never skips: it ends at the shore instead', () => {
+    const FRAMES = 36;
+    let worst = 0;
+    let wallHits = 0;
+    for (let a = 0; a < 360; a += 15) {
+      for (const along of [1500, 1700, 1850]) {
+        for (let across = -3000; across <= 3000; across += 400) {
+          const from = pt(along, across);
+          if (blockedAt(TOKYO, from.x, from.z, R)) continue;
+          const yaw = (a * Math.PI) / 180;
+          const to = { x: from.x + Math.sin(yaw) * 700, z: from.z + Math.cos(yaw) * 700 };
+          let pos = from;
+          let dashing = true;
+          for (let f = 1; f <= FRAMES && dashing; f++) {
+            const raw = leapPosition(from, to, f / FRAMES, 1, 0);
+            const step = shoreStep(TOKYO, pos, raw, R);
+            worst = Math.max(worst, Math.hypot(step.pos.x - pos.x, step.pos.z - pos.z));
+            expect(blockedAt(TOKYO, step.pos.x, step.pos.z, R)).toBe(false);
+            if (step.slid) { dashing = false; wallHits++; }
+            pos = step.pos;
+          }
+        }
+      }
+    }
+    expect(wallHits).toBeGreaterThan(0);
+    expect(worst).toBeLessThanOrEqual(700 / FRAMES + 1e-6);
   });
 });
