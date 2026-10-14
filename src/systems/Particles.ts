@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { CONFIG } from '../config';
 import { faceted } from '../render/toon';
 
-export type ParticleKind = 'dust' | 'debris' | 'fire' | 'smoke' | 'spark' | 'acid' | 'plasma' | 'trail' | 'ink' | 'rot' | 'shade' | 'mist' | 'bone' | 'wisp' | 'hexfire' | 'hexember' | 'wraith' | 'billow' | 'veil';
+export type ParticleKind = 'dust' | 'debris' | 'fire' | 'smoke' | 'spark' | 'acid' | 'plasma' | 'trail' | 'ink' | 'rot' | 'shade' | 'mist' | 'bone' | 'wisp' | 'hexfire' | 'hexember' | 'wraith' | 'billow' | 'veil' | 'splash';
 
 /**
  * `stretch`: drawn upright and this many times taller than wide, flickering (flame tongues) instead of tumbling.
@@ -42,6 +42,8 @@ export const PRESETS: Record<ParticleKind, Preset> = {
   billow: { color: 0x9c8a70, life: 2.3, size0: 200, size1: 520, speed: 280, up: 240, gravity: -10, drag: 1.3 },
   /** The cloud that erupts over the crater at impact and hides it: big, dense, slowly swelling puffs that thin away. */
   veil: { color: 0xb5a588, life: 3.2, size0: 240, size1: 460, speed: 110, up: 30, gravity: -6, drag: 1.4, fadeFrom: 0.38 },
+  /** Water spray: white drops thrown up fast that fall back down. */
+  splash: { color: 0xf4f8fb, life: 0.9, size0: 18, size1: 6, speed: 90, up: 300, gravity: 520, drag: 0.8 },
   ink: { color: CONFIG.kraken.colors.ink, life: 1.1, size0: 30, size1: 70, speed: 120, up: 50, gravity: -10, drag: 2 },
 };
 
@@ -57,7 +59,7 @@ const HIDDEN = new THREE.Matrix4().makeScale(0, 0, 0);
 /** `cloud`: the intro's crater cloud: where it is thick it hides what is inside; where thin, a dark shape looms through. */
 const LAYER_OPACITY = { solid: 1, dust: 0.65, smoke: 0.35, murk: 0.85, cloud: 0.6 } as const;
 type LayerName = keyof typeof LAYER_OPACITY;
-const LAYER_OF: Record<ParticleKind, LayerName> = { dust: 'dust', smoke: 'smoke', debris: 'solid', fire: 'solid', spark: 'solid', acid: 'solid', plasma: 'solid', trail: 'dust', ink: 'smoke', rot: 'solid', shade: 'murk', mist: 'murk', bone: 'solid', wisp: 'dust', hexfire: 'solid', hexember: 'solid', wraith: 'murk', billow: 'dust', veil: 'cloud' };
+const LAYER_OF: Record<ParticleKind, LayerName> = { dust: 'dust', smoke: 'smoke', debris: 'solid', fire: 'solid', spark: 'solid', acid: 'solid', plasma: 'solid', trail: 'dust', ink: 'smoke', rot: 'solid', shade: 'murk', mist: 'murk', bone: 'solid', wisp: 'dust', hexfire: 'solid', hexember: 'solid', wraith: 'murk', billow: 'dust', veil: 'cloud', splash: 'solid' };
 const LAYER_MAX: Record<LayerName, number> = { solid: 500, dust: 400, smoke: 500, murk: 400, cloud: 160 };
 
 /** One pooled InstancedMesh: swap-remove on death, no per-frame allocation. */

@@ -28,6 +28,8 @@ export interface WorldContext {
   damageBuildings(p: Vec2, r: number, amount: number): void;
   fireShell(from: THREE.Vector3, to: THREE.Vector3, damage: number): void;
   fireRocket(from: THREE.Vector3, to: THREE.Vector3, damage: number): void;
+  /** Spray where something hits the ground; does nothing unless the point is water. */
+  splash(p: THREE.Vector3, size?: number): void;
   shake(amount: number): void;
   readonly onDestroyed: OnDestroyed;
 }

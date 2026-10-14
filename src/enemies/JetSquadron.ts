@@ -123,6 +123,7 @@ export class JetSquadron implements EnemySystem {
           const p = j.position.clone().setY(0);
           ctx.particles.explosion(p, 2);
           ctx.particles.ring('dust', p, 120, 12);
+          ctx.splash(p, 2);
           ctx.shake(0.3);
           this.scene.remove(j.group);
           this.jets.splice(i, 1);

@@ -214,6 +214,7 @@ export class SamSilos implements EnemySystem {
       } else if (m.age > C.missileTtl || m.position.y < 0) {
         m.alive = false;
         ctx.particles.explosion(m.position, 0.5);
+        if (m.position.y < 0) ctx.splash(m.position);
       }
     }
     this.draw();

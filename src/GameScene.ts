@@ -66,9 +66,13 @@ import { KINDS, ROSTER_ORDER, isMonsterId, rosterEntries } from './monsters/rost
 import { loadPick, savePick, type PickStore } from './monsters/pick';
 import type { MonsterKind } from './monsters/types';
 import { flowNext } from './menuFlow';
+import { Splasher } from './systems/splash';
 import { frameHeight, selectPose, titlePose } from './systems/menuCamera';
 
 type Order = { kind: 'move'; to: Vec2 } | { kind: 'attack'; target: Target } | null;
+
+/** A projectile hit below this height (m) is a ground impact and splashes if it lands on water. */
+const GROUND_HIT_Y = 20;
 
 export class GameScene {
   readonly events = new GameEventEmitter();
@@ -99,6 +103,7 @@ export class GameScene {
   private groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
   private tmpV = new THREE.Vector3();
   private particles: Particles;
+  private splasher: Splasher;
   private inkFx: InkFx;
   private projectiles: Projectiles;
   private enemies: EnemyRegistry;
@@ -156,6 +161,7 @@ export class GameScene {
     this.rig = new CameraRig(this.camera);
     this.markers = new Markers(this.scene);
     this.particles = new Particles(this.scene);
+    this.splasher = new Splasher(() => this.city.style, this.particles);
     this.chevrons = new Chevrons(this.scene);
     this.shockwave = new Shockwave(this.scene);
     this.aura = new LevelUpAura(this.scene);
@@ -185,10 +191,13 @@ export class GameScene {
     this.city.onCollapseStart = (pos, size) => {
       this.particles.ring('dust', pos, size, 14);
       this.particles.emit('debris', pos.clone().setY(30), 8);
+      this.splasher.footprint(pos.x, pos.z, size);
       this.rig.addTrauma(0.12);
     };
+    this.city.onSplash = (p, size) => this.splasher.at(p, size / 40);
     this.monster.onFootLand = (p) => {
       this.particles.ring('dust', p, 60, 7);
+      this.splasher.at(p);
       if (this.monster.kind.id === 'golem') {
         // Dark dust and crumbs of rot kicked up from under the claws and hooves.
         this.particles.emit('shade', this.tmpV.copy(p).setY(10), 3, 0.9);
@@ -525,6 +534,7 @@ export class GameScene {
     const realDt = clampDelta(raw);
     // World time runs in slow motion during the level-up moment; the aura and moment use real time.
     const dt = realDt * this.moment.timeScale();
+    this.splasher.newFrame();
     const frozen = this.state === 'levelup' || this.state === 'paused' || this.state === 'loading';
 
     if (!frozen) {
@@ -1028,6 +1038,7 @@ export class GameScene {
         this.projectiles.fireRocket(from, to, damage);
         this.particles.emit('fire', from, 2, 0.3);
       },
+      splash: (p, size) => this.splasher.at(p, size),
       shake: (a) => this.rig.addTrauma(a),
       onDestroyed: this.onTargetDestroyed,
     };
@@ -1489,6 +1500,7 @@ export class GameScene {
   }
 
   private onProjectileHit = (h: Hit): void => {
+    if (h.point.y < GROUND_HIT_Y) this.splasher.at(h.point, h.kind === 'chunk' || h.kind === 'glob' ? 1.5 : 1);
     if (h.kind === 'shard') {
       this.particles.emit('bone', h.point, 5, 0.8);
       return;
