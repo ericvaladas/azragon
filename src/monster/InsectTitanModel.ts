@@ -34,10 +34,13 @@ const HEAD_POINTS: readonly P3[] = [
   [12, 296, 226], [10, 272, 226], [0, 306, 222], [0, 266, 228],
 ];
 
-/** The pronotum: a domed shield over the thorax with a low ridge, overhanging its edges a little (one side; mirrored). */
+/**
+ * The pronotum: a shield over the thorax, overhanging its edges a little, its planes rising to a peak along a
+ * ridge down the middle (one side; mirrored).
+ */
 const PRONOTUM: readonly P3[] = [
   [0, 368, 116], [56, 360, 110], [82, 348, 60], [84, 346, -20], [76, 350, -96], [48, 360, -110], [0, 366, -112],
-  [0, 390, 30], [38, 382, 44], [44, 380, -54], [0, 386, -76], [70, 340, 100], [78, 336, -100],
+  [0, 468, 4], [0, 420, 84], [0, 428, -76], [30, 392, 40], [36, 390, -52], [70, 340, 100], [78, 336, -100],
 ];
 /** Abdomen (body space): centre, radii, tilt about X — the elytra are built over its upper surface. */
 const ABDOMEN = { c: new THREE.Vector3(0, 330, -210), r: new THREE.Vector3(130, 105, 190), tilt: -0.25 };
