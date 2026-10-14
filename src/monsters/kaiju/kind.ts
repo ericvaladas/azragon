@@ -19,6 +19,7 @@ export const KAIJU: MonsterKind = {
   melee: { kind: 'arc', halfAngle: K.rakeHalfAngle },
   ranged: 'breath',
   antiAir: 'bite',
+  leapCrouch: 0.2,
   tailSweep: true,
   signatures: ['acid', 'storm', 'chitin', 'frenzy', 'spines', 'swat', 'nova', 'mortar', 'meltdown'],
   abilityText: {

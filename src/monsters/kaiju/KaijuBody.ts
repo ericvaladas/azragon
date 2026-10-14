@@ -7,6 +7,7 @@ import { bipedFoot, bipedLanded } from './bipedGait';
 import { rakeSwing } from './rake';
 import { neckAim, stepNeck } from './neck';
 import { tailSwing } from './tailSweep';
+import { kaijuLeap, type KaijuLeapPose } from './leapPose';
 
 const K = CONFIG.kaiju;
 const C = K.colors;
@@ -14,6 +15,10 @@ const THIGH = 170;
 const SHIN = 190;
 const LIFT = 80;
 const FOOT_X = 115;
+/** Leap: how far (model units) the body sinks in its crouch, and how high the feet tuck up in the air. */
+const LEAP_SINK = 150;
+const LEAP_TUCK = 150;
+const STANDING: KaijuLeapPose = { sink: 0, pitch: 0, tuck: 0, arms: 0, tail: 0 };
 /** Walking tail wag: sideways swing at the tip (model units) and the phase lag per segment (rad). */
 const TAIL_WAG = 230;
 const TAIL_LAG = 0.45;
@@ -183,20 +188,22 @@ export class KaijuBody implements MonsterBody {
   }
 
   animate(f: BodyFrame, onFootLand: (p: THREE.Vector3) => void): void {
-    const m = f.motion;
+    // Mid-leap the feet stop stepping: planted through the crouch, tucked up in the air.
+    const m = f.leap ? 0 : f.motion;
+    const lp = f.leap ? kaijuLeap(f.leap.t, f.leap.duration, f.leap.crouch) : STANDING;
     // Weight shifts over the planted foot once per stride; the tail swings the other way.
     // Leg 0 (+X) swings while sin(2π·cycle) > 0, so the weight sits toward −X (over leg 1) then, and vice versa.
     const shift = -Math.sin(f.cycle * Math.PI * 2);
     const body = this.body;
-    body.position.set(shift * 16 * m, (1 - Math.abs(shift)) * 10 * m + Math.sin(f.time * 1.3) * 6 - f.pose.dip - f.pose.collapse * 230, 0);
-    body.rotation.set(f.pose.pitch + f.pose.collapse * 0.5, 0, -shift * 0.05 * m - f.pose.collapse * 0.3);
+    body.position.set(shift * 16 * m, (1 - Math.abs(shift)) * 10 * m + Math.sin(f.time * 1.3) * 6 - f.pose.dip - f.pose.collapse * 230 - lp.sink * LEAP_SINK, 0);
+    body.rotation.set(f.pose.pitch + f.pose.collapse * 0.5 + lp.pitch, 0, -shift * 0.05 * m - f.pose.collapse * 0.3);
     this.root.updateMatrixWorld(true);
 
     for (let i = 0; i < 2; i++) {
       const leg = this.legs[i]!;
       const fs = bipedFoot(f.cycle, i);
       _hip.copy(leg.hip).applyMatrix4(body.matrix);
-      _foot.set(leg.side * FOOT_X * (1 + f.pose.collapse * 0.5), fs.lift * LIFT * m, fs.stride * (K.stats.strideLength / 2) * m);
+      _foot.set(leg.side * FOOT_X * (1 + f.pose.collapse * 0.5), fs.lift * LIFT * m + lp.tuck * LEAP_TUCK, fs.stride * (K.stats.strideLength / 2) * m + lp.tuck * 40);
       _pole.copy(_hip).add(_tmp.set(leg.side * 20, 0, 300)); // knees bend forward
       solveTwoBone(_hip, _foot, THIGH, SHIN, _pole, _knee);
       placeSegment(leg.thigh, _hip, _knee);
@@ -208,6 +215,7 @@ export class KaijuBody implements MonsterBody {
     for (let i = 0; i < 2; i++) {
       const arm = this.shortArms[i]!;
       let swing = Math.sin(f.time * 1.3 + i) * 0.06 - shift * arm.side * 0.12 * m;
+      swing += lp.arms;
       if (f.melee && f.melee.side === i) swing = rakeSwing(f.melee.t, K.stats.meleeTiming);
       // While slashing forward (negative swing) the arm also sweeps across the body.
       arm.pivot.rotation.set(swing, 0, -arm.side * Math.max(0, -swing) * 0.5);
@@ -262,7 +270,7 @@ export class KaijuBody implements MonsterBody {
       const wag = -lagged * TAIL_WAG * Math.pow(k, 1.2) * m;
       this.tailPts[i]!.set(
         base.x + Math.sin(f.time * 1.1 - i * 0.6) * 30 * k + wag,
-        base.y + Math.sin(f.time * 1.7 + i) * 8 * k + Math.abs(lagged) * 18 * k * m + (f.roaring ? 40 * k : 0),
+        base.y + Math.sin(f.time * 1.7 + i) * 8 * k + Math.abs(lagged) * 18 * k * m + (f.roaring ? 40 * k : 0) + lp.tail * 110 * k,
         base.z + Math.abs(wag) * 0.25,
       );
     }
