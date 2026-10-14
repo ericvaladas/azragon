@@ -127,10 +127,28 @@ body {
   top: calc(var(--safe-top) + 10px);
   left: calc(var(--safe-left) + 10px);
   right: calc(var(--safe-right) + 10px);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   contain: content;
 }
+/* Level in the top-left corner, time in the top-right, health centred between them. */
+.hud-top .bar-hp { flex: 0 1 560px; }
+/* EXP along the bottom edge, its gains popping up just above it. */
+.hud-bottom {
+  position: absolute;
+  left: calc(var(--safe-left) + 10px);
+  right: calc(var(--safe-right) + 10px);
+  bottom: calc(var(--safe-bottom) + 8px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  contain: content;
+}
+.hud-bottom .bar-exp { align-self: stretch; }
 
-.hud-row { display: flex; align-items: center; gap: 8px; max-width: 560px; margin: 0 auto; }
 .hud-level, .hud-time {
   font-weight: 700;
   font-variant-numeric: tabular-nums;
@@ -140,7 +158,7 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 .hud-level { color: var(--color-primary); }
-.hud-bars { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+.hud-level, .hud-time { flex-shrink: 0; white-space: nowrap; }
 
 .bar {
   position: relative;
@@ -150,7 +168,7 @@ body {
   background: rgba(0, 0, 0, 0.6);
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
-.bar-exp { height: 7px; }
+.bar-exp { height: 8px; }
 .bar-fill {
   position: absolute;
   inset: 0;
@@ -170,7 +188,6 @@ body {
 }
 
 .exp-pop {
-  margin: 6px auto 0;
   width: max-content;
   font-weight: 700;
   color: var(--color-secondary);
@@ -288,7 +305,7 @@ body {
 .ability-bar {
   position: absolute;
   right: calc(var(--safe-right) + 14px);
-  bottom: calc(var(--safe-bottom) + 18px);
+  bottom: calc(var(--safe-bottom) + 30px);
   display: flex;
   gap: 12px;
   pointer-events: auto;

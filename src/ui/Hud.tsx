@@ -8,25 +8,25 @@ export function Hud({ hud, expPop }: { hud: HudSnapshot; expPop: { amount: numbe
   const hpPct = Math.max(0, Math.min(1, hud.hp / hud.maxHp));
   const expPct = Math.max(0, Math.min(1, hud.exp / hud.expToNext));
   return (
-    <div className="hud-top">
-      <div className="hud-row">
+    <>
+      <div className="hud-top">
         <div className="hud-level">LV {hud.level}</div>
-        <div className="hud-bars">
-          <div className={`bar bar-hp${hpPct < 0.3 ? ' low' : ''}`}>
-            <div className="bar-fill" style={{ transform: `scaleX(${hpPct})` }} />
-            <span className="bar-label">{hud.hp} / {hud.maxHp}</span>
-          </div>
-          <div className={`bar bar-exp${hud.levelingUp ? ' full' : ''}`}>
-            <div className="bar-fill" style={{ transform: `scaleX(${expPct})` }} />
-          </div>
+        <div className={`bar bar-hp${hpPct < 0.3 ? ' low' : ''}`}>
+          <div className="bar-fill" style={{ transform: `scaleX(${hpPct})` }} />
+          <span className="bar-label">{hud.hp} / {hud.maxHp}</span>
         </div>
         <div className="hud-time">{fmtTime(hud.timeSec)}</div>
       </div>
-      {expPop && (
-        <div key={expPop.key} className="exp-pop">
-          +{expPop.amount} EXP
+      <div className="hud-bottom">
+        {expPop && (
+          <div key={expPop.key} className="exp-pop">
+            +{expPop.amount} EXP
+          </div>
+        )}
+        <div className={`bar bar-exp${hud.levelingUp ? ' full' : ''}`}>
+          <div className="bar-fill" style={{ transform: `scaleX(${expPct})` }} />
         </div>
-      )}
-    </div>
+      </div>
+    </>
   );
 }
