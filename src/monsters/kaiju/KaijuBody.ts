@@ -89,7 +89,7 @@ function headPoints(): THREE.Vector3[] {
 function neckPoints(): THREE.Vector3[] {
   const pts: THREE.Vector3[] = [];
   oval(pts, new THREE.Vector3(0, 0, 4), new THREE.Vector3(44, 44, 46));
-  oval(pts, new THREE.Vector3(0, 72, 58), new THREE.Vector3(32, 32, 34));
+  oval(pts, new THREE.Vector3(0, 48, 39), new THREE.Vector3(32, 32, 34));
   return pts;
 }
 
@@ -162,7 +162,7 @@ export class KaijuBody implements MonsterBody {
     this.neck.position.copy(NECK_BASE);
     add(this.neck, this.keep(faceted(new ConvexGeometry(neckPoints()))), scale, [0, 0, 0], [1, 1, 1]);
     const head = new THREE.Object3D();
-    head.position.set(0, 85, 75);
+    head.position.set(0, 57, 50);
     head.scale.setScalar(HEAD_SCALE);
     this.neck.add(head);
     add(head, this.keep(faceted(new ConvexGeometry(headPoints()))), scale, [0, 0, 0], [1, 1, 1]);
