@@ -19,16 +19,11 @@ describe('GOLEM kind (the Wendigo)', () => {
     expect(GOLEM.tailSweep).toBe(false);
     expect(GOLEM.moves.map((m) => m.label)).toEqual(['Rending Claws', 'Dread Gaze', 'Shadow Hands']);
   });
-  it('has its own named signatures with Ravenous Hunger — never Brood Swarm, Meltdown or Sucker Grip', () => {
+  it('has its own signatures with Damage When Hurt — never Brood Swarm, Meltdown or Sucker Grip', () => {
     for (const id of ['brood', 'meltdown', 'grip'] as const) expect(GOLEM.signatures).not.toContain(id);
     expect(GOLEM.signatures).toContain('core');
-    for (const id of GOLEM.signatures) expect(GOLEM.abilityText[id]?.title).toBeTruthy();
-    expect(GOLEM.abilityText.core?.title).toBe('Ravenous Hunger');
-    expect(GOLEM.abilityText.acid?.title).toBe('Blighted Tracks');
-    expect(GOLEM.abilityText.spines?.title).toBe('Bone Ward');
-    expect(GOLEM.abilityText.swat?.title).toBe('Shadow Hands+');
-    expect(GOLEM.upgradeText.multiShot?.title).toBe('Twin Curse');
-    expect(GOLEM.abilityText.mortar?.title).toBe('Evil Eye');
+    for (const id of GOLEM.signatures) expect(GOLEM.abilityText[id]?.title).toBeUndefined();
+    expect(GOLEM.abilityText.mortar?.desc(1)).toMatch(/black fire/);
     expect(GOLEM.fx.particle).toBe('rot');
     expect(GOLEM.fx.intercept).toBe('bone');
   });
@@ -37,8 +32,8 @@ describe('GOLEM kind (the Wendigo)', () => {
       GOLEM.name,
       GOLEM.blurb,
       ...GOLEM.moves.map((m) => m.label),
-      ...Object.values(GOLEM.abilityText).flatMap((a) => [a.title, a.desc(1), a.desc(2)]),
-      ...Object.values(GOLEM.upgradeText).flatMap((u) => [u.title, u.desc ?? '']),
+      ...Object.values(GOLEM.abilityText).flatMap((a) => [a.title ?? '', a.desc(1), a.desc(2)]),
+      ...Object.values(GOLEM.upgradeText).flatMap((u) => [u.title ?? '', u.desc ?? '']),
     ];
     for (const t of texts) expect(t).not.toMatch(/magma|lava|(?<!black )fire|vent|ember|molten|heat|burn/i);
   });

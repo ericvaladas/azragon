@@ -156,7 +156,7 @@ describe('Progression pools', () => {
     for (let i = 0; i < 300; i++) for (const o of p.offer()) seen.set(o.id, o.title);
     expect(seen.get('acid')).toBe('Radiant Wake I');
     expect(seen.get('vitality')).toBe('Ironscale Hide');
-    expect(seen.get('nova')).toBe('Venom Nova I');
+    expect(seen.get('nova')).toBe('Area Pulse I');
   });
 
   it('refuses to rank up a signature outside the pool', () => {
@@ -187,9 +187,9 @@ describe('Progression.offer(all)', () => {
   });
 });
 
-describe('Ravenous Hunger ability', () => {
+describe('Damage When Hurt ability', () => {
   it('exists with a title, and the Insect\'s default pool never offers it', () => {
-    expect(ABILITIES.core.title).toBe('Ravenous Hunger');
+    expect(ABILITIES.core.title).toBe('Damage When Hurt');
     const p = new Progression(mulberry32(5));
     expect(p.offer(true).map((o) => o.id)).not.toContain('core');
   });

@@ -25,13 +25,13 @@ export const BASE_STATS: Stats = {
 };
 
 export const UPGRADES: Record<UpgradeId, { title: string; desc: string; apply(s: Stats): Stats }> = {
-  damage: { title: 'Acid Venom', desc: '+20% damage', apply: (s) => ({ ...s, damageMult: s.damageMult * 1.2 }) },
-  attackSpeed: { title: 'Frenzy', desc: 'Attacks 15% faster', apply: (s) => ({ ...s, cooldownMult: s.cooldownMult * 0.85 }) },
-  vitality: { title: 'Thick Carapace', desc: '+20% max HP, heal 30%', apply: (s) => ({ ...s, maxHpMult: s.maxHpMult * 1.2 }) },
-  regen: { title: 'Mutagen', desc: '+3 HP per second', apply: (s) => ({ ...s, regenBonus: s.regenBonus + 3 }) },
-  stompRadius: { title: 'Quake Stomp', desc: '+20% stomp radius', apply: (s) => ({ ...s, stompRadiusMult: s.stompRadiusMult * 1.2 }) },
-  multiShot: { title: 'Barbed Volley', desc: '+1 spike per shot', apply: (s) => ({ ...s, extraSpikes: s.extraSpikes + 1 }) },
-  moveSpeed: { title: 'Long Strides', desc: '+15% move speed', apply: (s) => ({ ...s, moveSpeedMult: s.moveSpeedMult * 1.15 }) },
+  damage: { title: 'Damage', desc: '+20% damage', apply: (s) => ({ ...s, damageMult: s.damageMult * 1.2 }) },
+  attackSpeed: { title: 'Attack Speed', desc: 'Attacks 15% faster', apply: (s) => ({ ...s, cooldownMult: s.cooldownMult * 0.85 }) },
+  vitality: { title: 'Max HP', desc: '+20% max HP, heal 30%', apply: (s) => ({ ...s, maxHpMult: s.maxHpMult * 1.2 }) },
+  regen: { title: 'HP Regen', desc: '+3 HP per second', apply: (s) => ({ ...s, regenBonus: s.regenBonus + 3 }) },
+  stompRadius: { title: 'Attack Radius', desc: '+20% stomp radius', apply: (s) => ({ ...s, stompRadiusMult: s.stompRadiusMult * 1.2 }) },
+  multiShot: { title: 'Multi-Shot', desc: '+1 spike per shot', apply: (s) => ({ ...s, extraSpikes: s.extraSpikes + 1 }) },
+  moveSpeed: { title: 'Move Speed', desc: '+15% move speed', apply: (s) => ({ ...s, moveSpeedMult: s.moveSpeedMult * 1.15 }) },
 };
 
 export type AbilityId = 'dash' | 'roar' | 'acid' | 'storm' | 'chitin' | 'frenzy' | 'brood' | 'overload' | 'spines' | 'swat' | 'nova' | 'mortar' | 'bubble' | 'reflect' | 'meltdown' | 'grip' | 'core';
@@ -41,8 +41,8 @@ const ROMAN = ['', 'I', 'II', 'III'];
 /** What a monster's level-up pool offers beyond the shared abilities, and its display names. */
 export type PoolSpec = {
   signatures: readonly AbilityId[];
-  abilityText: Partial<Record<AbilityId, { title: string; desc(rank: number): string }>>;
-  upgradeText: Partial<Record<UpgradeId, { title: string; desc?: string }>>;
+  abilityText: Partial<Record<AbilityId, { title?: string; desc(rank: number): string }>>;
+  upgradeText: Partial<Record<UpgradeId, { title?: string; desc?: string }>>;
 };
 
 /** Offered to every monster. */
@@ -58,21 +58,21 @@ const DEFAULT_POOL: PoolSpec = {
 export const ABILITIES: Record<AbilityId, { title: string; desc(rank: number): string }> = {
   dash: { title: 'Dash', desc: (r) => (r === 1 ? 'Button: charge and flatten a path (E)' : 'Dash recharges faster') },
   roar: { title: 'Roar', desc: (r) => (r === 1 ? 'Button: shockwave, downs flyers (R)' : 'Roar recharges faster') },
-  acid: { title: 'Acid Footprints', desc: (r) => (r === 1 ? 'Steps leave burning acid' : 'Bigger, longer-lasting acid') },
-  storm: { title: 'Spike Storm', desc: (r) => (r === 1 ? 'Homing spike barrage every 6s' : '+3 spikes, fires faster') },
-  chitin: { title: 'Chitin Deflection', desc: () => '+15% chance to deflect hits' },
-  frenzy: { title: 'Feeding Frenzy', desc: () => '+6 HP per kill' },
-  brood: { title: 'Brood Swarm', desc: (r) => (r === 1 ? 'Drones hunt aircraft every 10s' : '+2 drones') },
-  spines: { title: 'Spine Shield', desc: (r) => (r === 1 ? 'Auto-shoot incoming shells and missiles' : 'Faster, wider spine defense') },
-  swat: { title: 'Tail Swat+', desc: () => 'Tail swats flyers faster, harder, more at once' },
-  nova: { title: 'Venom Nova', desc: (r) => (r === 1 ? 'Acid shockwave pulse every 7s' : 'Bigger, stronger, more frequent pulses') },
-  mortar: { title: 'Acid Mortar', desc: (r) => (r === 1 ? 'Lobs acid at artillery, SAMs, trucks' : 'More globs, bigger splash') },
+  acid: { title: 'Damage Trail', desc: (r) => (r === 1 ? 'Steps leave burning acid' : 'Bigger, longer-lasting acid') },
+  storm: { title: 'Homing Barrage', desc: (r) => (r === 1 ? 'Homing spike barrage every 6s' : '+3 spikes, fires faster') },
+  chitin: { title: 'Deflect', desc: () => '+15% chance to deflect hits' },
+  frenzy: { title: 'Heal on Kill', desc: () => '+6 HP per kill' },
+  brood: { title: 'Drone Swarm', desc: (r) => (r === 1 ? 'Drones hunt aircraft every 10s' : '+2 drones') },
+  spines: { title: 'Missile Defense', desc: (r) => (r === 1 ? 'Auto-shoot incoming shells and missiles' : 'Faster, wider spine defense') },
+  swat: { title: 'Anti-Air Boost', desc: () => 'Tail swats flyers faster, harder, more at once' },
+  nova: { title: 'Area Pulse', desc: (r) => (r === 1 ? 'Acid shockwave pulse every 7s' : 'Bigger, stronger, more frequent pulses') },
+  mortar: { title: 'Auto Mortar', desc: (r) => (r === 1 ? 'Lobs acid at artillery, SAMs, trucks' : 'More globs, bigger splash') },
   bubble: { title: 'Shield Bubble', desc: (r) => (r === 1 ? 'Auto: 3s invincibility when hit is coming' : 'Longer bubble, shorter cooldown') },
-  grip: { title: 'Sucker Grip', desc: (r) => (r === 1 ? 'Planted arms crush an enemy beside them' : 'Wider, harder grip') },
-  core: { title: 'Ravenous Hunger', desc: (r) => (r === 1 ? 'Wounds feed its hunger: more damage, and a withering aura when starved' : 'Deeper hunger: more damage, wider aura') },
-  meltdown: { title: 'Meltdown', desc: (r) => (r === 1 ? 'Below 30% HP: +50% damage, ranged recharges 2x' : 'Meltdown kicks in at higher HP') },
+  grip: { title: 'Grab and Crush', desc: (r) => (r === 1 ? 'Planted arms crush an enemy beside them' : 'Wider, harder grip') },
+  core: { title: 'Damage When Hurt', desc: (r) => (r === 1 ? 'Wounds feed its hunger: more damage, and a withering aura when starved' : 'Deeper hunger: more damage, wider aura') },
+  meltdown: { title: 'Low HP Boost', desc: (r) => (r === 1 ? 'Below 30% HP: +50% damage, ranged recharges 2x' : 'Kicks in at higher HP') },
   reflect: { title: 'Reflect Shield', desc: (r) => (r === 1 ? 'Auto: bounce projectiles back at enemies' : 'Longer reflect, shorter cooldown') },
-  overload: { title: 'Overload', desc: (r) => (r === 1 ? 'Absorb a laser hit and fire it back' : 'Overload recharges faster') },
+  overload: { title: 'Laser Absorb', desc: (r) => (r === 1 ? 'Absorb a laser hit and fire it back' : 'Recharges faster') },
 };
 
 const emptyRanks = (): Record<AbilityId, number> => ({ dash: 0, roar: 0, acid: 0, storm: 0, chitin: 0, frenzy: 0, brood: 0, overload: 0, spines: 0, swat: 0, nova: 0, mortar: 0, bubble: 0, reflect: 0, meltdown: 0, grip: 0, core: 0 });
@@ -139,9 +139,10 @@ export class Progression {
       }
       return ids.map((id) => {
         if (id in ABILITIES) {
-          const a = this.pool.abilityText[id as AbilityId] ?? ABILITIES[id as AbilityId];
+          const base = ABILITIES[id as AbilityId];
+          const a = this.pool.abilityText[id as AbilityId];
           const next = this.ranks[id as AbilityId] + 1;
-          return { id, title: `${a.title} ${ROMAN[next]}`, desc: a.desc(next) };
+          return { id, title: `${a?.title ?? base.title} ${ROMAN[next]}`, desc: (a ?? base).desc(next) };
         }
         const u = UPGRADES[id as UpgradeId];
         const t = this.pool.upgradeText[id as UpgradeId];

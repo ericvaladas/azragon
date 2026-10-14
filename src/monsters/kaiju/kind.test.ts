@@ -21,12 +21,10 @@ describe('KAIJU kind', () => {
     expect(KAIJU.ranged).toBe('breath');
     expect(KAIJU.antiAir).toBe('bite');
   });
-  it('has its own signatures and names; never the Insect-only Brood Swarm', () => {
+  it('has its own signatures and descriptions under the shared plain names; never the Insect-only Brood Swarm', () => {
     expect(KAIJU.signatures).not.toContain('brood');
     expect(KAIJU.signatures).toContain('meltdown');
-    for (const id of KAIJU.signatures) expect(KAIJU.abilityText[id]?.title).toBeTruthy();
-    expect(KAIJU.abilityText.acid?.title).toBe('Radiant Wake');
-    expect(KAIJU.upgradeText.vitality?.title).toBe('Ironscale Hide');
-    expect(KAIJU.upgradeText.multiShot?.title).toBe('Wide Sweep');
+    for (const id of KAIJU.signatures) expect(KAIJU.abilityText[id]?.title).toBeUndefined();
+    expect(KAIJU.upgradeText.multiShot?.desc).toBe('Breath fires +1 extra beam');
   });
 });
