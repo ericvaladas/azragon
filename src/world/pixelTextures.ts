@@ -106,52 +106,56 @@ export function facadeAtlas(): THREE.CanvasTexture {
   return finish(c);
 }
 
-/**
- * Ground tile covering 2 × 2 blocks in a city's colours: paved with speckle; roads on the block lines with dashed
- * centre lines; zebra crosswalks across every road arm at each intersection. Wraps seamlessly.
- */
+/** Ground tile covering 2 × 2 blocks in a city's colours: plain paving with speckle (roads are their own meshes). Wraps seamlessly. */
 export function cityGroundTexture(style: CityStyle): THREE.CanvasTexture {
   const { world } = CONFIG;
   const C = style.colors;
   const size = 128;
-  const span = world.blockSize * 2;
   const c = document.createElement('canvas');
   c.width = size;
   c.height = size;
   const g = c.getContext('2d')!;
-  const px = size / span;
   const rng = mulberry32(world.seed + 1);
   g.fillStyle = hex(C.paved);
   g.fillRect(0, 0, size, size);
   g.fillStyle = hex(C.pavedSpeck);
   for (let i = 0; i < 500; i++) g.fillRect(Math.floor(rng() * size), Math.floor(rng() * size), 1, 1);
-  const roadPx = Math.max(2, Math.round(world.roadWidth * px));
-  const half = Math.floor(roadPx / 2);
-  const lines = [0, Math.round(world.blockSize * px), size];
-  g.fillStyle = hex(C.road);
-  for (const p of lines) {
-    g.fillRect(p - half, 0, roadPx, size);
-    g.fillRect(0, p - half, size, roadPx);
-  }
-  g.fillStyle = hex(C.roadLine);
-  for (const p of lines) for (let t = 0; t < size; t += 6) {
-    g.fillRect(p, t, 1, 3);
-    g.fillRect(t, p, 3, 1);
-  }
-  // Crosswalks: stripes across each arm, just outside every intersection.
-  g.fillStyle = hex(C.crosswalk);
-  for (const ix of lines) for (const iz of lines) {
-    for (let s = -half; s < half; s += 2) {
-      for (const o of [half + 1, -half - 2]) {
-        g.fillRect(ix + s, iz + o, 1, 1);
-        g.fillRect(ix + o, iz + s, 1, 1);
-      }
-    }
-  }
   const tex = finish(c);
   tex.wrapS = THREE.RepeatWrapping;
   tex.wrapT = THREE.RepeatWrapping;
   return tex;
+}
+
+/** Road texture size: across the road (u) × along one segment (v), in px. */
+const ROAD_TEX = { w: 8, h: 64 } as const;
+
+/**
+ * One road segment, stretched over its quad (u across, v along): asphalt, white edge lines, a dashed centre line, and
+ * zebra crosswalk stripes in the last 6 px at each end.
+ */
+export function roadTexture(style: CityStyle): THREE.CanvasTexture {
+  const C = style.colors;
+  const { w, h } = ROAD_TEX;
+  const c = document.createElement('canvas');
+  c.width = w;
+  c.height = h;
+  const g = c.getContext('2d')!;
+  g.fillStyle = hex(C.road);
+  g.fillRect(0, 0, w, h);
+  g.fillStyle = hex(C.roadLine);
+  g.fillRect(0, 0, 1, h);
+  g.fillRect(w - 1, 0, 1, h);
+  for (let y = 9; y < h - 9; y += 8) g.fillRect(w / 2 - 1, y, 2, 4);
+  // Crosswalks: stripes along the road, symmetric about the centre; the middle pair meets as one wide stripe.
+  g.fillStyle = hex(C.road);
+  g.fillRect(0, 0, w, 6);
+  g.fillRect(0, h - 6, w, 6);
+  g.fillStyle = hex(C.crosswalk);
+  for (const x of [1, 3, 4, 6]) {
+    g.fillRect(x, 1, 1, 5);
+    g.fillRect(x, h - 6, 1, 5);
+  }
+  return finish(c);
 }
 
 export type Rect = { x: number; y: number; w: number; h: number };
@@ -224,6 +228,7 @@ export type CityTextures = {
   screen(): THREE.Texture;
   signs(): THREE.Texture;
   overlay(id: string): THREE.Texture;
+  road(style: CityStyle): THREE.Texture;
 };
 
 export const canvasCityTextures: CityTextures = {
@@ -233,6 +238,7 @@ export const canvasCityTextures: CityTextures = {
   screen: screenTexture,
   signs: () => signAtlas(),
   overlay: () => scrambleTexture(),
+  road: roadTexture,
 };
 
 /**

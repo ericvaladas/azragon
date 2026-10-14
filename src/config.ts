@@ -104,6 +104,12 @@ export const CONFIG = {
     /** Pool size for park ground pads across all loaded chunks. */
     maxParks: 2000,
     maxRubble: 2500,
+    /** Road segment pool: at most 32 segments start in a chunk, times maxLoadedChunks (185), rounded up. */
+    maxRoads: 6000,
+    /** Intersection squares plus bridge deck slabs (at most 16 intersections per chunk). */
+    maxNodes: 3000,
+    /** River cell quads. */
+    maxWater: 800,
     blockSize: 200,
     roadWidth: 36,
     /** Crater around the origin (the pod's impact site; the decal is half a block wider), sized to the cocoon. */

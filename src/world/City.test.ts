@@ -15,6 +15,7 @@ const STUB: CityTextures = {
   screen: () => new THREE.Texture(),
   signs: () => new THREE.Texture(),
   overlay: () => new THREE.Texture(),
+  road: () => new THREE.Texture(),
 };
 const make = (style: CityStyle = TOKYO, onDestroyed = (_t: Target, _e: number) => {}) => {
   const scene = new THREE.Scene();
@@ -193,6 +194,41 @@ describe('City (Tokyo)', () => {
     let seen = false;
     for (let i = 0; i < city.buildingMesh.count; i++) if (attr.getX(i) > 0) seen = true;
     expect(seen).toBe(true);
+  });
+});
+
+describe('road network', () => {
+  const meshes = (city: City) => city as unknown as Record<'roadMesh' | 'nodeMesh' | 'waterMesh', THREE.InstancedMesh>;
+  const counts = (city: City) => {
+    const m = meshes(city);
+    return [m.roadMesh.count, m.nodeMesh.count, m.waterMesh.count];
+  };
+
+  it('draws roads, intersections and the river after construction', () => {
+    const { city } = make();
+    const m = meshes(city);
+    expect(m.roadMesh.count).toBeGreaterThan(0);
+    expect(m.nodeMesh.count).toBeGreaterThan(0);
+    expect(m.waterMesh.count).toBeGreaterThan(0);
+    expect(m.roadMesh.count).toBeLessThanOrEqual(CONFIG.world.maxRoads);
+  });
+
+  it('keeps the same counts after reset(TOKYO) twice (no leak)', () => {
+    const { city } = make();
+    const before = counts(city);
+    city.reset(TOKYO);
+    city.reset(TOKYO);
+    expect(counts(city)).toEqual(before);
+  });
+
+  // Mesh `count` is the highest slot in use, which depends on the order slots were freed; slots in use do not.
+  it('returns to the same slots in use after streaming 30 km away and back', () => {
+    const { city } = make();
+    const before = city.roadNetworkCount();
+    expect(before.roads).toBeGreaterThan(0);
+    for (let i = 0; i < 200; i++) city.update(0.016, new THREE.Vector3(30000, 0, 0));
+    for (let i = 0; i < 200; i++) city.update(0.016, new THREE.Vector3());
+    expect(city.roadNetworkCount()).toEqual(before);
   });
 });
 

@@ -5,6 +5,7 @@ import { CONFIG } from '../config';
 import { TOKYO } from '../cities/tokyo';
 import { SHIBUYA_CROSSING } from '../cities/tokyo/layout';
 import type { CityStyle } from '../cities/types';
+import { PITCH, isWater, lineWidth, segmentAt, type Axis } from './roads';
 
 const W = CONFIG.world;
 
@@ -145,6 +146,98 @@ describe('generateChunk', () => {
     const near = (x: number, z: number) => generateChunk(TOKYO, 1337, Math.floor(x / CHUNK_SIZE), Math.floor(z / CHUNK_SIZE)).buildings;
     expect(near(600, 1600).some((b) => b.signs.length > 0)).toBe(true);
     expect(Math.max(...near(300, 3100).map((b) => b.h))).toBeGreaterThanOrEqual(150);
+  });
+});
+
+describe('road network in chunks', () => {
+  // Chunks straddling the river (z ≈ 1120–1480), the crater, Shibuya and a residential stretch.
+  const SAMPLE: [number, number][] = [];
+  for (let cx = -6; cx <= 6; cx++) for (let cz = 0; cz <= 2; cz++) SAMPLE.push([cx, cz]);
+  SAMPLE.push([3, -3], [4, -4], [2, -2], [-3, -3]);
+
+  it("lists exactly the existing segments whose start node lies in the chunk", () => {
+    for (const [cx, cz] of SAMPLE) {
+      const want: string[] = [];
+      for (let i = 4 * cx; i < 4 * cx + 4; i++) for (let j = 4 * cz; j < 4 * cz + 4; j++) {
+        for (const axis of ['x', 'z'] as Axis[]) {
+          const s = segmentAt(TOKYO, axis, i, j);
+          if (s) want.push(JSON.stringify(s));
+        }
+      }
+      const got = generateChunk(TOKYO, 1337, cx, cz).roads.map((s) => JSON.stringify(s));
+      expect(got.sort()).toEqual(want.sort());
+    }
+  });
+
+  it('puts no building, tree or park in a water cell, and lists the water cells', () => {
+    let water = 0;
+    for (const [cx, cz] of SAMPLE) {
+      const c = generateChunk(TOKYO, 1337, cx, cz);
+      const wet = (x: number, z: number) => isWater(TOKYO, Math.floor(x / PITCH), Math.floor(z / PITCH));
+      for (const b of c.buildings) expect(wet(b.x, b.z)).toBe(false);
+      for (const t of c.trees) expect(wet(t.x, t.z)).toBe(false);
+      for (const p of c.parks) expect(wet(p.x, p.z)).toBe(false);
+      for (const wc of c.water) expect(wet(wc.x, wc.z)).toBe(true);
+      water += c.water.length;
+    }
+    expect(water).toBeGreaterThan(10);
+  });
+
+  it("keeps every building footprint clear of its cell's bordering line half-widths", () => {
+    for (const [cx, cz] of SAMPLE) {
+      for (const b of generateChunk(TOKYO, 1337, cx, cz).buildings) {
+        const ci = Math.floor(b.x / PITCH);
+        const cj = Math.floor(b.z / PITCH);
+        expect(b.x - b.w / 2).toBeGreaterThanOrEqual(PITCH * ci + lineWidth(ci) / 2 - 1e-6);
+        expect(b.x + b.w / 2).toBeLessThanOrEqual(PITCH * (ci + 1) - lineWidth(ci + 1) / 2 + 1e-6);
+        expect(b.z - b.d / 2).toBeGreaterThanOrEqual(PITCH * cj + lineWidth(cj) / 2 - 1e-6);
+        expect(b.z + b.d / 2).toBeLessThanOrEqual(PITCH * (cj + 1) - lineWidth(cj + 1) / 2 + 1e-6);
+      }
+    }
+  });
+
+  it('plants trees along removed street strips between residential cells', () => {
+    let strips = 0;
+    for (let cx = 2; cx <= 4; cx++) for (let cz = -4; cz <= -2; cz++) {
+      const c = generateChunk(TOKYO, 1337, cx, cz);
+      for (let i = 4 * cx; i < 4 * cx + 4; i++) for (let j = 4 * cz; j < 4 * cz + 4; j++) {
+        for (const axis of ['x', 'z'] as Axis[]) {
+          if (segmentAt(TOKYO, axis, i, j)) continue;
+          const [a, b] = axis === 'x' ? [[i, j - 1], [i, j]] : [[i - 1, j], [i, j]];
+          const res = [a!, b!].every(([ci, cj]) => TOKYO.districtAt(PITCH * (ci! + 0.5), PITCH * (cj! + 0.5)) === 'residential');
+          if (!res) continue;
+          strips++;
+          const on = c.trees.filter((t) => axis === 'x'
+            ? Math.abs(t.z - PITCH * j) < 1 && t.x > PITCH * i && t.x < PITCH * (i + 1)
+            : Math.abs(t.x - PITCH * i) < 1 && t.z > PITCH * j && t.z < PITCH * (j + 1));
+          expect(on.length).toBeGreaterThanOrEqual(3);
+        }
+      }
+    }
+    expect(strips).toBeGreaterThan(0);
+  });
+
+  it('lists intersections with at least one incident segment, sized to the widest', () => {
+    const c = generateChunk(TOKYO, 1337, 0, 1);
+    const shibuya = c.nodes.find((n) => n.x === SHIBUYA_CROSSING.x && n.z === SHIBUYA_CROSSING.z);
+    expect(shibuya?.size).toBe(56);
+    for (const n of c.nodes) expect([36, 56]).toContain(n.size);
+  });
+
+  it('fits a full load of roads, intersections (with bridge slabs) and water in the pools', () => {
+    expect(32 * maxLoadedChunks()).toBeLessThanOrEqual(W.maxRoads);
+    for (const [x, z] of [[0, 0], [0, 1300], [4000, 1300], [-9000, 1500], [20000, 900]] as const) {
+      let roads = 0, nodes = 0, water = 0;
+      for (const r of chunksInRadius(x, z, W.unloadRadius)) {
+        const c = generateChunk(TOKYO, 1337, r.cx, r.cz);
+        roads += c.roads.length;
+        nodes += c.nodes.length + c.roads.filter((s) => s.bridge).length;
+        water += c.water.length;
+      }
+      expect(roads).toBeLessThanOrEqual(W.maxRoads);
+      expect(nodes).toBeLessThanOrEqual(W.maxNodes);
+      expect(water).toBeLessThanOrEqual(W.maxWater);
+    }
   });
 });
 

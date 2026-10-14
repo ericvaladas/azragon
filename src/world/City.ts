@@ -4,7 +4,8 @@ import type { OnDestroyed, Target } from '../combat';
 import type { Vec2 } from '../util/math';
 import { mulberry32 } from '../util/rng';
 import type { CityStyle, LandmarkSpec, SignDef } from '../cities/types';
-import { blastTopples, chunksInRadius, DestroyedLog, generateChunk, planStreaming, type BuildingSpec, type ChunkContent } from './chunks';
+import { blastTopples, chunksInRadius, DestroyedLog, generateChunk, nodeSize, planStreaming, type BuildingSpec, type ChunkContent } from './chunks';
+import { isWater, PITCH, type Segment } from './roads';
 import { canvasCityTextures, patchFacadeShader, SCREEN_FRAMES, SIGN_RECTS, type CityTextures } from './pixelTextures';
 import { faceted, toonMat } from '../render/toon';
 
@@ -55,9 +56,73 @@ class Building implements Target {
   }
 }
 
-type LoadedChunk = { content: ChunkContent; buildings: Building[]; treeSlots: number[]; parkSlots: number[] };
+type LoadedChunk = {
+  content: ChunkContent;
+  buildings: Building[];
+  treeSlots: number[];
+  parkSlots: number[];
+  roadSlots: number[];
+  nodeSlots: number[];
+  waterSlots: number[];
+};
 
 const ZERO = new THREE.Matrix4().makeScale(0, 0, 0);
+
+/** Fixed-size slots of one instanced mesh: free slots are taken from a stack; released slots are zero-scaled. */
+class SlotPool {
+  private free: number[] = [];
+  private used: boolean[];
+
+  constructor(readonly mesh: THREE.InstancedMesh) {
+    this.used = new Array(mesh.instanceMatrix.count).fill(false);
+    this.reset();
+  }
+
+  reset(): void {
+    this.free = [];
+    for (let i = this.used.length - 1; i >= 0; i--) this.free.push(i);
+  }
+
+  /** A free slot with `m` written to it, or undefined when the pool is full. */
+  take(m: THREE.Matrix4): number | undefined {
+    const slot = this.free.pop();
+    if (slot === undefined) return undefined;
+    this.used[slot] = true;
+    this.mesh.setMatrixAt(slot, m);
+    return slot;
+  }
+
+  release(slot: number): void {
+    this.mesh.setMatrixAt(slot, ZERO);
+    this.used[slot] = false;
+    this.free.push(slot);
+  }
+
+  /** Slots in use. */
+  inUse(): number {
+    return this.used.length - this.free.length;
+  }
+
+  /** One past the highest slot in use. */
+  highWater(): number {
+    let i = this.used.length - 1;
+    while (i >= 0 && !this.used[i]) i--;
+    return i + 1;
+  }
+}
+
+/** Heights of the ground layers. The flat layers also stack by polygon offset: water 1, road 2, node 3, overlay 4, crater 5. */
+const Y = { water: 0.1, park: 0.2, road: 0.3, node: 0.32, overlay: 0.35, crater: 0.5, bridge: 2.5, slab: 2.0 } as const;
+/** Bridge deck slab: this much wider than its road, this thick (hanging below its top), in this grey. */
+const SLAB = { extra: 8, thick: 1.8, color: 0x9aa0a6 } as const;
+const WATER_COLOR = 0x3f8fc9;
+
+function layered(mat: THREE.Material, offset: number): THREE.Material {
+  mat.polygonOffset = true;
+  mat.polygonOffsetFactor = -offset;
+  mat.polygonOffsetUnits = -offset;
+  return mat;
+}
 const UP = new THREE.Vector3(0, 1, 0);
 const X_AXIS = new THREE.Vector3(1, 0, 0);
 /** Ground texture covers 2x2 blocks; the ground plane snaps to this so the pattern stays world-aligned. */
@@ -85,6 +150,16 @@ export class City {
   private rubbleMesh: THREE.InstancedMesh;
   private treeMesh: THREE.InstancedMesh;
   private parkMesh: THREE.InstancedMesh;
+  /** Road segments: one textured quad each. */
+  private roadMesh: THREE.InstancedMesh;
+  /** Intersection squares and bridge deck slabs: flat-topped boxes tinted per instance. */
+  private nodeMesh: THREE.InstancedMesh;
+  /** River cells. */
+  private waterMesh: THREE.InstancedMesh;
+  private roads: SlotPool;
+  private nodes: SlotPool;
+  private waters: SlotPool;
+  private roadMat: THREE.MeshToonMaterial;
   private signMesh: THREE.InstancedMesh;
   private signRect: THREE.InstancedBufferAttribute;
   private screenMesh: THREE.InstancedMesh;
@@ -134,10 +209,9 @@ export class City {
 
     const craterMat = toonMat(0xffffff, { map: this.textures.crater() });
     craterMat.alphaTest = 0.5;
-    craterMat.polygonOffset = true;
-    craterMat.polygonOffsetFactor = -2;
+    layered(craterMat, 5);
     this.crater = new THREE.Mesh(new THREE.CircleGeometry(CRATER_RADIUS, 32).rotateX(-Math.PI / 2), craterMat);
-    this.crater.position.y = 0.5;
+    this.crater.position.y = Y.crater;
     this.crater.receiveShadow = true;
     // Hidden until the pod lands.
     this.crater.visible = false;
@@ -165,7 +239,18 @@ export class City {
     this.parkMesh = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), toonMat(0xffffff), world.maxParks);
     for (let i = 0; i < world.maxParks; i++) this.parkMesh.setColorAt(i, _c.setHex(0xffffff));
     this.parkMesh.receiveShadow = true;
-    this.parkMesh.position.y = 0.2;
+    this.parkMesh.position.y = Y.park;
+    const flat = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
+    this.roadMat = toonMat(0xffffff, { map: this.roadTexture() });
+    this.roadMesh = new THREE.InstancedMesh(flat, layered(this.roadMat, 2), world.maxRoads);
+    this.roadMesh.receiveShadow = true;
+    // Top face at local y = 0, so an instance's y is its top and its y scale its thickness.
+    const slab = new THREE.BoxGeometry(1, 1, 1).translate(0, -0.5, 0);
+    this.nodeMesh = new THREE.InstancedMesh(slab, layered(toonMat(0xffffff), 3), world.maxNodes);
+    for (let i = 0; i < world.maxNodes; i++) this.nodeMesh.setColorAt(i, _c.setHex(0xffffff));
+    this.nodeMesh.receiveShadow = true;
+    this.waterMesh = new THREE.InstancedMesh(flat, layered(toonMat(WATER_COLOR), 1), world.maxWater);
+    this.waterMesh.receiveShadow = true;
     const signBox = new THREE.BoxGeometry(1, 1, 1);
     const signGeo = new THREE.BoxGeometry(1, 1, 1);
     this.signRect = new THREE.InstancedBufferAttribute(new Float32Array(world.maxSigns * 4), 4);
@@ -187,7 +272,7 @@ export class City {
     for (let i = 0; i < world.maxSigns; i++) this.signMesh.setColorAt(i, _c.setHex(0xffffff));
     this.signUsed = new Array(world.maxSigns).fill(false);
     this.screenUsed = new Array(world.maxScreens).fill(false);
-    for (const m of [this.buildingMesh, this.rubbleMesh, this.treeMesh, this.parkMesh, this.signMesh, this.screenMesh]) {
+    for (const m of this.instanced()) {
       m.frustumCulled = false;
       for (let i = 0; i < m.instanceMatrix.count; i++) m.setMatrixAt(i, ZERO);
     }
@@ -196,12 +281,21 @@ export class City {
     this.treeUsed = new Array(world.maxTrees).fill(false);
     this.rubbleUsed = new Array(world.maxRubble).fill(false);
     this.parkUsed = new Array(world.maxParks).fill(false);
+    this.roads = new SlotPool(this.roadMesh);
+    this.nodes = new SlotPool(this.nodeMesh);
+    this.waters = new SlotPool(this.waterMesh);
     this.resetPools();
-    scene.add(this.buildingMesh, this.rubbleMesh, this.treeMesh, this.parkMesh, this.signMesh, this.screenMesh);
+    scene.add(...this.instanced());
     this.landmarkMat = toonMat(0xffffff, { vertexColors: true });
 
     this.buildOverlays();
     this.stream(new THREE.Vector3(), Infinity);
+    this.updateCounts();
+  }
+
+  /** Every pooled instanced mesh. */
+  private instanced(): THREE.InstancedMesh[] {
+    return [this.buildingMesh, this.rubbleMesh, this.treeMesh, this.parkMesh, this.signMesh, this.screenMesh, this.roadMesh, this.nodeMesh, this.waterMesh];
   }
 
   get style(): CityStyle {
@@ -217,6 +311,11 @@ export class City {
     return tex;
   }
 
+  /** The style's road texture, stretched over each segment's quad. */
+  private roadTexture(): THREE.Texture {
+    return this.textures.road(this._style);
+  }
+
   /** Replace the ground decals (e.g. the Shibuya scramble) with the current style's. */
   private buildOverlays(): void {
     for (const o of this.overlays) {
@@ -228,10 +327,9 @@ export class City {
     this.overlays = this._style.overlays.map((ov) => {
       const mat = toonMat(0xffffff, { map: this.textures.overlay(ov.id) });
       mat.alphaTest = 0.5;
-      mat.polygonOffset = true;
-      mat.polygonOffsetFactor = -1;
+      layered(mat, 4);
       const m = new THREE.Mesh(new THREE.PlaneGeometry(ov.size, ov.size).rotateX(-Math.PI / 2), mat);
-      m.position.set(ov.x, 0.35, ov.z);
+      m.position.set(ov.x, Y.overlay, ov.z);
       m.receiveShadow = true;
       this.scene.add(m);
       return m;
@@ -268,6 +366,9 @@ export class City {
     for (let i = CONFIG.world.maxSigns - 1; i >= 0; i--) this.freeSigns.push(i);
     this.freeScreens = [];
     for (let i = CONFIG.world.maxScreens - 1; i >= 0; i--) this.freeScreens.push(i);
+    this.roads.reset();
+    this.nodes.reset();
+    this.waters.reset();
   }
 
   /** Draw only up to the highest slot in use: empty slots still cost vertex work even at zero scale. */
@@ -283,6 +384,7 @@ export class City {
     this.rubbleMesh.count = high((i) => this.rubbleUsed[i]!, this.rubbleUsed.length);
     this.signMesh.count = high((i) => this.signUsed[i]!, this.signUsed.length);
     this.screenMesh.count = high((i) => this.screenUsed[i]!, this.screenUsed.length);
+    for (const p of [this.roads, this.nodes, this.waters]) p.mesh.count = p.highWater();
   }
 
   /** Forget all destruction and rebuild the city around the origin, in `style` if given. */
@@ -295,6 +397,9 @@ export class City {
       mat.needsUpdate = true;
       this.roofMat.color.setHex(style.colors.roof);
       this.treeMat.color.setHex(style.colors.tree);
+      this.roadMat.map?.dispose();
+      this.roadMat.map = this.roadTexture();
+      this.roadMat.needsUpdate = true;
     }
     this.buildOverlays();
     this.crater.visible = false;
@@ -303,6 +408,12 @@ export class City {
     this.destroyed.clear();
     this.resetPools();
     this.stream(new THREE.Vector3(), Infinity);
+    this.updateCounts();
+  }
+
+  /** Road, intersection-and-slab, and water slots in use. */
+  roadNetworkCount(): { roads: number; nodes: number; water: number } {
+    return { roads: this.roads.inUse(), nodes: this.nodes.inUse(), water: this.waters.inUse() };
   }
 
   /** Sign slots in use. */
@@ -430,7 +541,8 @@ export class City {
     if (this.dirty) {
       this.dirty = false;
       this.updateCounts();
-      for (const m of [this.buildingMesh, this.rubbleMesh, this.treeMesh, this.parkMesh, this.signMesh, this.screenMesh]) m.instanceMatrix.needsUpdate = true;
+      for (const m of this.instanced()) m.instanceMatrix.needsUpdate = true;
+      if (this.nodeMesh.instanceColor) this.nodeMesh.instanceColor.needsUpdate = true;
       if (this.buildingMesh.instanceColor) this.buildingMesh.instanceColor.needsUpdate = true;
       if (this.signMesh.instanceColor) this.signMesh.instanceColor.needsUpdate = true;
       this.signRect.needsUpdate = true;
@@ -482,11 +594,11 @@ export class City {
       else this.writeStanding(b, 0, 0);
       buildings.push(b);
     });
-    const inner = CONFIG.world.blockSize - CONFIG.world.roadWidth;
     for (const p of content.parks) {
       const slot = this.freeParks.pop();
       if (slot === undefined) break;
-      _m.compose(_p.set(p.x, 0, p.z), _q.identity(), _s.set(inner, 1, inner));
+      // The full cell, so neighbouring parks (and the lane between them) read as one green space.
+      _m.compose(_p.set(p.x, 0, p.z), _q.identity(), _s.set(PITCH, 1, PITCH));
       this.parkMesh.setMatrixAt(slot, _m);
       this.parkMesh.setColorAt(slot, _c.setHex(this._style.colors.park));
       this.parkUsed[slot] = true;
@@ -500,7 +612,22 @@ export class City {
       this.treeUsed[slot] = true;
       treeSlots.push(slot);
     }
-    this.chunks.set(key, { content, buildings, treeSlots, parkSlots });
+    const roadSlots: number[] = [];
+    const nodeSlots: number[] = [];
+    const waterSlots: number[] = [];
+    const keep = (slots: number[], slot: number | undefined) => { if (slot !== undefined) slots.push(slot); };
+    for (const seg of content.roads) this.writeRoad(seg, roadSlots, nodeSlots);
+    for (const n of content.nodes) {
+      _m.compose(_p.set(n.x, Y.node, n.z), _q.identity(), _s.set(n.size, Y.node - 0.02, n.size));
+      const slot = this.nodes.take(_m);
+      if (slot !== undefined) this.nodeMesh.setColorAt(slot, _c.setHex(this._style.colors.road));
+      keep(nodeSlots, slot);
+    }
+    for (const w of content.water) {
+      _m.compose(_p.set(w.x, Y.water, w.z), _q.identity(), _s.set(PITCH, 1, PITCH));
+      keep(waterSlots, this.waters.take(_m));
+    }
+    this.chunks.set(key, { content, buildings, treeSlots, parkSlots, roadSlots, nodeSlots, waterSlots });
     this.loadedKeys.add(key);
     this.dirty = true;
   }
@@ -532,10 +659,39 @@ export class City {
       this.parkUsed[slot] = false;
       this.freeParks.push(slot);
     }
+    for (const slot of chunk.roadSlots) this.roads.release(slot);
+    for (const slot of chunk.nodeSlots) this.nodes.release(slot);
+    for (const slot of chunk.waterSlots) this.waters.release(slot);
     if (this.collapsing.length) this.collapsing = this.collapsing.filter((b) => b.chunk !== key);
     this.chunks.delete(key);
     this.loadedKeys.delete(key);
     this.dirty = true;
+  }
+
+  /**
+   * One segment's road quad, running between the edges of its end intersections so their crosswalks show. A bridge
+   * is raised on a grey deck slab and runs straight through mid-river nodes (whose four cells are all water).
+   */
+  private writeRoad(seg: Segment, roadSlots: number[], nodeSlots: number[]): void {
+    const st = this._style;
+    const [i1, j1] = seg.axis === 'x' ? [seg.i + 1, seg.j] : [seg.i, seg.j + 1];
+    const midRiver = (i: number, j: number) => isWater(st, i - 1, j - 1) && isWater(st, i, j - 1) && isWater(st, i - 1, j) && isWater(st, i, j);
+    const trim0 = seg.bridge && midRiver(seg.i, seg.j) ? 0 : nodeSize(st, seg.i, seg.j) / 2;
+    const trim1 = seg.bridge && midRiver(i1, j1) ? 0 : nodeSize(st, i1, j1) / 2;
+    const len = PITCH - trim0 - trim1;
+    const along = trim0 + len / 2;
+    const x = PITCH * seg.i + (seg.axis === 'x' ? along : 0);
+    const z = PITCH * seg.j + (seg.axis === 'z' ? along : 0);
+    _q.setFromAxisAngle(UP, seg.axis === 'x' ? Math.PI / 2 : 0);
+    _m.compose(_p.set(x, seg.bridge ? Y.bridge : Y.road, z), _q, _s.set(seg.width, 1, len));
+    const slot = this.roads.take(_m);
+    if (slot !== undefined) roadSlots.push(slot);
+    if (!seg.bridge) return;
+    _m.compose(_p.set(x, Y.slab, z), _q, _s.set(seg.width + SLAB.extra, SLAB.thick, len));
+    const deck = this.nodes.take(_m);
+    if (deck === undefined) return;
+    this.nodeMesh.setColorAt(deck, _c.setHex(SLAB.color));
+    nodeSlots.push(deck);
   }
 
   private writeRubble(b: Building): void {

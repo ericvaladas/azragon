@@ -1,12 +1,29 @@
 import { CONFIG } from '../config';
 import { mulberry32, pick, range } from '../util/rng';
 import type { BuildingSpec, CityStyle, DistrictRules, LandmarkSpec, SignDef } from '../cities/types';
+import { isWater, lineWidth, segmentAt, type Axis, type Segment } from './roads';
 
 export type { BuildingSpec } from '../cities/types';
 export type TreeSpec = { x: number; z: number; s: number };
 /** A park block, by its centre: drawn as a green pad under its trees. */
 export type ParkSpec = { x: number; z: number };
-export type ChunkContent = { buildings: BuildingSpec[]; trees: TreeSpec[]; parks: ParkSpec[]; landmarks: LandmarkSpec[] };
+/** An intersection at (x, z), drawn as a square `size` m across (the widest incident road). */
+export type NodeSpec = { x: number; z: number; size: number };
+/** A river cell, by its centre. */
+export type WaterSpec = { x: number; z: number };
+/**
+ * `roads`: existing segments whose start node lies in the chunk. `nodes`: the chunk's intersections that have at
+ * least one incident segment. `water`: the chunk's river cells.
+ */
+export type ChunkContent = {
+  buildings: BuildingSpec[];
+  trees: TreeSpec[];
+  parks: ParkSpec[];
+  landmarks: LandmarkSpec[];
+  roads: Segment[];
+  nodes: NodeSpec[];
+  water: WaterSpec[];
+};
 export type ChunkRef = { cx: number; cz: number; key: string; dist: number };
 
 /** Road lines sit on every multiple of blockSize on both axes; chunks are chunkBlocks × chunkBlocks blocks. */
@@ -64,6 +81,15 @@ export function maxLoadedChunks(): number {
 export const BUILDINGS_PER_CHUNK = Math.floor(CONFIG.world.maxBuildings / maxLoadedChunks());
 export const SIGNS_PER_CHUNK = Math.floor(CONFIG.world.maxSigns / maxLoadedChunks());
 
+/** Width of the widest existing segment meeting node (i, j), or 0 when none does. */
+export function nodeSize(style: CityStyle, i: number, j: number): number {
+  let size = 0;
+  for (const s of [segmentAt(style, 'x', i, j), segmentAt(style, 'x', i - 1, j), segmentAt(style, 'z', i, j), segmentAt(style, 'z', i, j - 1)]) {
+    if (s) size = Math.max(size, s.width);
+  }
+  return size;
+}
+
 const overlaps = (a: { x: number; z: number; w: number; d: number }, b: { x: number; z: number; w: number; d: number }, gap = 0) =>
   Math.abs(a.x - b.x) * 2 < a.w + b.w + gap && Math.abs(a.z - b.z) * 2 < a.d + b.d + gap;
 
@@ -95,21 +121,23 @@ function makeSigns(rules: DistrictRules, style: CityStyle, w: number, d: number,
 }
 
 /**
- * One chunk of the city in `style`: each block is built from the district at its centre. Landmarks claim their
- * block (the chunk holding the landmark's centre owns it); special lots replace the random lots they overlap; the
- * crash site is never a park. Per-chunk caps thin the random buildings (never special lots) and then their signs.
- * Same inputs, same chunk.
+ * One chunk of the city in `style`: each block is built from the district at its centre. River cells hold nothing
+ * but water. Lots sit inside the block inset by half the width of each bordering lattice line, whether or not its
+ * segment exists, so removed-street strips stay unbuilt; in residential and park blocks they become tree-lined
+ * lanes. Landmarks claim their block (the chunk holding the landmark's centre owns it); special lots replace the
+ * random lots they overlap; the crash site is never a park. Per-chunk caps thin the random buildings (never special
+ * lots) and then their signs. Same inputs, same chunk.
  */
 export function generateChunk(style: CityStyle, seed: number, cx: number, cz: number): ChunkContent {
   const w = CONFIG.world;
   const rng = mulberry32(chunkSeed(seed, cx, cz));
   const pitch = w.blockSize;
-  const inner = pitch - w.roadWidth;
   const buildings: BuildingSpec[] = [];
   const specials: BuildingSpec[] = [];
   const trees: TreeSpec[] = [];
   const parks: ParkSpec[] = [];
   const landmarks: LandmarkSpec[] = [];
+  const water: WaterSpec[] = [];
   const blockOf = (v: number) => Math.floor(v / pitch);
   // Billboards: at most one per chunk, only on a building whose centre is in the chunk's central 400 × 400 m.
   const midX = (cx + 0.5) * CHUNK_SIZE + ROAD_ORIGIN;
@@ -123,6 +151,19 @@ export function generateChunk(style: CityStyle, seed: number, cx: number, cz: nu
       const bx = (bi + 0.5) * pitch + ROAD_ORIGIN;
       const bz = (bj + 0.5) * pitch + ROAD_ORIGIN;
       const craterSite = Math.hypot(bx, bz) < w.clearRadius + pitch * 0.5;
+      if (isWater(style, bi, bj)) {
+        water.push({ x: bx, z: bz });
+        continue;
+      }
+      // The buildable block: the cell inset by half of each bordering line's width.
+      const x0 = bi * pitch + lineWidth(bi) / 2 + ROAD_ORIGIN;
+      const x1 = (bi + 1) * pitch - lineWidth(bi + 1) / 2 + ROAD_ORIGIN;
+      const z0 = bj * pitch + lineWidth(bj) / 2 + ROAD_ORIGIN;
+      const z1 = (bj + 1) * pitch - lineWidth(bj + 1) / 2 + ROAD_ORIGIN;
+      const ix = (x0 + x1) / 2;
+      const iz = (z0 + z1) / 2;
+      const iw = x1 - x0;
+      const id = z1 - z0;
 
       const landmark = style.landmarks.find((l) => blockOf(l.x) === bi && blockOf(l.z) === bj);
       if (landmark) {
@@ -137,7 +178,7 @@ export function generateChunk(style: CityStyle, seed: number, cx: number, cz: nu
         parks.push({ x: bx, z: bz });
         const count = Math.round(range(rng, style.parkTrees[0], style.parkTrees[1]));
         for (let t = 0; t < count; t++) {
-          trees.push({ x: bx + range(rng, -inner / 2, inner / 2), z: bz + range(rng, -inner / 2, inner / 2), s: range(rng, 14, 26) });
+          trees.push({ x: ix + range(rng, -iw / 2, iw / 2), z: iz + range(rng, -id / 2, id / 2), s: range(rng, 14, 26) });
         }
         continue;
       }
@@ -146,13 +187,14 @@ export function generateChunk(style: CityStyle, seed: number, cx: number, cz: nu
       for (const s of blockSpecials) specials.push({ ...s, signs: s.signs.map((g) => ({ ...g })) });
 
       const n = rules.lots;
-      const lot = inner / n;
+      const lotW = iw / n;
+      const lotD = id / n;
       // Roll every lot first so the dice sequence never depends on what was placed.
       const rolls: { lx: number; lz: number; built: boolean }[] = [];
       for (let a = 0; a < n; a++) for (let b = 0; b < n; b++) {
-        rolls.push({ lx: bx + (a - (n - 1) / 2) * lot, lz: bz + (b - (n - 1) / 2) * lot, built: rng() < rules.fill });
+        rolls.push({ lx: ix + (a - (n - 1) / 2) * lotW, lz: iz + (b - (n - 1) / 2) * lotD, built: rng() < rules.fill });
       }
-      const free = rolls.filter((r) => !blockSpecials.some((s) => overlaps(s, { x: r.lx, z: r.lz, w: lot, d: lot }, 4)));
+      const free = rolls.filter((r) => !blockSpecials.some((s) => overlaps(s, { x: r.lx, z: r.lz, w: lotW, d: lotD }, 4)));
       let placed = free.filter((r) => r.built).length;
       for (const r of free) {
         if (!r.built && placed < rules.minPerBlock) {
@@ -162,8 +204,8 @@ export function generateChunk(style: CityStyle, seed: number, cx: number, cz: nu
       }
       for (const r of free) {
         if (!r.built) continue;
-        const bw = lot * range(rng, rules.footprint[0], rules.footprint[1]);
-        const bd = lot * range(rng, rules.footprint[0], rules.footprint[1]);
+        const bw = lotW * range(rng, rules.footprint[0], rules.footprint[1]);
+        const bd = lotD * range(rng, rules.footprint[0], rules.footprint[1]);
         const h = rules.height[0] + (rules.height[1] - rules.height[0]) * Math.pow(rng(), rules.heightCurve);
         const facade = pick(rules.facades, rng);
         const color = pick(rules.colors, rng);
@@ -175,10 +217,41 @@ export function generateChunk(style: CityStyle, seed: number, cx: number, cz: nu
       if (!craterSite) {
         for (let t = 0; t < rules.trees; t++) {
           // Street trees along the block's edge (the pavement).
-          const along = range(rng, -inner / 2, inner / 2);
-          const edge = (rng() < 0.5 ? -1 : 1) * (inner / 2 - 3);
+          const along = range(rng, -0.5, 0.5);
+          const side = rng() < 0.5 ? -1 : 1;
           const xs = rng() < 0.5;
-          trees.push({ x: bx + (xs ? along : edge), z: bz + (xs ? edge : along), s: range(rng, 9, 14) });
+          trees.push(xs
+            ? { x: ix + along * iw, z: iz + side * (id / 2 - 3), s: range(rng, 9, 14) }
+            : { x: ix + side * (iw / 2 - 3), z: iz + along * id, s: range(rng, 9, 14) });
+        }
+      }
+    }
+  }
+
+  // The road network: segments starting at this chunk's nodes, the intersections, and lanes on removed strips.
+  const roads: Segment[] = [];
+  const nodes: NodeSpec[] = [];
+  const lane = (d: string) => d === 'residential' || d === 'park';
+  for (let i = cx * w.chunkBlocks; i < (cx + 1) * w.chunkBlocks; i++) {
+    for (let j = cz * w.chunkBlocks; j < (cz + 1) * w.chunkBlocks; j++) {
+      const size = nodeSize(style, i, j);
+      if (size > 0) nodes.push({ x: i * pitch + ROAD_ORIGIN, z: j * pitch + ROAD_ORIGIN, size });
+      for (const axis of ['x', 'z'] as Axis[]) {
+        const seg = segmentAt(style, axis, i, j);
+        if (seg) {
+          roads.push(seg);
+          continue;
+        }
+        // A removed segment between two land cells: three trees down the middle of the strip in leafy districts.
+        const [ai, aj] = axis === 'x' ? [i, j - 1] : [i - 1, j];
+        if (isWater(style, ai, aj) || isWater(style, i, j)) continue;
+        const da = style.districtAt((ai + 0.5) * pitch + ROAD_ORIGIN, (aj + 0.5) * pitch + ROAD_ORIGIN);
+        const db = style.districtAt((i + 0.5) * pitch + ROAD_ORIGIN, (j + 0.5) * pitch + ROAD_ORIGIN);
+        if (!lane(da) && !lane(db)) continue;
+        for (const f of [0.25, 0.5, 0.75]) {
+          const x = (axis === 'x' ? i + f : i) * pitch + ROAD_ORIGIN;
+          const z = (axis === 'x' ? j : j + f) * pitch + ROAD_ORIGIN;
+          trees.push({ x, z, s: range(rng, 10, 15) });
         }
       }
     }
@@ -204,7 +277,7 @@ export function generateChunk(style: CityStyle, seed: number, cx: number, cz: nu
     }
     for (const [b, ks] of drop) b.signs = b.signs.filter((_, k) => !ks.has(k));
   }
-  return { buildings: out, trees, parks, landmarks };
+  return { buildings: out, trees, parks, landmarks, roads, nodes, water };
 }
 
 /** Chunks to load (within loadRadius, nearest first) and to unload (beyond unloadRadius). */
