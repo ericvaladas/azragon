@@ -15,6 +15,24 @@ const LEAP_SINK = 120;
 const LEAP_TUCK = 180;
 const LEAP_GATHER = 0.35;
 const STANDING: KaijuLeapPose = { sink: 0, pitch: 0, tuck: 0, arms: 0, tail: 0 };
+/** Fraction of the crouch at its end spent pushing back up, so the crouch is over the moment the feet leave the ground. */
+const PUSH = 0.3;
+const smooth = (x: number) => {
+  const u = Math.min(1, Math.max(0, x));
+  return u * u * (3 - 2 * u);
+};
+
+/** The Kaiju's leap pose, except the crouch ends at liftoff: down, then pushed back up to standing as the feet leave. */
+function insectLeap(t: number, duration: number, crouch: number): KaijuLeapPose {
+  const p = kaijuLeap(t, duration, crouch);
+  const L0 = crouch * duration;
+  if (t < L0) {
+    const down = smooth(t / ((1 - PUSH) * L0));
+    const up = 1 - smooth((t - (1 - PUSH) * L0) / (PUSH * L0));
+    return { ...p, sink: down * up, pitch: 0.32 * down * up };
+  }
+  return { ...p, sink: Math.min(0, p.sink), pitch: Math.min(0, p.pitch) };
+}
 const _hip = new THREE.Vector3();
 const _foot = new THREE.Vector3();
 const _knee = new THREE.Vector3();
@@ -46,7 +64,7 @@ export class InsectBody implements MonsterBody {
     const body = this.model.body;
     // Mid-leap the feet stop stepping: planted through the crouch, gathered up under the body in the air.
     const m = f.leap ? 0 : f.motion;
-    const lp = f.leap ? kaijuLeap(f.leap.t, f.leap.duration, f.leap.crouch) : STANDING;
+    const lp = f.leap ? insectLeap(f.leap.t, f.leap.duration, f.leap.crouch) : STANDING;
     const bob = Math.sin(f.cycle * Math.PI * 4) * 10 * m;
     const breathe = Math.sin(f.time * 1.6) * 5;
     body.position.y = bob + breathe - f.pose.dip - f.pose.collapse * 230 - lp.sink * LEAP_SINK;
