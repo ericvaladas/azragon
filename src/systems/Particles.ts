@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { CONFIG } from '../config';
 import { faceted } from '../render/toon';
 
-export type ParticleKind = 'dust' | 'debris' | 'fire' | 'smoke' | 'spark' | 'acid' | 'plasma' | 'trail' | 'ink' | 'rot' | 'shade' | 'mist' | 'bone' | 'wisp' | 'hexfire' | 'hexember' | 'wraith' | 'billow' | 'veil';
+export type ParticleKind = 'dust' | 'debris' | 'fire' | 'smoke' | 'spark' | 'acid' | 'plasma' | 'trail' | 'ink' | 'rot' | 'shade' | 'mist' | 'bone' | 'wisp' | 'hexfire' | 'hexember' | 'wraith' | 'billow' | 'veil' | 'splash';
 
 /**
  * `stretch`: drawn upright and this many times taller than wide, flickering (flame tongues) instead of tumbling.
@@ -42,6 +42,8 @@ export const PRESETS: Record<ParticleKind, Preset> = {
   billow: { color: 0x9c8a70, life: 2.3, size0: 200, size1: 520, speed: 280, up: 240, gravity: -10, drag: 1.3 },
   /** The cloud that erupts over the crater at impact and hides it: big, dense, slowly swelling puffs that thin away. */
   veil: { color: 0xb5a588, life: 3.2, size0: 240, size1: 460, speed: 110, up: 30, gravity: -6, drag: 1.4, fadeFrom: 0.38 },
+  /** Water spray: white drops thrown up fast that fall back down. */
+  splash: { color: 0xf4f8fb, life: 0.9, size0: 18, size1: 6, speed: 90, up: 300, gravity: 520, drag: 0.8 },
   ink: { color: CONFIG.kraken.colors.ink, life: 1.1, size0: 30, size1: 70, speed: 120, up: 50, gravity: -10, drag: 2 },
 };
 
@@ -55,10 +57,11 @@ const HIDDEN = new THREE.Matrix4().makeScale(0, 0, 0);
 /** Opacity per draw layer. Smoke and dust are see-through so trails never hide units behind them. */
 /** `murk`: the Wendigo's dark smoke and mist, dense enough to read as dark over light ground. */
 /** `cloud`: the intro's crater cloud: where it is thick it hides what is inside; where thin, a dark shape looms through. */
-const LAYER_OPACITY = { solid: 1, dust: 0.65, smoke: 0.35, murk: 0.85, cloud: 0.6 } as const;
+/** `splash`: water spray, opaque, in its own small pool so fire, debris and sparks filling `solid` never starve it. */
+const LAYER_OPACITY = { solid: 1, dust: 0.65, smoke: 0.35, murk: 0.85, cloud: 0.6, splash: 1 } as const;
 type LayerName = keyof typeof LAYER_OPACITY;
-const LAYER_OF: Record<ParticleKind, LayerName> = { dust: 'dust', smoke: 'smoke', debris: 'solid', fire: 'solid', spark: 'solid', acid: 'solid', plasma: 'solid', trail: 'dust', ink: 'smoke', rot: 'solid', shade: 'murk', mist: 'murk', bone: 'solid', wisp: 'dust', hexfire: 'solid', hexember: 'solid', wraith: 'murk', billow: 'dust', veil: 'cloud' };
-const LAYER_MAX: Record<LayerName, number> = { solid: 500, dust: 400, smoke: 500, murk: 400, cloud: 160 };
+const LAYER_OF: Record<ParticleKind, LayerName> = { dust: 'dust', smoke: 'smoke', debris: 'solid', fire: 'solid', spark: 'solid', acid: 'solid', plasma: 'solid', trail: 'dust', ink: 'smoke', rot: 'solid', shade: 'murk', mist: 'murk', bone: 'solid', wisp: 'dust', hexfire: 'solid', hexember: 'solid', wraith: 'murk', billow: 'dust', veil: 'cloud', splash: 'splash' };
+const LAYER_MAX: Record<LayerName, number> = { solid: 500, dust: 400, smoke: 500, murk: 400, cloud: 160, splash: 200 };
 
 /** One pooled InstancedMesh: swap-remove on death, no per-frame allocation. */
 class Layer {
@@ -165,7 +168,7 @@ class Layer {
   }
 }
 
-/** Chunky puffs, drawn in layers (solid, dust, smoke, murk) so see-through effects blend over solid ones. */
+/** Chunky puffs, drawn in layers (solid, dust, smoke, murk, cloud, splash) so see-through effects blend over solid ones. */
 export class Particles {
   private layers: Record<LayerName, Layer>;
 
@@ -177,6 +180,7 @@ export class Particles {
       smoke: new Layer(scene, geo, LAYER_OPACITY.smoke, LAYER_MAX.smoke),
       murk: new Layer(scene, geo, LAYER_OPACITY.murk, LAYER_MAX.murk),
       cloud: new Layer(scene, geo, LAYER_OPACITY.cloud, LAYER_MAX.cloud),
+      splash: new Layer(scene, geo, LAYER_OPACITY.splash, LAYER_MAX.splash),
     };
   }
 

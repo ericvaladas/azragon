@@ -4,13 +4,20 @@ import type { OnDestroyed, Target } from '../combat';
 import type { Vec2 } from '../util/math';
 import { mulberry32 } from '../util/rng';
 import type { CityStyle, LandmarkSpec, SignDef } from '../cities/types';
-import { blastTopples, chunksInRadius, DestroyedLog, generateChunk, nodeSize, planStreaming, type BuildingSpec, type ChunkContent } from './chunks';
-import { isWater, PITCH, type Segment } from './roads';
+import { blastTopples, chunksInRadius, DestroyedLog, generateChunk, nodeSize, planStreaming, seaWallRects, SEA_WALL_SIZE, type BuildingSpec, type ChunkContent, type Rect, type SeaWallSpec } from './chunks';
+import { isIsland, isWater, PITCH, type Segment } from './roads';
 import { canvasCityTextures, patchFacadeShader, patchRoadShader, SCREEN_FRAMES, SIGN_RECTS, type CityTextures } from './pixelTextures';
 import { rubbleGeometry } from './rubble';
+import { craneGeometry } from './crane';
 import { faceted, toonMat } from '../render/toon';
 
 type BuildingState = 'standing' | 'collapsing' | 'rubble';
+
+/**
+ * A long landmark's frame: `u` the unit vector from `from` to its far end, `length` m away; `yaw` turns local +Z onto
+ * `u`; `toLocal` maps world points into the frame (local x across, y up, z along), where `picks` are its picking boxes (the deck, then each tower).
+ */
+type SpanFrame = { from: Vec2; u: Vec2; length: number; halfWidth: number; yaw: THREE.Quaternion; toLocal: THREE.Matrix4; picks: THREE.Box3[] };
 
 class Building implements Target {
   readonly kind = 'building' as const;
@@ -37,6 +44,8 @@ class Building implements Target {
     readonly spec: BuildingSpec,
     private city: City,
     readonly mesh: THREE.Mesh | null = null,
+    /** A long landmark's frame (the Rainbow Bridge), else null. */
+    readonly span: SpanFrame | null = null,
   ) {
     this.position = new THREE.Vector3(spec.x, spec.h / 2, spec.z);
     this.radius = Math.max(spec.w, spec.d) / 2;
@@ -65,6 +74,9 @@ type LoadedChunk = {
   roadSlots: number[];
   nodeSlots: number[];
   waterSlots: number[];
+  craneSlots: number[];
+  wallSlots: number[];
+  foamSlots: number[];
 };
 
 const ZERO = new THREE.Matrix4().makeScale(0, 0, 0);
@@ -114,10 +126,26 @@ export class SlotPool {
 }
 
 /** Heights of the ground layers. The flat layers also stack by polygon offset: water and park 1 (they never overlap), road 2, node 3, overlay 4, crater 5. */
-const Y = { water: 0.1, park: 0.2, road: 0.3, node: 0.32, overlay: 0.35, crater: 0.5, bridge: 2.5, slab: 2.0 } as const;
+const Y = { water: 0.1, foam: 0.15, park: 0.2, road: 0.3, node: 0.32, overlay: 0.35, crater: 0.5, bridge: 2.5, slab: 2.0 } as const;
 /** Bridge deck slab: this much wider than its road, this thick (hanging below its top), in this grey. */
 const SLAB = { extra: 8, thick: 1.8, color: 0x9aa0a6 } as const;
 const WATER_COLOR = 0x3f8fc9;
+/** Sea wall colours: a pale concrete cap over a dark face that darkens further to a wet band at the waterline. */
+const SEA_WALL = { cap: 0xf2eee4, face: 0x5a554e, waterline: 0x262422 } as const;
+
+/**
+ * Foam opacity 0.35 + 0.2·sin(1.3·time + phase), the phase taken from the instance's world position so strips pulse
+ * out of step. Time is shared through a uniform object.
+ */
+export function patchFoamShader(sh: { uniforms: Record<string, { value: unknown }>; vertexShader: string; fragmentShader: string }, time: { value: number }): void {
+  sh.uniforms['uFoamTime'] = time;
+  sh.vertexShader = sh.vertexShader
+    .replace('#include <common>', '#include <common>\nvarying float vFoamPhase;')
+    .replace('#include <begin_vertex>', '#include <begin_vertex>\n  vFoamPhase = instanceMatrix[3].x * 0.011 + instanceMatrix[3].z * 0.017;');
+  sh.fragmentShader = sh.fragmentShader
+    .replace('#include <common>', '#include <common>\nuniform float uFoamTime;\nvarying float vFoamPhase;')
+    .replace('#include <opaque_fragment>', 'diffuseColor.a = 0.35 + 0.2 * sin(uFoamTime * 1.3 + vFoamPhase);\n  #include <opaque_fragment>');
+}
 
 /**
  * Flag an instanced attribute for upload, limited to the first `count` instances (the draw range): three uploads that
@@ -138,6 +166,9 @@ function layered(mat: THREE.Material, offset: number): THREE.Material {
 }
 const UP = new THREE.Vector3(0, 1, 0);
 const X_AXIS = new THREE.Vector3(1, 0, 0);
+const Z_AXIS = new THREE.Vector3(0, 0, 1);
+/** A long landmark requests a splash every SPLASH_GAP m along its span where it falls into water. */
+const SPLASH_GAP = 80;
 /** Ground texture covers 2x2 blocks; the ground plane snaps to this so the pattern stays world-aligned. */
 const GROUND_TILE = CONFIG.world.blockSize * 2;
 const _m = new THREE.Matrix4();
@@ -149,6 +180,37 @@ const _c = new THREE.Color();
 const _p2 = new THREE.Vector3();
 const _s2 = new THREE.Vector3();
 const _m2 = new THREE.Matrix4();
+const _q2 = new THREE.Quaternion();
+const _ray = new THREE.Ray();
+
+/** Half the along-span length of a tower's picking box: the tower's footing reaches 13 m either side. */
+const TOWER_PICK_HALF = 15;
+
+/**
+ * The frame of landmark l's span, or null for a compact landmark. Picking boxes: the deck from the ground to 10 m
+ * over its top, and each tower up to the landmark's height.
+ */
+function spanFrame(l: LandmarkSpec): SpanFrame | null {
+  const span = l.span;
+  if (!span) return null;
+  const length = Math.hypot(span.to.x - span.from.x, span.to.z - span.from.z);
+  const u = { x: (span.to.x - span.from.x) / length, z: (span.to.z - span.from.z) / length };
+  const yaw = new THREE.Quaternion().setFromAxisAngle(UP, Math.atan2(u.x, u.z));
+  const toLocal = new THREE.Matrix4().compose(new THREE.Vector3(span.from.x, 0, span.from.z), yaw, new THREE.Vector3(1, 1, 1)).invert();
+  const picks = [
+    new THREE.Box3(new THREE.Vector3(-span.halfWidth, 0, 0), new THREE.Vector3(span.halfWidth, span.deckY + 10, length)),
+    ...(span.towers ?? []).map(
+      (t) => new THREE.Box3(new THREE.Vector3(-span.halfWidth, 0, t - TOWER_PICK_HALF), new THREE.Vector3(span.halfWidth, l.h, t + TOWER_PICK_HALF)),
+    ),
+  ];
+  return { from: span.from, u, length, halfWidth: span.halfWidth, yaw, toLocal, picks };
+}
+
+/** Distance from p to the segment of a span's line. */
+function spanDistance(f: SpanFrame, p: Vec2): number {
+  const t = Math.max(0, Math.min(f.length, (p.x - f.from.x) * f.u.x + (p.z - f.from.z) * f.u.z));
+  return Math.hypot(p.x - (f.from.x + f.u.x * t), p.z - (f.from.z + f.u.z * t));
+}
 
 /** Radius of the pod's crater (and its ground decal) around the origin. */
 export const CRATER_RADIUS = CONFIG.world.clearRadius + CONFIG.world.blockSize * 0.5;
@@ -167,8 +229,17 @@ export class City {
   private roadMesh: THREE.InstancedMesh;
   /** Intersection squares and bridge deck slabs: flat-topped boxes tinted per instance. */
   private nodeMesh: THREE.InstancedMesh;
-  /** River cells. */
+  /** River and bay cells. */
   private waterMesh: THREE.InstancedMesh;
+  /** Gantry cranes along the coast: scenery, never targets. */
+  private craneMesh: THREE.InstancedMesh;
+  private cranes: SlotPool;
+  /** Sea wall along every land/bay edge, and the pulsing foam strip beyond it. */
+  private wallMesh: THREE.InstancedMesh;
+  private foamMesh: THREE.InstancedMesh;
+  private walls: SlotPool;
+  private foams: SlotPool;
+  private foamTime = { value: 0 };
   private roads: SlotPool;
   private nodes: SlotPool;
   private waters: SlotPool;
@@ -204,12 +275,18 @@ export class City {
   private groundSpan = Math.ceil((CONFIG.world.unloadRadius * 2.4) / GROUND_TILE) * GROUND_TILE;
   private rubbleUsed: boolean[];
   private collapsing: Building[] = [];
+  /** A long landmark's splashes not yet due: each fires `delay` s on, so the span reads as falling in from the shore out. */
+  private splashQueue: { delay: number; p: THREE.Vector3; size: number }[] = [];
+  /** Loaded long landmarks (also in their owning chunk's buildings): their reach is measured to their line. */
+  private spans: Building[] = [];
   private destroyed = new DestroyedLog();
   /** Chunks streamed: every pool needs re-uploading. */
   private dirtyStream = false;
   /** Buildings collapsed or turned to rubble: only the building, rubble, sign and screen matrices changed. */
   private dirtyBuildings = false;
   onCollapseStart: (pos: THREE.Vector3, size: number) => void = () => {};
+  /** Called along the span, over water, during a long landmark's collapse: each point's delay grows with its distance out. */
+  onSplash: (p: THREE.Vector3, size: number) => void = () => {};
 
   constructor(
     private scene: THREE.Scene,
@@ -274,6 +351,23 @@ export class City {
     this.nodeMesh.receiveShadow = true;
     this.waterMesh = new THREE.InstancedMesh(flat, layered(toonMat(WATER_COLOR), 1), world.maxWater);
     this.waterMesh.receiveShadow = true;
+    this.craneMesh = new THREE.InstancedMesh(craneGeometry(), toonMat(0xffffff, { vertexColors: true }), world.maxCranes);
+    this.craneMesh.castShadow = true;
+    this.craneMesh.receiveShadow = true;
+    // Wall: base at y = 0, runs along local x; the top face (BoxGeometry's +y vertices 8-11) is the pale cap, the
+    // side faces shade from the dark face at the top to the waterline colour at the base.
+    const wallGeo = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
+    const wallColors = new Float32Array(24 * 3);
+    const wallY = wallGeo.getAttribute('position');
+    for (let v = 0; v < 24; v++) _c.setHex(v >= 8 && v < 12 ? SEA_WALL.cap : wallY.getY(v) > 0.5 ? SEA_WALL.face : SEA_WALL.waterline).toArray(wallColors, v * 3);
+    wallGeo.setAttribute('color', new THREE.BufferAttribute(wallColors, 3));
+    this.wallMesh = new THREE.InstancedMesh(wallGeo, toonMat(0xffffff, { vertexColors: true }), world.maxSeaWall);
+    this.wallMesh.castShadow = true;
+    this.wallMesh.receiveShadow = true;
+    const foamMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, depthWrite: false });
+    foamMat.onBeforeCompile = (sh) => patchFoamShader(sh, this.foamTime);
+    foamMat.customProgramCacheKey = () => 'city-foam';
+    this.foamMesh = new THREE.InstancedMesh(flat, layered(foamMat, 2), world.maxFoam);
     const signBox = new THREE.BoxGeometry(1, 1, 1);
     const signGeo = new THREE.BoxGeometry(1, 1, 1);
     this.signRect = new THREE.InstancedBufferAttribute(new Float32Array(world.maxSigns * 4), 4);
@@ -307,6 +401,9 @@ export class City {
     this.roads = new SlotPool(this.roadMesh);
     this.nodes = new SlotPool(this.nodeMesh);
     this.waters = new SlotPool(this.waterMesh);
+    this.cranes = new SlotPool(this.craneMesh);
+    this.walls = new SlotPool(this.wallMesh);
+    this.foams = new SlotPool(this.foamMesh);
     this.resetPools();
     scene.add(...this.instanced());
     this.landmarkMat = toonMat(0xffffff, { vertexColors: true });
@@ -318,7 +415,7 @@ export class City {
 
   /** Every pooled instanced mesh. */
   private instanced(): THREE.InstancedMesh[] {
-    return [this.buildingMesh, this.rubbleMesh, this.treeMesh, this.parkMesh, this.signMesh, this.screenMesh, this.roadMesh, this.nodeMesh, this.waterMesh];
+    return [this.buildingMesh, this.rubbleMesh, this.treeMesh, this.parkMesh, this.signMesh, this.screenMesh, this.roadMesh, this.nodeMesh, this.waterMesh, this.craneMesh, this.wallMesh, this.foamMesh];
   }
 
   get style(): CityStyle {
@@ -371,9 +468,10 @@ export class City {
     return false;
   }
 
-  /** Whether nothing may be placed at (x, z): inside a loaded landmark's footprint, or on a river cell. */
+  /** Whether nothing may be placed at (x, z): inside a loaded landmark's footprint, on a water cell (river or bay), or on an island cell. */
   blockedAt(x: number, z: number): boolean {
-    return isWater(this._style, Math.floor(x / PITCH), Math.floor(z / PITCH)) || this.landmarkAt(x, z);
+    const ci = Math.floor(x / PITCH), cj = Math.floor(z / PITCH);
+    return isWater(this._style, ci, cj) || isIsland(this._style, ci, cj) || this.landmarkAt(x, z);
   }
 
   /** Loaded landmark meshes. */
@@ -397,6 +495,9 @@ export class City {
     this.roads.reset();
     this.nodes.reset();
     this.waters.reset();
+    this.cranes.reset();
+    this.walls.reset();
+    this.foams.reset();
   }
 
   /**
@@ -416,7 +517,7 @@ export class City {
     this.buildingMesh.count = high((i) => this.slotOwner[i] !== null, this.slotOwner.length);
     this.treeMesh.count = high((i) => this.treeUsed[i]!, this.treeUsed.length);
     this.parkMesh.count = high((i) => this.parkUsed[i]!, this.parkUsed.length);
-    for (const p of [this.roads, this.nodes, this.waters]) p.mesh.count = p.highWater();
+    for (const p of [this.roads, this.nodes, this.waters, this.cranes, this.walls, this.foams]) p.mesh.count = p.highWater();
   }
 
   /** Forget all destruction and rebuild the city around the origin, in `style` if given. */
@@ -437,6 +538,7 @@ export class City {
     this.crater.visible = false;
     for (const key of [...this.loadedKeys]) this.unloadChunk(key);
     this.collapsing = [];
+    this.splashQueue = [];
     this.destroyed.clear();
     this.resetPools();
     this.stream(new THREE.Vector3(), Infinity);
@@ -446,6 +548,16 @@ export class City {
   /** Road, intersection-and-slab, and water slots in use. */
   roadNetworkCount(): { roads: number; nodes: number; water: number } {
     return { roads: this.roads.inUse(), nodes: this.nodes.inUse(), water: this.waters.inUse() };
+  }
+
+  /** Crane slots in use. */
+  craneCount(): number {
+    return this.cranes.inUse();
+  }
+
+  /** Sea-wall and foam instances in use (equal: one foam strip per wall). */
+  seaWallCount(): { walls: number; foam: number } {
+    return { walls: this.walls.inUse(), foam: this.foams.inUse() };
   }
 
   /** Sign slots in use. */
@@ -467,31 +579,43 @@ export class City {
     return b && b.isAlive() ? b : null;
   }
 
-  /** Nearest standing building hit by the ray, tested against each building's box. */
+  /**
+   * Nearest standing building hit by the ray, tested against each building's box; a long landmark's box lies along its
+   * span (tested in its own frame, which keeps distances).
+   */
   pickBuilding(ray: THREE.Ray): Target | null {
     let best: Building | null = null;
     let bestD = Infinity;
     for (const chunk of this.chunks.values()) {
       for (const b of chunk.buildings) {
-        if (b.state !== 'standing' || !ray.intersectBox(b.box, _hit)) continue;
-        const d = _hit.distanceToSquared(ray.origin);
-        if (d < bestD) {
-          bestD = d;
-          best = b;
+        if (b.state !== 'standing') continue;
+        const r = b.span ? _ray.copy(ray).applyMatrix4(b.span.toLocal) : ray;
+        const n = b.span ? b.span.picks.length : 1;
+        for (let k = 0; k < n; k++) {
+          if (!r.intersectBox(b.span ? b.span.picks[k]! : b.box, _hit)) continue;
+          const d = _hit.distanceToSquared(r.origin);
+          if (d < bestD) {
+            bestD = d;
+            best = b;
+          }
         }
       }
     }
     return best;
   }
 
+  /** Standing buildings within r of p (plus their radius); a long landmark when its line is within r + halfWidth. */
   forEachStandingInRadius(p: Vec2, r: number, fn: (t: Target) => void): void {
     for (const ref of chunksInRadius(p.x, p.z, r + CONFIG.world.blockSize)) {
       const chunk = this.chunks.get(ref.key);
       if (!chunk) continue;
       for (const b of chunk.buildings) {
-        if (b.state !== 'standing') continue;
+        if (b.state !== 'standing' || b.span) continue;
         if (Math.hypot(b.spec.x - p.x, b.spec.z - p.z) <= r + b.radius) fn(b);
       }
+    }
+    for (const b of this.spans) {
+      if (b.state === 'standing' && spanDistance(b.span!, p) <= r + b.span!.halfWidth) fn(b);
     }
   }
 
@@ -515,8 +639,32 @@ export class City {
     if (award) this.onDestroyed(b, Math.max(1, Math.round(b.maxHp * CONFIG.world.buildingExpPerHp)));
   }
 
+  /**
+   * Dust at the building's base. A long landmark also splashes every SPLASH_GAP m along its span where it is over
+   * water, each point `t` m out waiting t / length of the collapse time, so the splashes run from the shore end out
+   * to the far end and the per-frame splash budget is spread over the whole collapse.
+   */
   private collapseDust(b: Building): void {
     this.onCollapseStart(new THREE.Vector3(b.spec.x, 0, b.spec.z), Math.max(b.spec.w, b.spec.d));
+    const f = b.span;
+    if (!f) return;
+    for (let t = 0; t <= f.length; t += SPLASH_GAP) {
+      const x = f.from.x + f.u.x * t, z = f.from.z + f.u.z * t;
+      if (!isWater(this._style, Math.floor(x / PITCH), Math.floor(z / PITCH))) continue;
+      this.splashQueue.push({ delay: (t / f.length) * CONFIG.world.collapseTime, p: new THREE.Vector3(x, 0, z), size: f.halfWidth * 4 });
+    }
+    this.flushSplashes(0);
+  }
+
+  /** Counts queued splashes down by dt and fires the ones now due, in queue order (nearest the shore first). */
+  private flushSplashes(dt: number): void {
+    let kept = 0;
+    for (const s of this.splashQueue) {
+      s.delay -= dt;
+      if (s.delay > 0) this.splashQueue[kept++] = s;
+      else this.onSplash(s.p, s.size);
+    }
+    this.splashQueue.length = kept;
   }
 
   /**
@@ -550,6 +698,7 @@ export class City {
   /** Animate collapses and stream chunks around `center`. */
   update(dt: number, center: THREE.Vector3): void {
     this.stream(center, CONFIG.world.chunksPerFrame);
+    this.flushSplashes(dt);
     const T = CONFIG.world.collapseTime;
     for (let i = this.collapsing.length - 1; i >= 0; i--) {
       const b = this.collapsing[i]!;
@@ -569,6 +718,7 @@ export class City {
       this.dirtyBuildings = true;
     }
     this.screenT += dt;
+    this.foamTime.value += dt;
     this.screenTex.offset.x = (Math.floor(this.screenT / 0.7) % SCREEN_FRAMES) / SCREEN_FRAMES;
     if (this.dirtyStream) {
       // Streaming (load, unload, reset) writes every pool and its per-instance attributes.
@@ -626,18 +776,21 @@ export class City {
       mesh.receiveShadow = true;
       this.scene.add(mesh);
       this.landmarks++;
-      const b = new Building(key, index, -1, this.landmarkSpec(l), this, mesh);
+      const b = new Building(key, index, -1, this.landmarkSpec(l), this, mesh, spanFrame(l));
+      if (b.span) this.spans.push(b);
       if (this.destroyed.has(key, index)) this.writeRubble(b);
       else this.writeStanding(b, 0, 0);
       buildings.push(b);
     });
-    for (const p of content.parks) {
+    // Park greens and port quays share the pad mesh, tinted per instance.
+    const pads = [...content.parks.map((p) => ({ ...p, color: this._style.colors.park })), ...content.quays.map((q) => ({ ...q, color: this._style.colors.quay }))];
+    for (const p of pads) {
       const slot = this.freeParks.pop();
       if (slot === undefined) break;
-      // The full cell, so neighbouring parks (and the lane between them) read as one green space.
+      // The full cell, so neighbouring pads (and the lane between them) read as one green space or one quay.
       _m.compose(_p.set(p.x, 0, p.z), _q.identity(), _s.set(PITCH, 1, PITCH));
       this.parkMesh.setMatrixAt(slot, _m);
-      this.parkMesh.setColorAt(slot, _c.setHex(this._style.colors.park));
+      this.parkMesh.setColorAt(slot, _c.setHex(p.color));
       this.parkUsed[slot] = true;
       parkSlots.push(slot);
     }
@@ -652,6 +805,7 @@ export class City {
     const roadSlots: number[] = [];
     const nodeSlots: number[] = [];
     const waterSlots: number[] = [];
+    const craneSlots: number[] = [];
     const keep = (slots: number[], slot: number | undefined) => { if (slot !== undefined) slots.push(slot); };
     for (const seg of content.roads) this.writeRoad(seg, roadSlots, nodeSlots);
     for (const n of content.nodes) {
@@ -664,9 +818,33 @@ export class City {
       _m.compose(_p.set(w.x, Y.water, w.z), _q.identity(), _s.set(PITCH, 1, PITCH));
       keep(waterSlots, this.waters.take(_m));
     }
-    this.chunks.set(key, { content, buildings, treeSlots, parkSlots, roadSlots, nodeSlots, waterSlots });
+    for (const c of content.cranes) {
+      _m.compose(_p.set(c.x, 0, c.z), _q.setFromAxisAngle(UP, c.yaw), _s.setScalar(1));
+      keep(craneSlots, this.cranes.take(_m));
+    }
+    const wallSlots: number[] = [];
+    const foamSlots: number[] = [];
+    for (const e of content.seaWall) this.writeSeaWall(e, wallSlots, foamSlots);
+    this.chunks.set(key, { content, buildings, treeSlots, parkSlots, roadSlots, nodeSlots, waterSlots, craneSlots, wallSlots, foamSlots });
     this.loadedKeys.add(key);
     this.dirtyStream = true;
+  }
+
+  /**
+   * One sea-wall edge: a wall just outside the waterfront road and a foam strip on the water beyond it, as laid out by
+   * `seaWallRects` (continuous around coastal corners).
+   */
+  private writeSeaWall(e: SeaWallSpec, wallSlots: number[], foamSlots: number[]): void {
+    const { wall, foam } = seaWallRects(e);
+    const place = (r: Rect, y: number, tall: number): THREE.Matrix4 => {
+      const alongX = e.axis === 'x';
+      const len = alongX ? r.x1 - r.x0 : r.z1 - r.z0;
+      const thick = alongX ? r.z1 - r.z0 : r.x1 - r.x0;
+      return _m.compose(_p.set((r.x0 + r.x1) / 2, y, (r.z0 + r.z1) / 2), _q.setFromAxisAngle(UP, alongX ? 0 : Math.PI / 2), _s.set(len, tall, thick));
+    };
+    const keep = (slots: number[], slot: number | undefined) => { if (slot !== undefined) slots.push(slot); };
+    keep(wallSlots, this.walls.take(place(wall, 0, SEA_WALL_SIZE.height)));
+    keep(foamSlots, this.foams.take(place(foam, Y.foam, 1)));
   }
 
   private unloadChunk(key: string): void {
@@ -699,7 +877,11 @@ export class City {
     for (const slot of chunk.roadSlots) this.roads.release(slot);
     for (const slot of chunk.nodeSlots) this.nodes.release(slot);
     for (const slot of chunk.waterSlots) this.waters.release(slot);
+    for (const slot of chunk.craneSlots) this.cranes.release(slot);
+    for (const slot of chunk.wallSlots) this.walls.release(slot);
+    for (const slot of chunk.foamSlots) this.foams.release(slot);
     if (this.collapsing.length) this.collapsing = this.collapsing.filter((b) => b.chunk !== key);
+    if (this.spans.length) this.spans = this.spans.filter((b) => b.chunk !== key);
     this.chunks.delete(key);
     this.loadedKeys.delete(key);
     this.dirtyStream = true;
@@ -748,8 +930,13 @@ export class City {
       b.rubbleSlot = slot;
       this.rubbleUsed[slot] = true;
     }
-    _q.setFromAxisAngle(UP, b.slot >= 0 ? b.slot : b.index);
-    _m.compose(_p.set(s.x, 0, s.z), _q, _s.set(s.w * 1.1, s.h * 0.15 + 8, s.d * 1.1));
+    if (b.span) {
+      // A long landmark falls into the water: only a low heap on its footprint at the `from` end, along its bearing.
+      _m.compose(_p.set(s.x, 0, s.z), b.span.yaw, _s.set(s.w * 1.1, 12, s.d * 1.1));
+    } else {
+      _q.setFromAxisAngle(UP, b.slot >= 0 ? b.slot : b.index);
+      _m.compose(_p.set(s.x, 0, s.z), _q, _s.set(s.w * 1.1, s.h * 0.15 + 8, s.d * 1.1));
+    }
     this.rubbleMesh.setMatrixAt(b.rubbleSlot, _m);
   }
 
@@ -761,12 +948,19 @@ export class City {
     b.rubbleSlot = -1;
   }
 
+  /**
+   * A building `sink` m down, tilted by `tilt` rad about its tilt axis. A long landmark instead keeps its bearing and
+   * rolls about its own line (local +Z through `from`), so the whole span drops evenly into the water rather than
+   * swinging its far end up; its roll's sign follows the tilt axis.
+   */
   private writeStanding(b: Building, sink: number, tilt: number): void {
     const s = b.spec;
-    _q.setFromAxisAngle(b.tiltAxis.lengthSq() > 0 ? b.tiltAxis : X_AXIS, tilt);
+    if (b.span) _q.copy(b.span.yaw).multiply(_q2.setFromAxisAngle(Z_AXIS, b.tiltAxis.x < 0 ? -tilt : tilt));
+    else _q.setFromAxisAngle(b.tiltAxis.lengthSq() > 0 ? b.tiltAxis : X_AXIS, tilt);
     if (b.mesh) {
       b.mesh.visible = true;
-      b.mesh.position.set(s.x, -sink, s.z);
+      const at = b.span?.from ?? s;
+      b.mesh.position.set(at.x, -sink, at.z);
       b.mesh.quaternion.copy(_q);
       return;
     }

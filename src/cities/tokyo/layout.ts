@@ -1,6 +1,7 @@
 import { CONFIG } from '../../config';
 import { hash2, valueNoise } from '../noise';
-import type { DistrictId } from '../types';
+import type { BaySpec, DistrictId, IslandSpec } from '../types';
+import { isIsland } from '../../world/roads';
 
 /** World metres; north is +Z, west is +X, east is −X. The crash is at the origin. */
 export const SHIBUYA_CROSSING = { x: 200, z: 1000 } as const;
@@ -8,6 +9,20 @@ export const SHINJUKU = { x: 1100, z: 2900 } as const;
 export const TMG_SITE = { x: 1300, z: 2900 } as const;
 export const TOKYO_TOWER_SITE = { x: -300, z: 1500 } as const;
 export const SKYTREE_SITE = { x: -1900, z: 3100 } as const;
+/** Tokyo Bay: the south-east coast. */
+export const TOKYO_BAY: BaySpec = { dir: { x: -Math.SQRT1_2, z: -Math.SQRT1_2 }, offset: 2000, amp: 150, wavelength: 1400 };
+/** The Odaiba-style island out in the bay. */
+export const TOKYO_ISLAND: IslandSpec = { center: { x: -2613, z: -1913 }, halfAlong: 350, halfAcross: 450 };
+/** The port: land within this many metres of the coastline (along the bay's dir). */
+export const PORT_DEPTH = 600;
+
+/** Metres from (x, z) to the coastline along the bay's dir: positive inland, negative out in the bay. */
+export function coastDistance(bay: BaySpec, x: number, z: number): number {
+  const along = x * bay.dir.x + z * bay.dir.z;
+  const across = -x * bay.dir.z + z * bay.dir.x;
+  return bay.offset + bay.amp * Math.sin(across / bay.wavelength) - along;
+}
+
 /** Inside this radius the districts are laid by hand (CORE_REGIONS); beyond it, noise. */
 export const CORE_RADIUS = 4000;
 
@@ -53,8 +68,20 @@ function nearStation(x: number, z: number): boolean {
   return false;
 }
 
-/** Tokyo's district at world point (x, z): the hand-laid core near the crash, seeded noise beyond. */
+/**
+ * Tokyo's district at world point (x, z). The island is office with one park block at its centre cell; the port is
+ * the land within PORT_DEPTH of the coast (off the crash site); then the hand-laid core near the crash, seeded noise
+ * beyond.
+ */
 export function districtAt(x: number, z: number): DistrictId {
+  const cell = CONFIG.world.blockSize;
+  const ci = Math.floor(x / cell), cj = Math.floor(z / cell);
+  if (isIsland({ bay: TOKYO_BAY, island: TOKYO_ISLAND }, ci, cj)) {
+    const centre = ci === Math.floor(TOKYO_ISLAND.center.x / cell) && cj === Math.floor(TOKYO_ISLAND.center.z / cell);
+    return centre ? 'park' : 'office';
+  }
+  const coast = coastDistance(TOKYO_BAY, x, z);
+  if (coast >= 0 && coast <= PORT_DEPTH && Math.hypot(x, z) > CONFIG.world.clearRadius + cell) return 'port';
   if (Math.hypot(x, z) <= CORE_RADIUS) {
     for (const r of CORE_REGIONS) if (inRegion(r, x, z)) return r.district;
     return 'office';

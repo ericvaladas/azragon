@@ -2,13 +2,15 @@ import { describe, it, expect } from 'vitest';
 import { CONFIG } from '../config';
 import { TOKYO } from '../cities/tokyo';
 import { mulberry32 } from '../util/rng';
-import { nearestRoadPoint, planRoadPath, ringOnRoads, segmentAt, isWater, lineWidth, PITCH, AVENUE_WIDTH, type Axis } from './roads';
+import { nearestRoadPoint, planRoadPath, ringOnRoads, segmentAt, isWater, isBay, isIsland, isRiver, lineWidth, PITCH, AVENUE_WIDTH, type Axis } from './roads';
 
 const R = 30;
 const mod = (n: number, m: number) => ((n % m) + m) % m;
 const mid = (axis: Axis, i: number, j: number) => (axis === 'x' ? { x: PITCH * i + PITCH / 2, z: PITCH * j } : { x: PITCH * i, z: PITCH * j + PITCH / 2 });
 const cellsOf = (axis: Axis, i: number, j: number): [[number, number], [number, number]] =>
   axis === 'x' ? [[i, j - 1], [i, j]] : [[i - 1, j], [i, j]];
+// River water outside the bay: the only water that carries bridges.
+const isRiverOnly = (i: number, j: number) => isRiver(TOKYO, i, j) && !isBay(TOKYO, i, j);
 const isAvenue = (axis: Axis, i: number, j: number) => mod(axis === 'x' ? j : i, 5) === 0;
 const forced = (axis: Axis, i: number, j: number) => {
   const m = mid(axis, i, j);
@@ -36,9 +38,11 @@ describe('road network', () => {
     for (let i = -R; i <= R; i++) for (let j = -R; j <= R; j++) for (const axis of ['x', 'z'] as const) {
       if (!isAvenue(axis, i, j)) continue;
       const [a, b] = cellsOf(axis, i, j);
-      const bothWater = isWater(TOKYO, a[0], a[1]) && isWater(TOKYO, b[0], b[1]);
+      if (isIsland(TOKYO, a[0], a[1]) || isIsland(TOKYO, b[0], b[1])) continue;
+      const bothWater = isRiverOnly(a[0], a[1]) && isRiverOnly(b[0], b[1]);
       const seg = segmentAt(TOKYO, axis, i, j);
-      if (bothWater && axis === 'x') expect(seg).toBeNull();
+      if (isWater(TOKYO, a[0], a[1]) && isWater(TOKYO, b[0], b[1]) && !bothWater) expect(seg).toBeNull();
+      else if (bothWater && axis === 'x') expect(seg).toBeNull();
       else {
         expect(seg).not.toBeNull();
         expect(seg!.avenue).toBe(true);
@@ -50,8 +54,9 @@ describe('road network', () => {
 
   it('every land node keeps at least one segment', () => {
     for (let i = -R; i <= R; i++) for (let j = -R; j <= R; j++) {
-      const land = [[i - 1, j - 1], [i, j - 1], [i - 1, j], [i, j]].some(([a, b]) => !isWater(TOKYO, a!, b!));
-      if (!land) continue;
+      const cells = [[i - 1, j - 1], [i, j - 1], [i - 1, j], [i, j]];
+      const land = cells.some(([a, b]) => !isWater(TOKYO, a!, b!));
+      if (!land || cells.some(([a, b]) => isIsland(TOKYO, a!, b!))) continue;
       const any = [segmentAt(TOKYO, 'x', i, j), segmentAt(TOKYO, 'x', i - 1, j), segmentAt(TOKYO, 'z', i, j), segmentAt(TOKYO, 'z', i, j - 1)].some((s) => s);
       expect(any, `node ${i},${j}`).toBe(true);
     }
@@ -101,7 +106,7 @@ describe('road network', () => {
     }
     for (let i = -R; i <= R; i++) for (let j = -R; j <= R; j++) for (const axis of ['x', 'z'] as const) {
       const [a, b] = cellsOf(axis, i, j);
-      if (!(isWater(TOKYO, a[0], a[1]) && isWater(TOKYO, b[0], b[1]))) continue;
+      if (!(isRiverOnly(a[0], a[1]) && isRiverOnly(b[0], b[1]))) continue;
       const seg = segmentAt(TOKYO, axis, i, j);
       if (axis === 'z' && isAvenue(axis, i, j)) expect(seg?.bridge).toBe(true);
       else expect(seg).toBeNull();
@@ -109,11 +114,14 @@ describe('road network', () => {
     for (let i = -20; i <= 20; i += 5) {
       // Water cells beside this z-avenue (cells i-1 and i): the run of bridge segments must span each stretch of water.
       for (let j = -30; j <= 30; j++) {
-        if (!(isWater(TOKYO, i - 1, j) && isWater(TOKYO, i, j))) continue;
+        if (!(isRiverOnly(i - 1, j) && isRiverOnly(i, j))) continue;
         expect(segmentAt(TOKYO, 'z', i, j)?.bridge, `avenue ${i} row ${j}`).toBe(true);
       }
       // The avenue is continuous across the river: every z segment from -30 to 30 exists.
-      for (let j = -30; j < 30; j++) expect(segmentAt(TOKYO, 'z', i, j), `avenue ${i} seg ${j}`).not.toBeNull();
+      for (let j = -30; j < 30; j++) {
+        if ([[i - 1, j], [i, j]].some(([a, b]) => isBay(TOKYO, a!, b!) || isIsland(TOKYO, a!, b!))) continue;
+        expect(segmentAt(TOKYO, 'z', i, j), `avenue ${i} seg ${j}`).not.toBeNull();
+      }
     }
   });
 
@@ -239,5 +247,130 @@ describe('ringOnRoads', () => {
     const pts = ringOnRoads(TOKYO, { x: 130, z: -70 }, 8, 1200);
     expect(pts).toHaveLength(8);
     for (const p of pts) expect(onSegment(p), `${p.x},${p.z}`).toBe(true);
+  });
+});
+
+describe('bay and island', () => {
+  const bay = TOKYO.bay!;
+  const perp = { x: -bay.dir.z, z: bay.dir.x };
+  const cellAt = (a: number, b: number) => {
+    // Cell containing the point at `a` along dir and `b` along perp.
+    const x = bay.dir.x * a + perp.x * b, z = bay.dir.z * a + perp.z * b;
+    return [Math.floor(x / PITCH), Math.floor(z / PITCH)] as const;
+  };
+  const centre = (ci: number, cj: number) => ({ x: PITCH * ci + PITCH / 2, z: PITCH * cj + PITCH / 2 });
+  const islandCells: [number, number][] = [];
+  for (let i = -40; i <= 20; i++) for (let j = -40; j <= 20; j++) if (isIsland(TOKYO, i, j)) islandCells.push([i, j]);
+
+  it('the origin cell is land', () => {
+    expect(isWater(TOKYO, 0, 0)).toBe(false);
+    expect(isWater(TOKYO, -1, -1)).toBe(false);
+  });
+
+  it('the coast lies 2000 m along dir, within the swing plus one cell of quantisation', () => {
+    for (let k = 0; k < 20; k++) {
+      const b = -4000 + (8000 * k) / 19;
+      let first = -1;
+      for (let a = 0; a <= 4000 && first < 0; a += 20) {
+        const [ci, cj] = cellAt(a, b);
+        // Coast distance of the first bay cell, measured at its centre.
+        if (isBay(TOKYO, ci, cj)) first = centre(ci, cj).x * bay.dir.x + centre(ci, cj).z * bay.dir.z;
+      }
+      expect(first, `perp ${b}`).toBeGreaterThanOrEqual(1800);
+      expect(first, `perp ${b}`).toBeLessThanOrEqual(2300);
+    }
+  });
+
+  it('water is continuous from the river at x = -4000 into the bay', () => {
+    const r = TOKYO.river!;
+    const start: [number, number] = [Math.floor(-4000 / PITCH), 0];
+    for (let j = -40; j <= 40; j++) if (isRiver(TOKYO, start[0], j)) { start[1] = j; break; }
+    expect(isRiver(TOKYO, start[0], start[1]), `river near z ${r.z0}`).toBe(true);
+    const seen = new Set<string>([start.join(',')]);
+    const queue = [start];
+    let reachedBay = false;
+    while (queue.length && !reachedBay) {
+      const [i, j] = queue.shift()!;
+      for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+        const n: [number, number] = [i + di, j + dj];
+        const key = n.join(',');
+        if (seen.has(key) || n[0] < -60 || n[0] > 60 || n[1] < -60 || n[1] > 60 || !isWater(TOKYO, n[0], n[1])) continue;
+        seen.add(key);
+        if (isBay(TOKYO, n[0], n[1])) reachedBay = true;
+        queue.push(n);
+      }
+    }
+    expect(reachedBay).toBe(true);
+  });
+
+  it('island cells are land, not water, and form one 4-connected group of more than 6 cells', () => {
+    expect(islandCells.length).toBeGreaterThan(6);
+    for (const [i, j] of islandCells) {
+      expect(isWater(TOKYO, i, j)).toBe(false);
+      expect(isBay(TOKYO, i, j)).toBe(false);
+    }
+    const set = new Set(islandCells.map((c) => c.join(',')));
+    const seen = new Set<string>([islandCells[0]!.join(',')]);
+    const stack = [islandCells[0]!];
+    while (stack.length) {
+      const [i, j] = stack.pop()!;
+      for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+        const key = `${i + di},${j + dj}`;
+        if (set.has(key) && !seen.has(key)) { seen.add(key); stack.push([i + di, j + dj]); }
+      }
+    }
+    expect(seen.size).toBe(islandCells.length);
+  });
+
+  it('the island centre cell is island', () => {
+    expect(isIsland(TOKYO, Math.floor(TOKYO.island!.center.x / PITCH), Math.floor(TOKYO.island!.center.z / PITCH))).toBe(true);
+  });
+
+  it('no segment has bay on both sides or touches an island cell', () => {
+    for (let i = -40; i <= 20; i++) for (let j = -40; j <= 20; j++) for (const axis of ['x', 'z'] as const) {
+      const [a, b] = cellsOf(axis, i, j);
+      const seg = segmentAt(TOKYO, axis, i, j);
+      if (isBay(TOKYO, a[0], a[1]) && isBay(TOKYO, b[0], b[1])) expect(seg, `bay ${axis} ${i},${j}`).toBeNull();
+      if (isIsland(TOKYO, a[0], a[1]) || isIsland(TOKYO, b[0], b[1])) expect(seg, `island ${axis} ${i},${j}`).toBeNull();
+    }
+  });
+
+  it('no segment has water on both sides unless both are river (a bridge)', () => {
+    for (let i = -40; i <= 20; i++) for (let j = -40; j <= 20; j++) for (const axis of ['x', 'z'] as const) {
+      const [a, b] = cellsOf(axis, i, j);
+      if (!(isWater(TOKYO, a[0], a[1]) && isWater(TOKYO, b[0], b[1]))) continue;
+      const seg = segmentAt(TOKYO, axis, i, j);
+      if (!(isRiver(TOKYO, a[0], a[1]) && !isBay(TOKYO, a[0], a[1]) && isRiver(TOKYO, b[0], b[1]) && !isBay(TOKYO, b[0], b[1]))) expect(seg, `${axis} ${i},${j}`).toBeNull();
+    }
+  });
+
+  it('nearestRoadPoint from the bay and the island never returns a point inside a bay or island cell', () => {
+    const rnd = mulberry32(5);
+    const bad = (i: number, j: number) => isBay(TOKYO, i, j) || isIsland(TOKYO, i, j);
+    for (let k = 0; k < 200; k++) {
+      const [ci, cj] = k % 2 === 0 ? cellAt(2400 + rnd() * 1500, (rnd() - 0.5) * 3000) : islandCells[Math.floor(rnd() * islandCells.length)]!;
+      const p = k % 2 === 0 ? centre(ci, cj) : { x: PITCH * ci + rnd() * PITCH, z: PITCH * cj + rnd() * PITCH };
+      const q = nearestRoadPoint(TOKYO, p);
+      const inside = cellRange(q.x).every((i) => cellRange(q.z).every((j) => bad(i, j)));
+      expect(inside, `${p.x},${p.z} -> ${q.x},${q.z}`).toBe(false);
+    }
+  });
+
+  it('a route between two land points 3 km apart along the coast never samples a bay cell', () => {
+    const a = centre(...cellAt(1500, -1500));
+    const b = centre(...cellAt(1500, 1500));
+    expect(isBay(TOKYO, Math.floor(a.x / PITCH), Math.floor(a.z / PITCH))).toBe(false);
+    expect(isBay(TOKYO, Math.floor(b.x / PITCH), Math.floor(b.z / PITCH))).toBe(false);
+    const pts = [a, ...planRoadPath(TOKYO, a, b)];
+    expect(pts.length).toBeGreaterThan(2);
+    for (let k = 1; k < pts.length; k++) {
+      const p = pts[k - 1]!, q = pts[k]!;
+      const n = Math.max(1, Math.ceil(Math.hypot(q.x - p.x, q.z - p.z) / 20));
+      for (let s = 0; s <= n; s++) {
+        const x = p.x + ((q.x - p.x) * s) / n, z = p.z + ((q.z - p.z) * s) / n;
+        const inside = cellRange(x).every((i) => cellRange(z).every((j) => isBay(TOKYO, i, j)));
+        expect(inside, `${x},${z}`).toBe(false);
+      }
+    }
   });
 });

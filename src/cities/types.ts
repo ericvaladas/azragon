@@ -1,11 +1,29 @@
 import type * as THREE from 'three';
 
-export type DistrictId = 'highrise' | 'neon' | 'office' | 'residential' | 'park';
-export const DISTRICTS: readonly DistrictId[] = ['highrise', 'neon', 'office', 'residential', 'park'];
+export type DistrictId = 'highrise' | 'neon' | 'office' | 'residential' | 'park' | 'port';
+export const DISTRICTS: readonly DistrictId[] = ['highrise', 'neon', 'office', 'residential', 'park', 'port'];
 
 /** Facade atlas cells (see pixelTextures.facadeAtlas): left to right. */
-export const FACADE = { glass: 0, office: 1, balcony: 2, shop: 3 } as const;
-export const FACADE_COUNT = 4;
+export const FACADE = { glass: 0, office: 1, balcony: 2, shop: 3, container: 4 } as const;
+export const FACADE_COUNT = 5;
+
+/**
+ * A container yard (the port): each built lot holds either one container block or one warehouse. A block covers
+ * `block` of its lot (fractions w × d, turned 90° on a coin toss per lot), `tier` m × tiers[0]..tiers[1] tall, in the
+ * district's facades and colours, so the repeating facade reads as rows of containers; a warehouse covers
+ * `warehouseFootprint` of its lot.
+ */
+export type YardRules = {
+  block: readonly [number, number];
+  tier: number;
+  tiers: readonly [number, number];
+  /** Chance a built lot is a warehouse instead of a container block. */
+  warehouse: number;
+  warehouseFootprint: number;
+  warehouseHeight: readonly [number, number];
+  warehouseFacade: number;
+  warehouseColors: readonly number[];
+};
 
 /** How one district fills a block (164 m inside the roads). */
 export type DistrictRules = {
@@ -30,6 +48,8 @@ export type DistrictRules = {
   billboard: number;
   /** Street trees per block. */
   trees: number;
+  /** Present for a container yard: lots hold container blocks and warehouses instead of `footprint` buildings. */
+  yard?: YardRules;
 };
 
 export type SignKind = 'vertical' | 'billboard' | 'screen';
@@ -39,14 +59,44 @@ export type SignDef = { kind: SignKind; lx: number; ly: number; lz: number; w: n
 /** One building: base centre (x, z), footprint w (x) × d (z), height h, facade atlas cell, tint, signs. */
 export type BuildingSpec = { x: number; z: number; w: number; d: number; h: number; facade: number; color: number; signs: SignDef[]; keep?: boolean };
 
-/** A destructible structure with its own mesh. `build` returns vertex-coloured geometry with its base centre at the origin, +Y up. */
-export type LandmarkSpec = { id: string; x: number; z: number; w: number; d: number; h: number; build(): THREE.BufferGeometry };
+/**
+ * A long landmark's line: from its shore end `from` to its far end `to`, `halfWidth` m to each side, its deck's top
+ * `deckY` m up (rays pick it up to 10 m above that), and towers `towers` m along it (rays pick each up to the
+ * landmark's full height, within TOWER_PICK_HALF m along). Its geometry is built in its own frame, running along
+ * local +Z from `from` (local z = 0) to `to` (local z = the span's length).
+ */
+export type LandmarkSpan = {
+  from: { x: number; z: number };
+  to: { x: number; z: number };
+  halfWidth: number;
+  deckY: number;
+  towers?: readonly number[];
+};
+
+/**
+ * A destructible structure with its own mesh. `build` returns vertex-coloured geometry with its base centre at the
+ * origin, +Y up. A long landmark (`span` set) is owned by the block holding `from`; its (x, z) and w × d are its
+ * footprint on the ground at that end (inside that block), and its mesh is placed at `from`, turned to the span's
+ * bearing.
+ */
+export type LandmarkSpec = { id: string; x: number; z: number; w: number; d: number; h: number; span?: LandmarkSpan; build(): THREE.BufferGeometry };
 
 /** A ground decal drawn over the road texture, `size` m square, centred on (x, z). */
 export type GroundOverlay = { id: string; x: number; z: number; size: number };
 
 /** A winding river: centreline z = z0 + amp · sin(x / wavelength); cells within halfWidth (vertical) are water. */
 export type RiverSpec = { z0: number; amp: number; wavelength: number; halfWidth: number };
+
+/**
+ * A coastline: cells whose centre c has dot(c, dir) > offset + amp · sin(dot(c, perp) / wavelength) are sea, with
+ * perp = (−dir.z, dir.x).
+ */
+export type BaySpec = { dir: { x: number; z: number }; offset: number; amp: number; wavelength: number };
+
+/** A rounded-rectangle island: half extents along the bay's dir and perp axes from center. Never reached by road. */
+export type IslandSpec = { center: { x: number; z: number }; halfAlong: number; halfAcross: number };
+/** Shape of the coast and island only (what the water tests read). */
+export type Shoreline = { bay?: BaySpec; island?: IslandSpec };
 
 export type CityStyle = {
   id: string;
@@ -60,6 +110,8 @@ export type CityStyle = {
     crosswalk: number;
     roof: number;
     tree: number;
+    /** Port quay paving, drawn as a pad over each port cell. */
+    quay: number;
   };
   /** Neon sign colours (never near the threat reds). */
   signColors: readonly number[];
@@ -72,6 +124,13 @@ export type CityStyle = {
   specialLots: readonly BuildingSpec[];
   overlays: readonly GroundOverlay[];
   river?: RiverSpec;
+  bay?: BaySpec;
+  island?: IslandSpec;
+  /**
+   * Rules for the island's built cells (districtAt reports them as office, its centre cell as park): no streets, so
+   * no signs and no street trees.
+   */
+  islandRules?: DistrictRules;
   /** Fraction of removable street segments removed, by the district at the segment's midpoint. */
   roadRemoval: Readonly<Record<DistrictId, number>>;
   /** Lattice nodes (world x, z) whose four segments always exist (e.g. the Shibuya Crossing). */

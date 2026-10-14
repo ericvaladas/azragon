@@ -45,7 +45,8 @@ import { LevelUpAura } from './systems/LevelUpAura';
 import { ShieldFx } from './systems/ShieldFx';
 import { InkFx } from './monsters/kraken/InkFx';
 import { shieldHitPoint } from './systems/shieldHit';
-import { dashTarget, leapTarget } from './monster/leap';
+import { dashTarget } from './monster/leap';
+import { landingSpot, leapLanding, shoreStep, shoreStopped } from './world/shore';
 import { FRONT_LEFT, footTargets, strikePlan } from './monster/strike';
 import { mortarTargets, nearestWithin } from './systems/targeting';
 import { Passives } from './systems/Passives';
@@ -65,9 +66,13 @@ import { KINDS, ROSTER_ORDER, isMonsterId, rosterEntries } from './monsters/rost
 import { loadPick, savePick, type PickStore } from './monsters/pick';
 import type { MonsterKind } from './monsters/types';
 import { flowNext } from './menuFlow';
+import { Splasher } from './systems/splash';
 import { frameHeight, selectPose, titlePose } from './systems/menuCamera';
 
 type Order = { kind: 'move'; to: Vec2 } | { kind: 'attack'; target: Target } | null;
+
+/** A projectile hit below this height (m) is a ground impact and splashes if it lands on water. */
+const GROUND_HIT_Y = 20;
 
 export class GameScene {
   readonly events = new GameEventEmitter();
@@ -98,6 +103,7 @@ export class GameScene {
   private groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
   private tmpV = new THREE.Vector3();
   private particles: Particles;
+  private splasher: Splasher;
   private inkFx: InkFx;
   private projectiles: Projectiles;
   private enemies: EnemyRegistry;
@@ -155,6 +161,7 @@ export class GameScene {
     this.rig = new CameraRig(this.camera);
     this.markers = new Markers(this.scene);
     this.particles = new Particles(this.scene);
+    this.splasher = new Splasher(() => this.city.style, this.particles);
     this.chevrons = new Chevrons(this.scene);
     this.shockwave = new Shockwave(this.scene);
     this.aura = new LevelUpAura(this.scene);
@@ -184,10 +191,13 @@ export class GameScene {
     this.city.onCollapseStart = (pos, size) => {
       this.particles.ring('dust', pos, size, 14);
       this.particles.emit('debris', pos.clone().setY(30), 8);
+      this.splasher.footprint(pos.x, pos.z, size);
       this.rig.addTrauma(0.12);
     };
+    this.city.onSplash = (p, size) => this.splasher.at(p, size / 40);
     this.monster.onFootLand = (p) => {
       this.particles.ring('dust', p, 60, 7);
+      this.splasher.at(p);
       if (this.monster.kind.id === 'golem') {
         // Dark dust and crumbs of rot kicked up from under the claws and hooves.
         this.particles.emit('shade', this.tmpV.copy(p).setY(10), 3, 0.9);
@@ -524,6 +534,7 @@ export class GameScene {
     const realDt = clampDelta(raw);
     // World time runs in slow motion during the level-up moment; the aura and moment use real time.
     const dt = realDt * this.moment.timeScale();
+    this.splasher.newFrame();
     const frozen = this.state === 'levelup' || this.state === 'paused' || this.state === 'loading';
 
     if (!frozen) {
@@ -651,7 +662,8 @@ export class GameScene {
   /** Leap aim-ring placement: the ground point clamped to Leap range. */
   private aimPoint(ground: THREE.Vector3): { to: Vec2; radius: number } {
     const m = this.monster.position;
-    const to = leapTarget({ x: m.x, z: m.z }, { x: ground.x, z: ground.z }, CONFIG.abilities.leap.range);
+    const from = { x: m.x, z: m.z };
+    const to = leapLanding(this.city.style, from, { x: ground.x, z: ground.z }, CONFIG.abilities.leap.range, this.ms.bodyRadius);
     return { to, radius: CONFIG.abilities.leap.landRadius };
   }
 
@@ -679,7 +691,8 @@ export class GameScene {
 
     private leapTo(ground: THREE.Vector3): void {
       const m = this.monster;
-      const to = leapTarget({ x: m.position.x, z: m.position.z }, { x: ground.x, z: ground.z }, CONFIG.abilities.leap.range);
+      const from = { x: m.position.x, z: m.position.z };
+      const to = leapLanding(this.city.style, from, { x: ground.x, z: ground.z }, CONFIG.abilities.leap.range, this.ms.bodyRadius);
       if (!this.abilities.trigger('leap')) return;
             m.crouch = false;
       m.startLeap(to);
@@ -1025,6 +1038,7 @@ export class GameScene {
         this.projectiles.fireRocket(from, to, damage);
         this.particles.emit('fire', from, 2, 0.3);
       },
+      splash: (p, size) => this.splasher.at(p, size),
       shake: (a) => this.rig.addTrauma(a),
       onDestroyed: this.onTargetDestroyed,
     };
@@ -1108,9 +1122,12 @@ export class GameScene {
     this.setRay(x, y);
     const p = this.raycaster.ray.intersectPlane(this.groundPlane, this.tmpV);
     if (!p) return;
-    this.order = { kind: 'move', to: { x: p.x, z: p.z } };
+    // The bay is off limits on foot: a tap out on the water walks to the last land on the line back to the monster.
+    const m = this.monster.position;
+    const to = landingSpot(this.city.style, { x: m.x, z: m.z }, { x: p.x, z: p.z }, this.ms.bodyRadius);
+    this.order = { kind: 'move', to };
     this.markers.setTarget(null);
-    this.markers.tapAt(p);
+    this.markers.tapAt(p.set(to.x, p.y, to.z));
   };
 
   private onHover = (x: number, y: number): void => {
@@ -1278,6 +1295,16 @@ export class GameScene {
       if (d.attack === 'ranged') this.fireRanged(d.attackOn === 'order' && this.order?.kind === 'attack' ? this.order.target : auto);
     }
     m.tick(dt);
+    // The bay and the island are off limits on foot: walking and dashing slide along the shore. A move order the
+    // shore stops dead is dropped, so the monster never walks on the spot at the water's edge.
+    if (!m.airborne) {
+      const next = { x: m.position.x, z: m.position.z };
+      const step = shoreStep(this.city.style, pos, next, this.ms.bodyRadius);
+      m.position.x = step.pos.x;
+      m.position.z = step.pos.z;
+      if (step.slid) m.endDash();
+      if (this.order?.kind === 'move' && shoreStopped(pos, next, step.pos)) this.order = null;
+    }
 
     if (!m.airborne) this.city.forEachStandingInRadius(pos, this.ms.bodyRadius, (t) => t.applyDamage(CONFIG.monster.contactDps * dt));
     m.hp = regen(m.hp, m.maxHp, CONFIG.monster.regenPerSec + s.regenBonus, dt);
@@ -1479,6 +1506,7 @@ export class GameScene {
   }
 
   private onProjectileHit = (h: Hit): void => {
+    if (h.point.y < GROUND_HIT_Y) this.splasher.at(h.point, h.kind === 'chunk' || h.kind === 'glob' ? 1.5 : 1);
     if (h.kind === 'shard') {
       this.particles.emit('bone', h.point, 5, 0.8);
       return;

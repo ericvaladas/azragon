@@ -1,8 +1,8 @@
 import { CONFIG } from '../config';
 import { mulberry32, pick, range } from '../util/rng';
-import type { BuildingSpec, CityStyle, DistrictRules, LandmarkSpec, SignDef } from '../cities/types';
+import type { BuildingSpec, CityStyle, DistrictRules, LandmarkSpec, SignDef, YardRules } from '../cities/types';
 import { hash2 } from '../cities/noise';
-import { AVENUE_WIDTH, isWater, lineWidth, segmentAt, type Axis, type Segment } from './roads';
+import { AVENUE_WIDTH, PITCH, isBay, isIsland, isWater, lineWidth, segmentAt, type Axis, type Segment } from './roads';
 
 export type { BuildingSpec } from '../cities/types';
 export type TreeSpec = { x: number; z: number; s: number };
@@ -12,18 +12,78 @@ export type ParkSpec = { x: number; z: number };
 export type NodeSpec = { x: number; z: number; size: number };
 /** A river cell, by its centre. */
 export type WaterSpec = { x: number; z: number };
+/** A gantry crane: portal centre (x, z) and yaw, its jib pointing along (sin yaw, cos yaw). Scenery only. */
+export type CraneSpec = { x: number; z: number; yaw: number };
+/**
+ * A sea-wall edge: the centre (x, z) of a land cell's edge on a lattice line that borders a bay cell. `axis` is the
+ * direction the wall runs along, `side` the direction (+1 or -1 along the other axis) from the land cell to the bay.
+ */
+export type SeaWallSpec = { x: number; z: number; axis: Axis; side: 1 | -1; ends: [SeaWallEnd, SeaWallEnd] };
+/**
+ * How a wall meets the next cell along its run, at its low and high end: `convex` (that cell is bay too, so the
+ * perpendicular wall turns the corner: extend to its outer face), `concave` (the next land cell is also walled round
+ * the corner: stop inside that wall), `straight` (a wall continues, or nothing does: small overlap).
+ */
+export type SeaWallEnd = 'convex' | 'concave' | 'straight';
+/** Sea-wall dimensions (m): height, thickness, foam strip width, overlap at straight ends. */
+export const SEA_WALL_SIZE = { height: 14, thick: 8, foam: 12, overlap: 6 } as const;
+export type Rect = { x0: number; x1: number; z0: number; z1: number };
+
+/**
+ * The footprints of a sea-wall edge's wall and foam strip. The wall's inner face is half the road's width past the
+ * edge, on the bay side; each end is extended (convex), retracted (concave) or overlapped (straight) so the walls form
+ * a continuous coastline around corners without poking over land.
+ */
+export function seaWallRects(e: SeaWallSpec): { wall: Rect; foam: Rect } {
+  const alongX = e.axis === 'x';
+  const { thick, foam, overlap } = SEA_WALL_SIZE;
+  const line = Math.round((alongX ? e.z : e.x) / PITCH);
+  const inner = lineWidth(line) / 2;
+  const cell = alongX ? e.x : e.z;
+  const ends = [-1, 1].map((t, k) => {
+    const corner = cell + (t * PITCH) / 2;
+    const half = lineWidth(Math.round(corner / PITCH)) / 2;
+    const kind = e.ends[k]!;
+    const wall = kind === 'convex' ? half + thick : kind === 'concave' ? -(half + thick / 2) : overlap;
+    const fm = kind === 'convex' ? half + thick + foam : wall;
+    return [corner + t * wall, corner + t * fm] as const;
+  });
+  const across = (a: number, b: number) => (e.side > 0 ? [(alongX ? e.z : e.x) + a, (alongX ? e.z : e.x) + b] : [(alongX ? e.z : e.x) - b, (alongX ? e.z : e.x) - a]) as [number, number];
+  const make = (k: 0 | 1, a: number, b: number): Rect => {
+    const [lo, hi] = [ends[0]![k], ends[1]![k]];
+    const [c0, c1] = across(a, b);
+    return alongX ? { x0: lo, x1: hi, z0: c0, z1: c1 } : { x0: c0, x1: c1, z0: lo, z1: hi };
+  };
+  return { wall: make(0, inner, inner + thick), foam: make(1, inner + thick, inner + thick + foam) };
+}
+
+/** End kinds of cell (i, j)'s wall on the edge toward (di, dj); the cell is land and (i+di, j+dj) is bay. */
+function wallEnds(style: CityStyle, i: number, j: number, di: number, dj: number): [SeaWallEnd, SeaWallEnd] {
+  const kind = (t: number): SeaWallEnd => {
+    const ni = di !== 0 ? i : i + t, nj = di !== 0 ? j + t : j;
+    if (isBay(style, ni, nj)) return 'convex';
+    return !isWater(style, ni, nj) && !isWater(style, ni + di, nj + dj) ? 'concave' : 'straight';
+  };
+  return [kind(-1), kind(1)];
+}
+
 /**
  * `roads`: existing segments whose start node lies in the chunk. `nodes`: the chunk's intersections that have at
- * least one incident segment. `water`: the chunk's river cells.
+ * least one incident segment. `water`: the chunk's water cells (river and bay). `quays`: the chunk's port cells, by
+ * centre, drawn as paving pads. `cranes`: gantry cranes on the chunk's coastal port cells. `seaWall`: one entry per land-cell edge that borders
+ * a bay cell, emitted by the chunk owning the land cell.
  */
 export type ChunkContent = {
   buildings: BuildingSpec[];
   trees: TreeSpec[];
   parks: ParkSpec[];
+  quays: ParkSpec[];
+  cranes: CraneSpec[];
   landmarks: LandmarkSpec[];
   roads: Segment[];
   nodes: NodeSpec[];
   water: WaterSpec[];
+  seaWall: SeaWallSpec[];
 };
 export type ChunkRef = { cx: number; cz: number; key: string; dist: number };
 
@@ -127,15 +187,102 @@ function makeSigns(rules: DistrictRules, style: CityStyle, w: number, d: number,
   return signs;
 }
 
+/** A crane's portal, in its own frame: legs at ±halfAlong along the sea edge and ±halfAcross along its normal, each leg `leg` m square. */
+export const CRANE_PORTAL = { halfAlong: 13, halfAcross: 16, leg: 4 } as const;
+/** Metres between a crane's front legs and its quay road's land-side edge, and between its back legs and any building. */
+const CRANE_CLEAR = 3;
+/** A container block cut back behind a crane's portal keeps at least this depth (m), or is left out. */
+const MIN_BLOCK = 20;
+/** The four sides of a cell: neighbour offset and the outward normal (x, z) of the shared edge. */
+const SIDES = [[-1, 0], [0, -1], [1, 0], [0, 1]] as const;
+
+/**
+ * One built port lot: a warehouse covering most of the lot, or one container block (turned 90° on a coin toss) a whole
+ * number of containers tall. `seaLot` (the sea side of a crane's cell) is never a warehouse.
+ */
+function yardLot(rules: DistrictRules, yard: YardRules, x: number, z: number, lotW: number, lotD: number, seaLot: boolean, rng: () => number): BuildingSpec {
+  if (rng() < yard.warehouse && !seaLot) {
+    const h = range(rng, yard.warehouseHeight[0], yard.warehouseHeight[1]);
+    const f = yard.warehouseFootprint;
+    return { x, z, w: lotW * f, d: lotD * f, h, facade: yard.warehouseFacade, color: pick(yard.warehouseColors, rng), signs: [] };
+  }
+  const turned = rng() < 0.5;
+  const [fw, fd] = turned ? [yard.block[1], yard.block[0]] : [yard.block[0], yard.block[1]];
+  const tiers = yard.tiers[0] + Math.floor(rng() * (yard.tiers[1] - yard.tiers[0] + 1));
+  return { x, z, w: lotW * fw, d: lotD * fd, h: yard.tier * tiers, facade: pick(rules.facades, rng), color: pick(rules.colors, rng), signs: [] };
+}
+
+/** World footprint of a crane's portal (legs and the span between them). */
+function portalFootprint(c: CraneSpec): { x: number; z: number; w: number; d: number } {
+  const across = 2 * CRANE_PORTAL.halfAcross + CRANE_PORTAL.leg;
+  const along = 2 * CRANE_PORTAL.halfAlong + CRANE_PORTAL.leg;
+  const alongX = Math.abs(Math.sin(c.yaw)) > 0.5;
+  return { x: c.x, z: c.z, w: alongX ? across : along, d: alongX ? along : across };
+}
+
+/**
+ * Building `b` kept clear of crane `c`'s portal: one overlapping it has its sea-side face pulled back inland of the
+ * back legs (by CRANE_CLEAR); null when less than MIN_BLOCK of it would be left.
+ */
+function clearOfPortal(b: BuildingSpec, c: CraneSpec): BuildingSpec | null {
+  const p = portalFootprint(c);
+  if (!overlaps(b, p)) return b;
+  const alongX = Math.abs(Math.sin(c.yaw)) > 0.5;
+  // Coordinates along the sea normal n (+1 or −1 on its axis); inland is decreasing.
+  const n = Math.round(alongX ? Math.sin(c.yaw) : Math.cos(c.yaw));
+  const pos = alongX ? b.x : b.z, size = alongX ? b.w : b.d;
+  const back = n * (alongX ? c.x : c.z) - (alongX ? p.w : p.d) / 2 - CRANE_CLEAR;
+  const inland = n * pos - size / 2;
+  const depth = back - inland;
+  if (depth < MIN_BLOCK) return null;
+  const mid = n * (inland + depth / 2);
+  return alongX ? { ...b, x: mid, w: depth } : { ...b, z: mid, d: depth };
+}
+
+/** Outward normals of the edges of cell (i, j) that border a bay cell. */
+const baySides = (style: CityStyle, i: number, j: number) => SIDES.filter(([di, dj]) => isBay(style, i + di, j + dj));
+
+/** Land, off the island, beside the bay: where cranes may stand. */
+const coastal = (style: CityStyle, i: number, j: number): boolean => !isWater(style, i, j) && !isIsland(style, i, j) && baySides(style, i, j).length > 0;
+
+/**
+ * The gantry crane of coastal cell (i, j), if it has one: a cell gets a crane when its hash is below every coastal
+ * neighbour's (8-neighbourhood), so cranes are never in touching cells and come about every 2–3 cells along the coast.
+ * It faces the bay side whose outward normal best matches the bay's dir (a tie, as on a diagonal coast, goes by the
+ * cell's hash), and stands at the middle of that edge with its front legs just inland of the quay road, jib out over
+ * the water.
+ */
+function craneAt(style: CityStyle, seed: number, i: number, j: number): CraneSpec | null {
+  if (!coastal(style, i, j) || !style.bay) return null;
+  const h = hash2(i, j, seed + 57);
+  for (let di = -1; di <= 1; di++) for (let dj = -1; dj <= 1; dj++) {
+    if ((di || dj) && coastal(style, i + di, j + dj) && hash2(i + di, j + dj, seed + 57) <= h) return null;
+  }
+  const dir = style.bay.dir;
+  const score = ([nx, nz]: readonly [number, number]) => nx * dir.x + nz * dir.z;
+  const sides = baySides(style, i, j);
+  const best = Math.max(...sides.map(score));
+  const ties = sides.filter((n) => score(n) > best - 1e-9);
+  const [nx, nz] = ties[Math.floor(hash2(i, j, seed + 58) * ties.length)]!;
+  const pitch = CONFIG.world.blockSize;
+  // The sea edge's lattice line, and the portal centre's distance in from it.
+  const line = nx < 0 ? i : nx > 0 ? i + 1 : nz < 0 ? j : j + 1;
+  const inset = lineWidth(line) / 2 + CRANE_CLEAR + CRANE_PORTAL.halfAcross + CRANE_PORTAL.leg / 2;
+  const cx = (i + 0.5) * pitch + ROAD_ORIGIN, cz = (j + 0.5) * pitch + ROAD_ORIGIN;
+  return { x: cx + nx * (pitch / 2 - inset), z: cz + nz * (pitch / 2 - inset), yaw: Math.atan2(nx, nz) };
+}
+
 /**
  * One chunk of the city in `style`: each block is built from the district at its centre. River cells hold nothing
  * but water. Lots sit inside the block inset by half the width of each bordering lattice line, whether or not its
  * segment exists, so removed-street strips stay unbuilt; in residential and park blocks they become tree-lined
  * lanes. Beside an avenue the inset adds an AVENUE_PAVEMENT band, lined with a row of street trees in every built
  * block off the crash site (not water, landmark or park cells; a tree inside a building's footprint is skipped).
- * Landmarks claim their block (the chunk holding the landmark's centre owns it); special lots replace the random lots
+ * Landmarks claim their block (the chunk holding the landmark's centre, or a long landmark's `from` end, owns it); special lots replace the random lots
  * they overlap; the crash site is never a park. Per-chunk caps thin the random buildings (never special lots), then
- * their signs, then the trees (other trees before avenue rows). Same inputs, same chunk.
+ * their signs, then the trees (other trees before avenue rows). Port cells are paved quays of container blocks and
+ * warehouses with cranes along the water (no warehouse on a crane's sea side, nothing in its portal), and no trees. Island cells use the style's islandRules (its centre park
+ * aside) and get no street, avenue or lane trees. Same inputs, same chunk.
  */
 export function generateChunk(style: CityStyle, seed: number, cx: number, cz: number): ChunkContent {
   const w = CONFIG.world;
@@ -146,8 +293,11 @@ export function generateChunk(style: CityStyle, seed: number, cx: number, cz: nu
   const trees: TreeSpec[] = [];
   const avenueTrees: TreeSpec[] = [];
   const parks: ParkSpec[] = [];
+  const quays: ParkSpec[] = [];
+  const cranes: CraneSpec[] = [];
   const landmarks: LandmarkSpec[] = [];
   const water: WaterSpec[] = [];
+  const seaWall: SeaWallSpec[] = [];
   const blockOf = (v: number) => Math.floor(v / pitch);
   // Billboards: at most one per chunk, only on a building whose centre is in the chunk's central 400 × 400 m.
   const midX = (cx + 0.5) * CHUNK_SIZE + ROAD_ORIGIN;
@@ -165,6 +315,11 @@ export function generateChunk(style: CityStyle, seed: number, cx: number, cz: nu
         water.push({ x: bx, z: bz });
         continue;
       }
+      for (const [di, dj] of baySides(style, bi, bj)) {
+        seaWall.push(di !== 0
+          ? { x: (di > 0 ? bi + 1 : bi) * pitch + ROAD_ORIGIN, z: bz, axis: 'z', side: di > 0 ? 1 : -1, ends: wallEnds(style, bi, bj, di, dj) }
+          : { x: bx, z: (dj > 0 ? bj + 1 : bj) * pitch + ROAD_ORIGIN, axis: 'x', side: dj > 0 ? 1 : -1, ends: wallEnds(style, bi, bj, di, dj) });
+      }
       // The buildable block: the cell inset by half of each bordering line's width, plus pavement beside an avenue.
       const inset = (line: number) => lineWidth(line) / 2 + (lineWidth(line) === AVENUE_WIDTH ? AVENUE_PAVEMENT : 0);
       const x0 = bi * pitch + inset(bi) + ROAD_ORIGIN;
@@ -176,16 +331,26 @@ export function generateChunk(style: CityStyle, seed: number, cx: number, cz: nu
       const iw = x1 - x0;
       const id = z1 - z0;
 
-      const landmark = style.landmarks.find((l) => blockOf(l.x) === bi && blockOf(l.z) === bj);
+      // A long landmark belongs to the block of its `from` end (the shore anchorage); its deck may cross other cells.
+      const landmark = style.landmarks.find((l) => {
+        const at = l.span?.from ?? l;
+        return blockOf(at.x) === bi && blockOf(at.z) === bj;
+      });
       if (landmark) {
         if (!craterSite) landmarks.push(landmark);
-        // A landmark in a park stands on the park's green (Tokyo Tower in Shiba Park).
-        if (!craterSite && style.districtAt(bx, bz) === 'park') parks.push({ x: bx, z: bz });
+        // A landmark in a park stands on the park's green (Tokyo Tower in Shiba Park); one in the port on the quay.
+        const district = style.districtAt(bx, bz);
+        if (!craterSite && district === 'park') parks.push({ x: bx, z: bz });
+        if (!craterSite && district === 'port') quays.push({ x: bx, z: bz });
         continue;
       }
       let district = style.districtAt(bx, bz);
       if (craterSite && district === 'park') district = 'office';
-      const rules = style.districts[district];
+      const island = isIsland(style, bi, bj);
+      const rules = island && district !== 'park' && style.islandRules ? style.islandRules : style.districts[district];
+      const crane = district === 'port' ? craneAt(style, seed, bi, bj) : null;
+      if (district === 'port') quays.push({ x: bx, z: bz });
+      if (crane) cranes.push(crane);
 
       if (district === 'park') {
         parks.push({ x: bx, z: bz });
@@ -218,6 +383,13 @@ export function generateChunk(style: CityStyle, seed: number, cx: number, cz: nu
       }
       for (const r of free) {
         if (!r.built) continue;
+        if (rules.yard) {
+          const seaLot = crane !== null && (r.lx - ix) * Math.sin(crane.yaw) + (r.lz - iz) * Math.cos(crane.yaw) > 0;
+          const b = yardLot(rules, rules.yard, r.lx, r.lz, lotW, lotD, seaLot, rng);
+          const clear = crane ? clearOfPortal(b, crane) : b;
+          if (clear) buildings.push(clear);
+          continue;
+        }
         const bw = lotW * range(rng, rules.footprint[0], rules.footprint[1]);
         const bd = lotD * range(rng, rules.footprint[0], rules.footprint[1]);
         const h = rules.height[0] + (rules.height[1] - rules.height[0]) * Math.pow(rng(), rules.heightCurve);
@@ -228,7 +400,7 @@ export function generateChunk(style: CityStyle, seed: number, cx: number, cz: nu
         if (signs.some((s) => s.kind === 'billboard')) billboardPlaced = true;
         buildings.push({ x: r.lx, z: r.lz, w: bw, d: bd, h, facade, color, signs });
       }
-      if (!craterSite) {
+      if (!craterSite && !island && district !== 'port') {
         for (let t = 0; t < rules.trees; t++) {
           // Street trees along the block's edge (the pavement).
           const along = range(rng, -0.5, 0.5);
@@ -283,10 +455,11 @@ export function generateChunk(style: CityStyle, seed: number, cx: number, cz: nu
         }
         // A removed segment between two land cells: three trees down the middle of the strip in leafy districts.
         const [ai, aj] = axis === 'x' ? [i, j - 1] : [i - 1, j];
-        if (isWater(style, ai, aj) || isWater(style, i, j)) continue;
+        // The island has no streets at all, so its lattice lines are no lanes.
+        if (isWater(style, ai, aj) || isWater(style, i, j) || isIsland(style, ai, aj) || isIsland(style, i, j)) continue;
         const da = style.districtAt((ai + 0.5) * pitch + ROAD_ORIGIN, (aj + 0.5) * pitch + ROAD_ORIGIN);
         const db = style.districtAt((i + 0.5) * pitch + ROAD_ORIGIN, (j + 0.5) * pitch + ROAD_ORIGIN);
-        if (!lane(da) && !lane(db)) continue;
+        if ((!lane(da) && !lane(db)) || da === 'port' || db === 'port') continue;
         for (const f of [0.25, 0.5, 0.75]) {
           const x = (axis === 'x' ? i + f : i) * pitch + ROAD_ORIGIN;
           const z = (axis === 'x' ? j : j + f) * pitch + ROAD_ORIGIN;
@@ -325,7 +498,7 @@ export function generateChunk(style: CityStyle, seed: number, cx: number, cz: nu
   };
   const keptAvenue = thin(avenueTrees, TREES_PER_CHUNK);
   const keptTrees = [...keptAvenue, ...thin(trees, TREES_PER_CHUNK - keptAvenue.length)];
-  return { buildings: out, trees: keptTrees, parks, landmarks, roads, nodes, water };
+  return { buildings: out, trees: keptTrees, parks, quays, cranes, landmarks, roads, nodes, water, seaWall };
 }
 
 /** Chunks to load (within loadRadius, nearest first) and to unload (beyond unloadRadius). */

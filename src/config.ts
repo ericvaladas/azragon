@@ -104,13 +104,18 @@ export const CONFIG = {
     maxScreens: 60,
     /** Pool size for park ground pads across all loaded chunks. */
     maxParks: 2000,
+    /** Gantry crane pool (scenery along the coast): a full load peaks at 19 (swept ±12 km), so 32 leaves headroom. */
+    maxCranes: 32,
+    /** Sea-wall edges and foam strips: a full load peaks at 110 (swept 200 m grid, x -6000..4000, z -6000..4000), so 128 leaves 16% headroom. */
+    maxSeaWall: 128,
+    maxFoam: 128,
     maxRubble: 2500,
     /** Road segment pool: at most 32 segments start in a chunk, times maxLoadedChunks (185), rounded up. */
     maxRoads: 6000,
     /** Intersection squares plus bridge deck slabs (at most 16 intersections per chunk), with 10% headroom over the swept peak. */
     maxNodes: 3300,
-    /** River cell quads. */
-    maxWater: 800,
+    /** River and bay cell quads (sized for a load centred on land). */
+    maxWater: 2400,
     blockSize: 200,
     roadWidth: 36,
     /** Crater around the origin (the pod's impact site; the decal is half a block wider), sized to the cocoon. */

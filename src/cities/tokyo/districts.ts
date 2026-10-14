@@ -1,5 +1,8 @@
 import { FACADE, type DistrictId, type DistrictRules } from '../types';
 
+/** Shipping-container colours. */
+export const CONTAINER_COLORS = [0xc9402a, 0x2d6fb5, 0xe88a2a, 0x3f9a4f, 0x2aa3a3] as const;
+
 /** Tokyo's districts (look-spike palette: brighter, more varied, greener). */
 export const TOKYO_DISTRICTS: Record<DistrictId, DistrictRules> = {
   // Shinjuku towers: blue-green glass and white steel.
@@ -28,4 +31,16 @@ export const TOKYO_DISTRICTS: Record<DistrictId, DistrictRules> = {
     lots: 0, fill: 0, minPerBlock: 0, height: [0, 0], heightCurve: 1, footprint: [0, 0],
     facades: [FACADE.office], colors: [0xffffff], signs: 0, billboard: 0, trees: 0,
   },
+  // The harbour: container blocks (red, blue, orange, green, teal) and pale warehouses; no signs, no trees.
+  port: {
+    lots: 2, fill: 0.85, minPerBlock: 1, height: [5.2, 10.4], heightCurve: 1, footprint: [1, 1],
+    facades: [FACADE.container], colors: CONTAINER_COLORS, signs: 0, billboard: 0, trees: 0,
+    yard: {
+      block: [0.85, 0.7], tier: 2.6, tiers: [2, 4], warehouse: 0.3, warehouseFootprint: 0.9, warehouseHeight: [12, 22],
+      warehouseFacade: FACADE.office, warehouseColors: [0xe4e6e8, 0xd5d9dc, 0xefe6d2, 0xe8dcc0],
+    },
+  },
 };
+
+/** The island: office blocks 40–110 m with no streets, so no signs and no street trees. */
+export const TOKYO_ISLAND_RULES: DistrictRules = { ...TOKYO_DISTRICTS.office, height: [40, 110], signs: 0, billboard: 0, trees: 0 };

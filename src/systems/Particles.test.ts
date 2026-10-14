@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { CONFIG } from '../config';
 import { CRATER_RADIUS } from '../world/City';
-import { PRESETS } from './Particles';
+import * as THREE from 'three';
+import { Particles, PRESETS } from './Particles';
 
 describe('veil (the cloud that hides the crater after impact)', () => {
   const S = CONFIG.intro.starts;
@@ -37,5 +38,19 @@ describe('billow (the pod crash dust cloud)', () => {
     expect(CONFIG.intro.starts.impact + b.life).toBeLessThan(CONFIG.intro.starts.emerge);
     // It rolls out along the ground rather than falling.
     expect(b.gravity).toBeLessThanOrEqual(0);
+  });
+});
+
+describe('splash layer', () => {
+  const counts = (scene: THREE.Scene) =>
+    scene.children.filter((c): c is THREE.InstancedMesh => (c as THREE.InstancedMesh).isInstancedMesh).map((m) => m.count).filter((n) => n > 0).sort((a, b) => a - b);
+  it('has its own 200-particle cap, so a full solid layer (fire, debris, sparks) never starves splashes', () => {
+    const scene = new THREE.Scene();
+    const fx = new Particles(scene);
+    const at = new THREE.Vector3();
+    fx.emit('fire', at, 1000);
+    fx.emit('splash', at, 1000);
+    fx.update(0.001);
+    expect(counts(scene)).toEqual([200, 500]);
   });
 });
