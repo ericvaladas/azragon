@@ -369,6 +369,7 @@ body {
 }
 .skip-hint {
   position: absolute;
+  font-family: Arial, Helvetica, sans-serif;
   left: 50%;
   bottom: calc(28px + var(--safe-bottom, 0px));
   transform: translateX(-50%);
@@ -395,7 +396,7 @@ body {
 /* The start hint sits at the bottom of the screen, plain text, steady. */
 .title-hint {
   position: absolute; left: 0; right: 0; bottom: calc(var(--safe-bottom, 0px) + 40px); text-align: center;
-  font-size: 15px; letter-spacing: 0.14em; text-transform: uppercase; color: #ffffff;
+  font-family: Arial, Helvetica, sans-serif; font-size: 15px; letter-spacing: 0.14em; text-transform: uppercase; color: #ffffff;
 }
 
 /* Select: carousel UI over the 3D diorama. */
