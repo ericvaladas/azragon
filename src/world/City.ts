@@ -7,6 +7,7 @@ import type { CityStyle, LandmarkSpec, SignDef } from '../cities/types';
 import { blastTopples, chunksInRadius, DestroyedLog, generateChunk, nodeSize, planStreaming, type BuildingSpec, type ChunkContent } from './chunks';
 import { isWater, PITCH, type Segment } from './roads';
 import { canvasCityTextures, patchFacadeShader, patchRoadShader, SCREEN_FRAMES, SIGN_RECTS, type CityTextures } from './pixelTextures';
+import { rubbleGeometry } from './rubble';
 import { faceted, toonMat } from '../render/toon';
 
 type BuildingState = 'standing' | 'collapsing' | 'rubble';
@@ -217,7 +218,7 @@ export class City {
     private onDestroyed: OnDestroyed,
     private textures: CityTextures = canvasCityTextures,
   ) {
-    const { palette, world } = CONFIG;
+    const { world } = CONFIG;
 
     const span = this.groundSpan;
     this.ground = new THREE.Mesh(new THREE.PlaneGeometry(span, span), toonMat(0xffffff, { map: this.groundTexture() }));
@@ -246,8 +247,7 @@ export class City {
     this.buildingMesh = new THREE.InstancedMesh(box, [facade, facade, this.roofMat, this.roofMat, facade, facade], max);
     this.buildingMesh.castShadow = true;
     this.buildingMesh.receiveShadow = true;
-    const rubbleGeo = faceted(new THREE.DodecahedronGeometry(0.5, 0)).translate(0, 0.25, 0);
-    this.rubbleMesh = new THREE.InstancedMesh(rubbleGeo, toonMat(palette.debris), world.maxRubble);
+    this.rubbleMesh = new THREE.InstancedMesh(rubbleGeometry(), toonMat(0xffffff, { vertexColors: true }), world.maxRubble);
     this.rubbleMesh.receiveShadow = true;
     const cone = faceted(new THREE.ConeGeometry(0.5, 1.6, 5)).translate(0, 0.8, 0);
     this.treeMat = toonMat(this._style.colors.tree);
@@ -749,7 +749,7 @@ export class City {
       this.rubbleUsed[slot] = true;
     }
     _q.setFromAxisAngle(UP, b.slot >= 0 ? b.slot : b.index);
-    _m.compose(_p.set(s.x, 0, s.z), _q, _s.set(s.w * 1.1, s.h * 0.12 + 6, s.d * 1.1));
+    _m.compose(_p.set(s.x, 0, s.z), _q, _s.set(s.w * 1.1, s.h * 0.15 + 8, s.d * 1.1));
     this.rubbleMesh.setMatrixAt(b.rubbleSlot, _m);
   }
 

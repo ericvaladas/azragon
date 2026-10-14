@@ -9,10 +9,10 @@ export const TOKYO: CityStyle = {
   id: 'tokyo',
   name: 'Tokyo',
   colors: {
-    paved: 0xc2c6c9,
-    pavedSpeck: 0xaeb3b8,
+    paved: 0x939899,
+    pavedSpeck: 0x83888c,
     park: 0x6fae4f,
-    road: 0x5d6168,
+    road: 0x4b4f56,
     roadLine: 0xeeeeea,
     crosswalk: 0xf2f0ea,
     roof: 0xd4d6d8,
