@@ -82,6 +82,17 @@ function headPoints(): THREE.Vector3[] {
   return pts;
 }
 
+/**
+ * The neck (neck space, origin at its pivot): a rounded taper from a thick base centred on the pivot — so however
+ * the head turns, the base turns in place, buried in the torso, and never pulls away from it — up into the head.
+ */
+function neckPoints(): THREE.Vector3[] {
+  const pts: THREE.Vector3[] = [];
+  oval(pts, new THREE.Vector3(0, 0, 4), new THREE.Vector3(44, 44, 46));
+  oval(pts, new THREE.Vector3(0, 72, 58), new THREE.Vector3(32, 32, 34));
+  return pts;
+}
+
 /** The lower jaw (jaw space): a slim rounded oval tucked under the snout. */
 function jawPoints(): THREE.Vector3[] {
   const pts: THREE.Vector3[] = [];
@@ -149,7 +160,7 @@ export class KaijuBody implements MonsterBody {
 
     // Neck → head → hinged jaw; `mouth` is where the breath leaves.
     this.neck.position.copy(NECK_BASE);
-    add(this.neck, box, scale, [0, 35, 30], [72, 80, 100], -0.5);
+    add(this.neck, this.keep(faceted(new ConvexGeometry(neckPoints()))), scale, [0, 0, 0], [1, 1, 1]);
     const head = new THREE.Object3D();
     head.position.set(0, 85, 75);
     head.scale.setScalar(HEAD_SCALE);
