@@ -93,10 +93,15 @@ function neckPoints(): THREE.Vector3[] {
   return pts;
 }
 
-/** The lower jaw (jaw space): a slim rounded oval tucked under the snout. */
+/**
+ * The lower jaw (jaw space, origin at its hinge): a slim rounded oval tucked under the snout, running back into a
+ * knob centred on the hinge and tucked up inside the skull — so when the jaw drops open it turns about the knob
+ * and stays joined to the head.
+ */
 function jawPoints(): THREE.Vector3[] {
   const pts: THREE.Vector3[] = [];
   oval(pts, new THREE.Vector3(0, -4, 54), new THREE.Vector3(22, 9, 36));
+  oval(pts, new THREE.Vector3(0, 2, 2), new THREE.Vector3(24, 16, 16));
   return pts;
 }
 
