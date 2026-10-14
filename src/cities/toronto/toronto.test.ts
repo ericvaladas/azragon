@@ -4,10 +4,16 @@ import { CONFIG } from '../../config';
 import { DISTRICTS, FACADE } from '../types';
 import { TORONTO } from './index';
 import { chunksInRadius, generateChunk } from '../../world/chunks';
-import { CN_TOWER_SITE, CITY_HALL_SITE, ROGERS_CENTRE_SITE } from './layout';
+import { CN_TOWER_SITE, CITY_HALL_SITE, ROGERS_CENTRE_SITE, blockInterior, districtAt } from './layout';
 import { CN_TOWER, cnTowerGeometry } from './cnTower';
 import { ROGERS_CENTRE, rogersCentreGeometry } from './rogersCentre';
 import { CITY_HALL, cityHallGeometry } from './cityHall';
+import { FIRST_CANADIAN_PLACE, FINANCIAL_LOTS, GOLD, ROYAL_BANK_PLAZA } from './financial';
+import { YD_BLOCK, YONGE_DUNDAS_LOTS } from './yongeDundas';
+import { NATHAN_PHILLIPS, SQUARE_LAYOUT, SQUARE_PX, letterRects, squareRects } from './square';
+import { LATIN_FONT } from '../../world/latinFont';
+import { overlayPainter } from '../../world/pixelTextures';
+import type { BuildingSpec } from '../types';
 import { PITCH, isIsland, isWater, lineWidth } from '../../world/roads';
 import { gameplayPose } from '../../intro/timeline';
 
@@ -177,5 +183,151 @@ describe('Toronto landmarks', () => {
     expect(Math.abs(p.x)).toBeLessThan(0.9);
     expect(Math.abs(p.y)).toBeLessThan(0.9);
     expect(p.z).toBeLessThan(1);
+  });
+});
+
+describe('hand-placed lots', () => {
+  const blockOf = (v: number) => Math.floor(v / CONFIG.world.blockSize);
+  const dark = FINANCIAL_LOTS.filter((b) => b !== FIRST_CANADIAN_PLACE && !ROYAL_BANK_PLAZA.includes(b));
+
+  it('puts 8–10 dark glass towers 200–300 m tall in the Financial District, all kept through the crash', () => {
+    expect(dark.length).toBeGreaterThanOrEqual(8);
+    expect(dark.length).toBeLessThanOrEqual(10);
+    for (const b of dark) {
+      expect(b.h).toBeGreaterThanOrEqual(200);
+      expect(b.h).toBeLessThanOrEqual(300);
+      const c = new THREE.Color(b.color);
+      expect(c.r + c.g + c.b).toBeLessThan(0.15);
+      expect(districtAt(CONFIG.world.blockSize * (blockOf(b.x) + 0.5), CONFIG.world.blockSize * (blockOf(b.z) + 0.5))).toBe('highrise');
+    }
+    for (const b of TORONTO.specialLots) expect(b.keep).toBe(true);
+  });
+
+  it('makes First Canadian Place the tallest of all, a white slab', () => {
+    expect(FIRST_CANADIAN_PLACE.h).toBe(Math.max(...TORONTO.specialLots.map((b) => b.h)));
+    expect(FIRST_CANADIAN_PLACE.h).toBeLessThanOrEqual(300);
+    expect(FIRST_CANADIAN_PLACE.w).not.toBe(FIRST_CANADIAN_PLACE.d);
+    const hsl = { h: 0, s: 0, l: 0 };
+    new THREE.Color(FIRST_CANADIAN_PLACE.color).getHSL(hsl, THREE.SRGBColorSpace);
+    expect(hsl.l).toBeGreaterThan(0.85);
+  });
+
+  it('builds the Royal Bank Plaza as two gold towers, each three staggered boxes stepping down (saw-tooth edges)', () => {
+    expect(ROYAL_BANK_PLAZA).toHaveLength(6);
+    for (const b of ROYAL_BANK_PLAZA) expect(b.color).toBe(GOLD);
+    for (const tower of [ROYAL_BANK_PLAZA.slice(0, 3), ROYAL_BANK_PLAZA.slice(3)]) {
+      for (let k = 1; k < 3; k++) {
+        expect(tower[k]!.x).toBeGreaterThan(tower[k - 1]!.x);
+        expect(tower[k]!.z).toBeGreaterThan(tower[k - 1]!.z);
+        expect(tower[k]!.h).toBeLessThan(tower[k - 1]!.h);
+      }
+    }
+  });
+
+  it('fills the Yonge-Dundas block with four kept shop blocks 40–90 m: a screen toward the crash, a roof billboard and a blade each', () => {
+    expect(YONGE_DUNDAS_LOTS).toHaveLength(4);
+    for (const b of YONGE_DUNDAS_LOTS) {
+      expect([blockOf(b.x), blockOf(b.z)]).toEqual([YD_BLOCK.ci, YD_BLOCK.cj]);
+      expect(b.h).toBeGreaterThanOrEqual(40);
+      expect(b.h).toBeLessThanOrEqual(90);
+      const screen = b.signs.find((s) => s.kind === 'screen')!;
+      expect(screen.lz).toBeLessThan(-b.d / 2);
+      expect([3, 4, 5]).toContain(b.signs.find((s) => s.kind === 'billboard')!.cell);
+      const blade = b.signs.find((s) => s.kind === 'vertical')!;
+      expect([0, 1, 2]).toContain(blade.cell);
+      expect(TORONTO.signColors).toContain(blade.color);
+    }
+  });
+
+  it('keeps every hand-placed lot inside its block interior (clear of roads and avenue pavement)', () => {
+    for (const b of TORONTO.specialLots) {
+      const r = blockInterior(blockOf(b.x), blockOf(b.z));
+      const msg = `${b.x},${b.z}`;
+      expect(b.x - b.w / 2, msg).toBeGreaterThanOrEqual(r.x0 - 1e-9);
+      expect(b.x + b.w / 2, msg).toBeLessThanOrEqual(r.x1 + 1e-9);
+      expect(b.z - b.d / 2, msg).toBeGreaterThanOrEqual(r.z0 - 1e-9);
+      expect(b.z + b.d / 2, msg).toBeLessThanOrEqual(r.z1 + 1e-9);
+    }
+  });
+
+  it('generates every hand-placed lot exactly, with no random building overlapping one', () => {
+    const all: BuildingSpec[] = [];
+    for (const r of chunksInRadius(-200, 1200, 1200)) all.push(...generateChunk(TORONTO, 1337, r.cx, r.cz).buildings);
+    const isSpecial = (b: BuildingSpec) => TORONTO.specialLots.some((s) => s.x === b.x && s.z === b.z && s.h === b.h);
+    expect(all.filter(isSpecial)).toHaveLength(TORONTO.specialLots.length);
+    const overlaps = (a: BuildingSpec, b: BuildingSpec) => Math.abs(a.x - b.x) * 2 < a.w + b.w && Math.abs(a.z - b.z) * 2 < a.d + b.d;
+    for (const s of all.filter(isSpecial)) for (const b of all.filter((b) => !isSpecial(b))) expect(overlaps(s, b)).toBe(false);
+  });
+
+  it('puts video screens only on the Yonge-Dundas lots', () => {
+    for (const r of chunksInRadius(0, 1500, 3000)) {
+      for (const b of generateChunk(TORONTO, 1337, r.cx, r.cz).buildings) {
+        if (b.signs.some((s) => s.kind === 'screen')) expect(YONGE_DUNDAS_LOTS.some((y) => y.x === b.x && y.z === b.z)).toBe(true);
+      }
+    }
+  });
+});
+
+describe('Nathan Phillips Square', () => {
+  const ov = NATHAN_PHILLIPS;
+  const worldX = (px: number) => ov.x - ov.size / 2 + (px * ov.size) / SQUARE_PX;
+  const worldZ = (py: number) => ov.z - ov.size / 2 + (py * ov.size) / SQUARE_PX;
+  const hall = TORONTO.landmarks.find((l) => l.id === 'city-hall')!;
+
+  it("is City Hall's block's ground decal, inside the block's interior, off every road", () => {
+    expect(TORONTO.overlays).toEqual([NATHAN_PHILLIPS]);
+    expect(ov).toEqual({ id: 'nathan-phillips', x: -500, z: 1106, size: 140 });
+    const r = blockInterior(Math.floor(hall.x / 200), Math.floor(hall.z / 200));
+    expect(ov.x - ov.size / 2).toBeGreaterThanOrEqual(r.x0);
+    expect(ov.x + ov.size / 2).toBeLessThanOrEqual(r.x1);
+    expect(ov.z - ov.size / 2).toBeGreaterThanOrEqual(r.z0);
+    expect(ov.z + ov.size / 2).toBeLessThanOrEqual(r.z1);
+  });
+
+  it('paves the whole decal and sets the rimmed pool and the TORONTO strip on the plaza in front of City Hall (camera side)', () => {
+    const rects = squareRects();
+    expect(rects[0]).toMatchObject({ x: 0, y: 0, w: SQUARE_PX, h: SQUARE_PX });
+    for (const r of rects) {
+      expect(r.x).toBeGreaterThanOrEqual(0);
+      expect(r.y).toBeGreaterThanOrEqual(0);
+      expect(r.x + r.w).toBeLessThanOrEqual(SQUARE_PX);
+      expect(r.y + r.h).toBeLessThanOrEqual(SQUARE_PX);
+    }
+    const { pool, rim, strip } = SQUARE_LAYOUT;
+    const front = hall.z - CITY_HALL.d / 2;
+    for (const r of [{ x: pool.x - rim, y: pool.y - rim, w: pool.w + 2 * rim, h: pool.h + 2 * rim }, strip]) {
+      expect(worldZ(r.y)).toBeGreaterThanOrEqual(blockInterior(-3, 5).z0);
+      expect(worldZ(r.y + r.h)).toBeLessThanOrEqual(front);
+      expect(worldX(r.x)).toBeGreaterThan(hall.x - CITY_HALL.w / 2);
+      expect(worldX(r.x + r.w)).toBeLessThan(hall.x + CITY_HALL.w / 2);
+    }
+  });
+
+  it('spells TORONTO on the strip, readable from the start camera: letters run toward −x, glyph tops toward +z', () => {
+    const ink = letterRects();
+    const word = 'TORONTO';
+    const { strip } = SQUARE_LAYOUT;
+    for (let k = 0; k < word.length; k++) {
+      const mine = ink.filter((r) => r.letter === k);
+      const want = LATIN_FONT[word[k]!]!.join('').split('').filter((c) => c === '1').length;
+      expect(mine, word[k]).toHaveLength(want);
+      for (const r of mine) {
+        expect(r.x).toBeGreaterThanOrEqual(strip.x);
+        expect(r.x + r.w).toBeLessThanOrEqual(strip.x + strip.w);
+        expect(r.y).toBeGreaterThanOrEqual(strip.y);
+        expect(r.y + r.h).toBeLessThanOrEqual(strip.y + strip.h);
+      }
+    }
+    const xs = (k: number) => ink.filter((r) => r.letter === k).map((r) => r.x);
+    expect(Math.min(...xs(0))).toBeGreaterThan(Math.max(...xs(6)));
+    // The T's crossbar (its top row) is the farthest (+z) row of ink.
+    const t = ink.filter((r) => r.letter === 0);
+    const top = Math.max(...ink.map((r) => r.y));
+    expect(t.filter((r) => r.y === top)).toHaveLength(5);
+    expect(squareRects()).toEqual(expect.arrayContaining(ink.map(({ letter: _l, ...r }) => r)));
+  });
+
+  it('has its own texture painter', () => {
+    expect(() => overlayPainter('nathan-phillips')).not.toThrow();
   });
 });

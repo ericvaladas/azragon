@@ -4,6 +4,9 @@ import { CITY_HALL_SITE, CN_TOWER_SITE, DON, ROGERS_CENTRE_SITE, TORONTO_ISLANDS
 import { CN_TOWER, cnTowerGeometry } from './cnTower';
 import { ROGERS_CENTRE, rogersCentreGeometry } from './rogersCentre';
 import { CITY_HALL, cityHallGeometry } from './cityHall';
+import { FINANCIAL_LOTS } from './financial';
+import { YONGE_DUNDAS_LOTS } from './yongeDundas';
+import { NATHAN_PHILLIPS } from './square';
 
 export const TORONTO: CityStyle = {
   id: 'toronto',
@@ -30,8 +33,8 @@ export const TORONTO: CityStyle = {
     { id: 'rogers-centre', x: ROGERS_CENTRE_SITE.x, z: ROGERS_CENTRE_SITE.z, w: ROGERS_CENTRE.w, d: ROGERS_CENTRE.d, h: ROGERS_CENTRE.h, build: rogersCentreGeometry },
     { id: 'city-hall', x: CITY_HALL_SITE.x, z: CITY_HALL_SITE.z, w: CITY_HALL.w, d: CITY_HALL.d, h: CITY_HALL.h, build: cityHallGeometry },
   ],
-  specialLots: [],
-  overlays: [],
+  specialLots: [...YONGE_DUNDAS_LOTS, ...FINANCIAL_LOTS],
+  overlays: [NATHAN_PHILLIPS],
   river: DON,
   bay: TORONTO_LAKE,
   island: TORONTO_ISLANDS,

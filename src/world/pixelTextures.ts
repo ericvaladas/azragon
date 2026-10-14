@@ -5,6 +5,7 @@ import type { CityStyle, GlyphSet, GroundOverlay } from '../cities/types';
 import { lineWidth, PITCH } from './roads';
 import { SIGN_WORDS, latinBoardRects } from './latinFont';
 import { FACADE_COUNT } from '../cities/types';
+import { SQUARE_PX, squareRects, type PaintRect } from '../cities/toronto/square';
 
 function hex(c: number): string {
   return `#${c.toString(16).padStart(6, '0')}`;
@@ -284,9 +285,28 @@ export function screenTexture(): THREE.CanvasTexture {
   return finish(c);
 }
 
+/** An n × n decal of solid rectangles (canvas row 0 at the decal's −z edge), transparent elsewhere (use with alphaTest). */
+function paintRects(n: number, rects: readonly PaintRect[]): THREE.CanvasTexture {
+  const c = document.createElement('canvas');
+  c.width = n;
+  c.height = n;
+  const g = c.getContext('2d')!;
+  for (const r of rects) {
+    g.fillStyle = hex(r.color);
+    g.fillRect(r.x, r.y, r.w, r.h);
+  }
+  return finish(c);
+}
+
+/** Nathan Phillips Square: paving, the reflecting pool and the TORONTO strip. */
+export function squareTexture(): THREE.CanvasTexture {
+  return paintRects(SQUARE_PX, squareRects());
+}
+
 /** The texture painter of each ground decal id. */
 const OVERLAY_PAINTERS: Readonly<Record<string, (ov: GroundOverlay) => THREE.CanvasTexture>> = {
   scramble: scrambleTexture,
+  'nathan-phillips': squareTexture,
 };
 
 /** The painter for overlay `id`; an id with no painter is a programming error. */
