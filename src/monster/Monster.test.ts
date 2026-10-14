@@ -114,6 +114,10 @@ describe('Monster frame flags', () => {
     expect(body.last!.dashing).toBe(false);
     m.startLeap({ x: 0, z: 500 });
     m.animate(0.016, 0);
+    // Still crouched on the ground until the crouch is over, then off it.
+    expect(body.last!.airborne).toBe(false);
+    m.tick(CONFIG.abilities.leap.duration * ((m.kind.leapCrouch ?? 0) + 0.05));
+    m.animate(0.016, 0);
     expect(body.last!.airborne).toBe(true);
     m.reset();
     m.startDash({ x: 0, z: 500 });

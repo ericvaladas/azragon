@@ -44,5 +44,6 @@ export const INSECT: MonsterKind = {
   abilityText: {},
   upgradeText: {},
   fx: { spike: P.stinger, glob: P.acid, pool: P.acid, nova: P.acid, particle: 'acid', intercept: 'spark' },
+  leapCrouch: 0.2,
   createBody: () => new InsectBody(),
 };

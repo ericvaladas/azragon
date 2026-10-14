@@ -5,10 +5,16 @@ import { didLand, footState } from '../../monster/gait';
 import { placeSegment, solveTwoBone } from '../../monster/ik';
 import { strikeFootPose } from '../../monster/strike';
 import type { BodyFrame, MonsterBody } from '../types';
+import { kaijuLeap, type KaijuLeapPose } from '../kaiju/leapPose';
 
 const FEMUR = 300;
 const TIBIA = 400;
 const LIFT = 110;
+/** Leap: how far (model units) the body sinks in its crouch, and how high and far in the feet tuck in the air. */
+const LEAP_SINK = 120;
+const LEAP_TUCK = 180;
+const LEAP_GATHER = 0.35;
+const STANDING: KaijuLeapPose = { sink: 0, pitch: 0, tuck: 0, arms: 0, tail: 0 };
 const _hip = new THREE.Vector3();
 const _foot = new THREE.Vector3();
 const _knee = new THREE.Vector3();
@@ -38,11 +44,14 @@ export class InsectBody implements MonsterBody {
   animate(f: BodyFrame, onFootLand: (p: THREE.Vector3) => void): void {
     const root = this.model.root;
     const body = this.model.body;
-    const bob = Math.sin(f.cycle * Math.PI * 4) * 10 * f.motion;
+    // Mid-leap the feet stop stepping: planted through the crouch, gathered up under the body in the air.
+    const m = f.leap ? 0 : f.motion;
+    const lp = f.leap ? kaijuLeap(f.leap.t, f.leap.duration, f.leap.crouch) : STANDING;
+    const bob = Math.sin(f.cycle * Math.PI * 4) * 10 * m;
     const breathe = Math.sin(f.time * 1.6) * 5;
-    body.position.y = bob + breathe - f.pose.dip - f.pose.collapse * 230;
-    body.rotation.x = f.pose.pitch;
-    body.rotation.z = Math.sin(f.cycle * Math.PI * 2) * 0.03 * f.motion;
+    body.position.y = bob + breathe - f.pose.dip - f.pose.collapse * 230 - lp.sink * LEAP_SINK;
+    body.rotation.x = f.pose.pitch + lp.pitch * 0.6;
+    body.rotation.z = Math.sin(f.cycle * Math.PI * 2) * 0.03 * m;
     root.updateMatrixWorld(true);
 
     const strikeLeg = f.melee ? f.melee.side : -1;
@@ -50,8 +59,8 @@ export class InsectBody implements MonsterBody {
       const leg = this.model.legs[i]!;
       const fs = footState(f.cycle, i);
       _hip.copy(leg.hipLocal).applyMatrix4(body.matrix);
-      const splay = 1 + f.pose.collapse * 0.35;
-      _foot.set(leg.restFoot.x * splay, fs.lift * LIFT * f.motion, leg.restFoot.z + fs.stride * (CONFIG.monster.strideLength / 2) * f.motion);
+      const splay = (1 + f.pose.collapse * 0.35) * (1 - LEAP_GATHER * lp.tuck);
+      _foot.set(leg.restFoot.x * splay, fs.lift * LIFT * m + lp.tuck * LEAP_TUCK, (leg.restFoot.z + fs.stride * (CONFIG.monster.strideLength / 2) * m) * (1 - LEAP_GATHER * lp.tuck));
       if (i === strikeLeg && f.melee) {
         _target.copy(f.melee.target);
         root.worldToLocal(_target);
@@ -64,7 +73,7 @@ export class InsectBody implements MonsterBody {
       placeSegment(leg.femur, _hip, _knee);
       placeSegment(leg.tibia, _knee, _foot);
       leg.knee.position.copy(_knee);
-      if (f.motion > 0.3 && i !== strikeLeg && didLand(f.prevCycle, f.cycle, i)) {
+      if (m > 0.3 && i !== strikeLeg && didLand(f.prevCycle, f.cycle, i)) {
         onFootLand(_world.copy(_foot).applyMatrix4(root.matrixWorld));
       }
     }
