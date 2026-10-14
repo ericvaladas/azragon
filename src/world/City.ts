@@ -158,9 +158,13 @@ function upload(attr: THREE.BufferAttribute | null | undefined, count: number): 
   attr.needsUpdate = true;
 }
 
+/**
+ * The slope term is kept small: at the camera's grazing angle a full factor pulls a layer metres toward the
+ * camera, so the crater decal would swallow the feet standing on it.
+ */
 function layered(mat: THREE.Material, offset: number): THREE.Material {
   mat.polygonOffset = true;
-  mat.polygonOffsetFactor = -offset;
+  mat.polygonOffsetFactor = -offset * 0.25;
   mat.polygonOffsetUnits = -offset;
   return mat;
 }
