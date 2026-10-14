@@ -72,6 +72,7 @@ export const TORONTO: CityStyle = {
     windowGlow: { color: 0xffc46b, strength: 0.45 },
   },
   glyphs: 'latin',
+  globe: { lat: 43.7, lon: -79.4 },
   cranes: false,
   // 80 buildings per chunk, so the Yonge corridor's offices and towers beside dense midtown are thinned less.
   buildingCapScale: 1.25,

@@ -32,3 +32,10 @@ describe('forcedCity (dev ?city= override)', () => {
     for (const s of ['', '?', '?debug', '?city=', '?city=,', '?city=paris', '?city=paris,rome']) expect(forcedCity(s, 0), s).toBeNull();
   });
 });
+
+describe('globe position', () => {
+  it('places each city on the intro globe at its real latitude and longitude', () => {
+    expect(TOKYO.globe).toEqual({ lat: 35.7, lon: 139.7 });
+    expect(TORONTO.globe).toEqual({ lat: 43.7, lon: -79.4 });
+  });
+});

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import { CONFIG } from '../config';
 import { CUT_TIME } from './timeline';
-import { ENTRY_TIME, earthCenter, heatAt, heatColor, podAltitude, spaceCamera, starDirections } from './spaceMath';
+import { ENTRY_TIME, earthCenter, globeDir, globeQuaternion, heatAt, heatColor, podAltitude, spaceCamera, starDirections } from './spaceMath';
 import { mulberry32 } from '../util/rng';
 
 const SP = CONFIG.intro.space;
@@ -90,4 +90,63 @@ describe('starDirections', () => {
     for (const v of a) expect(v.length()).toBeCloseTo(1);
     expect(starDirections(50, mulberry32(1))).toEqual(a);
   });
+});
+
+describe('globe orientation', () => {
+  const deg = (r: number) => (r * 180) / Math.PI;
+  it('globeDir matches the texel SphereGeometry samples there (u = (lon + 180) / 360, v = (lat + 90) / 180)', () => {
+    const geo = new THREE.SphereGeometry(1, 40, 24);
+    const pos = geo.getAttribute('position');
+    const uv = geo.getAttribute('uv');
+    const p = new THREE.Vector3();
+    const d = new THREE.Vector3();
+    let checked = 0;
+    for (let i = 0; i < pos.count; i++) {
+      const v = uv.getY(i);
+      if (v <= 0.01 || v >= 0.99) continue; // the poles: every longitude meets there
+      p.fromBufferAttribute(pos, i).normalize();
+      globeDir(v * 180 - 90, uv.getX(i) * 360 - 180, d);
+      expect(deg(d.angleTo(p))).toBeLessThan(0.01);
+      checked++;
+    }
+    expect(checked).toBeGreaterThan(500);
+  });
+  it('puts lon 0 on +X, lon -90 on +Z and the north pole on +Y', () => {
+    const d = new THREE.Vector3();
+    expect(globeDir(0, 0, d).distanceTo(new THREE.Vector3(1, 0, 0))).toBeLessThan(1e-9);
+    expect(globeDir(0, -90, d).distanceTo(new THREE.Vector3(0, 0, 1))).toBeLessThan(1e-9);
+    expect(globeDir(90, 37, d).distanceTo(new THREE.Vector3(0, 1, 0))).toBeLessThan(1e-9);
+  });
+  for (const [name, globe] of [['Tokyo', { lat: 35.7, lon: 139.7 }], ['Toronto', { lat: 43.7, lon: -79.4 }]] as const) {
+    it(`turns ${name} to sit under the pod at the cut`, () => {
+      const target = earthCenter(CUT_TIME, new THREE.Vector3()).negate().normalize();
+      const q = globeQuaternion(globe, CUT_TIME, new THREE.Quaternion());
+      const city = globeDir(globe.lat, globe.lon, new THREE.Vector3()).applyQuaternion(q);
+      expect(deg(city.angleTo(target))).toBeLessThan(5);
+    });
+    it(`keeps ${name}'s north pointing ahead (up the screen) at the cut`, () => {
+      const q = globeQuaternion(globe, CUT_TIME, new THREE.Quaternion());
+      const target = earthCenter(CUT_TIME, new THREE.Vector3()).negate().normalize();
+      const north = new THREE.Vector3(0, 1, 0).applyQuaternion(q);
+      const tangentNorth = north.sub(target.clone().multiplyScalar(north.dot(target))).normalize();
+      const ahead = new THREE.Vector3(0, 0, 1);
+      const tangentAhead = ahead.sub(target.clone().multiplyScalar(ahead.dot(target))).normalize();
+      expect(deg(tangentNorth.angleTo(tangentAhead))).toBeLessThan(5);
+    });
+    it(`spins ${name}'s Earth slowly eastward about its own axis through space`, () => {
+      const q0 = globeQuaternion(globe, 0, new THREE.Quaternion());
+      const q1 = globeQuaternion(globe, CUT_TIME, new THREE.Quaternion());
+      const axis0 = new THREE.Vector3(0, 1, 0).applyQuaternion(q0);
+      const axis1 = new THREE.Vector3(0, 1, 0).applyQuaternion(q1);
+      expect(deg(axis0.angleTo(axis1))).toBeLessThan(1e-6);
+      expect(deg(q0.angleTo(q1))).toBeCloseTo(deg(CUT_TIME * 0.04), 3);
+      // Eastward: a point on the equator at the cut was further west (smaller longitude) earlier.
+      const city = globeDir(globe.lat, globe.lon, new THREE.Vector3());
+      const east = globeDir(globe.lat, globe.lon + 1, new THREE.Vector3());
+      const cityAtCut = city.clone().applyQuaternion(q1);
+      const eastAtStart = east.applyQuaternion(q0);
+      const cityAtStart = city.applyQuaternion(q0);
+      expect(eastAtStart.angleTo(cityAtCut)).toBeLessThan(cityAtStart.angleTo(cityAtCut));
+    });
+  }
 });

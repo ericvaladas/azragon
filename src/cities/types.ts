@@ -173,6 +173,8 @@ export type CityStyle = {
   atmosphere: Atmosphere;
   /** The sign atlas's lettering. */
   glyphs: GlyphSet;
+  /** Where the city is on the intro's globe (degrees; north and east positive): the point the pod dives into. */
+  globe: { lat: number; lon: number };
   /** Facade tints for the random buildings of the block at (x, z), replacing its district's; unset or undefined keeps the district's. */
   blockColors?(x: number, z: number): readonly number[] | undefined;
   /** Rules for the random buildings of the block at (x, z), replacing its district's; unset or undefined keeps the district's. */
