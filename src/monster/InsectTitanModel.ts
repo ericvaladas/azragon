@@ -35,12 +35,12 @@ const HEAD_POINTS: readonly P3[] = [
 ];
 
 /**
- * The pronotum: a rounded dome over the thorax, rising to the same height as before and overhanging the thorax's
+ * The pronotum: a low rounded dome over the thorax, overhanging the thorax's
  * edges a little. Points on the upper half of an ellipsoid (body space), so the hull comes out smoothly faceted.
  */
 function pronotumPoints(): THREE.Vector3[] {
   const c = new THREE.Vector3(0, 340, 0);
-  const r = new THREE.Vector3(86, 126, 116);
+  const r = new THREE.Vector3(86, 70, 116);
   const pts: THREE.Vector3[] = [];
   for (let i = 0; i <= 5; i++) {
     const th = (i / 5) * (Math.PI / 2);
