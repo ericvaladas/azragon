@@ -220,21 +220,24 @@ export class Music {
     }
   }
 
-  /** The Main 2 element: primed with a silent clip inside the first gesture, then given the song once it has loaded. */
+  /**
+   * The Main 2 element: play() on a silent clip inside the first gesture lets it play later without one (iOS).
+   * The song replaces the clip as soon as it has downloaded, whether or not that play() has settled.
+   */
   private setUpMain2(ctx: AudioContext, master: GainNode): void {
     const el = new Audio();
-    el.loop = true;
     el.preload = 'auto';
     el.src = SILENT_WAV;
     const gain = ctx.createGain();
     ctx.createMediaElementSource(el).connect(gain).connect(master);
     const main2 = { el, gain, ready: false };
     this.main2 = main2;
-    const primed = el.play().then(() => el.pause()).catch(() => {});
-    Promise.all([primed, this.main2Blob])
-      .then(([, blob]) => {
+    el.play().catch(() => {});
+    this.main2Blob
+      .then((blob) => {
         if (this.disposed) return;
         this.main2Url = URL.createObjectURL(blob);
+        el.loop = true;
         el.src = this.main2Url;
         main2.ready = true;
         if (this.playing === 'main2') this.playMain2();
