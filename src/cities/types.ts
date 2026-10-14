@@ -175,6 +175,8 @@ export type CityStyle = {
   glyphs: GlyphSet;
   /** Facade tints for the random buildings of the block at (x, z), replacing its district's; unset or undefined keeps the district's. */
   blockColors?(x: number, z: number): readonly number[] | undefined;
+  /** Rules for the random buildings of the block at (x, z), replacing its district's; unset or undefined keeps the district's. */
+  blockRules?(x: number, z: number): DistrictRules | undefined;
   /** Multiplier on CONFIG.world.buildingsPerChunk for this city's per-chunk building cap; unset is 1. */
   buildingCapScale?: number;
   /** Port cranes: their paint, or false for none; unset is today's red and white. */

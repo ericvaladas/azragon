@@ -1,6 +1,6 @@
 import type { CityStyle } from '../types';
-import { TORONTO_DISTRICTS } from './districts';
-import { CASA_LOMA_SITE, CITY_HALL_SITE, CN_TOWER_SITE, QUEENS_PARK_SITE, SCOTIABANK_ARENA_SITE, DON, ROGERS_CENTRE_SITE, TORONTO_ISLANDS, TORONTO_LAKE, blockColors, districtAt } from './layout';
+import { POCKET_RULES, TORONTO_DISTRICTS } from './districts';
+import { CASA_LOMA_SITE, CITY_HALL_SITE, CN_TOWER_SITE, QUEENS_PARK_SITE, SCOTIABANK_ARENA_SITE, DON, ROGERS_CENTRE_SITE, TORONTO_ISLANDS, TORONTO_LAKE, blockColors, districtAt, pocketAt } from './layout';
 import { CN_TOWER, cnTowerGeometry } from './cnTower';
 import { ROGERS_CENTRE, rogersCentreGeometry } from './rogersCentre';
 import { CITY_HALL, cityHallGeometry } from './cityHall';
@@ -34,6 +34,8 @@ export const TORONTO: CityStyle = {
   signColors: [0xfff4d6, 0xffc23a, 0x35e8ff, 0xff3fb4, 0x5cf2a0],
   districtAt,
   blockColors,
+  // The tower pockets build condo towers by their own rules.
+  blockRules: (x, z) => (pocketAt(x, z) ? POCKET_RULES : undefined),
   districts: TORONTO_DISTRICTS,
   parkTrees: [20, 28],
   landmarks: [

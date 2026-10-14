@@ -2,7 +2,7 @@ import { CONFIG } from '../../config';
 import { hash2, valueNoise } from '../noise';
 import { coastDistance } from '../coast';
 import type { BaySpec, DistrictId, IslandSpec, RiverSpec } from '../types';
-import { AVENUE_WIDTH, PITCH, isIsland, lineWidth } from '../../world/roads';
+import { AVENUE_WIDTH, PITCH, isIsland, isRiverBank, isWater, lineWidth } from '../../world/roads';
 import { AVENUE_PAVEMENT } from '../../world/chunks';
 
 /**
@@ -144,13 +144,13 @@ function midtown(x: number, z: number): DistrictId {
 }
 
 /**
- * Toronto's district at world point (x, z). The islands are park, then the named AREAS hold their blocks. The lakeshore band (PORT_DEPTH of the coast, off
+ * Toronto's district at world point (x, z), before the tower pockets. The islands are park, then the named AREAS hold their blocks. The lakeshore band (PORT_DEPTH of the coast, off
  * the crash site) is port: in the core only on the waterfront, beyond it all along. Then Yonge-Dundas and the Financial
  * District, the Yonge corridor (inside and beyond the core), the rest of the hand-laid core, midtown where unmatched,
  * and seeded noise beyond. Midtown residential blocks, in the core and beyond, are parkettes on a seeded hash. The
  * Don's bank parks are applied on top by blockDistrict.
  */
-export function districtAt(x: number, z: number): DistrictId {
+function baseDistrictAt(x: number, z: number): DistrictId {
   const cell = CONFIG.world.blockSize;
   if (isIsland({ bay: TORONTO_LAKE, island: TORONTO_ISLANDS }, Math.floor(x / cell), Math.floor(z / cell))) return 'park';
   const area = areaAt(x, z);
@@ -169,6 +169,85 @@ export function districtAt(x: number, z: number): DistrictId {
   if (valueNoise(x, z, 2600, SEED + 3) > 0.8) return 'highrise';
   if (valueNoise(x, z, 900, SEED + 4) > 0.8) return 'park';
   return valueNoise(x, z, 1400, SEED + 5) < 0.62 ? midtown(x, z) : 'office';
+}
+
+/** Tower pockets: at most one per POCKET_GRID × POCKET_GRID blocks (1.2 km square, about 1.44 km²). */
+export const POCKET_GRID = 6;
+/** A pocket's blocks as offsets from its anchor: one block, two side by side, or three in an L, all within 2 × 2. */
+const POCKET_SHAPES: readonly (readonly (readonly [number, number])[])[] = [
+  [[0, 0]],
+  [[0, 0], [1, 0]],
+  [[0, 0], [0, 1]],
+  [[0, 0], [1, 0], [0, 1]],
+  [[0, 0], [1, 0], [1, 1]],
+  [[0, 0], [0, 1], [1, 1]],
+];
+/** Anchors tried per grid cell before it is left without a pocket. */
+const POCKET_TRIES = 3;
+/** The water and islands, for the Don bank test. */
+const WATERS = { river: DON, bay: TORONTO_LAKE, island: TORONTO_ISLANDS } as const;
+/** The blocks the landmarks stand on. */
+const LANDMARK_BLOCKS = [CN_TOWER_SITE, ROGERS_CENTRE_SITE, CITY_HALL_SITE, QUEENS_PARK_SITE, CASA_LOMA_SITE, SCOTIABANK_ARENA_SITE].map((s) => ({
+  ci: Math.floor(s.x / CONFIG.world.blockSize),
+  cj: Math.floor(s.z / CONFIG.world.blockSize),
+}));
+
+/**
+ * True when block (ci, cj) may hold a pocket: midtown houses (not a parkette or water), a block clear of every named
+ * area and landmark block, no part of it within clearRadius + half a block of the crash, and off the Don's bank parks.
+ */
+function pocketEligible(ci: number, cj: number): boolean {
+  const cell = CONFIG.world.blockSize;
+  const x = (ci + 0.5) * cell, z = (cj + 0.5) * cell;
+  const nx = Math.max(Math.abs(x) - cell / 2, 0), nz = Math.max(Math.abs(z) - cell / 2, 0);
+  if (Math.hypot(nx, nz) < CONFIG.world.clearRadius + cell / 2) return false;
+  if (isWater(WATERS, ci, cj) || isRiverBank(WATERS, ci, cj)) return false;
+  // A block's gap to every named area and landmark block, so the campus, the market and the castle keep their setting.
+  if (LANDMARK_BLOCKS.some((b) => Math.abs(b.ci - ci) <= 1 && Math.abs(b.cj - cj) <= 1)) return false;
+  for (let di = -1; di <= 1; di++) for (let dj = -1; dj <= 1; dj++) if (areaAt(x + di * cell, z + dj * cell)) return false;
+  return baseDistrictAt(x, z) === 'residential';
+}
+
+/** The pocket hash's seed. */
+const POCKET_SEED = SEED + 41;
+
+const pocketCache = new Map<string, readonly (readonly [number, number])[]>();
+/**
+ * The pocket blocks of grid cell (gi, gj). A seeded hash picks an anchor block 1..POCKET_GRID − 2 blocks into the
+ * cell and a shape; the shape's eligible blocks are the pocket. When none is eligible another anchor is tried, up to
+ * POCKET_TRIES. Anchors keep a block's margin to the cell's edge, so pockets in neighbouring cells never touch.
+ */
+function pocketBlocks(gi: number, gj: number): readonly (readonly [number, number])[] {
+  const key = `${gi},${gj}`;
+  const hit = pocketCache.get(key);
+  if (hit) return hit;
+  let blocks: (readonly [number, number])[] = [];
+  for (let t = 0; t < POCKET_TRIES && blocks.length === 0; t++) {
+    const ai = gi * POCKET_GRID + 1 + Math.floor(hash2(gi, gj, POCKET_SEED + 3 * t) * (POCKET_GRID - 2));
+    const aj = gj * POCKET_GRID + 1 + Math.floor(hash2(gi, gj, POCKET_SEED + 1 + 3 * t) * (POCKET_GRID - 2));
+    const shape = POCKET_SHAPES[Math.floor(hash2(gi, gj, POCKET_SEED + 2 + 3 * t) * POCKET_SHAPES.length)]!;
+    blocks = shape.map(([di, dj]) => [ai + di, aj + dj] as const).filter(([i, j]) => pocketEligible(i, j));
+  }
+  if (pocketCache.size > 4096) pocketCache.clear();
+  pocketCache.set(key, blocks);
+  return blocks;
+}
+
+/** True when the block holding (x, z) is in a tower pocket: a cluster of 1–3 blocks of condo towers among the houses. */
+export function pocketAt(x: number, z: number): boolean {
+  const cell = CONFIG.world.blockSize;
+  const ci = Math.floor(x / cell), cj = Math.floor(z / cell);
+  return pocketBlocks(Math.floor(ci / POCKET_GRID), Math.floor(cj / POCKET_GRID)).some(([i, j]) => i === ci && j === cj);
+}
+
+/**
+ * Toronto's district at world point (x, z): the hand-laid and seeded districts, with the tower pockets raised as
+ * high-rise among midtown's houses, inside and beyond the core. The Don's bank parks are applied on top by
+ * blockDistrict (pockets avoid them).
+ */
+export function districtAt(x: number, z: number): DistrictId {
+  const base = baseDistrictAt(x, z);
+  return base === 'residential' && pocketAt(x, z) ? 'highrise' : base;
 }
 
 /** The buildable interior of block (ci, cj), as generateChunk lays lots: inset by half of each bordering line, plus pavement beside an avenue. */

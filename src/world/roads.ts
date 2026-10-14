@@ -1,7 +1,10 @@
 import { CONFIG } from '../config';
 import { hash2 } from '../cities/noise';
-import type { CityStyle, DistrictId, Shoreline } from '../cities/types';
+import type { CityStyle, DistrictId, RiverSpec, Shoreline } from '../cities/types';
 import type { Vec2 } from '../util/math';
+
+/** The water a city lays: its river, bay and island. */
+export type Waters = Shoreline & { river?: RiverSpec };
 
 export const PITCH = CONFIG.world.blockSize;
 export const AVENUE_EVERY = 5;
@@ -23,7 +26,7 @@ const cellCentre = (ci: number, cj: number): Vec2 => ({ x: PITCH * ci + PITCH / 
 const ISLAND_CORNER = 150;
 
 /** True when the centre of cell (ci, cj) lies within the river's half width of its centreline (measured across its axis). */
-export function isRiver(style: CityStyle, ci: number, cj: number): boolean {
+export function isRiver(style: Waters, ci: number, cj: number): boolean {
   const r = style.river;
   if (!r) return false;
   const { x, z } = cellCentre(ci, cj);
@@ -61,15 +64,15 @@ export function isBay(style: Shoreline, ci: number, cj: number): boolean {
 }
 
 /** River water outside the bay: only these cells carry bridges. */
-const isRiverOnly = (style: CityStyle, ci: number, cj: number): boolean => isRiver(style, ci, cj) && !isBay(style, ci, cj);
+const isRiverOnly = (style: Waters, ci: number, cj: number): boolean => isRiver(style, ci, cj) && !isBay(style, ci, cj);
 
 /** True for any water cell: river or bay. */
-export function isWater(style: CityStyle, ci: number, cj: number): boolean {
+export function isWater(style: Waters, ci: number, cj: number): boolean {
   return isRiver(style, ci, cj) || isBay(style, ci, cj);
 }
 
 /** True for a land cell within the river's bankPark blocks (Chebyshev) of river water outside the bay. */
-export function isRiverBank(style: CityStyle, ci: number, cj: number): boolean {
+export function isRiverBank(style: Waters, ci: number, cj: number): boolean {
   const n = style.river?.bankPark ?? 0;
   if (n <= 0 || isWater(style, ci, cj)) return false;
   for (let di = -n; di <= n; di++) for (let dj = -n; dj <= n; dj++) if (isRiverOnly(style, ci + di, cj + dj)) return true;

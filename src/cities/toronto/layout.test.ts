@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { CONFIG } from '../../config';
 import { DISTRICTS, type DistrictId } from '../types';
 import { coastDistance } from '../coast';
-import { AREAS, CORE_RADIUS, DON, FINANCIAL, PORT_DEPTH, TORONTO_ISLANDS, TORONTO_LAKE, WATERFRONT, YONGE_CORRIDOR, YONGE_DUNDAS, YONGE_NODES, blockInterior, districtAt, lotCentre } from './layout';
+import { AREAS, CORE_RADIUS, DON, FINANCIAL, PORT_DEPTH, TORONTO_ISLANDS, TORONTO_LAKE, WATERFRONT, YONGE_CORRIDOR, YONGE_DUNDAS, YONGE_NODES, blockInterior, districtAt, lotCentre, pocketAt } from './layout';
 import { TORONTO } from './index';
 import { AVENUE_WIDTH, PITCH, blockDistrict, isBay, isIsland, isRiver, isRiverBank, isWater, lineWidth, segmentAt } from '../../world/roads';
 import { inBay } from '../../world/shore';
@@ -115,8 +115,9 @@ describe('Toronto layout', () => {
   });
 
   it('fills behind and beside the crash with residential midtown, and never builds the crash site as park', () => {
-    // Off the Yonge corridor (and in the crater, which the corridor skips) midtown is houses, some blocks parkettes.
-    for (const [x, z] of [[-700, -1000], [-1500, 0], [900, -500], [-2000, -2000], [100, 100]] as const) expect(['residential', 'park'], `${x},${z}`).toContain(districtAt(x, z));
+    // Off the Yonge corridor (and in the crater, which the corridor skips) midtown is houses, some blocks parkettes,
+    // a few tower pockets (high-rise).
+    for (const [x, z] of [[-700, -1000], [-1500, 0], [900, -500], [-2000, -2000], [100, 100]] as const) expect(pocketAt(x, z) ? ['highrise'] : ['residential', 'park'], `${x},${z}`).toContain(districtAt(x, z));
     expect(districtAt(100, 100)).toBe('residential');
     const W = CONFIG.world;
     for (let x = -1000; x <= 1000; x += 100) for (let z = -1000; z <= 1000; z += 100) {

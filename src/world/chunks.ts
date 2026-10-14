@@ -353,7 +353,7 @@ export function generateChunk(style: CityStyle, seed: number, cx: number, cz: nu
       let district = blockDistrict(style, bx, bz);
       if (craterSite && district === 'park') district = 'office';
       const island = isIsland(style, bi, bj);
-      const rules = island && district !== 'park' && style.islandRules ? style.islandRules : style.districts[district];
+      const rules = island && district !== 'park' && style.islandRules ? style.islandRules : (style.blockRules?.(bx, bz) ?? style.districts[district]);
       const palette = style.blockColors?.(bx, bz) ?? rules.colors;
       const crane = district === 'port' ? craneAt(style, seed, bi, bj) : null;
       if (district === 'port') quays.push({ x: bx, z: bz });

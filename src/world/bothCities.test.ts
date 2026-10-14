@@ -47,7 +47,9 @@ const across = (s: CityStyle): [{ x: number; z: number }, { x: number; z: number
 const LOAD_POINTS: Record<string, readonly (readonly [number, number])[]> = {
   tokyo: [[0, 0], [0, 1300], [-1100, -900], [-2000, 400]],
   toronto: [[0, 0], [1500, 0], [0, 2100], [-300, 2100], [1500, 2100], [-3000, 2100], [6000, 2100], [0, -4200], [-3000, -3000],
-    [-1800, 700], [-1000, -100], [-2400, 1500], [-5000, 1000], [-1700, -2300], [1100, 1700]],
+    [-1800, 700], [-1000, -100], [-2400, 1500], [-5000, 1000], [-1700, -2300], [1100, 1700],
+    // The tower-pocket boxes A–D.
+    [3000, 1700], [2900, -1700], [-3700, 900], [-3300, -1900]],
 };
 // Chunks around the crash, the river and the coast, in every city.
 const SAMPLE: [number, number][] = [];
