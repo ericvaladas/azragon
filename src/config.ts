@@ -95,7 +95,10 @@ export const CONFIG = {
     loadRadius: 4800,
     unloadRadius: 5600,
     chunksPerFrame: 3,
-    maxBuildings: 12000,
+    /** Random buildings per chunk (Tokyo's cap); a city's buildingCapScale multiplies it. */
+    buildingsPerChunk: 64,
+    /** Building pool: the largest city cap (Toronto's 80) × maxLoadedChunks (185) = 14800, rounded up. */
+    maxBuildings: 15000,
     /** Tree cones; a per-chunk cap (maxTrees / maxLoadedChunks) keeps a full load inside the pool. */
     maxTrees: 37000,
     /** Pool size for neon sign boxes across all loaded chunks. */

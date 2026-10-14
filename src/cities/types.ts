@@ -173,6 +173,8 @@ export type CityStyle = {
   atmosphere: Atmosphere;
   /** The sign atlas's lettering. */
   glyphs: GlyphSet;
+  /** Multiplier on CONFIG.world.buildingsPerChunk for this city's per-chunk building cap; unset is 1. */
+  buildingCapScale?: number;
   /** Port cranes: their paint, or false for none; unset is today's red and white. */
   cranes?: { colors: CraneColors } | false;
 };

@@ -3,7 +3,7 @@ import { CONFIG } from '../config';
 import { CITIES } from '../cities';
 import type { BuildingSpec, CityStyle } from '../cities/types';
 import { mulberry32 } from '../util/rng';
-import { CHUNK_SIZE, chunksInRadius, generateChunk, maxLoadedChunks } from './chunks';
+import { BUILDINGS_PER_CHUNK, CHUNK_SIZE, buildingsPerChunk, chunksInRadius, generateChunk, maxLoadedChunks } from './chunks';
 import { AVENUE_WIDTH, PITCH, bridgeAxis, isBay, isIsland, isRiver, isWater, lineWidth, nearestRoadPoint, planRoadPath, segmentAt, type Axis } from './roads';
 import { inBay } from './shore';
 import { openWater } from '../systems/splash';
@@ -214,6 +214,19 @@ describe.each(CITIES.map((c) => [c.id, c] as const))('%s: chunks', (id, style) =
       expect(s.keep).toBe(true);
       for (const b of all.filter((b) => !isSpecial(b))) expect(overlaps(s, b)).toBe(false);
     }
+  });
+
+  it('caps buildings per chunk at the city\'s share (Tokyo 64, Toronto 80), and a full load at the cap fits the pool', () => {
+    expect(BUILDINGS_PER_CHUNK).toBe(64);
+    expect(buildingsPerChunk(style)).toBe(({ tokyo: 64, toronto: 80 } as Record<string, number>)[id]);
+    expect(buildingsPerChunk(style) * maxLoadedChunks()).toBeLessThanOrEqual(W.maxBuildings);
+    let most = 0;
+    for (const [cx, cz] of SAMPLE) {
+      const n = generateChunk(style, 1337, cx, cz).buildings.length;
+      expect(n, `${cx},${cz}`).toBeLessThanOrEqual(buildingsPerChunk(style));
+      most = Math.max(most, n);
+    }
+    expect(most).toBe(buildingsPerChunk(style));
   });
 
   it('has a pad slot for every cell of a full load (each cell holds at most one park, quay or lawn pad)', () => {

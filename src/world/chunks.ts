@@ -140,8 +140,10 @@ export function maxLoadedChunks(): number {
   }
   return max;
 }
-/** Per-chunk caps, so a full load of the densest districts still fits the pools. */
-export const BUILDINGS_PER_CHUNK = Math.floor(CONFIG.world.maxBuildings / maxLoadedChunks());
+/** Per-chunk caps, so a full load of the densest districts still fits the pools. Buildings: the base cap (Tokyo's). */
+export const BUILDINGS_PER_CHUNK = CONFIG.world.buildingsPerChunk;
+/** A city's per-chunk building cap: the base cap times its buildingCapScale. */
+export const buildingsPerChunk = (style: CityStyle): number => Math.floor(BUILDINGS_PER_CHUNK * (style.buildingCapScale ?? 1));
 export const SIGNS_PER_CHUNK = Math.floor(CONFIG.world.maxSigns / maxLoadedChunks());
 export const TREES_PER_CHUNK = Math.floor(CONFIG.world.maxTrees / maxLoadedChunks());
 
@@ -475,7 +477,7 @@ export function generateChunk(style: CityStyle, seed: number, cx: number, cz: nu
   }
 
   // Caps: thin random buildings evenly (deterministic), never special lots; then trim signs.
-  const room = Math.max(0, BUILDINGS_PER_CHUNK - specials.length);
+  const room = Math.max(0, buildingsPerChunk(style) - specials.length);
   let kept = buildings;
   if (buildings.length > room) {
     const order = buildings.map((_, k) => ({ k, r: rng() })).sort((a, b) => a.r - b.r).slice(0, room).map((o) => o.k).sort((a, b) => a - b);

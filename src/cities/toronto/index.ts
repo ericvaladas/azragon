@@ -62,4 +62,6 @@ export const TORONTO: CityStyle = {
   },
   glyphs: 'latin',
   cranes: false,
+  // 80 buildings per chunk, so the Yonge corridor's offices and towers beside dense midtown are thinned less.
+  buildingCapScale: 1.25,
 };
