@@ -30,6 +30,8 @@ export class Music {
   /** The playing Intro; `zero` is the audio-clock time of its song time 0. */
   private intro: (BufferTrack & { zero: number }) | null = null;
   private main1: BufferTrack | null = null;
+  /** The Intro being handed over from, and the audio-clock time Main 1 starts; cleared once the Intro has stopped. */
+  private handing: { intro: BufferTrack & { zero: number }; at: number } | null = null;
   private main2Blob: Promise<Blob>;
   private main2: { el: HTMLAudioElement; gain: GainNode; ready: boolean } | null = null;
   private main2Url: string | null = null;
@@ -164,20 +166,26 @@ export class Music {
         t.src.start(at, M.main1.offset);
         this.main1 = t;
         if (intro) {
-          this.fadeOut(intro, at, M.handoffFade);
-          intro.src.onended = () => delete this.buffers.intro;
+          // The Intro is stopped after its fade by a timer, not by stop(at + fade): a menu before `at` keeps it playing.
+          this.handing = { intro, at };
+          this.rampDown(intro.gain, at, M.handoffFade);
+          setTimeout(() => {
+            if (this.handing?.intro === intro) this.handing = null;
+            if (this.intro === intro || this.disposed) return;
+            intro.src.stop();
+            delete this.buffers.intro;
+          }, (at + M.handoffFade - now) * 1000 + 100);
         }
       })
       .catch(report);
   }
 
-  /** Ramp a buffer track to silence from `at` over `dur` s, then stop it (a source not yet started never plays). */
-  private fadeOut(t: BufferTrack, at: number, dur: number): void {
-    const g = t.gain.gain;
+  /** Ramp a gain to silence from `at` over `dur` s. */
+  private rampDown(gain: GainNode, at: number, dur: number): void {
+    const g = gain.gain;
     g.cancelScheduledValues(at);
     g.setValueAtTime(g.value, at);
     g.linearRampToValueAtTime(0, at + dur);
-    t.src.stop(at + dur);
   }
 
   /** Fade the gameplay track out over `dur` s from now, for a menu's return to the Intro. */
@@ -185,17 +193,25 @@ export class Music {
     const now = this.ctx!.currentTime;
     if (id === 'main1' && this.main1) {
       const t = this.main1;
+      const h = this.handing;
       this.main1 = null;
-      this.fadeOut(t, now, dur);
       t.src.onended = () => delete this.buffers.main1;
+      if (h && now < h.at) {
+        // Main 1 has not started: it never does, and the Intro it was taking over from plays on at full volume.
+        this.handing = null;
+        t.src.stop();
+        h.intro.gain.gain.cancelScheduledValues(now);
+        h.intro.gain.gain.setValueAtTime(1, now);
+        this.intro = h.intro;
+        return;
+      }
+      this.rampDown(t.gain, now, dur);
+      t.src.stop(now + dur);
     }
     if (id === 'main2' && this.main2) {
       const m = this.main2;
       this.main2Pending = false;
-      const g = m.gain.gain;
-      g.cancelScheduledValues(now);
-      g.setValueAtTime(g.value, now);
-      g.linearRampToValueAtTime(0, now + dur);
+      this.rampDown(m.gain, now, dur);
       setTimeout(() => {
         if (this.playing === 'main2') return;
         m.el.pause();
