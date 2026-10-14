@@ -504,6 +504,8 @@ export const CONFIG = {
     returnFade: 1.0,
     /** A bar line closer than this (s) is too soon to schedule on; the one after it is used. */
     minLead: 0.05,
+    /** `?music=simple`: the Intro and Main 1 crossfade over this long (s) the moment the reveal starts. */
+    simpleCrossfade: 1.0,
   },
   readability: {
     threatKinds: ['blimp', 'sam', 'artillery', 'truck'] as readonly string[],
