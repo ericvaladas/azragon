@@ -67,7 +67,10 @@ import { loadPick, savePick, type PickStore } from './monsters/pick';
 import type { MonsterKind } from './monsters/types';
 import { flowNext } from './menuFlow';
 import { Splasher } from './systems/splash';
-import { frameHeight, selectPose, titlePose } from './systems/menuCamera';
+import { rosterFrameHeight, selectPose, titlePose } from './systems/menuCamera';
+
+/** The select camera frames every monster the same, by the biggest one. */
+const SELECT_FRAME = rosterFrameHeight(Object.values(KINDS).map((k) => k.stats.size));
 
 type Order = { kind: 'move'; to: Vec2 } | { kind: 'attack'; target: Target } | null;
 
@@ -628,7 +631,7 @@ export class GameScene {
     if (shown === 'title' || shown === 'select') {
       if (!frozen) this.menuT += realDt;
       if (shown === 'title') titlePose(this.menuT, this.menuPose);
-      else selectPose(this.menuT, frameHeight(this.ms.size), this.camera.aspect, this.menuPose);
+      else selectPose(this.menuT, SELECT_FRAME, this.camera.aspect, this.menuPose);
       this.camera.position.copy(this.menuPose.pos);
       this.camera.lookAt(this.menuPose.look);
     } else if (!this.intro.active) {
