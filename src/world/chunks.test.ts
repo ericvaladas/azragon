@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { BUILDINGS_PER_CHUNK, CHUNK_SIZE, DestroyedLog, SIGNS_PER_CHUNK, TREES_PER_CHUNK, blastTopples, chunkKey, chunksInRadius, generateChunk, maxLoadedChunks, planStreaming } from './chunks';
+import { AVENUE_PAVEMENT, BUILDINGS_PER_CHUNK, CHUNK_SIZE, DestroyedLog, SIGNS_PER_CHUNK, TREES_PER_CHUNK, blastTopples, chunkKey, chunksInRadius, generateChunk, maxLoadedChunks, planStreaming } from './chunks';
 import type { BuildingSpec } from './chunks';
 import { CONFIG } from '../config';
 import { TOKYO } from '../cities/tokyo';
 import { SHIBUYA_CROSSING } from '../cities/tokyo/layout';
 import type { CityStyle } from '../cities/types';
-import { PITCH, isWater, lineWidth, segmentAt, type Axis } from './roads';
+import { AVENUE_WIDTH, PITCH, isWater, lineWidth, segmentAt, type Axis } from './roads';
 
 const W = CONFIG.world;
 
@@ -226,6 +226,55 @@ describe('road network in chunks', () => {
       }
     }
     expect(strips).toBeGreaterThan(0);
+  });
+
+  describe('avenue street trees', () => {
+    const CHUNKS = [[5, -3], [-7, 11], [40, 40], [3, 7], [-4, -6], [8, 2]] as const;
+    const avenue = (line: number) => lineWidth(line) === AVENUE_WIDTH;
+    const mod = (n: number, m: number) => ((n % m) + m) % m;
+
+    it('line both sides of every avenue bordering a built block, in the pavement band beside the road', () => {
+      let edges = 0;
+      for (const [cx, cz] of CHUNKS) {
+        const c = generateChunk(TOKYO, 1337, cx, cz);
+        for (let bi = 4 * cx; bi < 4 * cx + 4; bi++) for (let bj = 4 * cz; bj < 4 * cz + 4; bj++) {
+          const bx = PITCH * (bi + 0.5), bz = PITCH * (bj + 0.5);
+          if (isWater(TOKYO, bi, bj) || TOKYO.districtAt(bx, bz) === 'park' || Math.hypot(bx, bz) < W.clearRadius + PITCH * 0.5) continue;
+          if (TOKYO.landmarks.some((l) => blockCell(l.x) === bi && blockCell(l.z) === bj)) continue;
+          // [line index, line coordinate, side the block lies on, along-axis is z]
+          const sides: [number, number, 1 | -1, boolean][] = [[bi, PITCH * bi, 1, true], [bi + 1, PITCH * (bi + 1), -1, true], [bj, PITCH * bj, 1, false], [bj + 1, PITCH * (bj + 1), -1, false]];
+          for (const [line, at, side, alongZ] of sides) {
+            if (!avenue(line)) continue;
+            edges++;
+            const lo = PITCH * (alongZ ? bj : bi), hi = lo + PITCH;
+            const row = c.trees.filter((t) => {
+              const off = ((alongZ ? t.x : t.z) - at) * side;
+              const along = alongZ ? t.z : t.x;
+              return off > AVENUE_WIDTH / 2 && off < AVENUE_WIDTH / 2 + AVENUE_PAVEMENT && along > lo && along < hi;
+            });
+            expect(row.length, `block ${bi},${bj} line ${line}`).toBeGreaterThanOrEqual(4);
+          }
+        }
+      }
+      expect(edges).toBeGreaterThan(10);
+    });
+
+    it('never stands on an avenue, and no building stands in an avenue pavement band', () => {
+      for (const [cx, cz] of CHUNKS) {
+        const c = generateChunk(TOKYO, 1337, cx, cz);
+        for (const t of c.trees) for (const v of [t.x, t.z]) {
+          const line = Math.round(v / PITCH);
+          if (mod(line, 5) === 0) expect(Math.abs(v - PITCH * line)).toBeGreaterThan(AVENUE_WIDTH / 2);
+        }
+        for (const b of c.buildings) {
+          if (b.keep) continue;
+          for (const [v, half] of [[b.x, b.w / 2], [b.z, b.d / 2]] as const) {
+            const line = Math.round(v / PITCH);
+            if (mod(line, 5) === 0) expect(Math.abs(v - PITCH * line) - half).toBeGreaterThanOrEqual(AVENUE_WIDTH / 2 + AVENUE_PAVEMENT - 1e-6);
+          }
+        }
+      }
+    });
   });
 
   it('lists intersections with at least one incident segment, sized to the widest', () => {

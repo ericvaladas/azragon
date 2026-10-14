@@ -1,7 +1,8 @@
 import { CONFIG } from '../config';
 import { mulberry32, pick, range } from '../util/rng';
 import type { BuildingSpec, CityStyle, DistrictRules, LandmarkSpec, SignDef } from '../cities/types';
-import { isWater, lineWidth, segmentAt, type Axis, type Segment } from './roads';
+import { hash2 } from '../cities/noise';
+import { AVENUE_WIDTH, isWater, lineWidth, segmentAt, type Axis, type Segment } from './roads';
 
 export type { BuildingSpec } from '../cities/types';
 export type TreeSpec = { x: number; z: number; s: number };
@@ -82,6 +83,11 @@ export const BUILDINGS_PER_CHUNK = Math.floor(CONFIG.world.maxBuildings / maxLoa
 export const SIGNS_PER_CHUNK = Math.floor(CONFIG.world.maxSigns / maxLoadedChunks());
 export const TREES_PER_CHUNK = Math.floor(CONFIG.world.maxTrees / maxLoadedChunks());
 
+/** Pavement (m) between an avenue and the buildings of a block beside it; the avenue's street trees stand in it. */
+export const AVENUE_PAVEMENT = 8;
+/** Target spacing (m) of the street trees lining an avenue. */
+const AVENUE_TREE_GAP = 28;
+
 /** Width of the widest existing segment meeting node (i, j), or 0 when none does. */
 export function nodeSize(style: CityStyle, i: number, j: number): number {
   let size = 0;
@@ -125,9 +131,11 @@ function makeSigns(rules: DistrictRules, style: CityStyle, w: number, d: number,
  * One chunk of the city in `style`: each block is built from the district at its centre. River cells hold nothing
  * but water. Lots sit inside the block inset by half the width of each bordering lattice line, whether or not its
  * segment exists, so removed-street strips stay unbuilt; in residential and park blocks they become tree-lined
- * lanes. Landmarks claim their block (the chunk holding the landmark's centre owns it); special lots replace the
- * random lots they overlap; the crash site is never a park. Per-chunk caps thin the random buildings (never special
- * lots), then their signs, then the trees. Same inputs, same chunk.
+ * lanes. Beside an avenue the inset adds an AVENUE_PAVEMENT band, lined with a row of street trees in every built
+ * block off the crash site (not water, landmark or park cells; a tree inside a building's footprint is skipped).
+ * Landmarks claim their block (the chunk holding the landmark's centre owns it); special lots replace the random lots
+ * they overlap; the crash site is never a park. Per-chunk caps thin the random buildings (never special lots), then
+ * their signs, then the trees (other trees before avenue rows). Same inputs, same chunk.
  */
 export function generateChunk(style: CityStyle, seed: number, cx: number, cz: number): ChunkContent {
   const w = CONFIG.world;
@@ -136,6 +144,7 @@ export function generateChunk(style: CityStyle, seed: number, cx: number, cz: nu
   const buildings: BuildingSpec[] = [];
   const specials: BuildingSpec[] = [];
   const trees: TreeSpec[] = [];
+  const avenueTrees: TreeSpec[] = [];
   const parks: ParkSpec[] = [];
   const landmarks: LandmarkSpec[] = [];
   const water: WaterSpec[] = [];
@@ -156,11 +165,12 @@ export function generateChunk(style: CityStyle, seed: number, cx: number, cz: nu
         water.push({ x: bx, z: bz });
         continue;
       }
-      // The buildable block: the cell inset by half of each bordering line's width.
-      const x0 = bi * pitch + lineWidth(bi) / 2 + ROAD_ORIGIN;
-      const x1 = (bi + 1) * pitch - lineWidth(bi + 1) / 2 + ROAD_ORIGIN;
-      const z0 = bj * pitch + lineWidth(bj) / 2 + ROAD_ORIGIN;
-      const z1 = (bj + 1) * pitch - lineWidth(bj + 1) / 2 + ROAD_ORIGIN;
+      // The buildable block: the cell inset by half of each bordering line's width, plus pavement beside an avenue.
+      const inset = (line: number) => lineWidth(line) / 2 + (lineWidth(line) === AVENUE_WIDTH ? AVENUE_PAVEMENT : 0);
+      const x0 = bi * pitch + inset(bi) + ROAD_ORIGIN;
+      const x1 = (bi + 1) * pitch - inset(bi + 1) + ROAD_ORIGIN;
+      const z0 = bj * pitch + inset(bj) + ROAD_ORIGIN;
+      const z1 = (bj + 1) * pitch - inset(bj + 1) + ROAD_ORIGIN;
       const ix = (x0 + x1) / 2;
       const iz = (z0 + z1) / 2;
       const iw = x1 - x0;
@@ -187,6 +197,7 @@ export function generateChunk(style: CityStyle, seed: number, cx: number, cz: nu
       }
 
       const blockSpecials = style.specialLots.filter((s) => blockOf(s.x) === bi && blockOf(s.z) === bj);
+      const firstBuilding = buildings.length;
       for (const s of blockSpecials) specials.push({ ...s, signs: s.signs.map((g) => ({ ...g })) });
 
       const n = rules.lots;
@@ -227,6 +238,29 @@ export function generateChunk(style: CityStyle, seed: number, cx: number, cz: nu
             ? { x: ix + along * iw, z: iz + side * (id / 2 - 3), s: range(rng, 9, 14) }
             : { x: ix + side * (iw / 2 - 3), z: iz + along * id, s: range(rng, 9, 14) });
         }
+        // Avenue rows: evenly spaced down the middle of each avenue pavement band, between the cross streets' edges.
+        const blockBuildings = [...blockSpecials, ...buildings.slice(firstBuilding)];
+        const plant = (x: number, z: number) => {
+          if (blockBuildings.some((b) => overlaps(b, { x, z, w: 0, d: 0 }, 6))) return;
+          avenueTrees.push({ x, z, s: 10 + 4 * hash2(Math.round(x), Math.round(z), seed + 31) });
+        };
+        const row = (line: number, side: 1 | -1, alongZ: boolean) => {
+          if (lineWidth(line) !== AVENUE_WIDTH) return;
+          const at = line * pitch + side * (AVENUE_WIDTH / 2 + AVENUE_PAVEMENT / 2) + ROAD_ORIGIN;
+          const c = alongZ ? bj : bi;
+          const lo = c * pitch + lineWidth(c) / 2 + ROAD_ORIGIN;
+          const hi = (c + 1) * pitch - lineWidth(c + 1) / 2 + ROAD_ORIGIN;
+          const n = Math.max(1, Math.round((hi - lo) / AVENUE_TREE_GAP));
+          for (let k = 0; k < n; k++) {
+            const along = lo + ((k + 0.5) * (hi - lo)) / n;
+            if (alongZ) plant(at, along);
+            else plant(along, at);
+          }
+        };
+        row(bi, 1, true);
+        row(bi + 1, -1, true);
+        row(bj, 1, false);
+        row(bj + 1, -1, false);
       }
     }
   }
@@ -282,12 +316,15 @@ export function generateChunk(style: CityStyle, seed: number, cx: number, cz: nu
     }
     for (const [b, ks] of drop) b.signs = b.signs.filter((_, k) => !ks.has(k));
   }
-  // Tree cap: an over-full (park-heavy) chunk drops trees at random, so every loaded chunk fits the tree pool.
-  let keptTrees = trees;
-  if (trees.length > TREES_PER_CHUNK) {
-    const order = trees.map((_, k) => ({ k, r: rng() })).sort((a, b) => a.r - b.r).slice(0, TREES_PER_CHUNK).map((o) => o.k).sort((a, b) => a - b);
-    keptTrees = order.map((k) => trees[k]!);
-  }
+  // Tree cap: an over-full (park-heavy) chunk drops trees at random, so every loaded chunk fits the tree pool. Avenue
+  // rows are thinned only once every other tree is gone, so the rows stay regular.
+  const thin = (list: TreeSpec[], room: number): TreeSpec[] => {
+    if (list.length <= room) return list;
+    const order = list.map((_, k) => ({ k, r: rng() })).sort((a, b) => a.r - b.r).slice(0, room).map((o) => o.k).sort((a, b) => a - b);
+    return order.map((k) => list[k]!);
+  };
+  const keptAvenue = thin(avenueTrees, TREES_PER_CHUNK);
+  const keptTrees = [...keptAvenue, ...thin(trees, TREES_PER_CHUNK - keptAvenue.length)];
   return { buildings: out, trees: keptTrees, parks, landmarks, roads, nodes, water };
 }
 
