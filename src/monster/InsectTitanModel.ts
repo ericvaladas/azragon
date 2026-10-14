@@ -34,6 +34,34 @@ const HEAD_POINTS: readonly P3[] = [
   [12, 296, 226], [10, 272, 226], [0, 306, 222], [0, 266, 228],
 ];
 
+/** The pronotum: a domed shield over the thorax with a low ridge, overhanging its edges a little (one side; mirrored). */
+const PRONOTUM: readonly P3[] = [
+  [0, 368, 116], [56, 360, 110], [82, 348, 60], [84, 346, -20], [76, 350, -96], [48, 360, -110], [0, 366, -112],
+  [0, 390, 30], [38, 382, 44], [44, 380, -54], [0, 386, -76], [70, 340, 100], [78, 336, -100],
+];
+/** Abdomen (body space): centre, radii, tilt about X — the elytra are built over its upper surface. */
+const ABDOMEN = { c: new THREE.Vector3(0, 330, -210), r: new THREE.Vector3(130, 105, 190), tilt: -0.25 };
+
+/**
+ * One elytron (`side` +1 = +X): a hardened wing case over the abdomen's top, from just off the centre seam out
+ * past its shoulder, front to rear; its outer edge flares out a little. A hull over points on a slightly
+ * larger copy of the abdomen, so it hugs the body.
+ */
+function elytronPoints(side: 1 | -1): THREE.Vector3[] {
+  const { c, r, tilt } = ABDOMEN;
+  const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), tilt);
+  const pts: THREE.Vector3[] = [];
+  for (let i = 0; i <= 6; i++) {
+    const u = 0.8 - i * 0.33;
+    for (let j = 0; j <= 4; j++) {
+      const v = 0.1 + j * 0.28;
+      const grow = j === 4 ? 1.12 : 1.07;
+      pts.push(new THREE.Vector3(side * Math.sin(v) * r.x * grow, Math.cos(v) * Math.cos(u) * r.y * grow, Math.cos(v) * Math.sin(u) * r.z * 1.04).applyQuaternion(q).add(c));
+    }
+  }
+  return pts;
+}
+
 const TAIL_BASE: THREE.Vector3[] = [
   new THREE.Vector3(0, 350, -380),
   new THREE.Vector3(0, 450, -440),
@@ -77,12 +105,13 @@ export class InsectTitanModel {
     const blob = faceted(new THREE.IcosahedronGeometry(1, 1));
 
     add(this.body, box, shell, [0, 300, 0], [150, 110, 200]);
-    add(this.body, box, shellDark, [0, 360, 0], [110, 30, 170]);
-    const abdomen = add(this.body, blob, shell, [0, 330, -210], [130, 105, 190]);
-    abdomen.rotation.x = -0.25;
-    for (let i = 0; i < 3; i++) add(this.body, box, shellDark, [0, 395 - i * 8, -140 - i * 70], [120 - i * 15, 18, 40]);
-    const mirrored = HEAD_POINTS.flatMap(([x, y, z]) => (x === 0 ? [new THREE.Vector3(x, y, z)] : [new THREE.Vector3(x, y, z), new THREE.Vector3(-x, y, z)]));
-    add(this.body, faceted(new ConvexGeometry(mirrored)), shell, [0, 0, 0]);
+    const mirror = (pts: readonly P3[]) => pts.flatMap(([x, y, z]) => (x === 0 ? [new THREE.Vector3(x, y, z)] : [new THREE.Vector3(x, y, z), new THREE.Vector3(-x, y, z)]));
+    add(this.body, faceted(new ConvexGeometry(mirror(PRONOTUM))), shellDark, [0, 0, 0]);
+    const abdomen = add(this.body, blob, shell, ABDOMEN.c.toArray(), ABDOMEN.r.toArray());
+    abdomen.rotation.x = ABDOMEN.tilt;
+    // Elytra: two wing cases over the abdomen, parted by a seam down the middle.
+    for (const sd of [1, -1] as const) add(this.body, faceted(new ConvexGeometry(elytronPoints(sd))), shellDark, [0, 0, 0]);
+    add(this.body, faceted(new ConvexGeometry(mirror(HEAD_POINTS))), shell, [0, 0, 0]);
     // Eyes: angular faceted gems set into the sides of the head, looking forward and out.
     const eyeGeo = faceted(new THREE.OctahedronGeometry(1, 0));
     for (const sd of [1, -1]) {
