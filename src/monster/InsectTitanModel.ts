@@ -43,7 +43,7 @@ const PRONOTUM: readonly P3[] = [
 const ABDOMEN = { c: new THREE.Vector3(0, 330, -210), r: new THREE.Vector3(130, 105, 190), tilt: -0.25 };
 
 /**
- * One elytron (`side` +1 = +X): a hardened wing case over the abdomen's top, from just off the centre seam out
+ * One elytron (`side` +1 = +X): a hardened wing case over the abdomen's top, from the centre line (where it meets the other) out
  * past its shoulder, front to rear; its outer edge flares out a little. A hull over points on a slightly
  * larger copy of the abdomen, so it hugs the body.
  */
@@ -54,7 +54,7 @@ function elytronPoints(side: 1 | -1): THREE.Vector3[] {
   for (let i = 0; i <= 6; i++) {
     const u = 0.8 - i * 0.33;
     for (let j = 0; j <= 4; j++) {
-      const v = 0.1 + j * 0.28;
+      const v = j * 0.305;
       const grow = j === 4 ? 1.12 : 1.07;
       pts.push(new THREE.Vector3(side * Math.sin(v) * r.x * grow, Math.cos(v) * Math.cos(u) * r.y * grow, Math.cos(v) * Math.sin(u) * r.z * 1.04).applyQuaternion(q).add(c));
     }
