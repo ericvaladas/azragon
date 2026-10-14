@@ -118,6 +118,17 @@ const Y = { water: 0.1, park: 0.2, road: 0.3, node: 0.32, overlay: 0.35, crater:
 const SLAB = { extra: 8, thick: 1.8, color: 0x9aa0a6 } as const;
 const WATER_COLOR = 0x3f8fc9;
 
+/**
+ * Flag an instanced attribute for upload, limited to the first `count` instances (the draw range): three uploads that
+ * range with bufferSubData instead of the whole pool. Nothing is flagged for an empty draw range.
+ */
+function upload(attr: THREE.BufferAttribute | null | undefined, count: number): void {
+  if (!attr || count <= 0) return;
+  attr.clearUpdateRanges();
+  attr.addUpdateRange(0, count * attr.itemSize);
+  attr.needsUpdate = true;
+}
+
 function layered(mat: THREE.Material, offset: number): THREE.Material {
   mat.polygonOffset = true;
   mat.polygonOffsetFactor = -offset;
@@ -193,7 +204,10 @@ export class City {
   private rubbleUsed: boolean[];
   private collapsing: Building[] = [];
   private destroyed = new DestroyedLog();
-  private dirty = false;
+  /** Chunks streamed: every pool needs re-uploading. */
+  private dirtyStream = false;
+  /** Buildings collapsed or turned to rubble: only the building, rubble, sign and screen matrices changed. */
+  private dirtyBuildings = false;
   onCollapseStart: (pos: THREE.Vector3, size: number) => void = () => {};
 
   constructor(
@@ -379,19 +393,23 @@ export class City {
     this.waters.reset();
   }
 
-  /** Draw only up to the highest slot in use: empty slots still cost vertex work even at zero scale. */
-  private updateCounts(): void {
+  /**
+   * Draw only up to the highest slot in use: empty slots still cost vertex work even at zero scale. `all` false
+   * recounts only the pools a collapse changes (rubble, signs, screens).
+   */
+  private updateCounts(all = true): void {
     const high = (used: (i: number) => boolean, n: number) => {
       let i = n - 1;
       while (i >= 0 && !used(i)) i--;
       return i + 1;
     };
-    this.buildingMesh.count = high((i) => this.slotOwner[i] !== null, this.slotOwner.length);
-    this.treeMesh.count = high((i) => this.treeUsed[i]!, this.treeUsed.length);
-    this.parkMesh.count = high((i) => this.parkUsed[i]!, this.parkUsed.length);
     this.rubbleMesh.count = high((i) => this.rubbleUsed[i]!, this.rubbleUsed.length);
     this.signMesh.count = high((i) => this.signUsed[i]!, this.signUsed.length);
     this.screenMesh.count = high((i) => this.screenUsed[i]!, this.screenUsed.length);
+    if (!all) return;
+    this.buildingMesh.count = high((i) => this.slotOwner[i] !== null, this.slotOwner.length);
+    this.treeMesh.count = high((i) => this.treeUsed[i]!, this.treeUsed.length);
+    this.parkMesh.count = high((i) => this.parkUsed[i]!, this.parkUsed.length);
     for (const p of [this.roads, this.nodes, this.waters]) p.mesh.count = p.highWater();
   }
 
@@ -520,7 +538,7 @@ export class City {
       }
     }
     this.crater.visible = true;
-    this.dirty = true;
+    this.dirtyBuildings = true;
   }
 
   /** Animate collapses and stream chunks around `center`. */
@@ -542,21 +560,25 @@ export class City {
       } else {
         this.writeStanding(b, k * k * b.spec.h, k * 0.3);
       }
-      this.dirty = true;
+      this.dirtyBuildings = true;
     }
     this.screenT += dt;
     this.screenTex.offset.x = (Math.floor(this.screenT / 0.7) % SCREEN_FRAMES) / SCREEN_FRAMES;
-    if (this.dirty) {
-      this.dirty = false;
+    if (this.dirtyStream) {
+      // Streaming (load, unload, reset) writes every pool and its per-instance attributes.
+      this.dirtyStream = false;
+      this.dirtyBuildings = false;
       this.updateCounts();
-      for (const m of this.instanced()) m.instanceMatrix.needsUpdate = true;
-      if (this.nodeMesh.instanceColor) this.nodeMesh.instanceColor.needsUpdate = true;
-      if (this.buildingMesh.instanceColor) this.buildingMesh.instanceColor.needsUpdate = true;
-      if (this.signMesh.instanceColor) this.signMesh.instanceColor.needsUpdate = true;
-      this.signRect.needsUpdate = true;
-      if (this.parkMesh.instanceColor) this.parkMesh.instanceColor.needsUpdate = true;
-      this.facadeAttr.needsUpdate = true;
-      this.plainEnds.needsUpdate = true;
+      for (const m of this.instanced()) upload(m.instanceMatrix, m.count);
+      for (const m of [this.nodeMesh, this.buildingMesh, this.signMesh, this.parkMesh]) upload(m.instanceColor, m.count);
+      upload(this.signRect, this.signMesh.count);
+      upload(this.facadeAttr, this.buildingMesh.count);
+      upload(this.plainEnds, this.roadMesh.count);
+    } else if (this.dirtyBuildings) {
+      // A collapse moves buildings and their signs and lays rubble; colours, facades and the ground layers stay put.
+      this.dirtyBuildings = false;
+      this.updateCounts(false);
+      for (const m of [this.buildingMesh, this.rubbleMesh, this.signMesh, this.screenMesh]) upload(m.instanceMatrix, m.count);
     }
   }
 
@@ -638,7 +660,7 @@ export class City {
     }
     this.chunks.set(key, { content, buildings, treeSlots, parkSlots, roadSlots, nodeSlots, waterSlots });
     this.loadedKeys.add(key);
-    this.dirty = true;
+    this.dirtyStream = true;
   }
 
   private unloadChunk(key: string): void {
@@ -674,7 +696,7 @@ export class City {
     if (this.collapsing.length) this.collapsing = this.collapsing.filter((b) => b.chunk !== key);
     this.chunks.delete(key);
     this.loadedKeys.delete(key);
-    this.dirty = true;
+    this.dirtyStream = true;
   }
 
   /**

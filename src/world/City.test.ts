@@ -187,6 +187,34 @@ describe('City (Tokyo)', () => {
     expect(countNear()).toBe(first);
   });
 
+  it('a collapse-only frame re-uploads buildings, rubble and signs, never the ground-layer pools', () => {
+    const { city } = make();
+    const meshes = city as unknown as Record<'treeMesh' | 'roadMesh' | 'nodeMesh' | 'waterMesh' | 'parkMesh' | 'rubbleMesh', THREE.InstancedMesh>;
+    // Flush the construction upload; the city stays centred on the origin, so nothing streams.
+    city.update(0, new THREE.Vector3());
+    const ground = [meshes.treeMesh, meshes.roadMesh, meshes.nodeMesh, meshes.waterMesh, meshes.parkMesh];
+    const versions = () => [
+      ...ground.map((m) => m.instanceMatrix.version),
+      meshes.nodeMesh.instanceColor!.version,
+      meshes.parkMesh.instanceColor!.version,
+      city.buildingMesh.instanceColor!.version,
+      (city.buildingMesh.geometry.getAttribute('aFacade') as THREE.InstancedBufferAttribute).version,
+      (meshes.roadMesh.geometry.getAttribute('aPlainEnds') as THREE.InstancedBufferAttribute).version,
+    ];
+    const before = versions();
+    const building = city.buildingMesh.instanceMatrix.version;
+    const rubble = meshes.rubbleMesh.instanceMatrix.version;
+    let victim: Target | null = null;
+    city.forEachStandingInRadius({ x: 100, z: 1900 }, 150, (t) => { if (!victim && (t as unknown as { slot: number }).slot >= 0) victim = t; });
+    victim!.applyDamage(1e9);
+    for (let i = 0; i < 20; i++) city.update(0.1, new THREE.Vector3());
+    expect(versions()).toEqual(before);
+    expect(city.buildingMesh.instanceMatrix.version).toBeGreaterThan(building);
+    expect(meshes.rubbleMesh.instanceMatrix.version).toBeGreaterThan(rubble);
+    // Only the slots in draw range go up.
+    expect(city.buildingMesh.instanceMatrix.updateRanges).toEqual([{ start: 0, count: city.buildingMesh.count * 16 }]);
+  });
+
   it('tints each building with its spec colour and sets its facade cell', () => {
     const { city } = make();
     const attr = city.buildingMesh.geometry.getAttribute('aFacade') as THREE.InstancedBufferAttribute;
