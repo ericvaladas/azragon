@@ -379,9 +379,7 @@ body {
   color: rgba(255, 255, 255, 0.85);
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
   white-space: nowrap;
-  animation: skip-hint-blink 1.6s steps(2) infinite;
 }
-@keyframes skip-hint-blink { 50% { opacity: 0.45; } }
 
 /* Title: logo over the drifting city; taps fall through to the canvas. */
 .title-screen {
