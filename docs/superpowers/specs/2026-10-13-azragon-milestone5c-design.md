@@ -158,8 +158,9 @@ New pure module `src/world/shore.ts`:
 ## Sea wall, foam and splashes
 
 - **Sea wall:**
-  - For every land cell edge that borders a bay cell, a concrete wall box: 200 m long, 10 m tall, 6 m thick, on the
-    land side of the edge.
+  - For every land cell edge that borders a bay cell, a concrete wall box: 200 m long, 14 m tall, 8 m thick, just
+    outside the waterfront road on the bay side of the edge (the coast road straddles the edge).
+  - A pale cap over a dark face that darkens to a wet waterline band, so it reads from the gameplay camera.
   - Corners overlap cleanly.
   - One instanced mesh, pooled per chunk like roads.
 - **Foam:**
@@ -184,10 +185,13 @@ New pure module `src/world/shore.ts`:
 | `src/world/chunks.ts` | Port lots; crane spots; sea-wall and foam edges; island buildings without roads; quay pads |
 | `src/world/City.ts` | Sea-wall, foam and crane instanced meshes; quay pads (reusing the per-instance park pad colour); long-landmark targeting and picking; `blockedAt` covers the island; collapse of the bridge with splashes |
 | `src/world/pixelTextures.ts` | The container facade cell (the atlas grows by one cell) |
-| `src/systems/Particles.ts` | The `splash` preset |
+| `src/systems/Particles.ts` | The `splash` preset, drawn in its own 200-particle layer |
 | `src/GameScene.ts` | Shore collision for walking, dash and leap; `splashIfWater` hooks |
 
-**Draw calls added:** sea wall 1, foam 1, cranes 1, Rainbow Bridge 1. Quay pads ride the park-pad mesh.
+**Draw calls added:** main pass: sea wall 1, foam 1, cranes 1, Rainbow Bridge 1 (when in view). Shadow pass: sea
+wall 1, cranes 1, Rainbow Bridge 1 (shadow casters; foam casts none). So +5 at play start (bridge out of view) and
++7 with the bridge in view. The splash particle layer adds 1 only while splashes are alive. Quay pads ride the
+park-pad mesh.
 
 ## Testing
 
