@@ -26,12 +26,13 @@ export class SpaceScene {
   private embers: THREE.Points;
   private emberPos: Float32Array;
   private rng = mulberry32(CONFIG.world.seed + 41);
+  private sun: THREE.DirectionalLight;
 
   constructor() {
     this.scene.background = new THREE.Color(0x05060f);
-    const sun = new THREE.DirectionalLight(CONFIG.palette.sun, 2.4);
-    sun.position.set(1, 0.7, -0.3);
-    this.scene.add(sun, new THREE.HemisphereLight(0x4a5f8a, 0x000000, 0.5));
+    this.sun = new THREE.DirectionalLight(CONFIG.palette.sun, 2.4);
+    this.sun.position.set(1, 0.7, -0.3);
+    this.scene.add(this.sun, new THREE.HemisphereLight(0x4a5f8a, 0x000000, 0.5));
 
     // Two star layers: many faint single pixels and a few bright 2-px ones.
     const dirs = starDirections(SP.stars, mulberry32(CONFIG.world.seed + 43));
@@ -78,6 +79,11 @@ export class SpaceScene {
     this.emberPos[i * 3] = Math.cos(a) * r;
     this.emberPos[i * 3 + 1] = Math.sin(a) * r;
     this.emberPos[i * 3 + 2] = z;
+  }
+
+  /** The sun's colour: the run city's, so the dive never flips from one time of day to another. */
+  setSun(color: number): void {
+    this.sun.color.setHex(color);
   }
 
   update(t: number, dt: number): void {

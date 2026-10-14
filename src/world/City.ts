@@ -10,6 +10,7 @@ import { canvasCityTextures, patchFacadeShader, patchRoadShader, SCREEN_FRAMES, 
 import { rubbleGeometry } from './rubble';
 import { craneGeometry } from './crane';
 import { faceted, toonMat } from '../render/toon';
+import { applyAtmosphere, windowGlowColor, type AtmosphereTargets } from '../render/atmosphere';
 
 type BuildingState = 'standing' | 'collapsing' | 'rubble';
 
@@ -291,6 +292,11 @@ export class City {
   onCollapseStart: (pos: THREE.Vector3, size: number) => void = () => {};
   /** Called along the span, over water, during a long landmark's collapse: each point's delay grows with its distance out. */
   onSplash: (p: THREE.Vector3, size: number) => void = () => {};
+  /** Lit-window colour the facade shader adds to window texels (set from the style's atmosphere). */
+  readonly windowGlow = new THREE.Color(0, 0, 0);
+  private glowUniform = { value: this.windowGlow };
+  /** Sky, fog and lights the style's atmosphere drives, once attached. */
+  private atmosphere: AtmosphereTargets | null = null;
 
   constructor(
     private scene: THREE.Scene,
@@ -300,6 +306,7 @@ export class City {
     private textures: CityTextures = canvasCityTextures,
   ) {
     const { world } = CONFIG;
+    windowGlowColor(this._style.atmosphere, this.windowGlow);
 
     const span = this.groundSpan;
     this.ground = new THREE.Mesh(new THREE.PlaneGeometry(span, span), toonMat(0xffffff, { map: this.groundTexture() }));
@@ -320,7 +327,7 @@ export class City {
     const box = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
     const max = world.maxBuildings;
     const facade = toonMat(0xffffff, { map: this.textures.facades() });
-    facade.onBeforeCompile = (sh) => patchFacadeShader(sh);
+    facade.onBeforeCompile = (sh) => patchFacadeShader(sh, this.glowUniform);
     facade.customProgramCacheKey = () => 'city-facade';
     this.roofMat = toonMat(this._style.colors.roof);
     this.facadeAttr = new THREE.InstancedBufferAttribute(new Float32Array(max), 1);
@@ -483,6 +490,12 @@ export class City {
     return this.landmarks;
   }
 
+  /** Attach the scene's sky, fog and lights: the style's atmosphere is applied now and on every reset. */
+  attachAtmosphere(t: Omit<AtmosphereTargets, 'windowGlow'>): void {
+    this.atmosphere = { ...t, windowGlow: this.windowGlow };
+    applyAtmosphere(this._style.atmosphere, this.atmosphere);
+  }
+
   private resetPools(): void {
     this.freeSlots = [];
     for (let i = CONFIG.world.maxBuildings - 1; i >= 0; i--) this.freeSlots.push(i);
@@ -538,6 +551,8 @@ export class City {
       this.roadMat.map = this.roadTexture();
       this.roadMat.needsUpdate = true;
     }
+    if (this.atmosphere) applyAtmosphere(this._style.atmosphere, this.atmosphere);
+    else windowGlowColor(this._style.atmosphere, this.windowGlow);
     this.buildOverlays();
     this.crater.visible = false;
     for (const key of [...this.loadedKeys]) this.unloadChunk(key);

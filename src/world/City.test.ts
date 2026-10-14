@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { CONFIG } from '../config';
 import { TOKYO } from '../cities/tokyo';
 import type { CityStyle } from '../cities/types';
+import type { AtmosphereTargets } from '../render/atmosphere';
 import { City, CRATER_RADIUS, SlotPool, patchFoamShader } from './City';
 import { chunksInRadius, CRANE_PORTAL, generateChunk } from './chunks';
 import { craneGeometry } from './crane';
@@ -636,5 +637,48 @@ describe('City: the Rainbow Bridge (a span landmark)', () => {
     const t = hits(city, span.from, 2)!;
     city.blast({ x: 0, z: 0 }, CRATER_RADIUS, true, CRATER_RADIUS * CONFIG.intro.impact.outer);
     expect(t.isAlive()).toBe(true);
+  });
+});
+
+describe('City atmosphere', () => {
+  const DUSK: CityStyle = {
+    ...TOKYO,
+    id: 'dusk',
+    atmosphere: { ...TOKYO.atmosphere, fog: 0xe9a985, skyZenith: 0x4b4a8c, sun: 0xffa25a, sunIntensity: 2, sunDir: { x: -0.9, y: 0.3, z: 0.2 }, windowGlow: { color: 0xffc46b, strength: 0.5 } },
+  };
+  const targets = (): Omit<AtmosphereTargets, 'windowGlow'> => ({
+    fog: new THREE.Fog(0x000000, 1, 2),
+    sky: { zenith: new THREE.Color(), horizon: new THREE.Color() },
+    hemi: new THREE.HemisphereLight(),
+    sun: new THREE.DirectionalLight(),
+    sunDir: new THREE.Vector3(),
+  });
+  const snap = (city: City, t: Omit<AtmosphereTargets, 'windowGlow'>) => ({
+    fog: t.fog.color.getHex(), near: t.fog.near, far: t.fog.far, zenith: t.sky.zenith.getHex(), horizon: t.sky.horizon.getHex(),
+    hemi: t.hemi.color.getHex(), ground: t.hemi.groundColor.getHex(), hemiI: t.hemi.intensity,
+    sun: t.sun.color.getHex(), sunI: t.sun.intensity, dir: t.sunDir.toArray(), glow: city.windowGlow.getHex(),
+  });
+
+  it("starts with no window glow for Tokyo, before anything is attached", () => {
+    const { city } = make();
+    expect(city.windowGlow.getHex()).toBe(0);
+  });
+
+  it("applies the style's atmosphere when attached and on every reset: Tokyo → dusk → Tokyo restores everything", () => {
+    const { city } = make();
+    const t = targets();
+    city.attachAtmosphere(t);
+    const tokyo = snap(city, t);
+    expect(tokyo.fog).toBe(CONFIG.palette.fog);
+    expect([tokyo.near, tokyo.far]).toEqual([CONFIG.fog.near, CONFIG.fog.far]);
+    city.reset(DUSK);
+    const dusk = snap(city, t);
+    expect(dusk.fog).toBe(0xe9a985);
+    expect(dusk.zenith).toBe(0x4b4a8c);
+    expect(dusk.sun).toBe(0xffa25a);
+    expect(dusk.dir[0]).toBeLessThan(0);
+    expect(dusk.glow).not.toBe(0);
+    city.reset(TOKYO);
+    expect(snap(city, t)).toEqual(tokyo);
   });
 });

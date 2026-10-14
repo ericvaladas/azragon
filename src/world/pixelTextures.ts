@@ -305,10 +305,27 @@ export const canvasCityTextures: CityTextures = {
 };
 
 /**
- * Facade material hook: each building instance picks an atlas cell (attribute aFacade) and the cell repeats by the
- * building's size, one per FACADE_TILE metres, so tall towers get more floors rather than stretched windows.
+ * A facade texel is a window when its linear blue exceeds its red by this much: the bluish window inks of the atlas
+ * (office bands, balcony and shop windows) pass, pale glass panes, mullions, whites and greys do not.
  */
-export function patchFacadeShader(sh: { vertexShader: string; fragmentShader: string }): void {
+export const WINDOW_CHROMA = 0.145;
+
+/** Whether an atlas ink counts as a lit window (the shader's test, on the CPU). */
+export function isWindowTexel(hex: number): boolean {
+  const c = new THREE.Color(hex);
+  return c.b - c.r >= WINDOW_CHROMA;
+}
+
+/**
+ * Facade material hook: each building instance picks an atlas cell (attribute aFacade) and the cell repeats by the
+ * building's size, one per FACADE_TILE metres, so tall towers get more floors rather than stretched windows. With
+ * `glow`, window texels (see WINDOW_CHROMA) also emit the shared uniform's colour: lit windows at no extra draw call.
+ */
+export function patchFacadeShader(
+  sh: { uniforms?: Record<string, { value: unknown }>; vertexShader: string; fragmentShader: string },
+  glow?: { value: THREE.Color },
+): void {
+  if (glow && sh.uniforms) sh.uniforms['uWindowGlow'] = glow;
   sh.vertexShader = sh.vertexShader
     .replace('#include <common>', '#include <common>\nattribute float aFacade;\nvarying float vFacade;\nvarying vec2 vFacadeUv;')
     .replace(
@@ -318,12 +335,15 @@ export function patchFacadeShader(sh: { vertexShader: string; fragmentShader: st
   float across = abs(normal.x) > 0.5 ? length(instanceMatrix[2].xyz) : length(instanceMatrix[0].xyz);
   vFacadeUv = vec2(uv.x * across / ${FACADE_TILE.w.toFixed(1)}, uv.y * length(instanceMatrix[1].xyz) / ${FACADE_TILE.h.toFixed(1)});`,
     );
+  const glowDecl = glow ? '\nuniform vec3 uWindowGlow;' : '';
+  const glowAdd = glow ? `\n  totalEmissiveRadiance += uWindowGlow * step(${WINDOW_CHROMA.toFixed(3)}, facadeTexel.b - facadeTexel.r);` : '';
   sh.fragmentShader = sh.fragmentShader
-    .replace('#include <common>', '#include <common>\nvarying float vFacade;\nvarying vec2 vFacadeUv;')
+    .replace('#include <common>', `#include <common>\nvarying float vFacade;\nvarying vec2 vFacadeUv;${glowDecl}`)
     .replace(
       '#include <map_fragment>',
       `vec2 facadeUv = vec2((fract(vFacadeUv.x) + vFacade) / ${FACADE_COUNT.toFixed(1)}, fract(vFacadeUv.y));
-  diffuseColor *= texture2D(map, facadeUv);`,
+  vec4 facadeTexel = texture2D(map, facadeUv);
+  diffuseColor *= facadeTexel;${glowAdd}`,
     );
 }
 

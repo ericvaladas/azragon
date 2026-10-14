@@ -98,6 +98,26 @@ export type IslandSpec = { center: { x: number; z: number }; halfAlong: number; 
 /** Shape of the coast and island only (what the water tests read). */
 export type Shoreline = { bay?: BaySpec; island?: IslandSpec };
 
+/**
+ * A city's time of day. Colours are hex (sRGB). `sunDir` points from the ground toward the sun (normalised when
+ * applied); fog distances default to CONFIG.fog's. Window glow is added to the facade's window texels as emissive
+ * colour × strength (0 = none).
+ */
+export type Atmosphere = {
+  skyZenith: number;
+  skyHorizon: number;
+  fog: number;
+  fogNear?: number;
+  fogFar?: number;
+  hemiSky: number;
+  hemiGround: number;
+  hemiIntensity: number;
+  sun: number;
+  sunIntensity: number;
+  sunDir: { x: number; y: number; z: number };
+  windowGlow: { color: number; strength: number };
+};
+
 export type CityStyle = {
   id: string;
   name: string;
@@ -135,4 +155,6 @@ export type CityStyle = {
   roadRemoval: Readonly<Record<DistrictId, number>>;
   /** Lattice nodes (world x, z) whose four segments always exist (e.g. the Shibuya Crossing). */
   keepNodes: readonly { x: number; z: number }[];
+  /** Sky, fog, lights and window glow; City.reset applies it. */
+  atmosphere: Atmosphere;
 };

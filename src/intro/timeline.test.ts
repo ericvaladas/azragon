@@ -150,6 +150,14 @@ describe('introFog', () => {
     introFog(300, f);
     expect(f).toEqual(CONFIG.fog);
   });
+  it("starts from the run city's fog distances when given them (the existing call keeps CONFIG.fog)", () => {
+    const f = { near: 0, far: 0 };
+    introFog(300, f, { near: 1500, far: 3900 });
+    expect(f).toEqual({ near: 1500, far: 3900 });
+    introFog(5000, f, { near: 1500, far: 3900 });
+    expect(f.near).toBeCloseTo(5500);
+    expect(f.far).toBeCloseTo(13000);
+  });
 });
 
 describe('flashAt', () => {

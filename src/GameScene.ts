@@ -5,7 +5,7 @@ import { Chevrons } from './systems/Chevrons';
 import { edgeArrow } from './systems/edgeArrows';
 import { Lighting } from './render/Lighting';
 import { PixelRenderer } from './render/PixelRenderer';
-import { createSky } from './render/Sky';
+import { createSky, skyColors } from './render/Sky';
 import { clampDelta, yawTo, type Vec2 } from './util/math';
 import { resolveHit, type DamageSource, type Target } from './combat';
 import { City, CRATER_RADIUS } from './world/City';
@@ -157,10 +157,14 @@ export class GameScene {
 
   constructor(private container: HTMLDivElement, private store: PickStore | null = null) {
     this.pixel = new PixelRenderer(container);
-    this.lighting = new Lighting(this.scene);
-    this.lighting.attachSky(createSky(this.scene));
+    const style = pickCity(this.rng);
+    this.lighting = new Lighting(this.scene, style.atmosphere);
+    const sky = createSky(this.scene, style.atmosphere);
+    this.lighting.attachSky(sky);
 
-    this.city = new City(this.scene, pickCity(this.rng), CONFIG.world.seed, this.onTargetDestroyed);
+    this.city = new City(this.scene, style, CONFIG.world.seed, this.onTargetDestroyed);
+    // From here on every city.reset(style) swaps sky, fog, lights and window glow with the city.
+    this.city.attachAtmosphere({ fog: this.scene.fog as THREE.Fog, sky: skyColors(sky), hemi: this.lighting.hemi, sun: this.lighting.sun, sunDir: this.lighting.sunDir });
     this.monster = new Monster(this.scene, INSECT);
     this.progression.setPool(this.monster.kind);
     this.rig = new CameraRig(this.camera);
