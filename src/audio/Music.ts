@@ -27,6 +27,7 @@ export class Music {
   private streams: Partial<Record<TrackId, Stream>> = {};
   private urls: string[] = [];
   private disposed = false;
+  private muted = false;
 
   constructor() {
     const fetch = (file: string) => RundotGameAPI.cdn.fetchAsset(file, { timeout: M.fetchTimeout });
@@ -41,7 +42,7 @@ export class Music {
     if (!this.ctx) {
       this.ctx = new AudioContext();
       this.master = this.ctx.createGain();
-      this.master.gain.value = M.volume;
+      this.master.gain.value = this.muted ? 0 : M.volume;
       this.master.connect(this.ctx.destination);
       for (const id of ['intro', 'main1', 'main2'] as const) this.setUp(id);
     }
@@ -49,6 +50,17 @@ export class Music {
     if (this.ctx.state !== 'running' && this.ctx.state !== 'closed') this.ctx.resume().catch(report);
     for (const id of ['intro', 'main1', 'main2'] as const) if (this.streams[id]?.pending) this.play(id);
     this.send('unlock');
+  }
+
+  /** Silence the music or bring it back (a short fade). The tracks keep playing underneath, so the soundtrack stays in step with the game. */
+  setMuted(muted: boolean): void {
+    this.muted = muted;
+    if (!this.ctx || !this.master) return;
+    const g = this.master.gain;
+    const now = this.ctx.currentTime;
+    g.cancelScheduledValues(now);
+    g.setValueAtTime(g.value, now);
+    g.linearRampToValueAtTime(muted ? 0 : M.volume, now + 0.25);
   }
 
   /** The silhouette reveal started. */

@@ -11,6 +11,7 @@ import { resolveHit, type DamageSource, type Target } from './combat';
 import { City, CRATER_RADIUS } from './world/City';
 import { IntroCinematic } from './intro/IntroCinematic';
 import { Music } from './audio/Music';
+import { loadMusicOn, saveMusicOn } from './audio/musicPref';
 import { nearestRoadPoint, planRoadPath, ringOnRoads } from './world/roads';
 import { Monster } from './monster/Monster';
 import { CameraRig } from './systems/CameraRig';
@@ -126,6 +127,7 @@ export class GameScene {
   private hudT = 0;
   private stateBeforePause: GameState = 'playing';
   private music = new Music();
+  private musicOn = true;
   /**
    * Any pointer, touch or key gesture: the first starts the music (browsers allow audio only after a gesture).
    * Touch counts as a gesture only on release (pointerup / touchend), a mouse on press, so all of them are listened to.
@@ -279,6 +281,9 @@ export class GameScene {
     this.update();
     this.enterTitle();
     // The saved pick arrives asynchronously; it only picks the carousel's starting monster.
+    void loadMusicOn(this.store).then((on) => {
+      if (on !== this.musicOn) this.setMusicOn(on);
+    });
     void loadPick(this.store).then((id) => {
       if (this.browsed) return;
       this.selIndex = ROSTER_ORDER.indexOf(id);
@@ -315,15 +320,37 @@ export class GameScene {
     if (this.state === 'paused') this.setState(this.stateBeforePause);
   }
 
-  /** Escape: open the pause menu mid-run (also over the level-up cards), or close it. True when it did either. */
+  /** Escape: open the pause menu mid-run (also over the level-up cards) or on the monster select screen, or close it. True when it did either. */
   togglePause(): boolean {
     if (this.state === 'paused') {
       this.resume();
       return true;
     }
+    if (this.state === 'select') {
+      this.stateBeforePause = 'select';
+      this.setState('paused');
+      return true;
+    }
     if (this.state !== 'playing' && this.state !== 'levelup') return false;
     this.pause();
     return true;
+  }
+
+  /** The state the pause menu was opened over. */
+  pausedFrom(): GameState {
+    return this.stateBeforePause;
+  }
+
+  isMusicOn(): boolean {
+    return this.musicOn;
+  }
+
+  /** Pause menu → Music: turn the music on or off and remember it. */
+  setMusicOn(on: boolean): void {
+    this.musicOn = on;
+    this.music.setMuted(!on);
+    this.events.emit('music', on);
+    void saveMusicOn(this.store, on);
   }
 
   /** Pause menu → Exit Game: abandon the run and go back to the title screen. */

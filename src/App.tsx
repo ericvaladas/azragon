@@ -43,6 +43,7 @@ function applySafeArea(el: HTMLElement): void {
 
 function App() {
   const gameRef = useRef<GameScene | null>(null);
+  const [musicOn, setMusicOn] = useState(true);
   const [state, setState] = useState<GameState>('loading');
   const [skipHint, setSkipHint] = useState(false);
   const [hud, setHud] = useState<HudSnapshot>(EMPTY_HUD);
@@ -60,6 +61,7 @@ function App() {
     // Dev-only handle for scripted browser checks.
     if (import.meta.env.DEV) (window as unknown as { __game: GameScene }).__game = game;
     game.events.on('stateChange', setState);
+    game.events.on('music', setMusicOn);
     game.events.on('hud', setHud);
     game.events.on('levelUpOffer', setOffer);
     game.events.on('gameOver', setStats);
@@ -70,6 +72,7 @@ function App() {
     game.events.on('expGain', (amount) => setExpPop((p) => ({ amount, key: (p?.key ?? 0) + 1 })));
     // The constructor already entered 'title' before these subscriptions existed.
     setState(game.getState());
+    setMusicOn(game.isMusicOn());
     try {
       RundotGameAPI.lifecycles.onPause(() => game.pause());
       RundotGameAPI.lifecycles.onResume(() => game.resume());
@@ -95,8 +98,14 @@ function App() {
     gameRef.current?.changeMonster();
   }, []);
   const resume = useCallback(() => gameRef.current?.resume(), []);
+  const toggleMusic = useCallback(() => {
+    const game = gameRef.current;
+    if (game) game.setMusicOn(!game.isMusicOn());
+  }, []);
   const exitGame = useCallback(() => gameRef.current?.exitToTitle(), []);
-  const inMenu = state === 'title' || state === 'select';
+  // Paused from the select screen is still a menu: no run HUD behind the pause menu.
+  const under = state === 'paused' ? gameRef.current?.pausedFrom() : state;
+  const inMenu = under === 'title' || under === 'select';
 
   return (
     <div className="app-container">
@@ -112,7 +121,7 @@ function App() {
         {state === 'levelup' && offer && (
           <LevelUpCards key={offer.seq} level={offer.level} offers={offer.offers} all={offer.all} onPick={(id) => pick(id, offer.seq)} />
         )}
-        {state === 'paused' && <PauseMenu onResume={resume} onExit={exitGame} />}
+        {state === 'paused' && <PauseMenu musicOn={musicOn} onResume={resume} onToggleMusic={toggleMusic} onExit={exitGame} />}
         {state === 'gameover' && stats && <GameOver stats={stats} onRestart={restart} onChangeMonster={changeMonster} />}
       </div>
     </div>

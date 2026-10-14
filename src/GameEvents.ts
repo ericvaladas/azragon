@@ -23,6 +23,8 @@ export type RunStats = { timeSec: number; kills: number; buildings: number; leve
 
 export type GameEventMap = {
   stateChange: GameState;
+  /** Whether the music is on (the player's saved setting, then each toggle). */
+  music: boolean;
   hud: HudSnapshot;
   expGain: number;
   /** `all`: every available choice is listed (Konami-code levels), not the usual few. */
