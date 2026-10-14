@@ -16,6 +16,8 @@ const THIGH = 170;
 const SHIN = 190;
 const LIFT = 80;
 const FOOT_X = 115;
+/** The arms hang this much (rad) lower at the shoulder than they were modelled, so they don't jut out. */
+const ARM_DROP = 0.35;
 /** How big the head is (skull, jaw, teeth, eyes and brows together). */
 const HEAD_SCALE = 1.25;
 /** Leap: how far (model units) the body sinks in its crouch, and how high the feet tuck up in the air. */
@@ -252,7 +254,7 @@ export class KaijuBody implements MonsterBody {
       swing += lp.arms;
       if (f.melee && f.melee.side === i) swing = rakeSwing(f.melee.t, K.stats.meleeTiming);
       // While slashing forward (negative swing) the arm also sweeps across the body.
-      arm.pivot.rotation.set(swing, 0, -arm.side * Math.max(0, -swing) * 0.5);
+      arm.pivot.rotation.set(swing + ARM_DROP, 0, -arm.side * Math.max(0, -swing) * 0.5);
     }
 
     // Aim the head (not the body) at the breath target, at the neck's own turn speed.
