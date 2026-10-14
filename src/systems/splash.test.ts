@@ -99,7 +99,8 @@ describe('Splasher on a north–south river', () => {
   const NS: CityStyle = { ...TOKYO, river: { axis: 'z', c0: 1500, amp: 150, wavelength: 1100, halfWidth: 130 }, bay: undefined, island: undefined };
   it('splashes mid-channel, and not on the bank road along the x line at its west edge', () => {
     let ci = 0;
-    while (!(isRiver(NS, ci, 0) && !isRiver(NS, ci - 1, 0))) ci++;
+    while (ci < 40 && !(isRiver(NS, ci, 0) && !isRiver(NS, ci - 1, 0))) ci++;
+    expect(ci, 'west edge of the river in row 0 within 40 cells').toBeLessThan(40);
     const { out, fx } = stub();
     const sp = new Splasher(() => NS, fx);
     expect(sp.at(new THREE.Vector3(PITCH * (ci + 0.5), 0, PITCH * 0.5))).toBe(true);
