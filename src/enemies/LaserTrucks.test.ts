@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import { LaserTrucks } from './LaserTrucks';
 import type { WorldContext } from './types';
+import type { Vec2 } from '../util/math';
 import type { DamageSource } from '../combat';
 import { CONFIG } from '../config';
 import { pointSegmentDistance } from './beamMath';
@@ -18,6 +19,7 @@ function makeCtx() {
     minutes: 0,
     rng: () => 0.5,
     particles: { ring: noop, emit: noop, explosion: noop },
+    roads: { nearest: (p: Vec2) => p, nearestLand: (p: Vec2) => p, path: (_a: Vec2, b: Vec2) => [b] },
     damageMonster: (amount: number, source: DamageSource) => hits.push({ amount, source }),
     damageBuildings: noop,
     fireShell: noop,

@@ -10,8 +10,7 @@ import { clampDelta, yawTo, type Vec2 } from './util/math';
 import { resolveHit, type DamageSource, type Target } from './combat';
 import { City, CRATER_RADIUS } from './world/City';
 import { IntroCinematic } from './intro/IntroCinematic';
-import { ringOnRoads } from './world/roads';
-import { ROAD_ORIGIN } from './world/chunks';
+import { nearestRoadPoint, planRoadPath, ringOnRoads } from './world/roads';
 import { Monster } from './monster/Monster';
 import { CameraRig } from './systems/CameraRig';
 import { Input } from './systems/Input';
@@ -35,6 +34,7 @@ import { Artillery } from './enemies/Artillery';
 import { LaserTrucks } from './enemies/LaserTrucks';
 import { OrbitalLaser } from './enemies/OrbitalLaser';
 import { mulberry32 } from './util/rng';
+import { pickCity } from './cities';
 import { Progression, expToNext } from './systems/Progression';
 import { healOnKill, regen } from './monster/vitals';
 import { DebugOverlay } from './systems/DebugOverlay';
@@ -149,7 +149,7 @@ export class GameScene {
     this.lighting = new Lighting(this.scene);
     this.lighting.attachSky(createSky(this.scene));
 
-    this.city = new City(this.scene, CONFIG.world.seed, this.onTargetDestroyed);
+    this.city = new City(this.scene, pickCity(this.rng), CONFIG.world.seed, this.onTargetDestroyed);
     this.monster = new Monster(this.scene, INSECT);
     this.progression.setPool(this.monster.kind);
     this.rig = new CameraRig(this.camera);
@@ -282,7 +282,7 @@ export class GameScene {
   }
 
   private resetRun(): void {
-    this.city.reset();
+    this.city.reset(pickCity(this.rng));
     this.projectiles.clear();
     this.breath.clear();
     this.monster.body.arms?.clear();
@@ -548,7 +548,7 @@ export class GameScene {
         if (!this.openingDone && this.runTime >= CONFIG.opening.time) {
           this.openingDone = true;
           const c = { x: this.monster.position.x, z: this.monster.position.z };
-          for (const p of ringOnRoads(c, CONFIG.opening.count, CONFIG.opening.radius, ROAD_ORIGIN, CONFIG.world.blockSize)) this.enemies.get<TankFleet>('tank').spawnAt(p.x, p.z, this.ctx);
+          for (const p of ringOnRoads(this.city.style, c, CONFIG.opening.count, CONFIG.opening.radius)) this.enemies.get<TankFleet>('tank').spawnAt(p.x, p.z, this.ctx);
         }
         this.updateMonster(dt);
         this.tentacleSlams();
@@ -1008,7 +1008,13 @@ export class GameScene {
         return self.progression.level;
       },
       rng: this.rng,
+      blocked: (x, z) => this.city.blockedAt(x, z),
       particles: this.particles,
+      roads: {
+        nearest: (p) => nearestRoadPoint(this.city.style, p),
+        nearestLand: (p) => nearestRoadPoint(this.city.style, p, 3000, { avoidBridges: true }),
+        path: (from, to) => planRoadPath(this.city.style, from, to),
+      },
       damageMonster: (amount, source, attacker) => this.damageMonster(amount, source, attacker),
       damageBuildings: (p, r, amount) => this.city.forEachStandingInRadius(p, r, (t) => t.applyDamage(amount)),
       fireShell: (from, to, damage) => {

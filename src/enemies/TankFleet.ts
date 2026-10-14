@@ -4,8 +4,6 @@ import type { Target } from '../combat';
 import type { EnemySystem, WorldContext } from './types';
 import { toonMat } from '../render/toon';
 import { dist2, type Vec2 } from '../util/math';
-import { ROAD_ORIGIN } from '../world/chunks';
-import { planRoadPath, snapToRoad } from '../world/roads';
 
 const REPLAN_EVERY = 4;
 const MAX_TANKS = CONFIG.spawns.tank.cap;
@@ -85,7 +83,8 @@ export class TankFleet implements EnemySystem {
     const a = ctx.rng() * Math.PI * 2;
     const r = CONFIG.director.spawnRing * (0.8 + ctx.rng() * 0.3);
     const around = ctx.monster.position;
-    this.spawnAt(snapToRoad(around.x + Math.cos(a) * r, ROAD_ORIGIN, CONFIG.world.blockSize), around.z + Math.sin(a) * r, ctx);
+    const p = ctx.roads.nearest({ x: around.x + Math.cos(a) * r, z: around.z + Math.sin(a) * r });
+    this.spawnAt(p.x, p.z, ctx);
   }
 
   /** Spawn a tank at an exact point (assumed on a road), HP scaled by difficulty. */
@@ -137,7 +136,7 @@ export class TankFleet implements EnemySystem {
 
       t.replanT -= dt;
       if (t.path.length === 0 || t.replanT <= 0) {
-        t.path = planRoadPath(here, goal, ROAD_ORIGIN, CONFIG.world.blockSize);
+        t.path = ctx.roads.path(here, goal);
         t.replanT = REPLAN_EVERY;
       }
       const wp = t.path[0];

@@ -15,7 +15,14 @@ export interface WorldContext {
   /** Player level: drives unlocks, spawn rate, difficulty, and salvo sizes. */
   readonly level: number;
   readonly rng: () => number;
+  /** True where nothing may be placed (inside a landmark's footprint, or on river water). Optional: absent means nowhere is blocked. */
+  blocked?(x: number, z: number): boolean;
   readonly particles: Particles;
+  /**
+   * The road network: nearest road point, nearest road point off every bridge deck (for things that sit on the
+   * ground), and a waypoint route over existing segments (excluding `from`).
+   */
+  readonly roads: { nearest(p: Vec2): Vec2; nearestLand(p: Vec2): Vec2; path(from: Vec2, to: Vec2): Vec2[] };
   /** `attacker` is the enemy dealing the hit, when there is one (Overload fires beams back at it). */
   damageMonster(amount: number, source: DamageSource, attacker?: Target): void;
   damageBuildings(p: Vec2, r: number, amount: number): void;

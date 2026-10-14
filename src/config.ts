@@ -25,7 +25,6 @@ export const CONFIG = {
     sun: 0xfff1d6,
     hemiSky: 0xcfe3ff,
     hemiGround: 0x6b5a3a,
-    buildingFacades: [0xe8d9c4, 0xc9d6df, 0xe6c3b0, 0xd4dcc2, 0xbfb8d6],
     roof: 0x5d5a66,
     carapace: 0x7fd41e,
     carapaceDark: 0x4e8f12,
@@ -66,7 +65,7 @@ export const CONFIG = {
     blimpTrim: 0xd8322a,
     blimpTrimDark: 0x5a1612,
   },
-  fog: { near: 1200, far: 4600 },
+  fog: { near: 2200, far: 4700 },
   camera: {
     near: 5,
     far: 12000,
@@ -96,16 +95,26 @@ export const CONFIG = {
     loadRadius: 4800,
     unloadRadius: 5600,
     chunksPerFrame: 3,
-    maxBuildings: 7000,
-    maxTrees: 3000,
+    maxBuildings: 12000,
+    /** Tree cones; a per-chunk cap (maxTrees / maxLoadedChunks) keeps a full load inside the pool. */
+    maxTrees: 37000,
+    /** Pool size for neon sign boxes across all loaded chunks. */
+    maxSigns: 12000,
+    /** Pool size for animated video-screen signs across all loaded chunks. */
+    maxScreens: 60,
+    /** Pool size for park ground pads across all loaded chunks. */
+    maxParks: 2000,
     maxRubble: 2500,
+    /** Road segment pool: at most 32 segments start in a chunk, times maxLoadedChunks (185), rounded up. */
+    maxRoads: 6000,
+    /** Intersection squares plus bridge deck slabs (at most 16 intersections per chunk), with 10% headroom over the swept peak. */
+    maxNodes: 3300,
+    /** River cell quads. */
+    maxWater: 800,
     blockSize: 200,
     roadWidth: 36,
     /** Crater around the origin (the pod's impact site; the decal is half a block wider), sized to the cocoon. */
     clearRadius: 650,
-    parkChance: 0.12,
-    minBuildingH: 20,
-    maxBuildingH: 120,
     groundExtent: 30000,
     buildingHpPerMetre: 1.5,
     /** EXP per building HP, rounded per building (min 1); 0.0365 is ~30% below the original 0.05 on average. */
@@ -438,7 +447,7 @@ export const CONFIG = {
      * a ring of secondary fireballs; crater fires per second during the settle.
      */
     impact: {
-      outer: 2,
+      outer: 1.3,
       shockSpeed: 1400,
       rings: [
         { radius: 2.4, life: 0.8, delay: 0 },
