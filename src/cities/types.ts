@@ -48,6 +48,15 @@ export type GroundOverlay = { id: string; x: number; z: number; size: number };
 /** A winding river: centreline z = z0 + amp · sin(x / wavelength); cells within halfWidth (vertical) are water. */
 export type RiverSpec = { z0: number; amp: number; wavelength: number; halfWidth: number };
 
+/**
+ * A coastline: cells whose centre c has dot(c, dir) > offset + amp · sin(dot(c, perp) / wavelength) are sea, with
+ * perp = (−dir.z, dir.x).
+ */
+export type BaySpec = { dir: { x: number; z: number }; offset: number; amp: number; wavelength: number };
+
+/** A rounded-rectangle island: half extents along the bay's dir and perp axes from center. Never reached by road. */
+export type IslandSpec = { center: { x: number; z: number }; halfAlong: number; halfAcross: number };
+
 export type CityStyle = {
   id: string;
   name: string;
@@ -72,6 +81,8 @@ export type CityStyle = {
   specialLots: readonly BuildingSpec[];
   overlays: readonly GroundOverlay[];
   river?: RiverSpec;
+  bay?: BaySpec;
+  island?: IslandSpec;
   /** Fraction of removable street segments removed, by the district at the segment's midpoint. */
   roadRemoval: Readonly<Record<DistrictId, number>>;
   /** Lattice nodes (world x, z) whose four segments always exist (e.g. the Shibuya Crossing). */

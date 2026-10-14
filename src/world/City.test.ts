@@ -243,6 +243,12 @@ describe('City (Tokyo)', () => {
     expect(city.blockedAt(...dry!)).toBe(false);
   });
 
+  it('blocks placement on the island', () => {
+    const { city } = make();
+    const c = TOKYO.island!.center;
+    expect(city.blockedAt(c.x, c.z)).toBe(true);
+  });
+
   it('tints each building with its spec colour and sets its facade cell', () => {
     const { city } = make();
     const attr = city.buildingMesh.geometry.getAttribute('aFacade') as THREE.InstancedBufferAttribute;

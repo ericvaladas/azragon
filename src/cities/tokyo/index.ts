@@ -31,6 +31,8 @@ export const TOKYO: CityStyle = {
   specialLots: SHIBUYA_LOTS,
   overlays: [SCRAMBLE],
   river: { z0: 1300, amp: 180, wavelength: 900, halfWidth: 130 },
+  bay: { dir: { x: -Math.SQRT1_2, z: -Math.SQRT1_2 }, offset: 2000, amp: 150, wavelength: 1400 },
+  island: { center: { x: -2613, z: -1913 }, halfAlong: 350, halfAcross: 450 },
   roadRemoval: { highrise: 0.15, neon: 0.15, office: 0.3, residential: 0.3, park: 0.5 },
   keepNodes: [SHIBUYA_CROSSING],
 };

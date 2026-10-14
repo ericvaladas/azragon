@@ -17,22 +17,61 @@ export function lineWidth(index: number): number {
   return mod(index, AVENUE_EVERY) === 0 ? AVENUE_WIDTH : CONFIG.world.roadWidth;
 }
 
+const cellCentre = (ci: number, cj: number): Vec2 => ({ x: PITCH * ci + PITCH / 2, z: PITCH * cj + PITCH / 2 });
+
+/** Radius of the island's rounded corners. */
+const ISLAND_CORNER = 150;
+
 /** True when the centre of cell (ci, cj) lies within the river's half width (vertical distance) of its centreline. */
-export function isWater(style: CityStyle, ci: number, cj: number): boolean {
+export function isRiver(style: CityStyle, ci: number, cj: number): boolean {
   const r = style.river;
   if (!r) return false;
-  const xc = PITCH * ci + PITCH / 2;
-  const zc = PITCH * cj + PITCH / 2;
+  const { x: xc, z: zc } = cellCentre(ci, cj);
   return Math.abs(zc - (r.z0 + r.amp * Math.sin(xc / r.wavelength))) < r.halfWidth;
 }
 
-/** The road segment on the lattice, or null where none exists (removed street, or river water). */
+/** True when cell (ci, cj) lies on the island: a rounded rectangle aligned to the bay axes. */
+export function isIsland(style: CityStyle, ci: number, cj: number): boolean {
+  const is = style.island;
+  const bay = style.bay;
+  if (!is || !bay) return false;
+  const c = cellCentre(ci, cj);
+  const dx = c.x - is.center.x, dz = c.z - is.center.z;
+  const u = dx * bay.dir.x + dz * bay.dir.z;
+  const v = -dx * bay.dir.z + dz * bay.dir.x;
+  const qu = Math.max(Math.abs(u) - (is.halfAlong - ISLAND_CORNER), 0);
+  const qv = Math.max(Math.abs(v) - (is.halfAcross - ISLAND_CORNER), 0);
+  return Math.hypot(qu, qv) <= ISLAND_CORNER;
+}
+
+/** True when the centre of cell (ci, cj) lies seaward of the coastline; island cells are never bay. */
+export function isBay(style: CityStyle, ci: number, cj: number): boolean {
+  const bay = style.bay;
+  if (!bay) return false;
+  const { x, z } = cellCentre(ci, cj);
+  const along = x * bay.dir.x + z * bay.dir.z;
+  const across = -x * bay.dir.z + z * bay.dir.x;
+  return along > bay.offset + bay.amp * Math.sin(across / bay.wavelength) && !isIsland(style, ci, cj);
+}
+
+/** River water outside the bay: only these cells carry bridges. */
+const isRiverOnly = (style: CityStyle, ci: number, cj: number): boolean => isRiver(style, ci, cj) && !isBay(style, ci, cj);
+
+/** True for any water cell: river or bay. */
+export function isWater(style: CityStyle, ci: number, cj: number): boolean {
+  return isRiver(style, ci, cj) || isBay(style, ci, cj);
+}
+
+/** The road segment on the lattice, or null where none exists (removed street, water, or island). */
 export function segmentAt(style: CityStyle, axis: Axis, i: number, j: number): Segment | null {
   const avenue = mod(axis === 'x' ? j : i, AVENUE_EVERY) === 0;
-  const a = axis === 'x' ? isWater(style, i, j - 1) : isWater(style, i - 1, j);
+  const ai = axis === 'x' ? i : i - 1, aj = axis === 'x' ? j - 1 : j;
+  if (isIsland(style, ai, aj) || isIsland(style, i, j)) return null;
+  const a = isWater(style, ai, aj);
   const b = isWater(style, i, j);
   const seg = (bridge: boolean): Segment => ({ axis, i, j, avenue, width: lineWidth(axis === 'x' ? j : i), bridge });
-  if (a && b) return avenue && axis === 'z' ? seg(true) : null;
+  // Only river-on-both-sides bridges; bay water, or river meeting bay, has no segment.
+  if (a && b) return avenue && axis === 'z' && isRiverOnly(style, ai, aj) && isRiverOnly(style, i, j) ? seg(true) : null;
   if (a || b || avenue) return seg(false);
   const mx = axis === 'x' ? PITCH * i + PITCH / 2 : PITCH * i;
   const mz = axis === 'x' ? PITCH * j : PITCH * j + PITCH / 2;

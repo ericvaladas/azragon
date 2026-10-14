@@ -5,7 +5,7 @@ import type { Vec2 } from '../util/math';
 import { mulberry32 } from '../util/rng';
 import type { CityStyle, LandmarkSpec, SignDef } from '../cities/types';
 import { blastTopples, chunksInRadius, DestroyedLog, generateChunk, nodeSize, planStreaming, type BuildingSpec, type ChunkContent } from './chunks';
-import { isWater, PITCH, type Segment } from './roads';
+import { isIsland, isWater, PITCH, type Segment } from './roads';
 import { canvasCityTextures, patchFacadeShader, patchRoadShader, SCREEN_FRAMES, SIGN_RECTS, type CityTextures } from './pixelTextures';
 import { rubbleGeometry } from './rubble';
 import { faceted, toonMat } from '../render/toon';
@@ -371,9 +371,10 @@ export class City {
     return false;
   }
 
-  /** Whether nothing may be placed at (x, z): inside a loaded landmark's footprint, or on a river cell. */
+  /** Whether nothing may be placed at (x, z): inside a loaded landmark's footprint, on a water cell (river or bay), or on an island cell. */
   blockedAt(x: number, z: number): boolean {
-    return isWater(this._style, Math.floor(x / PITCH), Math.floor(z / PITCH)) || this.landmarkAt(x, z);
+    const ci = Math.floor(x / PITCH), cj = Math.floor(z / PITCH);
+    return isWater(this._style, ci, cj) || isIsland(this._style, ci, cj) || this.landmarkAt(x, z);
   }
 
   /** Loaded landmark meshes. */
