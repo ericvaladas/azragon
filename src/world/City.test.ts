@@ -9,6 +9,7 @@ import { craneGeometry } from './crane';
 import { isWater, PITCH } from './roads';
 import type { CityTextures } from './pixelTextures';
 import type { Target } from '../combat';
+import { Splasher } from '../systems/splash';
 import { gameplayPose } from '../intro/timeline';
 
 const STUB: CityTextures = {
@@ -545,11 +546,12 @@ describe('City: the Rainbow Bridge (a span landmark)', () => {
     expect(city.pickBuilding(new THREE.Ray(new THREE.Vector3(side.x, 1000, side.z), down))).toBeNull();
   });
 
-  it('collapses into the bay: splashes along the span, sinks with a roll (the island end never rises), then is hidden', () => {
-    const { city, scene } = make();
+  it('collapses into the bay: splashes along the span over the collapse', () => {
+    const { city } = make();
     const splashes: THREE.Vector3[] = [];
     city.onSplash = (p) => splashes.push(p.clone());
     hits(city, span.from, 2)!.applyDamage(1e9);
+    for (let s = 0; s < 120; s++) city.update(CONFIG.world.collapseTime / 100, new THREE.Vector3());
     expect(splashes.length).toBeGreaterThan(8);
     for (const p of splashes) {
       const t = (p.x - span.from.x) * u.x + (p.z - span.from.z) * u.z;
@@ -557,6 +559,11 @@ describe('City: the Rainbow Bridge (a span landmark)', () => {
       expect(t).toBeLessThanOrEqual(len + 1);
       expect(Math.abs(-(p.x - span.from.x) * u.z + (p.z - span.from.z) * u.x)).toBeLessThan(1);
     }
+  });
+
+  it('sinks with a roll (the island end never rises), then is hidden', () => {
+    const { city, scene } = make();
+    hits(city, span.from, 2)!.applyDamage(1e9);
     const mesh = bridgeMesh(scene);
     const islandDeck = () => {
       mesh.updateMatrixWorld(true);
@@ -571,6 +578,44 @@ describe('City: the Rainbow Bridge (a span landmark)', () => {
     expect(Math.hypot(mid.x - span.to.x, mid.z - span.to.z)).toBeLessThan(60);
     city.update(CONFIG.world.collapseTime, new THREE.Vector3());
     expect(mesh.visible).toBe(false);
+  });
+
+  it('splashes progressively from the shore out to the island end, and the 40-a-frame budget still reaches the far half', () => {
+    const { city } = make();
+    const along = (p: { x: number; z: number }) => (p.x - span.from.x) * u.x + (p.z - span.from.z) * u.z;
+    const emitted: { t: number; time: number; n: number }[] = [];
+    let time = 0;
+    const record = (p: THREE.Vector3, n: number) => void emitted.push({ t: along(p), time, n });
+    const splasher = new Splasher(() => TOKYO, { emit: (_k, p, n) => record(p, n), ring: (_k, p, _r, n) => record(p, n) });
+    city.onSplash = (p, size) => splasher.at(p, size / 40);
+    splasher.newFrame();
+    hits(city, span.from, 2)!.applyDamage(1e9);
+    const dt = 1 / 60;
+    for (; time < CONFIG.world.collapseTime + 0.5; time += dt) {
+      splasher.newFrame();
+      city.update(dt, new THREE.Vector3());
+    }
+    const far = emitted.filter((e) => e.t > len / 2);
+    expect(far.reduce((n, e) => n + e.n, 0)).toBeGreaterThan(100);
+    expect(Math.max(...emitted.map((e) => e.t))).toBeGreaterThan(len - 200);
+    // The shore end splashes first and the island end last.
+    const first = (lo: number, hi: number) => Math.min(...emitted.filter((e) => e.t >= lo && e.t < hi).map((e) => e.time));
+    expect(first(0, len / 3)).toBeLessThan(0.2);
+    expect(first((2 * len) / 3, len + 1)).toBeGreaterThan(CONFIG.world.collapseTime * 0.5);
+  });
+
+  it('is picked by a ray at a tower top (160 m up, far above the deck), not by one at that height mid-span', () => {
+    const { city } = make();
+    const across = new THREE.Vector3(-u.z, 0, u.x);
+    const ray = (t: number, y: number) => {
+      const p = at(t, -300);
+      return new THREE.Ray(new THREE.Vector3(p.x, y, p.z), across.clone());
+    };
+    const bridgeT = hits(city, span.from, 2);
+    // Compared as booleans: a failing match would otherwise try to print the whole city.
+    expect(city.pickBuilding(ray(0.3 * len, bridge.h - 3)) === bridgeT).toBe(true);
+    expect(city.pickBuilding(ray(0.7 * len, bridge.h - 3)) === bridgeT).toBe(true);
+    expect(city.pickBuilding(ray(0.5 * len, bridge.h - 3)) === null).toBe(true);
   });
 
   it('stays destroyed after its chunk streams out and back', () => {

@@ -61,10 +61,17 @@ export type BuildingSpec = { x: number; z: number; w: number; d: number; h: numb
 
 /**
  * A long landmark's line: from its shore end `from` to its far end `to`, `halfWidth` m to each side, its deck's top
- * `deckY` m up (rays pick it up to 10 m above that). Its geometry is built in its own frame, running along local +Z
- * from `from` (local z = 0) to `to` (local z = the span's length).
+ * `deckY` m up (rays pick it up to 10 m above that), and towers `towers` m along it (rays pick each up to the
+ * landmark's full height, within TOWER_PICK_HALF m along). Its geometry is built in its own frame, running along
+ * local +Z from `from` (local z = 0) to `to` (local z = the span's length).
  */
-export type LandmarkSpan = { from: { x: number; z: number }; to: { x: number; z: number }; halfWidth: number; deckY: number };
+export type LandmarkSpan = {
+  from: { x: number; z: number };
+  to: { x: number; z: number };
+  halfWidth: number;
+  deckY: number;
+  towers?: readonly number[];
+};
 
 /**
  * A destructible structure with its own mesh. `build` returns vertex-coloured geometry with its base centre at the

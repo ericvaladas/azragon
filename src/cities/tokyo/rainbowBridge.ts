@@ -19,6 +19,8 @@ const CONCRETE = 0xb8b4aa;
 export const RAINBOW_BRIDGE = { from: { x: -1658, z: -958 }, length: 1080, h: 160, deckY: 50, towerX: 19, halfWidth: 24 } as const;
 /** Each anchorage: a concrete block `long` m beyond its end of the span, `wide` m across, `tall` m up (under the deck). */
 const ANCHOR = { long: 30, wide: 36, tall: 46 } as const;
+/** The towers stand at these fractions of the length. */
+const TOWER_AT = [0.3, 0.7] as const;
 /** Main cables rest on the anchorage saddles at this height and pass over the tower tops at TOWER_TOP. */
 const SADDLE_Y = 58;
 const TOWER_TOP = 157;
@@ -64,7 +66,7 @@ export function rainbowBridgeGeometry(length: number): THREE.BufferGeometry {
   for (const s of [-1, 1]) parts.push(box(s * 14.5 - 0.5, deckY, z0, s * 14.5 + 0.5, deckY + 1.4, z1, WHITE));
   for (let z = 15; z < length; z += 30) for (const s of [-1, 1]) parts.push(box(s * 14.2 - 0.5, deckY - 12, z - 1, s * 14.2 + 0.5, deckY - 4, z + 1, TRUSS));
   // Towers: footing, two legs, three cross beams (one carrying the deck), caps.
-  const towers = [0.3 * length, 0.7 * length];
+  const towers = TOWER_AT.map((f) => f * length);
   for (const tz of towers) {
     parts.push(box(-towerX - 4, 0, tz - 13, towerX + 4, 10, tz + 13, CONCRETE));
     for (const s of [-1, 1]) {
@@ -125,6 +127,12 @@ export const RAINBOW_BRIDGE_LANDMARK: LandmarkSpec = {
   w: SHORE_ANCHOR.size,
   d: SHORE_ANCHOR.size,
   h: RAINBOW_BRIDGE.h,
-  span: { from: RAINBOW_BRIDGE.from, to: TO, halfWidth: RAINBOW_BRIDGE.halfWidth, deckY: RAINBOW_BRIDGE.deckY },
+  span: {
+    from: RAINBOW_BRIDGE.from,
+    to: TO,
+    halfWidth: RAINBOW_BRIDGE.halfWidth,
+    deckY: RAINBOW_BRIDGE.deckY,
+    towers: TOWER_AT.map((f) => f * RAINBOW_BRIDGE.length),
+  },
   build: () => rainbowBridgeGeometry(RAINBOW_BRIDGE.length),
 };

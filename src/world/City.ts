@@ -15,9 +15,9 @@ type BuildingState = 'standing' | 'collapsing' | 'rubble';
 
 /**
  * A long landmark's frame: `u` the unit vector from `from` to its far end, `length` m away; `yaw` turns local +Z onto
- * `u`; `toLocal` maps world points into the frame (local x across, y up, z along), where `pick` is its picking box.
+ * `u`; `toLocal` maps world points into the frame (local x across, y up, z along), where `picks` are its picking boxes (the deck, then each tower).
  */
-type SpanFrame = { from: Vec2; u: Vec2; length: number; halfWidth: number; yaw: THREE.Quaternion; toLocal: THREE.Matrix4; pick: THREE.Box3 };
+type SpanFrame = { from: Vec2; u: Vec2; length: number; halfWidth: number; yaw: THREE.Quaternion; toLocal: THREE.Matrix4; picks: THREE.Box3[] };
 
 class Building implements Target {
   readonly kind = 'building' as const;
@@ -183,7 +183,13 @@ const _m2 = new THREE.Matrix4();
 const _q2 = new THREE.Quaternion();
 const _ray = new THREE.Ray();
 
-/** The frame of landmark l's span (picking box from the ground to 10 m over its deck), or null for a compact landmark. */
+/** Half the along-span length of a tower's picking box: the tower's footing reaches 13 m either side. */
+const TOWER_PICK_HALF = 15;
+
+/**
+ * The frame of landmark l's span, or null for a compact landmark. Picking boxes: the deck from the ground to 10 m
+ * over its top, and each tower up to the landmark's height.
+ */
 function spanFrame(l: LandmarkSpec): SpanFrame | null {
   const span = l.span;
   if (!span) return null;
@@ -191,8 +197,13 @@ function spanFrame(l: LandmarkSpec): SpanFrame | null {
   const u = { x: (span.to.x - span.from.x) / length, z: (span.to.z - span.from.z) / length };
   const yaw = new THREE.Quaternion().setFromAxisAngle(UP, Math.atan2(u.x, u.z));
   const toLocal = new THREE.Matrix4().compose(new THREE.Vector3(span.from.x, 0, span.from.z), yaw, new THREE.Vector3(1, 1, 1)).invert();
-  const pick = new THREE.Box3(new THREE.Vector3(-span.halfWidth, 0, 0), new THREE.Vector3(span.halfWidth, span.deckY + 10, length));
-  return { from: span.from, u, length, halfWidth: span.halfWidth, yaw, toLocal, pick };
+  const picks = [
+    new THREE.Box3(new THREE.Vector3(-span.halfWidth, 0, 0), new THREE.Vector3(span.halfWidth, span.deckY + 10, length)),
+    ...(span.towers ?? []).map(
+      (t) => new THREE.Box3(new THREE.Vector3(-span.halfWidth, 0, t - TOWER_PICK_HALF), new THREE.Vector3(span.halfWidth, l.h, t + TOWER_PICK_HALF)),
+    ),
+  ];
+  return { from: span.from, u, length, halfWidth: span.halfWidth, yaw, toLocal, picks };
 }
 
 /** Distance from p to the segment of a span's line. */
@@ -264,6 +275,8 @@ export class City {
   private groundSpan = Math.ceil((CONFIG.world.unloadRadius * 2.4) / GROUND_TILE) * GROUND_TILE;
   private rubbleUsed: boolean[];
   private collapsing: Building[] = [];
+  /** A long landmark's splashes not yet due: each fires `delay` s on, so the span reads as falling in from the shore out. */
+  private splashQueue: { delay: number; p: THREE.Vector3; size: number }[] = [];
   /** Loaded long landmarks (also in their owning chunk's buildings): their reach is measured to their line. */
   private spans: Building[] = [];
   private destroyed = new DestroyedLog();
@@ -272,7 +285,7 @@ export class City {
   /** Buildings collapsed or turned to rubble: only the building, rubble, sign and screen matrices changed. */
   private dirtyBuildings = false;
   onCollapseStart: (pos: THREE.Vector3, size: number) => void = () => {};
-  /** Called along the span, over water, when a long landmark's collapse starts. */
+  /** Called along the span, over water, during a long landmark's collapse: each point's delay grows with its distance out. */
   onSplash: (p: THREE.Vector3, size: number) => void = () => {};
 
   constructor(
@@ -525,6 +538,7 @@ export class City {
     this.crater.visible = false;
     for (const key of [...this.loadedKeys]) this.unloadChunk(key);
     this.collapsing = [];
+    this.splashQueue = [];
     this.destroyed.clear();
     this.resetPools();
     this.stream(new THREE.Vector3(), Infinity);
@@ -576,11 +590,14 @@ export class City {
       for (const b of chunk.buildings) {
         if (b.state !== 'standing') continue;
         const r = b.span ? _ray.copy(ray).applyMatrix4(b.span.toLocal) : ray;
-        if (!r.intersectBox(b.span ? b.span.pick : b.box, _hit)) continue;
-        const d = _hit.distanceToSquared(r.origin);
-        if (d < bestD) {
-          bestD = d;
-          best = b;
+        const n = b.span ? b.span.picks.length : 1;
+        for (let k = 0; k < n; k++) {
+          if (!r.intersectBox(b.span ? b.span.picks[k]! : b.box, _hit)) continue;
+          const d = _hit.distanceToSquared(r.origin);
+          if (d < bestD) {
+            bestD = d;
+            best = b;
+          }
         }
       }
     }
@@ -622,15 +639,32 @@ export class City {
     if (award) this.onDestroyed(b, Math.max(1, Math.round(b.maxHp * CONFIG.world.buildingExpPerHp)));
   }
 
-  /** Dust at the building's base; a long landmark also splashes every SPLASH_GAP m along its span where it is over water. */
+  /**
+   * Dust at the building's base. A long landmark also splashes every SPLASH_GAP m along its span where it is over
+   * water, each point `t` m out waiting t / length of the collapse time, so the splashes run from the shore end out
+   * to the far end and the per-frame splash budget is spread over the whole collapse.
+   */
   private collapseDust(b: Building): void {
     this.onCollapseStart(new THREE.Vector3(b.spec.x, 0, b.spec.z), Math.max(b.spec.w, b.spec.d));
     const f = b.span;
     if (!f) return;
     for (let t = 0; t <= f.length; t += SPLASH_GAP) {
       const x = f.from.x + f.u.x * t, z = f.from.z + f.u.z * t;
-      if (isWater(this._style, Math.floor(x / PITCH), Math.floor(z / PITCH))) this.onSplash(new THREE.Vector3(x, 0, z), f.halfWidth * 4);
+      if (!isWater(this._style, Math.floor(x / PITCH), Math.floor(z / PITCH))) continue;
+      this.splashQueue.push({ delay: (t / f.length) * CONFIG.world.collapseTime, p: new THREE.Vector3(x, 0, z), size: f.halfWidth * 4 });
     }
+    this.flushSplashes(0);
+  }
+
+  /** Counts queued splashes down by dt and fires the ones now due, in queue order (nearest the shore first). */
+  private flushSplashes(dt: number): void {
+    let kept = 0;
+    for (const s of this.splashQueue) {
+      s.delay -= dt;
+      if (s.delay > 0) this.splashQueue[kept++] = s;
+      else this.onSplash(s.p, s.size);
+    }
+    this.splashQueue.length = kept;
   }
 
   /**
@@ -664,6 +698,7 @@ export class City {
   /** Animate collapses and stream chunks around `center`. */
   update(dt: number, center: THREE.Vector3): void {
     this.stream(center, CONFIG.world.chunksPerFrame);
+    this.flushSplashes(dt);
     const T = CONFIG.world.collapseTime;
     for (let i = this.collapsing.length - 1; i >= 0; i--) {
       const b = this.collapsing[i]!;
