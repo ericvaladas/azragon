@@ -194,3 +194,14 @@ describe('Damage When Hurt ability', () => {
     expect(p.offer(true).map((o) => o.id)).not.toContain('core');
   });
 });
+
+describe('Progression.choosingLevel', () => {
+  it('is the level each pending choice is for: the first of several levels gained at once comes first', () => {
+    const p = new Progression(mulberry32(3));
+    p.addExp(expToNext(1) + expToNext(2));
+    expect(p.level).toBe(3);
+    expect(p.choosingLevel).toBe(2);
+    p.choose('damage');
+    expect(p.choosingLevel).toBe(3);
+  });
+});

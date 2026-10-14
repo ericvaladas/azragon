@@ -113,6 +113,11 @@ export class Progression {
     this.picks = 0;
   }
 
+  /** The level the next pending choice is for (levels gained together are chosen for in order). */
+  get choosingLevel(): number {
+    return this.level - this.pendingLevels + 1;
+  }
+
   /** Adds EXP, levelling as many times as it covers. Returns levels gained (each needs a choice). */
   addExp(n: number): number {
     this.exp += n;

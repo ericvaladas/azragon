@@ -460,7 +460,7 @@ export class GameScene {
   private emitOffer(): void {
     const all = this.cheatLevels > 0;
     const offers = this.progression.offer(all);
-    this.events.emit('levelUpOffer', { seq: this.progression.offerSeq, offers, all });
+    this.events.emit('levelUpOffer', { seq: this.progression.offerSeq, level: this.progression.choosingLevel, offers, all });
   }
 
     private emitThreats(): void {
