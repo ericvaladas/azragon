@@ -16,6 +16,8 @@ const THIGH = 170;
 const SHIN = 190;
 const LIFT = 80;
 const FOOT_X = 115;
+/** How big the head is (skull, jaw, teeth, eyes and brows together). */
+const HEAD_SCALE = 1.25;
 /** Leap: how far (model units) the body sinks in its crouch, and how high the feet tuck up in the air. */
 const LEAP_SINK = 150;
 const LEAP_TUCK = 150;
@@ -148,13 +150,22 @@ export class KaijuBody implements MonsterBody {
     add(this.neck, box, scale, [0, 35, 30], [72, 80, 100], -0.5);
     const head = new THREE.Object3D();
     head.position.set(0, 85, 75);
+    head.scale.setScalar(HEAD_SCALE);
     this.neck.add(head);
     add(head, this.keep(faceted(new ConvexGeometry(headPoints()))), scale, [0, 0, 0], [1, 1, 1]);
-    // Eyes: angular faceted gems set into the sides of the head, looking forward and out.
+    // Eyes: narrow glowing slits slanting down toward the snout, each under a heavy brow that angles down to
+    // the middle in a scowl.
     const eyeGeo = this.keep(faceted(new THREE.OctahedronGeometry(1, 0)));
-    for (const sd of [1, -1]) {
-      const e = add(head, eyeGeo, eye, [sd * 28, 17, 66], [8, 11, 16]);
-      e.rotation.set(0, sd * 0.55, sd * 0.2);
+    for (const sd of [1, -1] as const) {
+      const e = add(head, eyeGeo, eye, [sd * 36, 15, 54], [7, 4.5, 21]);
+      e.rotation.set(0.45, sd * 0.45, sd * -0.1);
+      // The brow: low and forward at its inner end, rising toward the back of the head.
+      const brow = [
+        [18, 22, 72], [24, 18, 70], [20, 28, 66],
+        [44, 30, 38], [46, 22, 40], [38, 36, 40],
+        [34, 26, 56], [30, 32, 54],
+      ].map(([x, y, z]) => new THREE.Vector3(x! * sd, y!, z!));
+      add(head, this.keep(faceted(new ConvexGeometry(brow))), dark, [0, 0, 0], [1, 1, 1]);
     }
     this.jaw.position.set(0, -30, 40);
     head.add(this.jaw);
