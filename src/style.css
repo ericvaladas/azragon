@@ -181,6 +181,7 @@ body {
 
 .exp-pop {
   width: max-content;
+  font-size: 13px;
   font-weight: 700;
   color: var(--color-secondary);
   animation: exp-pop 700ms ease-out forwards;
