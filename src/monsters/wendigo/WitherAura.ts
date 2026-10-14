@@ -17,7 +17,7 @@ export class WitherAura {
     const n = 28;
     const pos: number[] = [];
     const col: number[] = [];
-    const inner = new THREE.Color(CONFIG.golem.colors.blight);
+    const inner = new THREE.Color(CONFIG.wendigo.colors.blight);
     const rim = new THREE.Color(0x050307);
     const at = (a: number, r: number) => [Math.cos(a) * r, 0, Math.sin(a) * r];
     const ragged = (i: number) => 0.9 + 0.1 * Math.sin(i * 2.3) * Math.sin(i * 0.7 + 1);

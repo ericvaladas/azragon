@@ -242,8 +242,8 @@ export const CONFIG = {
       chunk: 0x8a8378,
     },
   },
-  /** The Wendigo (id `golem`). Stats feed its MonsterKind; fist and lob tune its attacks; colours its body and effects. */
-  golem: {
+  /** The Wendigo (id `wendigo`). Stats feed its MonsterKind; fist and lob tune its attacks; colours its body and effects. */
+  wendigo: {
     /** The Wendigo's size: its body is drawn at this scale (inside the monster scale), and its body-size stats match. */
     scale: 0.9,
     stats: {

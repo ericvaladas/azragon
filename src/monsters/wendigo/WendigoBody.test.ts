@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import { CONFIG } from '../../config';
 import type { BodyFrame } from '../types';
-import { GolemBody } from './GolemBody';
+import { WendigoBody } from './WendigoBody';
 
 const base = (): BodyFrame => ({
   dt: 1 / 60, time: 0, cycle: 0, prevCycle: 0, motion: 0, pose: { dip: 0, pitch: 0, collapse: 0 },
@@ -10,15 +10,15 @@ const base = (): BodyFrame => ({
   charge: 0, heat: 0, flash: false, glow: 0,
 });
 
-describe('GolemBody strike kind', () => {
+describe('WendigoBody strike kind', () => {
   it('poses the strike kind it is told (the one the damage uses), even right at the slam/backhand boundary', () => {
     for (const kind of ['slam', 'backhand'] as const) {
-      const body = new GolemBody();
+      const body = new WendigoBody();
       body.root.scale.setScalar(CONFIG.monster.scale);
       // Just inside the slam cone as the body sees it: a body recomputing the kind would slam.
-      const b = CONFIG.golem.fist.frontHalf - 0.01;
+      const b = CONFIG.wendigo.fist.frontHalf - 0.01;
       const target = new THREE.Vector3(Math.sin(b) * 150, 0, Math.cos(b) * 150);
-      const T = kind === 'backhand' ? CONFIG.golem.fist.backhandTiming : CONFIG.golem.stats.meleeTiming;
+      const T = kind === 'backhand' ? CONFIG.wendigo.fist.backhandTiming : CONFIG.wendigo.stats.meleeTiming;
       let hand = new THREE.Vector3();
       for (let t = 0; t <= T.impact + 1e-9; t += 1 / 60) {
         body.animate({ ...base(), time: t, melee: { t, side: 0, target, kind } }, () => {});
@@ -33,9 +33,9 @@ describe('GolemBody strike kind', () => {
   });
 });
 
-describe('GolemBody dispose', () => {
+describe('WendigoBody dispose', () => {
   it('frees every material it made (body, torso and its shadow), not just the geometry', () => {
-    const body = new GolemBody();
+    const body = new WendigoBody();
     const mats = new Set<THREE.Material>();
     body.root.traverse((o) => {
       const m = o as THREE.Mesh;

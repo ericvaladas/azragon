@@ -10,8 +10,12 @@ export type PickStore = {
   setItem(key: string, value: string): Promise<void>;
 };
 
+/** Ids saved by older builds, read as the monster's current id. */
+const RENAMED: Record<string, MonsterId> = { golem: 'wendigo' };
+
 export function parsePick(raw: string | null | undefined): MonsterId {
-  return raw && isMonsterId(raw) ? raw : 'insect';
+  const id = raw && Object.prototype.hasOwnProperty.call(RENAMED, raw) ? RENAMED[raw] : raw;
+  return id && isMonsterId(id) ? id : 'insect';
 }
 
 /** The last selected monster, or the Insect when storage is missing, failing, or holds anything else. */

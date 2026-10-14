@@ -1,13 +1,13 @@
 import { CONFIG } from '../../config';
 import type { MonsterKind } from '../types';
-import { GolemBody } from './GolemBody';
+import { WendigoBody } from './WendigoBody';
 import { WENDIGO_SWAT } from './handMath';
 
-const G = CONFIG.golem;
+const G = CONFIG.wendigo;
 
-/** The Wendigo (internally `golem`): a starved folklore horror of black magic, death and decay. */
-export const GOLEM: MonsterKind = {
-  id: 'golem',
+/** The Wendigo (internally `wendigo`): a starved folklore horror of black magic, death and decay. */
+export const WENDIGO: MonsterKind = {
+  id: 'wendigo',
   name: 'Wendigo',
   blurb: 'A starved thing from the deep woods. Every kill only makes it hungrier.',
   pips: { toughness: 5, power: 4, speed: 2 },
@@ -52,5 +52,5 @@ export const GOLEM: MonsterKind = {
     mortarGaze: true,
     shards: G.colors.boneShard,
   },
-  createBody: () => new GolemBody(),
+  createBody: () => new WendigoBody(),
 };

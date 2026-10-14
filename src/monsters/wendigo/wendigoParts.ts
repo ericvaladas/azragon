@@ -47,7 +47,7 @@ export function piece(out: THREE.BufferGeometry[], geo: THREE.BufferGeometry, co
 export function merge(parts: THREE.BufferGeometry[]): THREE.BufferGeometry {
   const g = mergeGeometries(parts);
   for (const p of parts) p.dispose();
-  if (!g) throw new Error('golemParts: merge failed');
+  if (!g) throw new Error('wendigoParts: merge failed');
   return g;
 }
 

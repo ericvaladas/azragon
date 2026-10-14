@@ -1,12 +1,12 @@
 import { INSECT } from './insect/kind';
 import { KAIJU } from './kaiju/kind';
 import { KRAKEN } from './kraken/kind';
-import { GOLEM } from './golem/kind';
+import { WENDIGO } from './wendigo/kind';
 import type { MonsterId, MonsterKind, RosterId } from './types';
 
-export const KINDS: Record<MonsterId, MonsterKind> = { insect: INSECT, kaiju: KAIJU, kraken: KRAKEN, golem: GOLEM };
+export const KINDS: Record<MonsterId, MonsterKind> = { insect: INSECT, kaiju: KAIJU, kraken: KRAKEN, wendigo: WENDIGO };
 
-export const ROSTER_ORDER: readonly RosterId[] = ['insect', 'kaiju', 'kraken', 'golem'];
+export const ROSTER_ORDER: readonly RosterId[] = ['insect', 'kaiju', 'kraken', 'wendigo'];
 
 /** Creatures shown in the carousel but not playable yet. */
 const COMING_SOON: Partial<Record<RosterId, { name: string; blurb: string }>> = {};

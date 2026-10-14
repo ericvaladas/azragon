@@ -56,12 +56,12 @@ import { decide, nearestInRange, type BrainOrder, type BrainTarget } from './mon
 import { assignStrikes } from './monsters/kraken/strikes';
 import type { ArmStrike } from './monsters/kraken/TentacleArms';
 import { INSECT } from './monsters/insect/kind';
-import { backhandYaw, bearingTo, fistKind, type FistKind } from './monsters/golem/fist';
-import { auraOn, coolHeat, coreDamageMult, heatAfterHit } from './monsters/golem/heat';
-import { ShadowHands } from './monsters/golem/ShadowHands';
-import { WitherAura } from './monsters/golem/WitherAura';
-import { RotRing } from './monsters/golem/RotRing';
-import { burnIntensity, GAZE, gazing } from './monsters/golem/gaze';
+import { backhandYaw, bearingTo, fistKind, type FistKind } from './monsters/wendigo/fist';
+import { auraOn, coolHeat, coreDamageMult, heatAfterHit } from './monsters/wendigo/heat';
+import { ShadowHands } from './monsters/wendigo/ShadowHands';
+import { WitherAura } from './monsters/wendigo/WitherAura';
+import { RotRing } from './monsters/wendigo/RotRing';
+import { burnIntensity, GAZE, gazing } from './monsters/wendigo/gaze';
 import { KINDS, ROSTER_ORDER, isMonsterId, rosterEntries } from './monsters/roster';
 import { loadPick, savePick, type PickStore } from './monsters/pick';
 import type { MonsterKind } from './monsters/types';
@@ -201,7 +201,7 @@ export class GameScene {
     this.monster.onFootLand = (p) => {
       this.particles.ring('dust', p, 60, 7);
       this.splasher.at(p);
-      if (this.monster.kind.id === 'golem') {
+      if (this.monster.kind.id === 'wendigo') {
         // Dark dust and crumbs of rot kicked up from under the claws and hooves.
         this.particles.emit('shade', this.tmpV.copy(p).setY(10), 3, 0.9);
         this.particles.emit('rot', this.tmpV.copy(p).setY(10), 3, 0.8);
@@ -405,7 +405,7 @@ export class GameScene {
     this.acid.setColor(kind.fx.pool, kind.fx.poolOpacity, kind.fx.poolLift);
     this.novaWave.setColor(kind.fx.nova);
     // The Roar shockwave: the Wendigo's is a ring of shadow; every other monster keeps the stinger yellow.
-    this.shockwave.setColor(kind.id === 'golem' ? CONFIG.golem.colors.shade : CONFIG.palette.stinger);
+    this.shockwave.setColor(kind.id === 'wendigo' ? CONFIG.wendigo.colors.shade : CONFIG.palette.stinger);
     this.breath.clear();
   }
 
@@ -604,7 +604,7 @@ export class GameScene {
       const dm = this.dmgMult();
       this.acid.update(dt, this.enemyTargets(), dm);
       // The Wendigo's patches of black fire keep burning.
-      if (this.monster.kind.id === 'golem') {
+      if (this.monster.kind.id === 'wendigo') {
         for (let n = Math.floor(dt * Math.min(70, this.acid.count * 22) + Math.random()); n > 0 && this.acid.randomPoint(this.tmpV); n--) {
           this.particles.emit(Math.random() < 0.2 ? 'hexember' : Math.random() < 0.15 ? 'shade' : 'hexfire', this.tmpV, 1, 0.25);
         }
@@ -715,7 +715,7 @@ export class GameScene {
       this.particles.ring('dust', p, L.landRadius, 26);
       this.particles.emit('debris', p.clone().setY(20), 16, 1.6);
       this.rig.addTrauma(0.55);
-      if (this.monster.kind.id === 'golem') {
+      if (this.monster.kind.id === 'wendigo') {
         this.particles.ring('rot', p, 220, 18);
         this.particles.ring('shade', p, 260, 14);
       }
@@ -736,7 +736,7 @@ export class GameScene {
       }
       this.particles.ring('dust', p, R.radius * 0.5, 30);
       this.rig.addTrauma(0.7);
-      if (this.monster.kind.id === 'golem') {
+      if (this.monster.kind.id === 'wendigo') {
         // A black miasma bursts off its back and rolls out with the shockwave.
         for (let i = 0; i < 3; i++) this.particles.emit('shade', this.monster.launchOrigin(this.tmpV), 8, 1.4);
         this.particles.emit('shade', this.bodyPoint(560), 16, 1.8);
@@ -975,7 +975,7 @@ export class GameScene {
     for (const t of footTargets({ x: p.x, z: p.z }, radius, this.enemyTargets())) t.applyDamage(dmg);
     this.particles.ring(this.monster.kind.fx.particle, p, radius * 0.6, 24);
     // Withering Ring: black smoke and rot roll out across the ground in widening bands.
-    if (this.monster.kind.id === 'golem') {
+    if (this.monster.kind.id === 'wendigo') {
       this.rotRing.start(p, radius);
       for (const k of [0.25, 0.55, 0.85]) {
         this.particles.ring('shade', p, radius * k, 22);
@@ -1185,7 +1185,7 @@ export class GameScene {
    */
   private fistImpact(p: THREE.Vector3): void {
     const m = this.monster;
-    const F = CONFIG.golem.fist;
+    const F = CONFIG.wendigo.fist;
     const s = this.progression.stats;
     const from = { x: m.position.x, z: m.position.z };
     const dmg = this.ms.meleeDamage * this.dmgMult();
@@ -1289,10 +1289,10 @@ export class GameScene {
         // Rending Claws: slam or backhand is decided once, here at the start, and the body is told it (so the pose
         // is the strike the damage uses); the backhand swings on its own slower timeline.
         if (shape.kind === 'fist') {
-          this.fistStrike = fistKind(bearingTo(pos, m.yaw, plan.point), CONFIG.golem.fist.frontHalf);
+          this.fistStrike = fistKind(bearingTo(pos, m.yaw, plan.point), CONFIG.wendigo.fist.frontHalf);
           this.fistSide = plan.leg === FRONT_LEFT ? 1 : -1;
         }
-        if (shape.kind === 'fist') m.startMelee(s.cooldownMult, plan.leg, plan.point, this.fistStrike === 'backhand' ? CONFIG.golem.fist.backhandTiming : undefined, this.fistStrike);
+        if (shape.kind === 'fist') m.startMelee(s.cooldownMult, plan.leg, plan.point, this.fistStrike === 'backhand' ? CONFIG.wendigo.fist.backhandTiming : undefined, this.fistStrike);
         else m.startMelee(s.cooldownMult, plan.leg, plan.point);
       }
       if (d.attack === 'ranged') this.fireRanged(d.attackOn === 'order' && this.order?.kind === 'attack' ? this.order.target : auto);
@@ -1343,7 +1343,7 @@ export class GameScene {
 
   /**
    * Dread Gaze: the Wendigo looks at the target and its nearest ground neighbours (1 + extra-projectile upgrades);
-   * each one bursts into black fire, which flares and does the damage after CONFIG.golem.gaze.delay. Nothing travels.
+   * each one bursts into black fire, which flares and does the damage after CONFIG.wendigo.gaze.delay. Nothing travels.
    */
   private gazeAt(target: Target | null): void {
     if (!target || target.airborne) return;
@@ -1354,7 +1354,7 @@ export class GameScene {
       .filter((t) => t.isAlive() && !t.airborne && Math.hypot(t.position.x - from.x, t.position.z - from.z) <= this.ms.rangedRange)
       .sort((a, b) => a.position.distanceToSquared(target.position) - b.position.distanceToSquared(target.position));
     const dmg = this.ms.rangedDamage * this.dmgMult();
-    for (const t of spikeTargets(target, others, count)) this.curse(t, CONFIG.golem.gaze.delay, dmg, false);
+    for (const t of spikeTargets(target, others, count)) this.curse(t, CONFIG.wendigo.gaze.delay, dmg, false);
     m.consumeRanged(this.rangedCdMult());
   }
 
@@ -1385,7 +1385,7 @@ export class GameScene {
       }
       if (!g.flared && g.t >= g.dur) {
         g.flared = true;
-        this.blackFlare(g.at.clone().setY(0), g.eye ? this.passives.mortarSplash() : CONFIG.golem.gaze.splash, g.damage, !g.eye);
+        this.blackFlare(g.at.clone().setY(0), g.eye ? this.passives.mortarSplash() : CONFIG.wendigo.gaze.splash, g.damage, !g.eye);
       }
       if (!gazing(g.t, g.dur)) this.gazes.splice(i, 1);
     }
@@ -1405,7 +1405,7 @@ export class GameScene {
       this.particles.emit('hexfire', t.position, 4, 0.5);
       t.applyDamage(damage);
     }
-    if (patch && this.state === 'playing') this.acid.add(p, CONFIG.golem.gaze.poolRadius, CONFIG.golem.gaze.poolLife);
+    if (patch && this.state === 'playing') this.acid.add(p, CONFIG.wendigo.gaze.poolRadius, CONFIG.wendigo.gaze.poolLife);
     this.particles.ring('hexfire', p, r, 16);
     this.particles.emit('hexfire', this.tmpV.copy(p).setY(15), 12, 1);
     this.particles.emit('hexember', this.tmpV, 8, 1);

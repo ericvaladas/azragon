@@ -4,7 +4,7 @@ import { faceted, toonMat } from '../../render/toon';
 import { solveTwoBone } from '../../monster/ik';
 import type { BodyFrame, MonsterBody } from '../types';
 import { backhandSweep, fistKind, lungeAmount, lungeWeight, strikeReturn, strikeStarted, type FistKind } from './fist';
-import { merge, piece, rng, SHAPES, type V3 } from './golemParts';
+import { merge, piece, rng, SHAPES, type V3 } from './wendigoParts';
 import { BECKON_T, beckonLift, beckonPull, beckonResume } from './handMath';
 import { SWING, limbPlanted, limbSwing } from './knuckleGait';
 import { clampShoulder, reachTwist, softCap, springStep, type ShoulderLimits } from './shoulder';
@@ -12,7 +12,7 @@ import { bendAngleAt, bendPoint, outwardBearing, pivotStep, stepToward } from '.
 import { LEAP_RECOVER, leapPhase, type LeapPose } from './leapPose';
 import { HOWL_AFTER, howlPose, type HowlPose } from './howlPose';
 
-const G = CONFIG.golem;
+const G = CONFIG.wendigo;
 const C = G.colors;
 /** Model units (before CONFIG.monster.scale). The torso pivots here (just behind the hips). */
 const PIVOT = new THREE.Vector3(0, 250, -60);
@@ -60,7 +60,7 @@ const LUNGE_DROP = 60;
 const LUNGE_LEAN = 0.25;
 /**
  * Rending Claws: seconds the hand stays on its target after a slam's impact before it eases home; a backhand's
- * hand carries through for BACKHAND_HOLD instead (on its own, slower timeline, CONFIG.golem.fist.backhandTiming).
+ * hand carries through for BACKHAND_HOLD instead (on its own, slower timeline, CONFIG.wendigo.fist.backhandTiming).
  */
 const STRIKE_HOLD = 0.1;
 const BACKHAND_HOLD = 0.14;
@@ -399,7 +399,7 @@ type Arm = { upper: THREE.Mesh; fore: THREE.Mesh; fist: THREE.Mesh };
 type Leg = { thigh: THREE.Mesh; shin: THREE.Mesh; foot: THREE.Mesh };
 
 /**
- * The Wendigo (internally the Golem), a folklore horror of the northern woods: a gaunt, starved thing that stalks on very long,
+ * The Wendigo (internally the Wendigo), a folklore horror of the northern woods: a gaunt, starved thing that stalks on very long,
  * sinewy arms and bony, clawed hands. Tight olive-grey skin shows the ribs and the knuckled lower spine beneath it;
  * a ragged black mane of matted fur hangs off its hunched withers, neck, shoulders and chest. Its face is a
  * weathered deer skull with empty sockets, carried low and forward on a long neck under a small gnarled rack hung
@@ -407,10 +407,10 @@ type Leg = { thigh: THREE.Mesh; shin: THREE.Mesh; foot: THREE.Mesh };
  * Hungry Ghosts and Bone Ward shards leave from hidden points on its back; for Dread Gaze the skull turns to stare;
  * for Shadow Hands it lifts a claw toward the flyer as the hand rises. Faces +Z; +X is its left.
  */
-export class GolemBody implements MonsterBody {
+export class WendigoBody implements MonsterBody {
   readonly root = new THREE.Group();
   /**
-   * Everything of the Wendigo hangs off this, scaled by CONFIG.golem.scale inside the root (which Monster scales for
+   * Everything of the Wendigo hangs off this, scaled by CONFIG.wendigo.scale inside the root (which Monster scales for
    * every monster), so all the posing below stays in the same model units at any size.
    */
   private frame = new THREE.Group();

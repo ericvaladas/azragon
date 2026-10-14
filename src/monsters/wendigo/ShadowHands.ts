@@ -111,7 +111,7 @@ export class ShadowHands {
     this.core = new THREE.InstancedMesh(bone, coreMat, MAX * CORE_PER);
     this.halo = new THREE.InstancedMesh(
       bone,
-      new THREE.MeshBasicMaterial({ color: CONFIG.golem.colors.handSmoke, transparent: true, opacity: HALO_OPACITY, depthWrite: false, side: THREE.BackSide }),
+      new THREE.MeshBasicMaterial({ color: CONFIG.wendigo.colors.handSmoke, transparent: true, opacity: HALO_OPACITY, depthWrite: false, side: THREE.BackSide }),
       MAX * HALO_PER,
     );
     this.halo.renderOrder = 1;

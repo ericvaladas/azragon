@@ -4,7 +4,7 @@ import * as THREE from 'three';
  * The Wendigo's spine bending sideways (torso space, +Z forward, +X left): from z0 (by the hips) to z1 (past the
  * shoulders) it curves at constant curvature through a total `a` rad (+ toward +X), keeping its length; everything
  * ahead of z1 is carried on rigidly, turned by `a`; everything behind z0 stays put. The torso's vertex shader runs
- * the same map (GolemBody's SPINE_BEND_GLSL); this is its CPU twin, for the shoulders, head and launch points.
+ * the same map (WendigoBody's SPINE_BEND_GLSL); this is its CPU twin, for the shoulders, head and launch points.
  */
 export function bendPoint(p: THREE.Vector3, a: number, z0: number, z1: number, out: THREE.Vector3, sin = Math.sin): THREE.Vector3 {
   const s = p.z - z0;

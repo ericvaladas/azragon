@@ -22,7 +22,7 @@ describe('pick', () => {
     expect(parsePick(null)).toBe('insect');
     expect(parsePick(undefined)).toBe('insect');
     expect(parsePick('kraken')).toBe('kraken');
-    expect(parsePick('golem')).toBe('golem');
+    expect(parsePick('wendigo')).toBe('wendigo');
     expect(parsePick('dragon')).toBe('insect');
     expect(parsePick('{"x":1}')).toBe('insect');
   });
@@ -38,6 +38,10 @@ describe('pick', () => {
     expect(s.saved[PICK_KEY]).toBe('insect');
     await expect(savePick(store(null, true), 'insect')).resolves.toBeUndefined();
     await expect(savePick(null, 'insect')).resolves.toBeUndefined();
+  });
+
+  it("reads a pick saved under the Wendigo's old id ('golem') as the Wendigo", () => {
+    expect(parsePick('golem')).toBe('wendigo');
   });
 
   it('uses a storage key the RUN SDK accepts (no dots, no leading __)', () => {

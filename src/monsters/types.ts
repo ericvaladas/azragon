@@ -5,9 +5,9 @@ import type { TentacleArms } from './kraken/TentacleArms';
 import type { SwatTiming } from '../monster/tailSwat';
 
 /** Playable creatures (widened as each one is built). */
-export type MonsterId = 'insect' | 'kaiju' | 'kraken' | 'golem';
+export type MonsterId = 'insect' | 'kaiju' | 'kraken' | 'wendigo';
 /** Everything the select carousel shows, including creatures still to come. */
-export type RosterId = 'insect' | 'kaiju' | 'kraken' | 'golem';
+export type RosterId = 'insect' | 'kaiju' | 'kraken' | 'wendigo';
 
 export type MonsterStats = {
   maxHp: number;
