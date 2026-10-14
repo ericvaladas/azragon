@@ -2,7 +2,7 @@ import { CONFIG } from '../config';
 import { mulberry32, pick, range } from '../util/rng';
 import type { BuildingSpec, CityStyle, DistrictRules, LandmarkSpec, SignDef, YardRules } from '../cities/types';
 import { hash2 } from '../cities/noise';
-import { AVENUE_WIDTH, isBay, isIsland, isWater, lineWidth, segmentAt, type Axis, type Segment } from './roads';
+import { AVENUE_WIDTH, PITCH, isBay, isIsland, isWater, lineWidth, segmentAt, type Axis, type Segment } from './roads';
 
 export type { BuildingSpec } from '../cities/types';
 export type TreeSpec = { x: number; z: number; s: number };
@@ -18,7 +18,55 @@ export type CraneSpec = { x: number; z: number; yaw: number };
  * A sea-wall edge: the centre (x, z) of a land cell's edge on a lattice line that borders a bay cell. `axis` is the
  * direction the wall runs along, `side` the direction (+1 or -1 along the other axis) from the land cell to the bay.
  */
-export type SeaWallSpec = { x: number; z: number; axis: Axis; side: 1 | -1 };
+export type SeaWallSpec = { x: number; z: number; axis: Axis; side: 1 | -1; ends: [SeaWallEnd, SeaWallEnd] };
+/**
+ * How a wall meets the next cell along its run, at its low and high end: `convex` (that cell is bay too, so the
+ * perpendicular wall turns the corner: extend to its outer face), `concave` (the next land cell is also walled round
+ * the corner: stop inside that wall), `straight` (a wall continues, or nothing does: small overlap).
+ */
+export type SeaWallEnd = 'convex' | 'concave' | 'straight';
+/** Sea-wall dimensions (m): height, thickness, foam strip width, overlap at straight ends. */
+export const SEA_WALL_SIZE = { height: 10, thick: 6, foam: 12, overlap: 6 } as const;
+export type Rect = { x0: number; x1: number; z0: number; z1: number };
+
+/**
+ * The footprints of a sea-wall edge's wall and foam strip. The wall's inner face is half the road's width past the
+ * edge, on the bay side; each end is extended (convex), retracted (concave) or overlapped (straight) so the walls form
+ * a continuous coastline around corners without poking over land.
+ */
+export function seaWallRects(e: SeaWallSpec): { wall: Rect; foam: Rect } {
+  const alongX = e.axis === 'x';
+  const { thick, foam, overlap } = SEA_WALL_SIZE;
+  const line = Math.round((alongX ? e.z : e.x) / PITCH);
+  const inner = lineWidth(line) / 2;
+  const cell = alongX ? e.x : e.z;
+  const ends = [-1, 1].map((t, k) => {
+    const corner = cell + (t * PITCH) / 2;
+    const half = lineWidth(Math.round(corner / PITCH)) / 2;
+    const kind = e.ends[k]!;
+    const wall = kind === 'convex' ? half + thick : kind === 'concave' ? -(half + thick / 2) : overlap;
+    const fm = kind === 'convex' ? half + thick + foam : wall;
+    return [corner + t * wall, corner + t * fm] as const;
+  });
+  const across = (a: number, b: number) => (e.side > 0 ? [(alongX ? e.z : e.x) + a, (alongX ? e.z : e.x) + b] : [(alongX ? e.z : e.x) - b, (alongX ? e.z : e.x) - a]) as [number, number];
+  const make = (k: 0 | 1, a: number, b: number): Rect => {
+    const [lo, hi] = [ends[0]![k], ends[1]![k]];
+    const [c0, c1] = across(a, b);
+    return alongX ? { x0: lo, x1: hi, z0: c0, z1: c1 } : { x0: c0, x1: c1, z0: lo, z1: hi };
+  };
+  return { wall: make(0, inner, inner + thick), foam: make(1, inner + thick, inner + thick + foam) };
+}
+
+/** End kinds of cell (i, j)'s wall on the edge toward (di, dj); the cell is land and (i+di, j+dj) is bay. */
+function wallEnds(style: CityStyle, i: number, j: number, di: number, dj: number): [SeaWallEnd, SeaWallEnd] {
+  const kind = (t: number): SeaWallEnd => {
+    const ni = di !== 0 ? i : i + t, nj = di !== 0 ? j + t : j;
+    if (isBay(style, ni, nj)) return 'convex';
+    return !isWater(style, ni, nj) && !isWater(style, ni + di, nj + dj) ? 'concave' : 'straight';
+  };
+  return [kind(-1), kind(1)];
+}
+
 /**
  * `roads`: existing segments whose start node lies in the chunk. `nodes`: the chunk's intersections that have at
  * least one incident segment. `water`: the chunk's water cells (river and bay). `quays`: the chunk's port cells, by
@@ -269,8 +317,8 @@ export function generateChunk(style: CityStyle, seed: number, cx: number, cz: nu
       }
       for (const [di, dj] of baySides(style, bi, bj)) {
         seaWall.push(di !== 0
-          ? { x: (di > 0 ? bi + 1 : bi) * pitch + ROAD_ORIGIN, z: bz, axis: 'z', side: di > 0 ? 1 : -1 }
-          : { x: bx, z: (dj > 0 ? bj + 1 : bj) * pitch + ROAD_ORIGIN, axis: 'x', side: dj > 0 ? 1 : -1 });
+          ? { x: (di > 0 ? bi + 1 : bi) * pitch + ROAD_ORIGIN, z: bz, axis: 'z', side: di > 0 ? 1 : -1, ends: wallEnds(style, bi, bj, di, dj) }
+          : { x: bx, z: (dj > 0 ? bj + 1 : bj) * pitch + ROAD_ORIGIN, axis: 'x', side: dj > 0 ? 1 : -1, ends: wallEnds(style, bi, bj, di, dj) });
       }
       // The buildable block: the cell inset by half of each bordering line's width, plus pavement beside an avenue.
       const inset = (line: number) => lineWidth(line) / 2 + (lineWidth(line) === AVENUE_WIDTH ? AVENUE_PAVEMENT : 0);

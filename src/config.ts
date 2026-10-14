@@ -106,9 +106,9 @@ export const CONFIG = {
     maxParks: 2000,
     /** Gantry crane pool (scenery along the coast): a full load peaks at 19 (swept ±12 km), so 32 leaves headroom. */
     maxCranes: 32,
-    /** Sea-wall edges (and foam strips) along the coast; a full load peaks well under this (see chunks.test). */
-    maxSeaWall: 200,
-    maxFoam: 200,
+    /** Sea-wall edges and foam strips: a full load peaks at 110 (swept 200 m grid, x -6000..4000, z -6000..4000), so 128 leaves 16% headroom. */
+    maxSeaWall: 128,
+    maxFoam: 128,
     maxRubble: 2500,
     /** Road segment pool: at most 32 segments start in a chunk, times maxLoadedChunks (185), rounded up. */
     maxRoads: 6000,

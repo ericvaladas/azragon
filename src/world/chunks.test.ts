@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { AVENUE_PAVEMENT, BUILDINGS_PER_CHUNK, CHUNK_SIZE, CRANE_PORTAL, DestroyedLog, SIGNS_PER_CHUNK, TREES_PER_CHUNK, blastTopples, chunkKey, chunksInRadius, generateChunk, maxLoadedChunks, planStreaming } from './chunks';
+import { AVENUE_PAVEMENT, BUILDINGS_PER_CHUNK, CHUNK_SIZE, CRANE_PORTAL, DestroyedLog, SIGNS_PER_CHUNK, TREES_PER_CHUNK, blastTopples, chunkKey, chunksInRadius, generateChunk, maxLoadedChunks, planStreaming, seaWallRects } from './chunks';
 import type { BuildingSpec, ChunkContent } from './chunks';
 import { CONFIG } from '../config';
 import { TOKYO } from '../cities/tokyo';
@@ -603,6 +603,39 @@ describe('sea wall', () => {
       const land = [Math.floor((w.x - px * PITCH / 2) / PITCH), Math.floor((w.z - pz * PITCH / 2) / PITCH)] as const;
       expect(isBay(TOKYO, bay[0], bay[1])).toBe(true);
       expect(isWater(TOKYO, land[0], land[1])).toBe(false);
+    }
+  });
+
+  const overlap = (a: { x0: number; x1: number; z0: number; z1: number }, b: typeof a) => a.x0 <= b.x1 && b.x0 <= a.x1 && a.z0 <= b.z1 && b.z0 <= a.z1;
+
+  it('is continuous around convex corners: the two walls (and their foam) of a corner cell overlap', () => {
+    let corners = 0;
+    const byCell = new Map<string, typeof walls>();
+    for (const w of walls) {
+      const i = Math.floor((w.axis === 'z' ? w.x - w.side * PITCH / 2 : w.x) / PITCH);
+      const j = Math.floor((w.axis === 'x' ? w.z - w.side * PITCH / 2 : w.z) / PITCH);
+      byCell.set(`${i},${j}`, [...(byCell.get(`${i},${j}`) ?? []), w]);
+    }
+    for (const list of byCell.values()) {
+      const a = list.find((w) => w.axis === 'x'), b = list.find((w) => w.axis === 'z');
+      if (!a || !b) continue;
+      corners++;
+      expect(overlap(seaWallRects(a).wall, seaWallRects(b).wall)).toBe(true);
+      expect(overlap(seaWallRects(a).foam, seaWallRects(b).foam)).toBe(true);
+    }
+    expect(corners).toBeGreaterThan(3);
+  });
+
+  it('never covers the interior of a land cell beyond its bordering roads (no poke at concave corners)', () => {
+    for (const w of walls) {
+      const { wall, foam } = seaWallRects(w);
+      for (const r of [wall, foam]) {
+        for (let i = Math.floor(r.x0 / PITCH); i <= Math.floor(r.x1 / PITCH); i++) for (let j = Math.floor(r.z0 / PITCH); j <= Math.floor(r.z1 / PITCH); j++) {
+          if (isWater(TOKYO, i, j)) continue;
+          const cell = { x0: i * PITCH + lineWidth(i) / 2, x1: (i + 1) * PITCH - lineWidth(i + 1) / 2, z0: j * PITCH + lineWidth(j) / 2, z1: (j + 1) * PITCH - lineWidth(j + 1) / 2 };
+          expect(r.x0 < cell.x1 && cell.x0 < r.x1 && r.z0 < cell.z1 && cell.z0 < r.z1, `wall at ${w.x},${w.z} over land cell ${i},${j}`).toBe(false);
+        }
+      }
     }
   });
 

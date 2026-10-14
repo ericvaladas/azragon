@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { CONFIG } from '../config';
 import { TOKYO } from '../cities/tokyo';
 import type { CityStyle } from '../cities/types';
-import { City, CRATER_RADIUS, SlotPool } from './City';
+import { City, CRATER_RADIUS, SlotPool, patchFoamShader } from './City';
 import { chunksInRadius, CRANE_PORTAL, generateChunk } from './chunks';
 import { craneGeometry } from './crane';
 import { isWater, PITCH } from './roads';
@@ -487,5 +487,17 @@ describe('City sea wall and foam', () => {
     const inland = make().city;
     settle(inland, INLAND);
     expect(counts(inland)).toEqual({ walls: 0, foam: 0 });
+  });
+});
+
+describe('foam shader patch', () => {
+  it('injects the time uniform, the phase varying and the opacity pulse into the basic material shaders', () => {
+    const time = { value: 0 };
+    const sh = { uniforms: {} as Record<string, { value: unknown }>, vertexShader: THREE.ShaderLib.basic.vertexShader, fragmentShader: THREE.ShaderLib.basic.fragmentShader };
+    patchFoamShader(sh, time);
+    expect(sh.uniforms['uFoamTime']).toBe(time);
+    expect(sh.vertexShader).toContain('vFoamPhase =');
+    expect(sh.fragmentShader).toContain('uniform float uFoamTime');
+    expect(sh.fragmentShader).toContain('diffuseColor.a = 0.35 + 0.2 * sin(uFoamTime * 1.3 + vFoamPhase)');
   });
 });

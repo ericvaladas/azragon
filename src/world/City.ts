@@ -4,8 +4,8 @@ import type { OnDestroyed, Target } from '../combat';
 import type { Vec2 } from '../util/math';
 import { mulberry32 } from '../util/rng';
 import type { CityStyle, LandmarkSpec, SignDef } from '../cities/types';
-import { blastTopples, chunksInRadius, DestroyedLog, generateChunk, nodeSize, planStreaming, type BuildingSpec, type ChunkContent, type SeaWallSpec } from './chunks';
-import { isIsland, isWater, lineWidth, PITCH, type Segment } from './roads';
+import { blastTopples, chunksInRadius, DestroyedLog, generateChunk, nodeSize, planStreaming, seaWallRects, SEA_WALL_SIZE, type BuildingSpec, type ChunkContent, type Rect, type SeaWallSpec } from './chunks';
+import { isIsland, isWater, PITCH, type Segment } from './roads';
 import { canvasCityTextures, patchFacadeShader, patchRoadShader, SCREEN_FRAMES, SIGN_RECTS, type CityTextures } from './pixelTextures';
 import { rubbleGeometry } from './rubble';
 import { craneGeometry } from './crane';
@@ -122,14 +122,14 @@ const Y = { water: 0.1, foam: 0.15, park: 0.2, road: 0.3, node: 0.32, overlay: 0
 /** Bridge deck slab: this much wider than its road, this thick (hanging below its top), in this grey. */
 const SLAB = { extra: 8, thick: 1.8, color: 0x9aa0a6 } as const;
 const WATER_COLOR = 0x3f8fc9;
-/** Sea wall (m) and its concrete / cap colours; foam strip width; `overlap` extends each end so corner walls meet. */
-const SEA_WALL = { height: 10, thick: 6, foam: 12, overlap: 6, color: 0xcfcac0, cap: 0x8e8a82 } as const;
+/** Sea wall concrete and top-cap colours. */
+const SEA_WALL = { color: 0xcfcac0, cap: 0x8e8a82 } as const;
 
 /**
  * Foam opacity 0.35 + 0.2·sin(1.3·time + phase), the phase taken from the instance's world position so strips pulse
  * out of step. Time is shared through a uniform object.
  */
-function patchFoamShader(sh: { uniforms: Record<string, { value: unknown }>; vertexShader: string; fragmentShader: string }, time: { value: number }): void {
+export function patchFoamShader(sh: { uniforms: Record<string, { value: unknown }>; vertexShader: string; fragmentShader: string }, time: { value: number }): void {
   sh.uniforms['uFoamTime'] = time;
   sh.vertexShader = sh.vertexShader
     .replace('#include <common>', '#include <common>\nvarying float vFoamPhase;')
@@ -742,23 +742,20 @@ export class City {
   }
 
   /**
-   * One sea-wall edge: a wall just outside the waterfront road (its inner face half the road's width past the edge, on
-   * the bay side), and a foam strip on the water beyond it. Both run 2·SEA_WALL.overlap longer than the cell so walls
-   * meet at coastal corners.
+   * One sea-wall edge: a wall just outside the waterfront road and a foam strip on the water beyond it, as laid out by
+   * `seaWallRects` (continuous around coastal corners).
    */
   private writeSeaWall(e: SeaWallSpec, wallSlots: number[], foamSlots: number[]): void {
-    const z = e.axis === 'x';
-    const line = Math.round((z ? e.z : e.x) / PITCH);
-    const inner = lineWidth(line) / 2;
-    const len = PITCH + 2 * SEA_WALL.overlap;
-    const place = (offset: number, y: number, thick: number, tall: number): THREE.Matrix4 => {
-      const x = z ? e.x : e.x + e.side * offset;
-      const zz = z ? e.z + e.side * offset : e.z;
-      return _m.compose(_p.set(x, y, zz), _q.setFromAxisAngle(UP, z ? 0 : Math.PI / 2), _s.set(len, tall, thick));
+    const { wall, foam } = seaWallRects(e);
+    const place = (r: Rect, y: number, tall: number): THREE.Matrix4 => {
+      const alongX = e.axis === 'x';
+      const len = alongX ? r.x1 - r.x0 : r.z1 - r.z0;
+      const thick = alongX ? r.z1 - r.z0 : r.x1 - r.x0;
+      return _m.compose(_p.set((r.x0 + r.x1) / 2, y, (r.z0 + r.z1) / 2), _q.setFromAxisAngle(UP, alongX ? 0 : Math.PI / 2), _s.set(len, tall, thick));
     };
     const keep = (slots: number[], slot: number | undefined) => { if (slot !== undefined) slots.push(slot); };
-    keep(wallSlots, this.walls.take(place(inner + SEA_WALL.thick / 2, 0, SEA_WALL.thick, SEA_WALL.height)));
-    keep(foamSlots, this.foams.take(place(inner + SEA_WALL.thick + SEA_WALL.foam / 2, Y.foam, SEA_WALL.foam, 1)));
+    keep(wallSlots, this.walls.take(place(wall, 0, SEA_WALL_SIZE.height)));
+    keep(foamSlots, this.foams.take(place(foam, Y.foam, 1)));
   }
 
   private unloadChunk(key: string): void {
