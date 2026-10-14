@@ -95,7 +95,7 @@ The skip hint stays visible until the jump. After that, it hides. A second tap s
 | `intro/timeline.ts` | Exports `SKIP_TO`, and helpers the skip needs (e.g. the cloud state at `t`) | config |
 | `config.ts` | `music` block: per-track file, gain, grid, loop points, end trim, fades. `intro.skipLead` | — |
 
-`Music` holds no knowledge of game states. It exposes `unlock()`, `reveal()` and `enterMenu()`. It is a plain TypeScript class, with no React and no hooks, as the project's rules require.
+`Music` holds no knowledge of game states. It exposes `unlock()`, `reveal()`, `prepareFight()` (called when the cutscene starts, to decode Main 1) and `enterMenu()`. It is a plain TypeScript class, with no React and no hooks, as the project's rules require.
 
 ### Playback
 
@@ -117,7 +117,7 @@ The skip hint stays visible until the jump. After that, it hides. A second tap s
   - Returning to monster select decodes the Intro again from the cached bytes.
 
   The peak is ≈126 MB, with the Intro and Main 1 both decoded, from the start of the cutscene until the handoff fade ends. While Main 2 loops, nothing is decoded.
-- **Not ready in time:** if the Intro isn't decoded at unlock, it starts when ready. If Main 1 isn't decoded at the reveal, it starts as soon as it is, without waiting for a bar line. A decode or fetch failure logs through `RundotGameAPI.error()`, and the game carries on silent.
+- **Not ready in time:** if the Intro isn't decoded at unlock, it starts when ready. If Main 1 isn't decoded at the reveal, it starts on the Intro's next bar line after it is ready, or at once if the Intro never started. A decode or fetch failure logs through `RundotGameAPI.error()`, and the game carries on silent.
 
 ## Testing
 
