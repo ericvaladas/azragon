@@ -365,8 +365,7 @@ export class Monster {
       }
     }
     if (this.dashT >= 0) {
-      // A slower kind covers the same range over a longer charge.
-      const duration = CONFIG.abilities.dash.duration / (this.kind.dashSpeed ?? 1);
+      const duration = CONFIG.abilities.dash.duration;
       this.dashT += dt;
       const p = leapPosition(this.dashFrom, this.dashTo, this.dashT, duration, 0);
       const step = Math.hypot(p.x - this.position.x, p.z - this.position.z);
