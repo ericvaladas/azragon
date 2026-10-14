@@ -310,14 +310,17 @@ describe('hand-placed lots', () => {
   const blockOf = (v: number) => Math.floor(v / CONFIG.world.blockSize);
   const dark = FINANCIAL_LOTS.filter((b) => b !== FIRST_CANADIAN_PLACE && !ROYAL_BANK_PLAZA.includes(b));
 
-  it('puts 8–10 dark glass towers 200–300 m tall in the Financial District, all kept through the crash', () => {
+  it('puts 8–10 deep slate glass towers 200–300 m tall in the Financial District, all kept through the crash', () => {
     expect(dark.length).toBeGreaterThanOrEqual(8);
     expect(dark.length).toBeLessThanOrEqual(10);
     for (const b of dark) {
       expect(b.h).toBeGreaterThanOrEqual(200);
       expect(b.h).toBeLessThanOrEqual(300);
-      const c = new THREE.Color(b.color);
-      expect(c.r + c.g + c.b).toBeLessThan(0.15);
+      // Darker than the stone offices on average, but not black (glass.test.ts sets the floor).
+      const sum = (hex: number) => { const c = new THREE.Color(hex); return c.r + c.g + c.b; };
+      const office = TORONTO.districts.office.colors.map(sum);
+      expect(sum(b.color)).toBeLessThan(office.reduce((a, v) => a + v, 0) / office.length);
+      expect(sum(b.color)).toBeGreaterThan(0.25);
       expect(districtAt(CONFIG.world.blockSize * (blockOf(b.x) + 0.5), CONFIG.world.blockSize * (blockOf(b.z) + 0.5))).toBe('highrise');
     }
     for (const b of TORONTO.specialLots) expect(b.keep).toBe(true);

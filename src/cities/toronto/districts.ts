@@ -1,12 +1,13 @@
 import { FACADE, type DistrictId, type DistrictRules } from '../types';
 
-/** Toronto's districts: brick midtown, warm stone offices, dark glass towers, pale condos on the lake. */
+/** Toronto's districts: brick midtown, warm stone offices, blue-grey glass towers, pale condos on the lake. */
 export const TORONTO_DISTRICTS: Record<DistrictId, DistrictRules> = {
-  // The Financial District and the Yonge corridor's nodes: dark blue-black and green-black glass (the Financial
-  // District's hand-placed lots add gold and white). Mostly 170–260 m, a few to 300.
+  // The Financial District, the Yonge corridor's nodes and Yorkville: deep blue-grey, slate and teal glass, darker
+  // than the stone offices but never black under the sunset (the Financial District's hand-placed lots add gold and
+  // white). Mostly 170–260 m, a few to 300.
   highrise: {
     lots: 2, fill: 0.5, minPerBlock: 1, height: [150, 300], heightCurve: 1.3, footprint: [0.75, 0.92],
-    facades: [FACADE.glass, FACADE.glass, FACADE.office], colors: [0x2b3a4a, 0x22302c, 0x313844, 0x1f2a35, 0x3a4a52],
+    facades: [FACADE.glass, FACADE.glass, FACADE.office], colors: [0x88a2ba, 0x78a4a0, 0x90a2b2, 0x7e96ae, 0x8aa8b8],
     signs: 0, billboard: 0.02, trees: 2,
   },
   // Chinatown: low, dense shop houses in jade, gold, vermilion brick, teal, pink and cream, hung with blade signs.

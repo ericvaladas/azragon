@@ -1,7 +1,8 @@
 import { FACADE, type BuildingSpec } from '../types';
 import { lotCentre } from './layout';
 
-const DARK = [0x24303c, 0x1f2b27, 0x2c3440] as const;
+/** Deep slate, teal and blue-grey glass: the darkest towers downtown, still glass rather than black silhouettes. */
+const DARK = [0x7890a6, 0x6e9894, 0x7c8ca2] as const;
 export const GOLD = 0xd4a442;
 const WHITE = 0xf0eee8;
 const DARK_SIZE = 56;
