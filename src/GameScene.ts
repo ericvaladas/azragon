@@ -34,7 +34,8 @@ import { Artillery } from './enemies/Artillery';
 import { LaserTrucks } from './enemies/LaserTrucks';
 import { OrbitalLaser } from './enemies/OrbitalLaser';
 import { mulberry32 } from './util/rng';
-import { pickCity } from './cities';
+import { forcedCity, pickCity } from './cities';
+import type { CityStyle } from './cities/types';
 import { Progression, expToNext } from './systems/Progression';
 import { healOnKill, regen } from './monster/vitals';
 import { DebugOverlay } from './systems/DebugOverlay';
@@ -112,6 +113,8 @@ export class GameScene {
   private enemies: EnemyRegistry;
   private ctx!: WorldContext;
   private rng = mulberry32(CONFIG.world.seed + 7);
+  /** Runs started; a dev `?city=` list is followed in this order. */
+  private runs = 0;
   private progression = new Progression(mulberry32(CONFIG.world.seed + 13));
   private runTime = 0;
   private openingDone = false;
@@ -157,7 +160,7 @@ export class GameScene {
 
   constructor(private container: HTMLDivElement, private store: PickStore | null = null) {
     this.pixel = new PixelRenderer(container);
-    const style = pickCity(this.rng);
+    const style = this.cityFor(0);
     this.lighting = new Lighting(this.scene, style.atmosphere);
     const sky = createSky(this.scene, style.atmosphere);
     this.lighting.attachSky(sky);
@@ -319,8 +322,13 @@ export class GameScene {
     this.enterTitle();
   }
 
+  /** The city for run `run`: in dev builds the `?city=` list's entry when it names a known city, else a random pick. */
+  private cityFor(run: number): CityStyle {
+    return (import.meta.env.DEV ? forcedCity(location.search, run) : null) ?? pickCity(this.rng);
+  }
+
   private resetRun(): void {
-    this.city.reset(pickCity(this.rng));
+    this.city.reset(this.cityFor(this.runs++));
     this.projectiles.clear();
     this.breath.clear();
     this.monster.body.arms?.clear();
