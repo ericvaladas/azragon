@@ -16,6 +16,12 @@ export const CITY_HALL_SITE = { x: -500, z: 1135 } as const;
 export const CN_TOWER_SITE = { x: -500, z: 1900 } as const;
 /** Centred on the interior of block (−800..−600, 1800..2000), the block just west of the tower's, so the dome sits at its west foot. */
 export const ROGERS_CENTRE_SITE = { x: -700, z: 1891 } as const;
+/** The Ontario Legislature: the interior centre of block (−1200..−1000, −200..0), at the head of University Avenue. */
+export const QUEENS_PARK_SITE = { x: -1109, z: -109 } as const;
+/** Casa Loma: the centre of block (−1800..−1600, −2400..−2200). */
+export const CASA_LOMA_SITE = { x: -1700, z: -2300 } as const;
+/** Scotiabank Arena: the interior centre of block (0..200, 1800..2000), at the foot of Yonge by the waterfront. */
+export const SCOTIABANK_ARENA_SITE = { x: 109, z: 1891 } as const;
 /** Lake Ontario: everything south of a gently wavering line near z = 2250 (land ends at z = 2200 almost everywhere). */
 export const TORONTO_LAKE: BaySpec = { dir: { x: 0, z: 1 }, offset: 2250, amp: 60, wavelength: 1500 };
 /** The Toronto Islands: long and low, east–west, one lake row offshore. */

@@ -1,9 +1,12 @@
 import type { CityStyle } from '../types';
 import { TORONTO_DISTRICTS } from './districts';
-import { CITY_HALL_SITE, CN_TOWER_SITE, DON, ROGERS_CENTRE_SITE, TORONTO_ISLANDS, TORONTO_LAKE, blockColors, districtAt } from './layout';
+import { CASA_LOMA_SITE, CITY_HALL_SITE, CN_TOWER_SITE, QUEENS_PARK_SITE, SCOTIABANK_ARENA_SITE, DON, ROGERS_CENTRE_SITE, TORONTO_ISLANDS, TORONTO_LAKE, blockColors, districtAt } from './layout';
 import { CN_TOWER, cnTowerGeometry } from './cnTower';
 import { ROGERS_CENTRE, rogersCentreGeometry } from './rogersCentre';
 import { CITY_HALL, cityHallGeometry } from './cityHall';
+import { QUEENS_PARK, queensParkGeometry } from './queensPark';
+import { CASA_LOMA, casaLomaGeometry } from './casaLoma';
+import { SCOTIABANK_ARENA, scotiabankArenaGeometry } from './scotiabankArena';
 import { FINANCIAL_LOTS } from './financial';
 import { YONGE_DUNDAS_LOTS } from './yongeDundas';
 import { NATHAN_PHILLIPS } from './square';
@@ -35,6 +38,9 @@ export const TORONTO: CityStyle = {
     { id: 'cn-tower', x: CN_TOWER_SITE.x, z: CN_TOWER_SITE.z, w: CN_TOWER.w, d: CN_TOWER.d, h: CN_TOWER.h, build: cnTowerGeometry },
     { id: 'rogers-centre', x: ROGERS_CENTRE_SITE.x, z: ROGERS_CENTRE_SITE.z, w: ROGERS_CENTRE.w, d: ROGERS_CENTRE.d, h: ROGERS_CENTRE.h, build: rogersCentreGeometry },
     { id: 'city-hall', x: CITY_HALL_SITE.x, z: CITY_HALL_SITE.z, w: CITY_HALL.w, d: CITY_HALL.d, h: CITY_HALL.h, build: cityHallGeometry },
+    { id: 'queens-park', x: QUEENS_PARK_SITE.x, z: QUEENS_PARK_SITE.z, w: QUEENS_PARK.w, d: QUEENS_PARK.d, h: QUEENS_PARK.h, build: queensParkGeometry },
+    { id: 'casa-loma', x: CASA_LOMA_SITE.x, z: CASA_LOMA_SITE.z, w: CASA_LOMA.w, d: CASA_LOMA.d, h: CASA_LOMA.h, build: casaLomaGeometry },
+    { id: 'scotiabank-arena', x: SCOTIABANK_ARENA_SITE.x, z: SCOTIABANK_ARENA_SITE.z, w: SCOTIABANK_ARENA.w, d: SCOTIABANK_ARENA.d, h: SCOTIABANK_ARENA.h, build: scotiabankArenaGeometry },
   ],
   specialLots: [...YONGE_DUNDAS_LOTS, ...FINANCIAL_LOTS],
   overlays: [NATHAN_PHILLIPS],

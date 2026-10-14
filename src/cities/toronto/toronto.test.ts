@@ -4,7 +4,10 @@ import { CONFIG } from '../../config';
 import { DISTRICTS, FACADE } from '../types';
 import { TORONTO } from './index';
 import { chunksInRadius, generateChunk } from '../../world/chunks';
-import { AREAS, CN_TOWER_SITE, CITY_HALL_SITE, ROGERS_CENTRE_SITE, blockInterior, districtAt } from './layout';
+import { AREAS, CASA_LOMA_SITE, CN_TOWER_SITE, CITY_HALL_SITE, QUEENS_PARK_SITE, ROGERS_CENTRE_SITE, SCOTIABANK_ARENA_SITE, blockInterior, districtAt } from './layout';
+import { QUEENS_PARK, queensParkGeometry } from './queensPark';
+import { CASA_LOMA, CASA_LOMA_TOWER, CASA_LOMA_TURRET, casaLomaGeometry } from './casaLoma';
+import { SCOTIABANK_ARENA, scotiabankArenaGeometry } from './scotiabankArena';
 import { CN_TOWER, cnTowerGeometry } from './cnTower';
 import { ROGERS_CENTRE, rogersCentreGeometry } from './rogersCentre';
 import { CITY_HALL, cityHallGeometry } from './cityHall';
@@ -129,7 +132,7 @@ describe('Toronto landmarks', () => {
     new THREE.Raycaster(new THREE.Vector3(x, 2000, z), new THREE.Vector3(0, -1, 0)).intersectObject(new THREE.Mesh(g, new THREE.MeshBasicMaterial()))[0];
 
   it('lists the CN Tower, Rogers Centre and City Hall at their sites and sizes', () => {
-    expect(TORONTO.landmarks.map((l) => l.id)).toEqual(['cn-tower', 'rogers-centre', 'city-hall']);
+    expect(TORONTO.landmarks.map((l) => l.id)).toEqual(['cn-tower', 'rogers-centre', 'city-hall', 'queens-park', 'casa-loma', 'scotiabank-arena']);
     expect(at('cn-tower')).toMatchObject({ ...CN_TOWER_SITE, ...CN_TOWER });
     expect(at('rogers-centre')).toMatchObject({ ...ROGERS_CENTRE_SITE, ...ROGERS_CENTRE });
     expect(at('city-hall')).toMatchObject({ ...CITY_HALL_SITE, ...CITY_HALL });
@@ -210,6 +213,77 @@ describe('Toronto landmarks', () => {
     const saucer = down(g, 0, 0)!.point.y;
     expect(saucer).toBeGreaterThan(20);
     expect(saucer).toBeLessThan(35);
+  });
+
+  it.each([
+    ['queens-park', QUEENS_PARK_SITE, { x: -1000, z: -100 }, QUEENS_PARK, 'park'],
+    ['casa-loma', CASA_LOMA_SITE, { x: -1800, z: -2300 }, CASA_LOMA, 'park'],
+    ['scotiabank-arena', SCOTIABANK_ARENA_SITE, { x: 100, z: 1950 }, SCOTIABANK_ARENA, 'port'],
+  ] as const)('sets %s within a block of its target, on its green or quay', (id, site, target, size, district) => {
+    expect(at(id)).toMatchObject({ ...site, ...size });
+    expect(Math.abs(site.x - target.x)).toBeLessThanOrEqual(W.blockSize);
+    expect(Math.abs(site.z - target.z)).toBeLessThanOrEqual(W.blockSize);
+    const ci = blockOf(site.x), cj = blockOf(site.z);
+    expect(blockDistrict(TORONTO, W.blockSize * (ci + 0.5), W.blockSize * (cj + 0.5))).toBe(district);
+  });
+
+  it('builds the Ontario Legislature: a long pink-sandstone front, wings lower than the centre, a taller pyramid-roofed central tower', () => {
+    const g = queensParkGeometry();
+    g.computeBoundingBox();
+    const bb = g.boundingBox!;
+    expect(bb.min.y).toBeCloseTo(0);
+    expect(bb.max.y).toBeCloseTo(QUEENS_PARK.h);
+    expect(bb.max.x - bb.min.x).toBeLessThanOrEqual(QUEENS_PARK.w + 0.01);
+    expect(bb.max.z - bb.min.z).toBeLessThanOrEqual(QUEENS_PARK.d + 0.01);
+    expect(bb.max.x - bb.min.x).toBeGreaterThan(2 * (bb.max.z - bb.min.z) - 10);
+    expect(g.getAttribute('color')).toBeDefined();
+    const tower = down(g, 0, QUEENS_PARK.d / 2 - 10)!.point.y;
+    const centre = down(g, 15, 0)!.point.y;
+    const wing = down(g, 45, 0)!.point.y;
+    expect(tower).toBeGreaterThan(centre + 15);
+    expect(centre).toBeGreaterThan(wing);
+    expect(wing).toBeGreaterThan(15);
+    // The tower's roof is a pyramid: lower off its axis.
+    expect(down(g, 5, QUEENS_PARK.d / 2 - 10)!.point.y).toBeLessThan(tower - 3);
+  });
+
+  it('builds Casa Loma: a stone hall, a tall square tower with battlements, and round turrets with conical roofs', () => {
+    const g = casaLomaGeometry();
+    g.computeBoundingBox();
+    const bb = g.boundingBox!;
+    expect(bb.min.y).toBeCloseTo(0);
+    expect(bb.max.y).toBeCloseTo(CASA_LOMA.h);
+    expect(bb.max.x - bb.min.x).toBeLessThanOrEqual(CASA_LOMA.w + 0.01);
+    expect(bb.max.z - bb.min.z).toBeLessThanOrEqual(CASA_LOMA.d + 0.01);
+    expect(bb.max.x - bb.min.x).toBeGreaterThan(80);
+    expect(g.getAttribute('color')).toBeDefined();
+    // The hall is lower than its towers; the square tower's top is notched (merlons and gaps).
+    const hall = down(g, 0, 0)!.point.y;
+    expect(hall).toBeGreaterThan(15);
+    expect(hall).toBeLessThan(35);
+    // A turret's cone peaks at its axis and falls toward its rim.
+    const tip = down(g, CASA_LOMA_TURRET.x, CASA_LOMA_TURRET.z)!.point.y;
+    expect(tip).toBeGreaterThan(hall + 10);
+    expect(down(g, CASA_LOMA_TURRET.x + CASA_LOMA_TURRET.r * 0.7, CASA_LOMA_TURRET.z)!.point.y).toBeLessThan(tip - 4);
+    const tops = [-8, -4, 0, 4, 8].map((dx) => down(g, CASA_LOMA_TOWER.x + dx, CASA_LOMA_TOWER.z + CASA_LOMA_TOWER.half - 0.75)!.point.y);
+    expect(Math.max(...tops) - Math.min(...tops)).toBeGreaterThan(1.5);
+    expect(Math.min(...tops)).toBeGreaterThan(hall + 10);
+  });
+
+  it('builds Scotiabank Arena: a big pale box under a vaulted roof, a dark glass corner', () => {
+    const g = scotiabankArenaGeometry();
+    g.computeBoundingBox();
+    const bb = g.boundingBox!;
+    expect(bb.min.y).toBeCloseTo(0);
+    expect(bb.max.y).toBeCloseTo(SCOTIABANK_ARENA.h);
+    expect(bb.max.x - bb.min.x).toBeLessThanOrEqual(SCOTIABANK_ARENA.w + 0.01);
+    expect(bb.max.z - bb.min.z).toBeLessThanOrEqual(SCOTIABANK_ARENA.d + 0.01);
+    expect(bb.max.x - bb.min.x).toBeGreaterThan(110);
+    expect(g.getAttribute('color')).toBeDefined();
+    // The roof vaults: highest along the middle, lower toward the long sides.
+    const mid = down(g, 0, 0)!.point.y;
+    expect(mid).toBeGreaterThan(down(g, 0, SCOTIABANK_ARENA.d / 2 - 12)!.point.y + 4);
+    expect(mid).toBeGreaterThan(down(g, 0, -SCOTIABANK_ARENA.d / 2 + 12)!.point.y + 4);
   });
 
   it.each([
