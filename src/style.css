@@ -308,14 +308,13 @@ body {
   transition: transform 100ms ease-out;
 }
 .ability-btn:active { transform: scale(0.92); }
-.ability-btn.ready { border-color: var(--color-primary); box-shadow: 0 0 12px rgba(155, 226, 45, 0.55); animation: ability-pulse 1.2s ease-in-out infinite; }
+.ability-btn.ready { border-color: var(--color-primary); box-shadow: 0 0 12px rgba(155, 226, 45, 0.55); }
 .ability-btn.aiming { background: var(--color-primary); color: #0d1110; }
 .ability-btn.locked { opacity: 0.45; filter: grayscale(0.6); }
 .ability-label { font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; line-height: 64px; }
 .ability-lock { position: absolute; left: 0; right: 0; bottom: 6px; font-size: 10px; font-weight: 700; }
 .ability-key { position: absolute; left: 0; right: 0; top: 4px; font-size: 8px; opacity: 0.7; letter-spacing: 0.08em; }
 .ability-cd { position: absolute; inset: 0; border-radius: 50%; }
-@keyframes ability-pulse { 50% { transform: scale(1.06); } }
 @media (pointer: coarse) { .ability-key { display: none; } }
 
 .bar-exp.full .bar-fill { background: #ffd23f; animation: exp-full-flash 160ms steps(2) infinite; }
@@ -330,6 +329,9 @@ body {
   color: #ffd23f;
   white-space: nowrap;
   animation: level-up-pop 1.2s ease-out both;
+
+  margin: 0; font-family: 'Unbounded', 'Chakra Petch', sans-serif; font-weight: 900;
+  font-size: 52px; letter-spacing: 0.02em; line-height: 1; color: #ffffff;
 }
 @keyframes level-up-pop {
   0% { transform: translate(-50%, 0) scale(0.4); opacity: 0; }
