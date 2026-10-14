@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { CONFIG } from '../config';
 import { TOKYO } from '../cities/tokyo';
-import { snapToRoad, planRoadPath, ringOnRoads, segmentAt, isWater, lineWidth, PITCH, AVENUE_WIDTH, type Axis } from './roads';
+import { mulberry32 } from '../util/rng';
+import { nearestRoadPoint, planRoadPath, ringOnRoads, segmentAt, isWater, lineWidth, PITCH, AVENUE_WIDTH, type Axis } from './roads';
 
 const R = 30;
 const mod = (n: number, m: number) => ((n % m) + m) % m;
@@ -132,45 +133,89 @@ describe('road network', () => {
   });
 });
 
-describe('legacy grid helpers (removed in Task 3)', () => {
+const onSegment = (p: { x: number; z: number }): boolean => {
+  // True when p lies on the centreline of an existing segment (within 1e-6 of the line and between its ends).
+  const eps = 1e-6;
+  const ci = Math.floor(p.x / PITCH), cj = Math.floor(p.z / PITCH);
+  for (let i = ci - 1; i <= ci + 1; i++) for (let j = cj - 1; j <= cj + 1; j++) {
+    if (Math.abs(p.z - PITCH * j) < eps && p.x >= PITCH * i - eps && p.x <= PITCH * (i + 1) + eps && segmentAt(TOKYO, 'x', i, j)) return true;
+    if (Math.abs(p.x - PITCH * i) < eps && p.z >= PITCH * j - eps && p.z <= PITCH * (j + 1) + eps && segmentAt(TOKYO, 'z', i, j)) return true;
+  }
+  return false;
+};
+// In water: every cell whose closed square contains p is water (a road on a cell edge with land on one side is a bank road).
+const cellRange = (v: number) => {
+  const c = Math.floor(v / PITCH);
+  return Math.abs(v - PITCH * c) < 1e-6 ? [c - 1, c] : [c];
+};
+const inWater = (p: { x: number; z: number }) => cellRange(p.x).every((i) => cellRange(p.z).every((j) => isWater(TOKYO, i, j)));
+const onBridgeLine = (p: { x: number; z: number }) => Math.abs(p.x - Math.round(p.x / 1000) * 1000) < 1e-6;
 
+describe('nearestRoadPoint', () => {
+  it('returns a point on an existing segment centreline', () => {
+    const rnd = mulberry32(11);
+    for (let k = 0; k < 300; k++) {
+      const p = { x: (rnd() - 0.5) * 6000, z: (rnd() - 0.5) * 6000 };
+      const q = nearestRoadPoint(TOKYO, p);
+      expect(onSegment(q), `${p.x},${p.z} -> ${q.x},${q.z}`).toBe(true);
+    }
+  });
 
-const O = -2000;
-const P = 200;
+  it('never returns a water point unless it is on a bridge', () => {
+    const rnd = mulberry32(23);
+    for (let k = 0; k < 500; k++) {
+      const p = { x: (rnd() - 0.5) * 6000, z: (rnd() - 0.5) * 6000 };
+      const q = nearestRoadPoint(TOKYO, p);
+      if (inWater(q)) expect(onBridgeLine(q), `${q.x},${q.z}`).toBe(true);
+    }
+  });
 
-describe('snapToRoad', () => {
-  it('snaps to the nearest road line', () => {
-    expect(snapToRoad(90, O, P)).toBe(0);
-    expect(snapToRoad(110, O, P)).toBe(200);
-    expect(snapToRoad(-2000, O, P)).toBe(-2000);
+  it('is the closest road point (a point already on a road maps to itself)', () => {
+    expect(nearestRoadPoint(TOKYO, { x: 0, z: 37 })).toEqual({ x: 0, z: 37 });
+    const q = nearestRoadPoint(TOKYO, { x: 15, z: 80 });
+    expect(q).toEqual({ x: 0, z: 80 });
   });
 });
 
 describe('planRoadPath', () => {
-  it('from a north-south road: drive along z, then along x', () => {
-    const path = planRoadPath({ x: -2000, z: 600 }, { x: 330, z: -170 }, O, P);
-    expect(path).toEqual([{ x: -2000, z: -200 }, { x: 400, z: -200 }]);
+  const start = { x: 0, z: 400 }, goal = { x: 0, z: 2400 };
+
+  it.each([
+    ['on a bridge avenue', start, goal],
+    ['off the bridge avenues (detours to one)', { x: 430, z: 400 }, { x: 610, z: 2400 }],
+  ])('crosses the river from south to north along existing segments, only on bridges: %s', (_name, start, goal) => {
+    const path = planRoadPath(TOKYO, start, goal);
+    expect(path.length).toBeGreaterThan(0);
+    const pts = [nearestRoadPoint(TOKYO, start), ...path];
+    for (let k = 1; k < pts.length; k++) {
+      const a = pts[k - 1]!, b = pts[k]!;
+      expect(a.x === b.x || a.z === b.z, `leg ${k} axis-aligned`).toBe(true);
+      // Sample the leg densely: every sample is on an existing segment.
+      const n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.z - a.z) / 10));
+      for (let s = 0; s <= n; s++) {
+        const q = { x: a.x + ((b.x - a.x) * s) / n, z: a.z + ((b.z - a.z) * s) / n };
+        expect(onSegment(q), `leg ${k} sample ${q.x},${q.z}`).toBe(true);
+        if (inWater(q)) expect(onBridgeLine(q), `water ${q.x},${q.z}`).toBe(true);
+      }
+    }
+    for (const w of path) if (inWater(w)) expect(onBridgeLine(w)).toBe(true);
+    expect(path[path.length - 1]).toEqual(nearestRoadPoint(TOKYO, goal));
   });
-  it('from an east-west road: drive along x, then along z', () => {
-    const path = planRoadPath({ x: 777, z: 2000 }, { x: -30, z: 10 }, O, P);
-    expect(path).toEqual([{ x: 0, z: 2000 }, { x: 0, z: 0 }]);
+
+  it('start equal to goal gives []', () => {
+    expect(planRoadPath(TOKYO, { x: 130, z: 410 }, { x: 130, z: 410 })).toEqual([]);
   });
-  it('drops zero-length legs', () => {
-    expect(planRoadPath({ x: 0, z: 1000 }, { x: 10, z: 0 }, O, P)).toEqual([{ x: 0, z: 0 }]);
+
+  it('falls back to the goal road point when the node budget runs out', () => {
+    const far = { x: 9000, z: -7000 };
+    expect(planRoadPath(TOKYO, start, far, 5)).toEqual([nearestRoadPoint(TOKYO, far)]);
   });
 });
 
 describe('ringOnRoads', () => {
-  it('places n points about r away, each on a road line', () => {
-    const pts = ringOnRoads({ x: 130, z: -70 }, 8, 1200, 0, 200);
+  it('returns n points, each on an existing segment', () => {
+    const pts = ringOnRoads(TOKYO, { x: 130, z: -70 }, 8, 1200);
     expect(pts).toHaveLength(8);
-    for (const p of pts) {
-      const onX = Math.abs(p.x - Math.round(p.x / 200) * 200) < 1e-6;
-      const onZ = Math.abs(p.z - Math.round(p.z / 200) * 200) < 1e-6;
-      expect(onX || onZ).toBe(true);
-      expect(Math.abs(Math.hypot(p.x - 130, p.z + 70) - 1200)).toBeLessThanOrEqual(150);
-    }
+    for (const p of pts) expect(onSegment(p), `${p.x},${p.z}`).toBe(true);
   });
-});
-
 });

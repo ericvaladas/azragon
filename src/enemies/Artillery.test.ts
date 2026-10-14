@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { Artillery } from './Artillery';
 import { mulberry32 } from '../util/rng';
 import type { WorldContext } from './types';
+import type { Vec2 } from '../util/math';
 
 const ctx = (blocked: (x: number, z: number) => boolean): WorldContext =>
   ({
@@ -11,6 +12,7 @@ const ctx = (blocked: (x: number, z: number) => boolean): WorldContext =>
     level: 1,
     rng: mulberry32(7),
     blocked,
+    roads: { nearest: (p: Vec2) => p, path: (_a: Vec2, b: Vec2) => [b] },
   }) as unknown as WorldContext;
 
 describe('Artillery spawn', () => {

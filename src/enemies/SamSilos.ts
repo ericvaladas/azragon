@@ -3,8 +3,6 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { CONFIG } from '../config';
 import type { Target } from '../combat';
 import { faceted, painted, toonMat } from '../render/toon';
-import { ROAD_ORIGIN } from '../world/chunks';
-import { snapToRoad } from '../world/roads';
 import { steerToward } from './steer';
 import type { EnemySystem, WorldContext } from './types';
 
@@ -137,9 +135,9 @@ export class SamSilos implements EnemySystem {
     const a = ctx.rng() * Math.PI * 2;
     const r = C.spawnMin + ctx.rng() * (C.spawnMax - C.spawnMin);
     const m = ctx.monster.position;
-    const pitch = CONFIG.world.blockSize;
     const s = new Silo(C.hp * ctx.difficulty.hpMult, this.damageSilo);
-    s.position.set(snapToRoad(m.x + Math.cos(a) * r, ROAD_ORIGIN, pitch), C.size * 0.4, snapToRoad(m.z + Math.sin(a) * r, ROAD_ORIGIN, pitch));
+    const p = ctx.roads.nearest({ x: m.x + Math.cos(a) * r, z: m.z + Math.sin(a) * r });
+    s.position.set(p.x, C.size * 0.4, p.z);
     ctx.particles.ring('dust', s.position.clone().setY(0), C.size * 1.5, 10);
     this.silos.push(s);
   }

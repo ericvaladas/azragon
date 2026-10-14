@@ -3,8 +3,6 @@ import { CONFIG } from '../config';
 import type { Target } from '../combat';
 import { toonMat } from '../render/toon';
 import { dist2, type Vec2 } from '../util/math';
-import { ROAD_ORIGIN } from '../world/chunks';
-import { planRoadPath, snapToRoad } from '../world/roads';
 import { rotateToward, stepAngle, yawPitch } from './aimMath';
 import { beamHits } from './beamMath';
 import { BARREL as BARREL_U, LEG_Z, PIVOT_DEPLOYED, cannonGeometry, chassisGeometry, deployPose, legBoxes, legGeometry, TRUNNION, turretGeometry } from './truckModel';
@@ -143,7 +141,8 @@ export class LaserTrucks implements EnemySystem {
     const r = CONFIG.director.spawnRing * (0.8 + ctx.rng() * 0.3);
     const m = ctx.monster.position;
     const t = new LaserTruck(T.hp * ctx.difficulty.hpMult, this.damage);
-    t.position.set(snapToRoad(m.x + Math.cos(a) * r, ROAD_ORIGIN, CONFIG.world.blockSize), S * 0.3, m.z + Math.sin(a) * r);
+    const p = ctx.roads.nearest({ x: m.x + Math.cos(a) * r, z: m.z + Math.sin(a) * r });
+    t.position.set(p.x, S * 0.3, p.z);
     this.trucks.push(t);
   }
 
@@ -202,7 +201,7 @@ export class LaserTrucks implements EnemySystem {
           }
           t.replanT -= dt;
           if (t.path.length === 0 || t.replanT <= 0) {
-            t.path = planRoadPath(here, goal, ROAD_ORIGIN, CONFIG.world.blockSize);
+            t.path = ctx.roads.path(here, goal);
             t.replanT = 4;
           }
           const wp = t.path[0];

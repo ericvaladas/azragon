@@ -10,8 +10,7 @@ import { clampDelta, yawTo, type Vec2 } from './util/math';
 import { resolveHit, type DamageSource, type Target } from './combat';
 import { City, CRATER_RADIUS } from './world/City';
 import { IntroCinematic } from './intro/IntroCinematic';
-import { ringOnRoads } from './world/roads';
-import { ROAD_ORIGIN } from './world/chunks';
+import { nearestRoadPoint, planRoadPath, ringOnRoads } from './world/roads';
 import { Monster } from './monster/Monster';
 import { CameraRig } from './systems/CameraRig';
 import { Input } from './systems/Input';
@@ -549,7 +548,7 @@ export class GameScene {
         if (!this.openingDone && this.runTime >= CONFIG.opening.time) {
           this.openingDone = true;
           const c = { x: this.monster.position.x, z: this.monster.position.z };
-          for (const p of ringOnRoads(c, CONFIG.opening.count, CONFIG.opening.radius, ROAD_ORIGIN, CONFIG.world.blockSize)) this.enemies.get<TankFleet>('tank').spawnAt(p.x, p.z, this.ctx);
+          for (const p of ringOnRoads(this.city.style, c, CONFIG.opening.count, CONFIG.opening.radius)) this.enemies.get<TankFleet>('tank').spawnAt(p.x, p.z, this.ctx);
         }
         this.updateMonster(dt);
         this.tentacleSlams();
@@ -1011,6 +1010,10 @@ export class GameScene {
       rng: this.rng,
       blocked: (x, z) => this.city.landmarkAt(x, z),
       particles: this.particles,
+      roads: {
+        nearest: (p) => nearestRoadPoint(this.city.style, p),
+        path: (from, to) => planRoadPath(this.city.style, from, to),
+      },
       damageMonster: (amount, source, attacker) => this.damageMonster(amount, source, attacker),
       damageBuildings: (p, r, amount) => this.city.forEachStandingInRadius(p, r, (t) => t.applyDamage(amount)),
       fireShell: (from, to, damage) => {
