@@ -42,11 +42,11 @@ export const TORONTO_DISTRICTS: Record<DistrictId, DistrictRules> = {
 };
 
 /**
- * The tower pockets among midtown's houses: a few condo towers per block, 80–200 m, in pale glass, teal and light
+ * The tower pockets among midtown's houses: a few condo towers per block, 60–150 m (mostly toward the low end), in pale glass, teal and light
  * stone (never the high-rise district's darker glass), with street trees.
  */
 export const POCKET_RULES: DistrictRules = {
-  lots: 2, fill: 0.75, minPerBlock: 2, height: [80, 200], heightCurve: 1.2, footprint: [0.55, 0.8],
+  lots: 2, fill: 0.75, minPerBlock: 2, height: [60, 150], heightCurve: 1.4, footprint: [0.55, 0.8],
   facades: [FACADE.glass, FACADE.balcony, FACADE.glass], colors: [0xcfe3e6, 0x9fd0cf, 0x7fb8c4, 0xe2ecec, 0x8cc4c9, 0xd8cdb4, 0xb7d3dc],
   signs: 0, billboard: 0, trees: 4,
 };
