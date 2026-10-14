@@ -13,9 +13,9 @@ export const YONGE_DUNDAS = { x: -100, z: 900 } as const;
 export const FINANCIAL = { x: -300, z: 1500 } as const;
 /** City Hall stands in the south of its block; Nathan Phillips Square is the paved strip north of it (the camera side). */
 export const CITY_HALL_SITE = { x: -500, z: 1135 } as const;
-export const CN_TOWER_SITE = { x: -700, z: 1900 } as const;
-/** Centred on the interior of block (−1200..−1000, 1800..2000), whose east and south sides are avenues. */
-export const ROGERS_CENTRE_SITE = { x: -1110, z: 1890 } as const;
+export const CN_TOWER_SITE = { x: -500, z: 1900 } as const;
+/** Centred on the interior of block (−800..−600, 1800..2000), the block just west of the tower's, so the dome sits at its west foot. */
+export const ROGERS_CENTRE_SITE = { x: -700, z: 1891 } as const;
 /** Lake Ontario: everything south of a gently wavering line near z = 2250 (land ends at z = 2200 almost everywhere). */
 export const TORONTO_LAKE: BaySpec = { dir: { x: 0, z: 1 }, offset: 2250, amp: 60, wavelength: 1500 };
 /** The Toronto Islands: long and low, east–west, one lake row offshore. */

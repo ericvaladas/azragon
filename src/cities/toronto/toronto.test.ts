@@ -16,6 +16,7 @@ import { overlayPainter } from '../../world/pixelTextures';
 import type { BuildingSpec } from '../types';
 import { PITCH, isIsland, isWater, lineWidth } from '../../world/roads';
 import { gameplayPose } from '../../intro/timeline';
+import { fovForAspect } from '../../systems/orbit';
 
 describe('TORONTO', () => {
   it('has rules for every district at the spec heights; parks build nothing; the port is condos, not a container yard', () => {
@@ -97,7 +98,7 @@ describe('Toronto landmarks', () => {
     expect(at('cn-tower')).toMatchObject({ ...CN_TOWER_SITE, ...CN_TOWER });
     expect(at('rogers-centre')).toMatchObject({ ...ROGERS_CENTRE_SITE, ...ROGERS_CENTRE });
     expect(at('city-hall')).toMatchObject({ ...CITY_HALL_SITE, ...CITY_HALL });
-    expect(CN_TOWER_SITE).toEqual({ x: -700, z: 1900 });
+    expect(CN_TOWER_SITE).toEqual({ x: -500, z: 1900 });
     expect(CN_TOWER.h).toBe(720);
   });
 
@@ -176,9 +177,13 @@ describe('Toronto landmarks', () => {
     expect(saucer).toBeLessThan(35);
   });
 
-  it('frames the CN Tower in the opening gameplay view (as Tokyo Tower is framed)', () => {
+  it.each([
+    ['16:10 desktop', 16 / 10],
+    ['390x844 phone portrait', 390 / 844],
+  ])('frames the CN Tower in the opening gameplay view (as Tokyo Tower is framed): %s', (_name, aspect) => {
     const pose = gameplayPose();
-    const cam = new THREE.PerspectiveCamera(CONFIG.camera.baseVFovDeg, 16 / 10, CONFIG.camera.near, CONFIG.camera.far);
+    const fov = fovForAspect(aspect, CONFIG.camera.baseVFovDeg, CONFIG.camera.maxHFovDeg);
+    const cam = new THREE.PerspectiveCamera(fov, aspect, CONFIG.camera.near, CONFIG.camera.far);
     cam.position.copy(pose.pos);
     cam.lookAt(pose.look);
     cam.updateMatrixWorld();

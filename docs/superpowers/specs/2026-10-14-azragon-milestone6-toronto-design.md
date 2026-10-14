@@ -44,10 +44,10 @@ Positions are world metres from the crash.
 |---|---|---|
 | **Yonge Street** | avenue line x = 0 | runs straight ahead to the lake |
 | **Yonge-Dundas Square** | neon block centred at (−100, 900) | the one bright billboard block, close to the crash, just right of Yonge |
-| **City Hall and Nathan Phillips Square** | (−500, 1100) | ahead and right |
+| **City Hall and Nathan Phillips Square** | (−500, 1135) | ahead and right; the Square is the paved strip north of the towers |
 | **Financial District** | high-rise district centred at (−300, 1500), about 350 m across | dense dark-glass and gold towers |
-| **CN Tower** | (−700, 1900) | ahead and right; the dominant shape in the view |
-| **Rogers Centre** | (−1100, 1900) | at the CN Tower's west foot, by the water |
+| **CN Tower** | (−500, 1900) | ahead and right; the dominant shape in the view |
+| **Rogers Centre** | (−700, 1891) | at the CN Tower's west foot, by the water; centred in the block just west of the tower's |
 | **Lakeshore** | about z = 2200 across the whole view | condo towers along it; waterfront quays (the port district, no container cranes) from x = 0 to x = 1400 |
 | **Toronto Islands** | offshore, centred at (−300, 2900) | long, low and green |
 | **Don Valley** | north–south ravine centred near x = 1500 | to the left, running down to the lake |
@@ -69,11 +69,11 @@ Toronto's starting values are below; they are tuned in the visual checks.
 | Setting | Toronto |
 |---|---|
 | Sky zenith | dusky violet-blue `0x4b4a8c` |
-| Sky horizon | orange-pink `0xf2a46b` |
-| Fog colour | warm peach `0xe9a985`; near and far as Tokyo's |
-| Ambient light | warm sky `0xffc59a` over violet ground `0x4a3550`, intensity about 0.8 (Tokyo 1.1) |
-| Sun | orange `0xffa25a`, intensity about 2.0, low in the west (from −X): direction about (−0.9, 0.3, 0.2) normalised, so buildings cast long shadows eastward |
-| Window glow | warm yellow lit windows on towers and condos (see the window-glow rule below) |
+| Sky horizon | warm gold `0xf2c08c` |
+| Fog colour | the horizon's gold `0xf2c08c`; near 3000 (Tokyo 2200) so the lake and islands read behind the skyline, far 4700 as Tokyo's |
+| Ambient light | cool violet sky `0x9c9ad6` over ground `0x4e4466`, intensity 1.1 (as Tokyo's), so shaded faces stay cool against the warm sunlit ones |
+| Sun | orange `0xffb468`, intensity 2.4, low in the west (from −X): direction (−0.85, 0.42, −0.35) normalised, so buildings cast long shadows eastward |
+| Window glow | warm yellow `0xffc46b`, strength 0.45, lit windows on towers and condos (see the window-glow rule below) |
 
 **Intro:**
 
@@ -135,7 +135,7 @@ not in the crater.
 
 ### Rogers Centre
 
-- **Size:** 220 m across, about 70 m tall.
+- **Size:** 144 m across, about 70 m tall.
 - **Look:** a low round drum.
   - Pale walls with dark window bands.
   - A slightly domed roof in pale segmented panels.
