@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import { TOKYO } from '../cities/tokyo';
-import { isWater, PITCH } from '../world/roads';
+import { isBay, isRiver, isWater, lineWidth, PITCH } from '../world/roads';
+import { SEA_WALL_SIZE } from '../world/chunks';
 import { PRESETS } from './Particles';
 import { Splasher, SPLASH_PER_FRAME } from './splash';
 
@@ -62,5 +63,33 @@ describe('Splasher', () => {
     expect(sp.footprint(0, 1300 - 150, 40)).toBe(false);
     expect(sp.footprint(0, 1300 - 90, 100)).toBe(true);
     expect(out.emitted).toBeGreaterThan(0);
+  });
+  it('ignores the coast road and sea wall: nothing within half the edge line\'s width plus the wall of a land edge', () => {
+    // Cell (0, 6) is bay and (0, 5) land: the shore edge is the line z = 1200.
+    expect(isWater(TOKYO, 0, 5)).toBe(false);
+    const margin = lineWidth(6) / 2 + SEA_WALL_SIZE.thick;
+    const { out, fx } = stub();
+    const sp = new Splasher(() => TOKYO, fx);
+    expect(sp.at(new THREE.Vector3(100, 0, 1200 + margin - 2))).toBe(false);
+    expect(out.emitted).toBe(0);
+    expect(sp.at(new THREE.Vector3(100, 0, 1200 + margin + 2))).toBe(true);
+  });
+  it('ignores a river bank\'s road the same way, on either bank', () => {
+    let checked = 0;
+    for (let ci = -20; ci < 20 && checked < 4; ci++) {
+      for (let cj = -20; cj < 20; cj++) {
+        if (!isRiver(TOKYO, ci, cj) || isBay(TOKYO, ci, cj)) continue;
+        for (const [dj, edge] of [[-1, cj], [1, cj + 1]] as const) {
+          if (isWater(TOKYO, ci, cj + dj)) continue;
+          const margin = lineWidth(edge) / 2 + SEA_WALL_SIZE.thick;
+          const x = PITCH * ci + PITCH / 2;
+          const sp = new Splasher(() => TOKYO, stub().fx);
+          expect(sp.at(new THREE.Vector3(x, 0, PITCH * edge - dj * (margin - 2)))).toBe(false);
+          expect(sp.at(new THREE.Vector3(x, 0, PITCH * edge - dj * (margin + 2)))).toBe(true);
+          checked++;
+        }
+      }
+    }
+    expect(checked).toBeGreaterThan(0);
   });
 });
