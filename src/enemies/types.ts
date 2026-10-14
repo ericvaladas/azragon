@@ -15,7 +15,7 @@ export interface WorldContext {
   /** Player level: drives unlocks, spawn rate, difficulty, and salvo sizes. */
   readonly level: number;
   readonly rng: () => number;
-  /** True where nothing may be placed (inside a landmark's footprint). Optional: absent means nowhere is blocked. */
+  /** True where nothing may be placed (inside a landmark's footprint, or on river water). Optional: absent means nowhere is blocked. */
   blocked?(x: number, z: number): boolean;
   readonly particles: Particles;
   /** The road network: nearest road point, and a waypoint route over existing segments (excluding `from`). */

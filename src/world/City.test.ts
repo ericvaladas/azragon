@@ -4,6 +4,7 @@ import { CONFIG } from '../config';
 import { TOKYO } from '../cities/tokyo';
 import type { CityStyle } from '../cities/types';
 import { City, CRATER_RADIUS, SlotPool } from './City';
+import { isWater, PITCH } from './roads';
 import type { CityTextures } from './pixelTextures';
 import type { Target } from '../combat';
 import { gameplayPose } from '../intro/timeline';
@@ -213,6 +214,33 @@ describe('City (Tokyo)', () => {
     expect(meshes.rubbleMesh.instanceMatrix.version).toBeGreaterThan(rubble);
     // Only the slots in draw range go up.
     expect(city.buildingMesh.instanceMatrix.updateRanges).toEqual([{ start: 0, count: city.buildingMesh.count * 16 }]);
+  });
+
+  it('trees cast no shadow; park pads stack by polygon offset above the ground and below the roads', () => {
+    const { city } = make();
+    const m = city as unknown as Record<'treeMesh' | 'parkMesh' | 'roadMesh' | 'waterMesh', THREE.InstancedMesh>;
+    expect(m.treeMesh.castShadow).toBe(false);
+    const off = (mesh: THREE.InstancedMesh) => {
+      const mat = mesh.material as THREE.Material;
+      expect(mat.polygonOffset).toBe(true);
+      return mat.polygonOffsetFactor;
+    };
+    expect(off(m.parkMesh)).toBeLessThan(0);
+    expect(off(m.parkMesh)).toBeGreaterThan(off(m.roadMesh));
+  });
+
+  it('blocks placement inside landmark footprints and on river water, nowhere else', () => {
+    const { city } = make();
+    expect(city.blockedAt(tmg.x, tmg.z)).toBe(true);
+    let wet: [number, number] | null = null;
+    let dry: [number, number] | null = null;
+    for (let i = -10; i <= 10 && !(wet && dry); i++) for (let j = 0; j <= 12; j++) {
+      const [x, z] = [PITCH * (i + 0.5), PITCH * (j + 0.5)];
+      if (isWater(TOKYO, i, j)) wet ??= [x, z];
+      else if (!city.landmarkAt(x, z)) dry ??= [x, z];
+    }
+    expect(city.blockedAt(...wet!)).toBe(true);
+    expect(city.blockedAt(...dry!)).toBe(false);
   });
 
   it('tints each building with its spec colour and sets its facade cell', () => {

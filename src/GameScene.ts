@@ -1008,7 +1008,7 @@ export class GameScene {
         return self.progression.level;
       },
       rng: this.rng,
-      blocked: (x, z) => this.city.landmarkAt(x, z),
+      blocked: (x, z) => this.city.blockedAt(x, z),
       particles: this.particles,
       roads: {
         nearest: (p) => nearestRoadPoint(this.city.style, p),

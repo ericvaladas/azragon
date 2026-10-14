@@ -112,7 +112,7 @@ export class SlotPool {
   }
 }
 
-/** Heights of the ground layers. The flat layers also stack by polygon offset: water 1, road 2, node 3, overlay 4, crater 5. */
+/** Heights of the ground layers. The flat layers also stack by polygon offset: water and park 1 (they never overlap), road 2, node 3, overlay 4, crater 5. */
 const Y = { water: 0.1, park: 0.2, road: 0.3, node: 0.32, overlay: 0.35, crater: 0.5, bridge: 2.5, slab: 2.0 } as const;
 /** Bridge deck slab: this much wider than its road, this thick (hanging below its top), in this grey. */
 const SLAB = { extra: 8, thick: 1.8, color: 0x9aa0a6 } as const;
@@ -252,8 +252,9 @@ export class City {
     const cone = faceted(new THREE.ConeGeometry(0.5, 1.6, 5)).translate(0, 0.8, 0);
     this.treeMat = toonMat(this._style.colors.tree);
     this.treeMesh = new THREE.InstancedMesh(cone, this.treeMat, world.maxTrees);
-    this.treeMesh.castShadow = true;
-    this.parkMesh = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), toonMat(0xffffff), world.maxParks);
+    // Trees receive light but cast no shadow: tens of thousands of cones in the shadow pass cost more than they show.
+    this.treeMesh.castShadow = false;
+    this.parkMesh = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), layered(toonMat(0xffffff), 1), world.maxParks);
     for (let i = 0; i < world.maxParks; i++) this.parkMesh.setColorAt(i, _c.setHex(0xffffff));
     this.parkMesh.receiveShadow = true;
     this.parkMesh.position.y = Y.park;
@@ -368,6 +369,11 @@ export class City {
       if (b.mesh && Math.abs(x - b.spec.x) <= b.spec.w / 2 && Math.abs(z - b.spec.z) <= b.spec.d / 2) return true;
     }
     return false;
+  }
+
+  /** Whether nothing may be placed at (x, z): inside a loaded landmark's footprint, or on a river cell. */
+  blockedAt(x: number, z: number): boolean {
+    return isWater(this._style, Math.floor(x / PITCH), Math.floor(z / PITCH)) || this.landmarkAt(x, z);
   }
 
   /** Loaded landmark meshes. */
