@@ -13,8 +13,6 @@ const _b = new THREE.Vector3();
 const _n = new THREE.Vector3();
 const UP = new THREE.Vector3(0, 1, 0);
 const X_AXIS = new THREE.Vector3(1, 0, 0);
-/** A quarter turn about the scale's own normal: its box becomes a diamond pointing down the body. */
-const DIAMOND = new THREE.Quaternion().setFromAxisAngle(UP, Math.PI / 4);
 
 /** A box that tapers along Z: `back` (w, h) at z = −len/2 to `front` (w, h) at z = +len/2. Faceted. */
 export function taper(back: readonly [number, number], front: readonly [number, number], len: number): THREE.BufferGeometry {
@@ -51,7 +49,7 @@ export function between(out: THREE.BufferGeometry[], geo: THREE.BufferGeometry, 
 }
 
 /**
- * Diamond dragon scales over an ellipsoid (centre `c`, radii `r`, tilted `tiltX` about X): staggered rows of raised,
+ * Dragon scales over an ellipsoid (centre `c`, radii `r`, tilted `tiltX` about X): staggered rows of raised,
  * faceted plates from polar angle `th0` to `th1` (0 = top) and azimuth `ph0` to `ph1` (0 = +Z, the front),
  * each `size` across, lying on the surface. Several colours alternate in a checker of scales.
  */
@@ -78,12 +76,10 @@ export function scaleRows(
       const dz = Math.sin(theta) * Math.cos(phi);
       _p.set(dx * r[0], dy * r[1], dz * r[2]).applyQuaternion(tilt).add(_a.set(...c));
       _n.set(dx / r[0], dy / r[1], dz / r[2]).normalize().applyQuaternion(tilt);
-      _q.setFromUnitVectors(UP, _n).multiply(DIAMOND);
-      // Sunk into the skin so it only just stands proud of it (the silhouette stays the body's own).
-      _p.addScaledVector(_n, -size * 0.05);
-      // Flat, angular diamond plates.
+      _q.setFromUnitVectors(UP, _n);
+      // Each scale overlaps the one below it: flattened, a little longer down the body than across.
       const tone = typeof color === 'number' ? color : color[(i + j) % color.length]!;
-      placed(out, SHAPES.box, tone, _m.compose(_p, _q, _s.set(size * 0.75, size * 0.18, size * 0.75)));
+      placed(out, SHAPES.boulder, tone, _m.compose(_p, _q, _s.set(size, size * 0.45, size * 1.15)));
     }
   }
 }
