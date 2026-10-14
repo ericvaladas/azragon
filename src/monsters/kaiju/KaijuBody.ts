@@ -7,6 +7,7 @@ import { bipedFoot, bipedLanded } from './bipedGait';
 import { rakeSwing } from './rake';
 import { neckAim, stepNeck } from './neck';
 import { tailSwing } from './tailSweep';
+import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
 import { kaijuLeap, type KaijuLeapPose } from './leapPose';
 
 const K = CONFIG.kaiju;
@@ -53,6 +54,27 @@ const _knee = new THREE.Vector3();
 const _pole = new THREE.Vector3();
 const _tmp = new THREE.Vector3();
 const _world = new THREE.Vector3();
+
+/**
+ * The head (head space): a hull over points on two ovals, a rounded cranium flowing into a narrower snout, so it
+ * comes out a smoothly faceted egg with a muzzle.
+ */
+function headPoints(): THREE.Vector3[] {
+  const pts: THREE.Vector3[] = [];
+  const oval = (c: THREE.Vector3, r: THREE.Vector3) => {
+    for (let i = 0; i <= 6; i++) {
+      const th = (i / 6) * Math.PI;
+      const n = i === 0 || i === 6 ? 1 : 10;
+      for (let j = 0; j < n; j++) {
+        const ph = (j / n) * Math.PI * 2;
+        pts.push(new THREE.Vector3(Math.sin(th) * Math.sin(ph) * r.x, Math.cos(th) * r.y, Math.sin(th) * Math.cos(ph) * r.z).add(c));
+      }
+    }
+  };
+  oval(new THREE.Vector3(0, 2, 25), new THREE.Vector3(46, 36, 58));
+  oval(new THREE.Vector3(0, -8, 112), new THREE.Vector3(32, 23, 50));
+  return pts;
+}
 
 type Leg = { side: 1 | -1; hip: THREE.Vector3; thigh: THREE.Mesh; shin: THREE.Mesh; foot: THREE.Mesh };
 type Arm = { side: 1 | -1; pivot: THREE.Object3D };
@@ -118,10 +140,13 @@ export class KaijuBody implements MonsterBody {
     const head = new THREE.Object3D();
     head.position.set(0, 85, 75);
     this.neck.add(head);
-    add(head, box, scale, [0, 0, 30], [90, 70, 110]);
-    add(head, box, dark, [0, -8, 110], [64, 46, 90]);
-    add(head, box, eye, [38, 22, 80], [16, 10, 16]);
-    add(head, box, eye, [-38, 22, 80], [16, 10, 16]);
+    add(head, this.keep(faceted(new ConvexGeometry(headPoints()))), scale, [0, 0, 0], [1, 1, 1]);
+    // Eyes: angular faceted gems set into the sides of the head, looking forward and out.
+    const eyeGeo = this.keep(faceted(new THREE.OctahedronGeometry(1, 0)));
+    for (const sd of [1, -1]) {
+      const e = add(head, eyeGeo, eye, [sd * 28, 17, 66], [8, 11, 16]);
+      e.rotation.set(0, sd * 0.55, sd * 0.2);
+    }
     this.jaw.position.set(0, -30, 40);
     head.add(this.jaw);
     add(this.jaw, box, belly, [0, -8, 60], [58, 18, 110]);
