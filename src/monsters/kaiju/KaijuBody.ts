@@ -76,14 +76,14 @@ function oval(pts: THREE.Vector3[], c: THREE.Vector3, r: THREE.Vector3): void {
 function headPoints(): THREE.Vector3[] {
   const pts: THREE.Vector3[] = [];
   oval(pts, new THREE.Vector3(0, 2, 25), new THREE.Vector3(46, 36, 58));
-  oval(pts, new THREE.Vector3(0, -8, 112), new THREE.Vector3(32, 23, 50));
+  oval(pts, new THREE.Vector3(0, -8, 96), new THREE.Vector3(32, 23, 40));
   return pts;
 }
 
 /** The lower jaw (jaw space): a slim rounded oval tucked under the snout. */
 function jawPoints(): THREE.Vector3[] {
   const pts: THREE.Vector3[] = [];
-  oval(pts, new THREE.Vector3(0, -4, 64), new THREE.Vector3(22, 9, 44));
+  oval(pts, new THREE.Vector3(0, -4, 54), new THREE.Vector3(22, 9, 36));
   return pts;
 }
 
@@ -153,25 +153,14 @@ export class KaijuBody implements MonsterBody {
     head.scale.setScalar(HEAD_SCALE);
     this.neck.add(head);
     add(head, this.keep(faceted(new ConvexGeometry(headPoints()))), scale, [0, 0, 0], [1, 1, 1]);
-    // Eyes: narrow glowing slits slanting down toward the snout, each under a heavy brow that angles down to
-    // the middle in a scowl.
-    const eyeGeo = this.keep(faceted(new THREE.OctahedronGeometry(1, 0)));
-    for (const sd of [1, -1] as const) {
-      const e = add(head, eyeGeo, eye, [sd * 36, 15, 54], [7, 4.5, 21]);
-      e.rotation.set(0.45, sd * 0.45, sd * -0.1);
-      // The brow: low and forward at its inner end, rising toward the back of the head.
-      const brow = [
-        [18, 22, 72], [24, 18, 70], [20, 28, 66],
-        [44, 30, 38], [46, 22, 40], [38, 36, 40],
-        [34, 26, 56], [30, 32, 54],
-      ].map(([x, y, z]) => new THREE.Vector3(x! * sd, y!, z!));
-      add(head, this.keep(faceted(new ConvexGeometry(brow))), dark, [0, 0, 0], [1, 1, 1]);
-    }
+    // Eyes: glowing rectangles set into the sides of the skull.
+    add(head, box, eye, [33, 15, 56], [16, 10, 16]);
+    add(head, box, eye, [-33, 15, 56], [16, 10, 16]);
     this.jaw.position.set(0, -30, 40);
     head.add(this.jaw);
     add(this.jaw, this.keep(faceted(new ConvexGeometry(jawPoints()))), belly, [0, 0, 0], [1, 1, 1]);
-    for (const x of [-11, 0, 11]) add(this.jaw, cone, claw, [x, 8, 94], [8, 15, 8]);
-    this.mouth.position.set(0, -20, 165);
+    for (const x of [-11, 0, 11]) add(this.jaw, cone, claw, [x, 8, 78], [8, 15, 8]);
+    this.mouth.position.set(0, -20, 140);
     head.add(this.mouth);
     this.body.add(this.neck);
 
