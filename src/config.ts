@@ -446,6 +446,8 @@ export const CONFIG = {
     /** In the cloud the monster starts curled down by crouchDip (model units of body drop); it straightens over riseTime s (see reveal.riseAfter). */
     crouchDip: 170,
     riseTime: 1.4,
+    /** A skip lands this long (s) before `emerge`, so the reveal and the music change on it still play. */
+    skipLead: 0.5,
     /** Cocoon length = the monster's largest dimension × podFit (the Insect's 484 m span gets a 620 m cocoon). */
     podFit: 1.28,
     /** Screen wash: builds over `rise` s before the cut, holds, fades; a full white-out at impact. */
