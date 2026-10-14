@@ -52,6 +52,8 @@ export const PARKETTE_CHANCE = 1 / 8;
 
 /** Pale condo glass: CityPlace and King West. */
 export const CONDO_COLORS = [0xcfe3e6, 0x9fd0cf, 0x7fb8c4, 0xe2ecec, 0x8cc4c9, 0xb7d3dc] as const;
+/** University Avenue: blue-grey glass and pale limestone, lighter than the Financial District's near-black towers. */
+export const UNIVERSITY_COLORS = [0x5c6f80, 0x7d8e9c, 0xb8ada0, 0x50677a, 0xa8b4bc] as const;
 /** Kensington Market's painted houses: pink, teal, yellow, purple, orange, sky blue. */
 export const KENSINGTON_COLORS = [0xe86aa0, 0x3fb8a8, 0xf2c94c, 0x9a4fd0, 0xf08a5d, 0x6cc4e8] as const;
 
@@ -72,7 +74,7 @@ export const AREAS: readonly Area[] = [
   // Yorkville: towers just west of the Bloor-Yonge node.
   { name: 'Yorkville', district: 'highrise', ci0: -4, ci1: -3, cj0: -7, cj1: -6 },
   // University Avenue: the blocks either side of the x = −1000 avenue, from Queen's Park south to the Financial row.
-  { name: 'University Avenue', district: 'highrise', ci0: -6, ci1: -5, cj0: 0, cj1: 6 },
+  { name: 'University Avenue', district: 'highrise', colors: UNIVERSITY_COLORS, ci0: -6, ci1: -5, cj0: 0, cj1: 6 },
   // CityPlace: condo towers west of the Rogers Centre.
   { name: 'CityPlace', district: 'highrise', colors: CONDO_COLORS, ci0: -7, ci1: -6, cj0: 8, cj1: 9 },
   // King West / Liberty Village: condo towers, a block clear of the lakeshore band.

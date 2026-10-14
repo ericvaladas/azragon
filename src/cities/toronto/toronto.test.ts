@@ -518,6 +518,15 @@ describe('Chinatown and Kensington Market', () => {
     expect(TOKYO.blockColors).toBeUndefined();
   });
 
+  it('keeps University Avenue out of the near-black: blue-grey glass and limestone, so its band does not wall off the start view', () => {
+    const towers = collect('University Avenue');
+    expect(towers.length).toBeGreaterThan(10);
+    for (const b of towers) {
+      expect(area('University Avenue').colors).toContain(b.color);
+      expect(hsl(b.color).l).toBeGreaterThan(0.25);
+    }
+  });
+
   it('gives CityPlace and King West pale condo glass, unlike the dark Financial District', () => {
     for (const name of ['CityPlace', 'King West']) {
       const towers = collect(name);
