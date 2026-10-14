@@ -123,6 +123,11 @@ export type Atmosphere = {
   windowGlow: { color: number; strength: number };
 };
 
+/** Lettering on vertical signs: Tokyo's blocky kanji-like strokes, or Latin capitals. */
+export type GlyphSet = 'kanji' | 'latin';
+/** Gantry crane paint: the bold bands (main and band alternate) and the grey machinery. */
+export type CraneColors = { main: number; band: number; machinery: number };
+
 export type CityStyle = {
   id: string;
   name: string;
@@ -137,6 +142,8 @@ export type CityStyle = {
     tree: number;
     /** Port quay paving, drawn as a pad over each port cell. */
     quay: number;
+    /** River and bay water. */
+    water: number;
   };
   /** Neon sign colours (never near the threat reds). */
   signColors: readonly number[];
@@ -162,4 +169,8 @@ export type CityStyle = {
   keepNodes: readonly { x: number; z: number }[];
   /** Sky, fog, lights and window glow; City.reset applies it. */
   atmosphere: Atmosphere;
+  /** The sign atlas's lettering. */
+  glyphs: GlyphSet;
+  /** Port cranes: their paint, or false for none; unset is today's red and white. */
+  cranes?: { colors: CraneColors } | false;
 };

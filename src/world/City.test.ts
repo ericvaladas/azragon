@@ -6,7 +6,7 @@ import type { CityStyle } from '../cities/types';
 import type { AtmosphereTargets } from '../render/atmosphere';
 import { City, CRATER_RADIUS, SlotPool, patchFoamShader } from './City';
 import { chunksInRadius, CRANE_PORTAL, generateChunk } from './chunks';
-import { craneGeometry } from './crane';
+import { DEFAULT_CRANE_COLORS, craneGeometry } from './crane';
 import { isWater, PITCH } from './roads';
 import type { CityTextures } from './pixelTextures';
 import type { Target } from '../combat';
@@ -680,5 +680,40 @@ describe('City atmosphere', () => {
     expect(dusk.glow).not.toBe(0);
     city.reset(TOKYO);
     expect(snap(city, t)).toEqual(tokyo);
+  });
+});
+
+describe('City style switch', () => {
+  const vertexHexes = (g: THREE.BufferGeometry) => {
+    const a = g.getAttribute('color');
+    const out = new Set<number>();
+    for (let i = 0; i < a.count; i++) out.add(new THREE.Color(a.getX(i), a.getY(i), a.getZ(i)).getHex());
+    return out;
+  };
+  const LATIN: CityStyle = {
+    ...TOKYO,
+    id: 'latin',
+    glyphs: 'latin',
+    colors: { ...TOKYO.colors, water: 0x3d8fa8 },
+    cranes: { colors: { main: 0x2255aa, band: 0xffffff, machinery: 0x444444 } },
+  };
+
+  it('rebuilds the sign atlas for the glyph set, repaints cranes and water on reset, and restores Tokyo after', () => {
+    const asked: string[] = [];
+    const textures: CityTextures = { ...STUB, signs: (g) => (asked.push(g), new THREE.Texture()) };
+    const city = new City(new THREE.Scene(), TOKYO, CONFIG.world.seed, () => {}, textures);
+    const m = city as unknown as { waterMesh: THREE.InstancedMesh; craneMesh: THREE.InstancedMesh };
+    const water = () => (m.waterMesh.material as THREE.MeshToonMaterial).color.getHex();
+    expect(water()).toBe(0x3f8fc9);
+    expect(vertexHexes(m.craneMesh.geometry).has(DEFAULT_CRANE_COLORS.main)).toBe(true);
+    city.reset(LATIN);
+    expect(water()).toBe(0x3d8fa8);
+    expect(vertexHexes(m.craneMesh.geometry).has(0x2255aa)).toBe(true);
+    city.reset(TOKYO);
+    expect(asked).toEqual(['kanji', 'latin', 'kanji']);
+    expect(water()).toBe(0x3f8fc9);
+    const hexes = vertexHexes(m.craneMesh.geometry);
+    expect(hexes.has(DEFAULT_CRANE_COLORS.main)).toBe(true);
+    expect(hexes.has(0x2255aa)).toBe(false);
   });
 });

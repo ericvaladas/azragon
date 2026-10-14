@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { FACADE, FACADE_COUNT } from '../cities/types';
 import { SCRAMBLE } from '../cities/tokyo/shibuya';
 import * as THREE from 'three';
-import { FACADE_TILE, WINDOW_CHROMA, isWindowTexel, patchFacadeShader, patchRoadShader, scrambleArms, scrambleStripes } from './pixelTextures';
+import { FACADE_TILE, WINDOW_CHROMA, isWindowTexel, patchFacadeShader, patchRoadShader, overlayPainter, scrambleArms, scrambleStripes, scrambleTexture } from './pixelTextures';
+import { LATIN_FONT, SIGN_WORDS, latinBoardRects } from './latinFont';
 
 const VERT = 'x\n#include <common>\ny\n#include <uv_vertex>\nz';
 const FRAG = 'x\n#include <common>\ny\n#include <map_fragment>\nz';
@@ -125,6 +126,44 @@ describe('window glow', () => {
     for (const ink of [0x7f93ab, 0x8a9aae, 0x8796aa]) expect(isWindowTexel(ink), ink.toString(16)).toBe(true);
     for (const ink of [0xc9d4dc, 0xe8eef2, 0x5d6a74, 0xffffff, 0xb8b0a4, 0xd9d3c8, 0xf2efe9, 0xffe9a8, 0xf4f4f4, 0xb4b4b4, 0x5a5a5a]) {
       expect(isWindowTexel(ink), ink.toString(16)).toBe(false);
+    }
+  });
+});
+
+describe('overlay textures by id', () => {
+  it("paints the Shibuya scramble for 'scramble' (Tokyo unchanged)", () => {
+    expect(overlayPainter('scramble')).toBe(scrambleTexture);
+  });
+  it('throws, naming the id, for an overlay with no texture', () => {
+    expect(() => overlayPainter('no-such-decal')).toThrow(/no-such-decal/);
+  });
+});
+
+describe('latin glyphs', () => {
+  it('draws every letter 5 px wide and 7 tall', () => {
+    for (const [ch, rows] of Object.entries(LATIN_FONT)) {
+      expect(rows, ch).toHaveLength(7);
+      for (const r of rows) expect(r, ch).toMatch(/^[01]{5}$/);
+    }
+  });
+  it('has one word per vertical board, each at most 5 letters, all in the font', () => {
+    expect(SIGN_WORDS).toHaveLength(3);
+    for (const w of SIGN_WORDS) {
+      expect(w.length).toBeLessThanOrEqual(5);
+      for (const ch of w) expect(LATIN_FONT[ch], ch).toBeDefined();
+    }
+  });
+  it('stacks a word down a 12 × 48 board inside its 1 px frame', () => {
+    for (const [k, w] of SIGN_WORDS.entries()) {
+      const x0 = k * 12;
+      const rects = latinBoardRects(w, x0);
+      expect(rects.length).toBeGreaterThan(w.length * 5);
+      for (const r of rects) {
+        expect(r.x).toBeGreaterThanOrEqual(x0 + 1);
+        expect(r.x + r.w).toBeLessThanOrEqual(x0 + 11);
+        expect(r.y).toBeGreaterThanOrEqual(1);
+        expect(r.y + r.h).toBeLessThanOrEqual(47);
+      }
     }
   });
 });

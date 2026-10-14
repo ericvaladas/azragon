@@ -8,7 +8,7 @@ import { blastTopples, chunksInRadius, DestroyedLog, generateChunk, nodeSize, pl
 import { isIsland, isWater, PITCH, type Segment } from './roads';
 import { canvasCityTextures, patchFacadeShader, patchRoadShader, SCREEN_FRAMES, SIGN_RECTS, type CityTextures } from './pixelTextures';
 import { rubbleGeometry } from './rubble';
-import { craneGeometry } from './crane';
+import { craneColors, craneGeometry } from './crane';
 import { faceted, toonMat } from '../render/toon';
 import { applyAtmosphere, windowGlowColor, type AtmosphereTargets } from '../render/atmosphere';
 
@@ -130,7 +130,6 @@ export class SlotPool {
 const Y = { water: 0.1, foam: 0.15, park: 0.2, road: 0.3, node: 0.32, overlay: 0.35, crater: 0.5, bridge: 2.5, slab: 2.0 } as const;
 /** Bridge deck slab: this much wider than its road, this thick (hanging below its top), in this grey. */
 const SLAB = { extra: 8, thick: 1.8, color: 0x9aa0a6 } as const;
-const WATER_COLOR = 0x3f8fc9;
 /** Sea wall colours: a pale concrete cap over a dark face that darkens further to a wet band at the waterline. */
 const SEA_WALL = { cap: 0xf2eee4, face: 0x5a554e, waterline: 0x262422 } as const;
 
@@ -236,6 +235,8 @@ export class City {
   private nodeMesh: THREE.InstancedMesh;
   /** River and bay cells. */
   private waterMesh: THREE.InstancedMesh;
+  private waterMat: THREE.MeshToonMaterial;
+  private signMat: THREE.MeshBasicMaterial;
   /** Gantry cranes along the coast: scenery, never targets. */
   private craneMesh: THREE.InstancedMesh;
   private cranes: SlotPool;
@@ -360,9 +361,10 @@ export class City {
     this.nodeMesh = new THREE.InstancedMesh(slab, layered(toonMat(0xffffff), 3), world.maxNodes);
     for (let i = 0; i < world.maxNodes; i++) this.nodeMesh.setColorAt(i, _c.setHex(0xffffff));
     this.nodeMesh.receiveShadow = true;
-    this.waterMesh = new THREE.InstancedMesh(flat, layered(toonMat(WATER_COLOR), 1), world.maxWater);
+    this.waterMat = toonMat(this._style.colors.water);
+    this.waterMesh = new THREE.InstancedMesh(flat, layered(this.waterMat, 1), world.maxWater);
     this.waterMesh.receiveShadow = true;
-    this.craneMesh = new THREE.InstancedMesh(craneGeometry(), toonMat(0xffffff, { vertexColors: true }), world.maxCranes);
+    this.craneMesh = new THREE.InstancedMesh(craneGeometry(craneColors(this._style)), toonMat(0xffffff, { vertexColors: true }), world.maxCranes);
     this.craneMesh.castShadow = true;
     this.craneMesh.receiveShadow = true;
     // Wall: base at y = 0, runs along local x; the top face (BoxGeometry's +y vertices 8-11) is the pale cap, the
@@ -383,7 +385,7 @@ export class City {
     const signGeo = new THREE.BoxGeometry(1, 1, 1);
     this.signRect = new THREE.InstancedBufferAttribute(new Float32Array(world.maxSigns * 4), 4);
     signGeo.setAttribute('aRect', this.signRect);
-    const signMat = new THREE.MeshBasicMaterial({ map: this.textures.signs() });
+    const signMat = (this.signMat = new THREE.MeshBasicMaterial({ map: this.textures.signs(this._style.glyphs) }));
     signMat.onBeforeCompile = (sh) => {
       sh.vertexShader = sh.vertexShader
         .replace('#include <common>', '#include <common>\nattribute vec4 aRect;\nvarying vec4 vRect;')
@@ -540,6 +542,7 @@ export class City {
   /** Forget all destruction and rebuild the city around the origin, in `style` if given. */
   reset(style?: CityStyle): void {
     if (style && style !== this._style) {
+      const prev = this._style;
       this._style = style;
       const mat = this.ground.material as THREE.MeshToonMaterial;
       mat.map?.dispose();
@@ -550,6 +553,16 @@ export class City {
       this.roadMat.map?.dispose();
       this.roadMat.map = this.roadTexture();
       this.roadMat.needsUpdate = true;
+      if (style.glyphs !== prev.glyphs) {
+        this.signMat.map?.dispose();
+        this.signMat.map = this.textures.signs(style.glyphs);
+        this.signMat.needsUpdate = true;
+      }
+      this.waterMat.color.setHex(style.colors.water);
+      if (craneColors(style) !== craneColors(prev)) {
+        this.craneMesh.geometry.dispose();
+        this.craneMesh.geometry = craneGeometry(craneColors(style));
+      }
     }
     if (this.atmosphere) applyAtmosphere(this._style.atmosphere, this.atmosphere);
     else windowGlowColor(this._style.atmosphere, this.windowGlow);

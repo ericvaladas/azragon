@@ -20,6 +20,7 @@ export const TOKYO: CityStyle = {
     roof: 0xd4d6d8,
     tree: 0x4c8f39,
     quay: 0xb9b2a4,
+    water: 0x3f8fc9,
   },
   // Magenta, cyan, warm white, yellow, violet: no reds (they belong to threats).
   signColors: [0xff3fb4, 0x35e8ff, 0xfff4d6, 0xffd23a, 0x7a5cff],
@@ -54,4 +55,5 @@ export const TOKYO: CityStyle = {
     sunDir: { x: 0.45, y: 0.8, z: 0.35 },
     windowGlow: { color: 0xffd27a, strength: 0 },
   },
+  glyphs: 'kanji',
 };

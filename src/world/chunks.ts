@@ -253,7 +253,7 @@ const coastal = (style: CityStyle, i: number, j: number): boolean => !isWater(st
  * the water.
  */
 function craneAt(style: CityStyle, seed: number, i: number, j: number): CraneSpec | null {
-  if (!coastal(style, i, j) || !style.bay) return null;
+  if (style.cranes === false || !coastal(style, i, j) || !style.bay) return null;
   const h = hash2(i, j, seed + 57);
   for (let di = -1; di <= 1; di++) for (let dj = -1; dj <= 1; dj++) {
     if ((di || dj) && coastal(style, i + di, j + dj) && hash2(i + di, j + dj, seed + 57) <= h) return null;

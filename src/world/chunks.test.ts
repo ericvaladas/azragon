@@ -509,6 +509,16 @@ describe('harbour and island', () => {
     }
   });
 
+  it('stands no crane anywhere when the style sets cranes: false (and the same coast with Tokyo has some)', () => {
+    const NO_CRANES: CityStyle = { ...TOKYO, cranes: false };
+    let tokyo = 0;
+    for (const [cx, cz] of REGION) {
+      expect(generateChunk(NO_CRANES, 1337, cx, cz).cranes).toEqual([]);
+      tokyo += generateChunk(TOKYO, 1337, cx, cz).cranes.length;
+    }
+    expect(tokyo).toBeGreaterThan(0);
+  });
+
   it('never stands a crane leg in a building, and never puts a warehouse on the sea side of a crane cell', () => {
     let cranes = 0;
     for (let cx = -8; cx <= 4; cx++) for (let cz = -8; cz <= 4; cz++) {
