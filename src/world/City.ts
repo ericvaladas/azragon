@@ -6,7 +6,7 @@ import { mulberry32 } from '../util/rng';
 import type { CityStyle, LandmarkSpec, SignDef } from '../cities/types';
 import { blastTopples, chunksInRadius, DestroyedLog, generateChunk, nodeSize, planStreaming, type BuildingSpec, type ChunkContent } from './chunks';
 import { isWater, PITCH, type Segment } from './roads';
-import { canvasCityTextures, patchFacadeShader, SCREEN_FRAMES, SIGN_RECTS, type CityTextures } from './pixelTextures';
+import { canvasCityTextures, patchFacadeShader, patchRoadShader, SCREEN_FRAMES, SIGN_RECTS, type CityTextures } from './pixelTextures';
 import { faceted, toonMat } from '../render/toon';
 
 type BuildingState = 'standing' | 'collapsing' | 'rubble';
@@ -161,6 +161,8 @@ export class City {
   private nodes: SlotPool;
   private waters: SlotPool;
   private roadMat: THREE.MeshToonMaterial;
+  /** Per road slot: 1 where that end's crosswalk gives way to plain asphalt (x start node, y end node). */
+  private plainEnds: THREE.InstancedBufferAttribute;
   private signMesh: THREE.InstancedMesh;
   private signRect: THREE.InstancedBufferAttribute;
   private screenMesh: THREE.InstancedMesh;
@@ -243,7 +245,12 @@ export class City {
     this.parkMesh.position.y = Y.park;
     const flat = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
     this.roadMat = toonMat(0xffffff, { map: this.roadTexture() });
-    this.roadMesh = new THREE.InstancedMesh(flat, layered(this.roadMat, 2), world.maxRoads);
+    this.roadMat.onBeforeCompile = (sh) => patchRoadShader(sh);
+    this.roadMat.customProgramCacheKey = () => 'city-road';
+    const roadQuad = flat.clone();
+    this.plainEnds = new THREE.InstancedBufferAttribute(new Float32Array(world.maxRoads * 2), 2);
+    roadQuad.setAttribute('aPlainEnds', this.plainEnds);
+    this.roadMesh = new THREE.InstancedMesh(roadQuad, layered(this.roadMat, 2), world.maxRoads);
     this.roadMesh.receiveShadow = true;
     // Top face at local y = 0, so an instance's y is its top and its y scale its thickness.
     const slab = new THREE.BoxGeometry(1, 1, 1).translate(0, -0.5, 0);
@@ -326,7 +333,7 @@ export class City {
       (o.material as THREE.Material).dispose();
     }
     this.overlays = this._style.overlays.map((ov) => {
-      const mat = toonMat(0xffffff, { map: this.textures.overlay(ov.id) });
+      const mat = toonMat(0xffffff, { map: this.textures.overlay(ov) });
       mat.alphaTest = 0.5;
       layered(mat, 4);
       const m = new THREE.Mesh(new THREE.PlaneGeometry(ov.size, ov.size).rotateX(-Math.PI / 2), mat);
@@ -549,6 +556,7 @@ export class City {
       this.signRect.needsUpdate = true;
       if (this.parkMesh.instanceColor) this.parkMesh.instanceColor.needsUpdate = true;
       this.facadeAttr.needsUpdate = true;
+      this.plainEnds.needsUpdate = true;
     }
   }
 
@@ -670,8 +678,9 @@ export class City {
   }
 
   /**
-   * One segment's road quad, running between the edges of its end intersections so their crosswalks show. A bridge
-   * is raised on a grey deck slab and runs straight through mid-river nodes (whose four cells are all water).
+   * One segment's road quad, running between the edges of its end intersections so their crosswalks show. At a keep
+   * node (the Shibuya Crossing) that end's crosswalk is switched off: the node's scramble overlay draws its own. A
+   * bridge is raised on a grey deck slab and runs straight through mid-river nodes (whose four cells are all water).
    */
   private writeRoad(seg: Segment, roadSlots: number[], nodeSlots: number[]): void {
     const st = this._style;
@@ -686,7 +695,11 @@ export class City {
     _q.setFromAxisAngle(UP, seg.axis === 'x' ? Math.PI / 2 : 0);
     _m.compose(_p.set(x, seg.bridge ? Y.bridge : Y.road, z), _q, _s.set(seg.width, 1, len));
     const slot = this.roads.take(_m);
-    if (slot !== undefined) roadSlots.push(slot);
+    if (slot !== undefined) {
+      const kept = (i: number, j: number) => (st.keepNodes.some((k) => k.x === PITCH * i && k.z === PITCH * j) ? 1 : 0);
+      this.plainEnds.setXY(slot, kept(seg.i, seg.j), kept(i1, j1));
+      roadSlots.push(slot);
+    }
     if (!seg.bridge) return;
     _m.compose(_p.set(x, Y.slab, z), _q, _s.set(seg.width + SLAB.extra, SLAB.thick, len));
     const deck = this.nodes.take(_m);

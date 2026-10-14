@@ -221,6 +221,34 @@ describe('road network', () => {
     expect(counts(city)).toEqual(before);
   });
 
+  it('switches off segment-end crosswalks only where a segment meets a keep node (the scramble draws its own)', () => {
+    const { city } = make();
+    const road = meshes(city).roadMesh;
+    const plain = road.geometry.getAttribute('aPlainEnds') as THREE.InstancedBufferAttribute;
+    expect(plain).toBeDefined();
+    const keep = TOKYO.keepNodes.map((k) => new THREE.Vector2(k.x, k.z));
+    const m = new THREE.Matrix4(), p = new THREE.Vector3(), q = new THREE.Quaternion(), s = new THREE.Vector3();
+    let atKeep = 0, elsewhere = 0;
+    for (let i = 0; i < road.count; i++) {
+      road.getMatrixAt(i, m);
+      m.decompose(p, q, s);
+      if (s.z === 0) continue;
+      const alongX = Math.abs(q.y) > 0.1;
+      const half = s.z / 2;
+      // Quad ends: the start node's end (lower coordinate) first.
+      const ends = alongX ? [new THREE.Vector2(p.x - half, p.z), new THREE.Vector2(p.x + half, p.z)] : [new THREE.Vector2(p.x, p.z - half), new THREE.Vector2(p.x, p.z + half)];
+      ends.forEach((e, k) => {
+        const touches = keep.some((n) => e.distanceTo(n) < 60);
+        const flag = k === 0 ? plain.getX(i) : plain.getY(i);
+        expect(flag, `road ${i} end ${k} at ${e.x},${e.y}`).toBe(touches ? 1 : 0);
+        if (touches) atKeep++;
+        else elsewhere++;
+      });
+    }
+    expect(atKeep).toBe(4 * TOKYO.keepNodes.length);
+    expect(elsewhere).toBeGreaterThan(100);
+  });
+
   // Mesh `count` is the highest slot in use, which depends on the order slots were freed; slots in use do not.
   it('returns to the same slots in use after streaming 30 km away and back', () => {
     const { city } = make();

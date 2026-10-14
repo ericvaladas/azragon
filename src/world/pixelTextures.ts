@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { CONFIG } from '../config';
 import { mulberry32 } from '../util/rng';
-import type { CityStyle } from '../cities/types';
+import type { CityStyle, GroundOverlay } from '../cities/types';
+import { lineWidth, PITCH } from './roads';
 import { FACADE_COUNT } from '../cities/types';
 
 function hex(c: number): string {
@@ -160,39 +161,86 @@ export function roadTexture(style: CityStyle): THREE.CanvasTexture {
 
 export type Rect = { x: number; y: number; w: number; h: number };
 
+/** Widths (m) of the two roads through a crossing: `ns` runs north-south (along z), `ew` east-west (along x). */
+export type ScrambleArms = { ns: number; ew: number };
+
+/** The arm widths of a crossing overlay, from the lattice lines through its node. */
+export function scrambleArms(ov: GroundOverlay): ScrambleArms {
+  return { ns: lineWidth(Math.round(ov.x / PITCH)), ew: lineWidth(Math.round(ov.z / PITCH)) };
+}
+
+/** Depth of each arm's zebra and its gap from the intersection square, in px. */
+const ZEBRA = { depth: 4, gap: 1 } as const;
+
 /**
- * Stripe rectangles of the scramble overlay on an n × n pixel grid: four straight zebra crossings at the edges of the
- * intersection plus both diagonals. `roadWidth` is in metres over `size` metres of ground. Whole pixels only, so
+ * Stripe rectangles of the scramble overlay on an n × n pixel grid over `size` metres of ground (texture x is world
+ * +x, texture y is world +z). Each arm gets a zebra across its own width, just outside the intersection square (as
+ * wide as the widest arm, like the road network's node square); both diagonal bands stay inside the square. Stripes
+ * pair off symmetrically about the centre, the middle pair meeting as one wide stripe. Whole pixels only, so
  * nearest-filtered alpha-tested stripes stay crisp.
  */
-export function scrambleStripes(n: number, roadWidth: number, size: number): Rect[] {
+export function scrambleStripes(n: number, size: number, arms: ScrambleArms): Rect[] {
   const out: Rect[] = [];
   const m = n / 2;
-  const road = Math.round((roadWidth / size) * n);
-  const half = Math.floor(road / 2);
-  for (let t = -half; t < half; t += 2) {
-    for (const e of [Math.round(m - road / 2 - 4), Math.round(m + road / 2 + 1)]) {
-      out.push({ x: m + t, y: e, w: 1, h: 3 });
-      out.push({ x: e, y: m + t, w: 3, h: 1 });
-    }
+  const px = n / size;
+  const sq = Math.ceil((Math.max(arms.ns, arms.ew) / 2) * px);
+  const near = sq + ZEBRA.gap;
+  // Stripe cells across one arm: m - 1 - 2k on one side, its mirror m + 2k on the other, within the road's half width.
+  const across = (width: number): number[] => {
+    const half = Math.floor((width / 2) * px);
+    const cells: number[] = [];
+    for (let k = 0; 2 * k + 1 <= half; k++) cells.push(m - 1 - 2 * k, m + 2 * k);
+    return cells;
+  };
+  for (const c of across(arms.ns)) {
+    out.push({ x: c, y: m - near - ZEBRA.depth, w: 1, h: ZEBRA.depth });
+    out.push({ x: c, y: m + near, w: 1, h: ZEBRA.depth });
   }
-  for (let k = -m + 6; k < m - 6; k += 2) for (let s = -2; s <= 2; s++) {
+  for (const c of across(arms.ew)) {
+    out.push({ x: m - near - ZEBRA.depth, y: c, w: ZEBRA.depth, h: 1 });
+    out.push({ x: m + near, y: c, w: ZEBRA.depth, h: 1 });
+  }
+  // Diagonal bands: 5 px dashes across each diagonal, every 2 px, inside the square's whole pixels.
+  const inner = Math.floor((Math.max(arms.ns, arms.ew) / 2) * px);
+  for (let k = 3 - inner; k <= inner - 3; k += 2) for (let s = -2; s <= 2; s++) {
     out.push({ x: m + k + s, y: m + k - s, w: 1, h: 1 });
     out.push({ x: m + k + s, y: m - k + s, w: 1, h: 1 });
   }
   return out;
 }
 
-/** The Shibuya scramble: zebra crossings on all four arms plus both diagonals, transparent elsewhere (use alphaTest). */
-export function scrambleTexture(): THREE.CanvasTexture {
+/** The Shibuya scramble: a zebra across each arm plus both diagonals, transparent elsewhere (use alphaTest). */
+export function scrambleTexture(ov: GroundOverlay): THREE.CanvasTexture {
   const n = 64;
   const c = document.createElement('canvas');
   c.width = n;
   c.height = n;
   const g = c.getContext('2d')!;
   g.fillStyle = '#f2f0ea';
-  for (const r of scrambleStripes(n, CONFIG.world.roadWidth, 120)) g.fillRect(r.x, r.y, r.w, r.h);
+  // Canvas row 0 is the texture's top (v = 1), which the overlay plane puts at its −z edge: rows run along +z.
+  for (const r of scrambleStripes(n, ov.size, scrambleArms(ov))) g.fillRect(r.x, r.y, r.w, r.h);
   return finish(c);
+}
+
+/**
+ * Road material hook: per-segment switches (attribute aPlainEnds: x the start node's end, y the end node's end) that
+ * replace that end's crosswalk with plain asphalt, sampling the stripe-free row just inside it. The start node's end is
+ * the texture's top (v near 1), the end node's end its bottom.
+ */
+export function patchRoadShader(sh: { vertexShader: string; fragmentShader: string }): void {
+  const h = ROAD_TEX.h.toFixed(1);
+  sh.vertexShader = sh.vertexShader
+    .replace('#include <common>', '#include <common>\nattribute vec2 aPlainEnds;\nvarying vec2 vPlainEnds;')
+    .replace('#include <uv_vertex>', '#include <uv_vertex>\n  vPlainEnds = aPlainEnds;');
+  sh.fragmentShader = sh.fragmentShader
+    .replace('#include <common>', '#include <common>\nvarying vec2 vPlainEnds;')
+    .replace(
+      '#include <map_fragment>',
+      `vec2 roadUv = vMapUv;
+  if (vPlainEnds.x > 0.5 && roadUv.y > 1.0 - 6.0 / ${h}) roadUv.y = 1.0 - 7.5 / ${h};
+  if (vPlainEnds.y > 0.5 && roadUv.y < 6.0 / ${h}) roadUv.y = 7.5 / ${h};
+  diffuseColor *= texture2D(map, roadUv);`,
+    );
 }
 
 export const SCREEN_FRAMES = 4;
@@ -227,7 +275,7 @@ export type CityTextures = {
   facades(): THREE.Texture;
   screen(): THREE.Texture;
   signs(): THREE.Texture;
-  overlay(id: string): THREE.Texture;
+  overlay(ov: GroundOverlay): THREE.Texture;
   road(style: CityStyle): THREE.Texture;
 };
 
@@ -237,7 +285,7 @@ export const canvasCityTextures: CityTextures = {
   facades: facadeAtlas,
   screen: screenTexture,
   signs: () => signAtlas(),
-  overlay: () => scrambleTexture(),
+  overlay: scrambleTexture,
   road: roadTexture,
 };
 
