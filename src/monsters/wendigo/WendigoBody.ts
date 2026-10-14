@@ -613,7 +613,7 @@ export class WendigoBody implements MonsterBody {
       piece(skull, NUB, C.bone, [sx * 22, 20, 24], [26, 12, 32], [0, 0, 0], head);
       piece(skull, NUB, C.boneShade, [sx * 22, -16, 34], [18, 16, 40], [0, 0, 0], head);
       // The sockets: deep, empty, black.
-      piece(skull, BALL, C.socket, [sx * 27, 6, 28], [28, 26, 30], [0, 0, 0], head);
+      piece(skull, BALL, C.socket, [sx * 28, 6, 29], [21, 20, 23], [0, 0, 0], head);
     }
     // Nasal cavity at the tip and the dark of the mouth under the upper jaw.
     piece(skull, box, C.socket, [0, -4, 100], [12, 10, 14], [0, 0, 0], head);
