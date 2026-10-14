@@ -248,6 +248,7 @@ export class GameScene {
         this.pressAbility(id);
         return true;
       },
+      escape: () => this.togglePause(),
       konami: this.cheatLevelUp,
     });
 
@@ -296,6 +297,24 @@ export class GameScene {
     if (this.state === 'paused') this.setState(this.stateBeforePause);
   }
 
+  /** Escape: open the pause menu mid-run (also over the level-up cards), or close it. True when it did either. */
+  togglePause(): boolean {
+    if (this.state === 'paused') {
+      this.resume();
+      return true;
+    }
+    if (this.state !== 'playing' && this.state !== 'levelup') return false;
+    this.pause();
+    return true;
+  }
+
+  /** Pause menu → Exit Game: abandon the run and go back to the title screen. */
+  exitToTitle(): void {
+    if (flowNext(this.state, 'exit') === null) return;
+    this.resetRun();
+    this.enterTitle();
+  }
+
   private resetRun(): void {
     this.city.reset(pickCity(this.rng));
     this.projectiles.clear();
@@ -331,6 +350,7 @@ export class GameScene {
     this.brood.clear();
     this.markers.setAim(null, 0);
     this.dyingT = 0;
+    this.spikeAim = null;
   }
 
   /** Game over → Play Again: same monster, fresh world, the intro replays. */

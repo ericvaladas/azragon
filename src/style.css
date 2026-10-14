@@ -438,5 +438,7 @@ body {
   text-transform: uppercase; letter-spacing: 0.08em; cursor: var(--cursor);
 }
 .btn-secondary:active { transform: scale(0.95); }
+/* Escape menu: two equal buttons under the title. */
+.pause-menu .btn-primary, .pause-menu .btn-secondary { min-width: 220px; }
 
 @keyframes menu-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }

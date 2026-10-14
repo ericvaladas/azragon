@@ -7,6 +7,7 @@ import { AbilityButtons } from './ui/AbilityButtons';
 import type { AbilityView, ActiveId } from './systems/abilities';
 import { Hud } from './ui/Hud';
 import { LevelUpCards } from './ui/LevelUpCards';
+import { PauseMenu } from './ui/PauseMenu';
 import { GameOver } from './ui/GameOver';
 import { Title } from './ui/Title';
 import { MonsterSelect } from './ui/MonsterSelect';
@@ -91,6 +92,8 @@ function App() {
     setStats(null);
     gameRef.current?.changeMonster();
   }, []);
+  const resume = useCallback(() => gameRef.current?.resume(), []);
+  const exitGame = useCallback(() => gameRef.current?.exitToTitle(), []);
   const inMenu = state === 'title' || state === 'select';
 
   return (
@@ -107,6 +110,7 @@ function App() {
         {state === 'levelup' && offer && (
           <LevelUpCards key={offer.seq} level={offer.level} offers={offer.offers} all={offer.all} onPick={(id) => pick(id, offer.seq)} />
         )}
+        {state === 'paused' && <PauseMenu onResume={resume} onExit={exitGame} />}
         {state === 'gameover' && stats && <GameOver stats={stats} onRestart={restart} onChangeMonster={changeMonster} />}
       </div>
     </div>

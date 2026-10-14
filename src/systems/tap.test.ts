@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { abilityKey, classifyGesture, pickEnemy, canTap, pinchToWheel, isSkipKey, menuKey } from './tap';
+import { abilityKey, classifyGesture, pickEnemy, canTap, pinchToWheel, isSkipKey, menuKey, isEscKey } from './tap';
 import { CONFIG } from '../config';
 
 describe('classifyGesture', () => {
@@ -123,5 +123,15 @@ describe('menuKey', () => {
     expect(menuKey(k('ArrowLeft', { repeat: true }))).toBeNull();
     expect(menuKey(k('ArrowRight', { metaKey: true }))).toBeNull();
     expect(menuKey(k('Enter', { ctrlKey: true }))).toBeNull();
+  });
+});
+
+describe('isEscKey', () => {
+  const k = (key: string, over: Partial<{ repeat: boolean; metaKey: boolean; ctrlKey: boolean; altKey: boolean }> = {}) => ({ key, repeat: false, metaKey: false, ctrlKey: false, altKey: false, ...over });
+  it('is Escape alone, not held down or with a modifier', () => {
+    expect(isEscKey(k('Escape'))).toBe(true);
+    expect(isEscKey(k('Escape', { repeat: true }))).toBe(false);
+    expect(isEscKey(k('Escape', { metaKey: true }))).toBe(false);
+    expect(isEscKey(k('Enter'))).toBe(false);
   });
 });
