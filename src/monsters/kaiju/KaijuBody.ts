@@ -122,7 +122,7 @@ export class KaijuBody implements MonsterBody {
     const dark = toonMat(C.scaleDark);
     const belly = toonMat(C.belly);
     const claw = toonMat(C.claw);
-    const eye = toonMat(C.eye);
+    const eye = toonMat(C.eye, { emissive: C.eye });
     this.plateMat = toonMat(C.plate, { emissive: C.plate });
     this.tintMats = [scale, dark, belly];
     const box = this.keep(faceted(new THREE.BoxGeometry(1, 1, 1)));
