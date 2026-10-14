@@ -136,7 +136,8 @@ export class SamSilos implements EnemySystem {
     const r = C.spawnMin + ctx.rng() * (C.spawnMax - C.spawnMin);
     const m = ctx.monster.position;
     const s = new Silo(C.hp * ctx.difficulty.hpMult, this.damageSilo);
-    const p = ctx.roads.nearest({ x: m.x + Math.cos(a) * r, z: m.z + Math.sin(a) * r });
+    // A silo rises out of the ground, so never onto a bridge deck.
+    const p = ctx.roads.nearestLand({ x: m.x + Math.cos(a) * r, z: m.z + Math.sin(a) * r });
     s.position.set(p.x, C.size * 0.4, p.z);
     ctx.particles.ring('dust', s.position.clone().setY(0), C.size * 1.5, 10);
     this.silos.push(s);

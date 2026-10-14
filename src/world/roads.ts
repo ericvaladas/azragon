@@ -53,15 +53,18 @@ function project(seg: Segment, p: Vec2): Vec2 {
   return { x: PITCH * seg.i, z: Math.min(Math.max(p.z, PITCH * seg.j), PITCH * (seg.j + 1)) };
 }
 
-/** Nearest road point and its segment: cells scanned in growing square rings, stopping once a ring cannot beat the best. */
-function nearestHit(style: CityStyle, p: Vec2, maxR: number): RoadHit | null {
+/**
+ * Nearest road point and its segment (bridge segments skipped when `avoidBridges`): cells scanned in growing square
+ * rings, stopping once a ring cannot beat the best.
+ */
+function nearestHit(style: CityStyle, p: Vec2, maxR: number, avoidBridges = false): RoadHit | null {
   const ci = Math.floor(p.x / PITCH);
   const cj = Math.floor(p.z / PITCH);
   let best: RoadHit | null = null;
   let bestD = Infinity;
   const consider = (axis: Axis, i: number, j: number): void => {
     const seg = segmentAt(style, axis, i, j);
-    if (!seg) return;
+    if (!seg || (avoidBridges && seg.bridge)) return;
     const q = project(seg, p);
     const d = Math.hypot(q.x - p.x, q.z - p.z);
     if (d < bestD) { bestD = d; best = { p: q, seg }; }
@@ -81,9 +84,12 @@ function nearestHit(style: CityStyle, p: Vec2, maxR: number): RoadHit | null {
   return bestD <= maxR ? best : null;
 }
 
-/** Closest point on any existing segment's centreline to p, searching outward up to maxR (default 3000). */
-export function nearestRoadPoint(style: CityStyle, p: Vec2, maxR = 3000): Vec2 {
-  return nearestHit(style, p, maxR)?.p ?? { x: p.x, z: p.z };
+/**
+ * Closest point on any existing segment's centreline to p, searching outward up to maxR (default 3000). With
+ * `avoidBridges`, bridge segments are skipped, so the point is on land (a bridgehead node at most).
+ */
+export function nearestRoadPoint(style: CityStyle, p: Vec2, maxR = 3000, opts: { avoidBridges?: boolean } = {}): Vec2 {
+  return nearestHit(style, p, maxR, opts.avoidBridges ?? false)?.p ?? { x: p.x, z: p.z };
 }
 
 const KEY_OFF = 32768;

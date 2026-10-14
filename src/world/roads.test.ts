@@ -170,6 +170,28 @@ describe('nearestRoadPoint', () => {
     }
   });
 
+  it('avoidBridges: from the river beside a bridge, returns a bank road point, never a bridge deck', () => {
+    // A point on a bridge deck: strictly inside a bridge segment's span.
+    const onBridge = (q: { x: number; z: number }) => {
+      const i = Math.round(q.x / PITCH), j = Math.floor(q.z / PITCH);
+      return Math.abs(q.x - PITCH * i) < 1e-6 && q.z > PITCH * j + 1e-6 && segmentAt(TOKYO, 'z', i, j)?.bridge === true;
+    };
+    let cases = 0;
+    for (let i = -20; i <= 20; i += 5) for (let j = 0; j <= 12; j++) {
+      if (!segmentAt(TOKYO, 'z', i, j)?.bridge) continue;
+      for (const dx of [-15, 15]) {
+        const p = { x: PITCH * i + dx, z: PITCH * (j + 0.5) };
+        expect(onBridge(nearestRoadPoint(TOKYO, p)), 'the plain nearest point is the bridge').toBe(true);
+        const q = nearestRoadPoint(TOKYO, p, 3000, { avoidBridges: true });
+        expect(onBridge(q), `${p.x},${p.z} -> ${q.x},${q.z}`).toBe(false);
+        expect(onSegment(q)).toBe(true);
+        expect(inWater(q) && !onBridgeLine(q)).toBe(false);
+        cases++;
+      }
+    }
+    expect(cases).toBeGreaterThan(4);
+  });
+
   it('is the closest road point (a point already on a road maps to itself)', () => {
     expect(nearestRoadPoint(TOKYO, { x: 0, z: 37 })).toEqual({ x: 0, z: 37 });
     const q = nearestRoadPoint(TOKYO, { x: 15, z: 80 });

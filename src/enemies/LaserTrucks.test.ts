@@ -19,7 +19,7 @@ function makeCtx() {
     minutes: 0,
     rng: () => 0.5,
     particles: { ring: noop, emit: noop, explosion: noop },
-    roads: { nearest: (p: Vec2) => p, path: (_a: Vec2, b: Vec2) => [b] },
+    roads: { nearest: (p: Vec2) => p, nearestLand: (p: Vec2) => p, path: (_a: Vec2, b: Vec2) => [b] },
     damageMonster: (amount: number, source: DamageSource) => hits.push({ amount, source }),
     damageBuildings: noop,
     fireShell: noop,

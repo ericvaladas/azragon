@@ -12,7 +12,7 @@ const ctx = (blocked: (x: number, z: number) => boolean): WorldContext =>
     level: 1,
     rng: mulberry32(7),
     blocked,
-    roads: { nearest: (p: Vec2) => p, path: (_a: Vec2, b: Vec2) => [b] },
+    roads: { nearest: (p: Vec2) => p, nearestLand: (p: Vec2) => p, path: (_a: Vec2, b: Vec2) => [b] },
   }) as unknown as WorldContext;
 
 describe('Artillery spawn', () => {

@@ -1012,6 +1012,7 @@ export class GameScene {
       particles: this.particles,
       roads: {
         nearest: (p) => nearestRoadPoint(this.city.style, p),
+        nearestLand: (p) => nearestRoadPoint(this.city.style, p, 3000, { avoidBridges: true }),
         path: (from, to) => planRoadPath(this.city.style, from, to),
       },
       damageMonster: (amount, source, attacker) => this.damageMonster(amount, source, attacker),
