@@ -757,8 +757,9 @@ describe('City (Toronto)', () => {
     const tokyo = snap();
     city.reset(TORONTO);
     const toronto = snap();
-    expect(toronto.fog).toBe(0xe9a985);
-    expect(toronto.sun).toBe(0xffa25a);
+    expect(toronto.fog).toBe(TORONTO.atmosphere.fog);
+    expect(toronto.near).toBe(TORONTO.atmosphere.fogNear ?? CONFIG.fog.near);
+    expect(toronto.sun).toBe(TORONTO.atmosphere.sun);
     expect(toronto.dir[0]).toBeLessThan(0);
     expect(toronto.glow).not.toBe(0);
     expect(toronto.water).toBe(TORONTO.colors.water);

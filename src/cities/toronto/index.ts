@@ -41,11 +41,14 @@ export const TORONTO: CityStyle = {
   // A very regular grid: fewer removed streets than Tokyo (neon and port per Ruling R8).
   roadRemoval: { highrise: 0.1, neon: 0.1, office: 0.15, residential: 0.15, park: 0.4, port: 0.15 },
   keepNodes: [],
-  // A warm evening: the sun low in the west (−X), so shadows fall long to the east.
+  // A warm evening: the sun low in the west (−X), so shadows fall long to the east. The fog is the horizon's colour,
+  // so fully fogged ground meets the sky without a band; it starts beyond Tokyo's near so the lake around the islands
+  // reads as water rather than haze.
   atmosphere: {
     skyZenith: 0x4b4a8c,
-    skyHorizon: 0xf2a46b,
-    fog: 0xe9a985,
+    skyHorizon: 0xf2c08c,
+    fog: 0xf2c08c,
+    fogNear: 3000,
     hemiSky: 0xffc59a,
     hemiGround: 0x4a3550,
     hemiIntensity: 0.8,

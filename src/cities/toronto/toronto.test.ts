@@ -40,13 +40,17 @@ describe('TORONTO', () => {
     expect(TORONTO.roadRemoval).toMatchObject({ residential: 0.15, office: 0.15, highrise: 0.1, park: 0.4 });
   });
 
-  it('is a warm evening: dusky sky, peach fog at Tokyo\'s distances, low western sun, warm window glow', () => {
+  it('is a warm evening: dusky sky, gold horizon fog pushed past the lakeshore, low western sun, warm window glow', () => {
     expect(TORONTO.atmosphere).toEqual({
-      skyZenith: 0x4b4a8c, skyHorizon: 0xf2a46b, fog: 0xe9a985,
+      skyZenith: 0x4b4a8c, skyHorizon: 0xf2c08c, fog: 0xf2c08c, fogNear: 3000,
       hemiSky: 0xffc59a, hemiGround: 0x4a3550, hemiIntensity: 0.8,
       sun: 0xffa25a, sunIntensity: 2, sunDir: { x: -0.9, y: 0.3, z: 0.2 },
       windowGlow: { color: 0xffc46b, strength: 0.45 },
     });
+  });
+
+  it('melts the fog into the horizon, so no band separates the fogged ground from the sky', () => {
+    expect(TORONTO.atmosphere.fog).toBe(TORONTO.atmosphere.skyHorizon);
   });
 
   it('letters its signs in Latin, has no cranes, and paints a greener lake', () => {
