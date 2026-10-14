@@ -64,3 +64,11 @@ export function shoreStep(style: CityStyle, prev: Vec2, next: Vec2, radius: numb
 export function leapLanding(style: CityStyle, from: Vec2, ground: Vec2, range: number, radius: number): Vec2 {
   return landingSpot(style, from, leapTarget(from, ground, range), radius);
 }
+
+/**
+ * True when the shore held a frame's move dead at `prev` (shoreStep resolved `next` to `prev` itself). A walk order
+ * whose frame ends like this cannot make progress and is dropped; a standstill (`next` at `prev`) never counts.
+ */
+export function shoreStopped(prev: Vec2, next: Vec2, pos: Vec2): boolean {
+  return pos === prev && (next.x !== prev.x || next.z !== prev.z);
+}

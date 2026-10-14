@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { TOKYO } from '../cities/tokyo';
 import { isRiver, isBay } from './roads';
-import { blockedAt, inBay, landingSpot, shoreStep, slideAlongShore } from './shore';
+import { blockedAt, inBay, landingSpot, shoreStep, shoreStopped, slideAlongShore } from './shore';
+import { CONFIG } from '../config';
 import { leapPosition } from '../monster/leap';
 
 const R = 100;
@@ -140,5 +141,44 @@ describe('shore', () => {
     }
     expect(wallHits).toBeGreaterThan(0);
     expect(worst).toBeLessThanOrEqual(700 / FRAMES + 1e-6);
+  });
+
+  describe('a move tapped into the bay', () => {
+    const shore = landingSpot(TOKYO, pt(1000, 0), pt(3000, 0), R);
+    const tap = pt(2600, 300);
+    /** Walks straight at `goal` 10 m a frame against the shore; the frame the order ends ('arrived' or 'stopped'). */
+    const walk = (goal: { x: number; z: number }) => {
+      let pos = { ...shore };
+      for (let f = 0; f < 600; f++) {
+        const d = Math.hypot(goal.x - pos.x, goal.z - pos.z);
+        if (d <= CONFIG.monster.arriveRadius) return { end: 'arrived', f };
+        const k = Math.min(1, 10 / d);
+        const next = { x: pos.x + (goal.x - pos.x) * k, z: pos.z + (goal.z - pos.z) * k };
+        const step = shoreStep(TOKYO, pos, next, R);
+        if (shoreStopped(pos, next, step.pos)) return { end: 'stopped', f };
+        pos = step.pos;
+      }
+      return { end: 'walking', f: 600 };
+    };
+
+    it('the raw bay point is unreachable: the shore stops the walk dead, so the order must clear', () => {
+      expect(blockedAt(TOKYO, tap.x, tap.z, R)).toBe(true);
+      expect(walk(tap).end).toBe('stopped');
+    });
+
+    it('clamped with landingSpot at tap time, it is on land and the walk arrives', () => {
+      const to = landingSpot(TOKYO, shore, tap, R);
+      expect(blockedAt(TOKYO, to.x, to.z, R)).toBe(false);
+      expect(walk(to).end).toBe('arrived');
+    });
+
+    it('shoreStopped: only a move the shore held at prev, never a free step or a standstill', () => {
+      const prev = { x: 0, z: 0 };
+      const next = { x: 5, z: 0 };
+      expect(shoreStopped(prev, next, prev)).toBe(true);
+      expect(shoreStopped(prev, next, next)).toBe(false);
+      expect(shoreStopped(prev, next, { x: 3, z: 0 })).toBe(false);
+      expect(shoreStopped(prev, { ...prev }, prev)).toBe(false);
+    });
   });
 });

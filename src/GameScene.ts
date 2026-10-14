@@ -46,7 +46,7 @@ import { ShieldFx } from './systems/ShieldFx';
 import { InkFx } from './monsters/kraken/InkFx';
 import { shieldHitPoint } from './systems/shieldHit';
 import { dashTarget } from './monster/leap';
-import { leapLanding, shoreStep } from './world/shore';
+import { landingSpot, leapLanding, shoreStep, shoreStopped } from './world/shore';
 import { FRONT_LEFT, footTargets, strikePlan } from './monster/strike';
 import { mortarTargets, nearestWithin } from './systems/targeting';
 import { Passives } from './systems/Passives';
@@ -1122,9 +1122,12 @@ export class GameScene {
     this.setRay(x, y);
     const p = this.raycaster.ray.intersectPlane(this.groundPlane, this.tmpV);
     if (!p) return;
-    this.order = { kind: 'move', to: { x: p.x, z: p.z } };
+    // The bay is off limits on foot: a tap out on the water walks to the last land on the line back to the monster.
+    const m = this.monster.position;
+    const to = landingSpot(this.city.style, { x: m.x, z: m.z }, { x: p.x, z: p.z }, this.ms.bodyRadius);
+    this.order = { kind: 'move', to };
     this.markers.setTarget(null);
-    this.markers.tapAt(p);
+    this.markers.tapAt(p.set(to.x, p.y, to.z));
   };
 
   private onHover = (x: number, y: number): void => {
@@ -1292,12 +1295,15 @@ export class GameScene {
       if (d.attack === 'ranged') this.fireRanged(d.attackOn === 'order' && this.order?.kind === 'attack' ? this.order.target : auto);
     }
     m.tick(dt);
-    // The bay and the island are off limits on foot: walking, dashing and knockback all slide along the shore.
+    // The bay and the island are off limits on foot: walking and dashing slide along the shore. A move order the
+    // shore stops dead is dropped, so the monster never walks on the spot at the water's edge.
     if (!m.airborne) {
-      const step = shoreStep(this.city.style, pos, { x: m.position.x, z: m.position.z }, this.ms.bodyRadius);
+      const next = { x: m.position.x, z: m.position.z };
+      const step = shoreStep(this.city.style, pos, next, this.ms.bodyRadius);
       m.position.x = step.pos.x;
       m.position.z = step.pos.z;
       if (step.slid) m.endDash();
+      if (this.order?.kind === 'move' && shoreStopped(pos, next, step.pos)) this.order = null;
     }
 
     if (!m.airborne) this.city.forEachStandingInRadius(pos, this.ms.bodyRadius, (t) => t.applyDamage(CONFIG.monster.contactDps * dt));
