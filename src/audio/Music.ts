@@ -47,7 +47,7 @@ export class Music {
     for (const p of [this.bytes.intro, this.bytes.main1, this.main2Blob]) p.catch(() => {});
   }
 
-  /** Call on every user gesture (pointerdown, keydown). The first creates the audio graph and starts the Intro; any later one retries a blocked Main 2. */
+  /** Call on every user gesture (pointer or touch press and release, key). The first creates the audio graph and starts the Intro; any later one retries a blocked Main 2. */
   unlock(): void {
     if (this.disposed) return;
     if (!this.ctx) {
@@ -57,7 +57,8 @@ export class Music {
       this.master.connect(this.ctx.destination);
       this.setUpMain2(this.ctx, this.master);
     }
-    if (this.ctx.state === 'suspended') this.ctx.resume().catch(report);
+    // Anything but running or closed: suspended before the first gesture, or 'interrupted' on iOS after a call or Siri.
+    if (this.ctx.state !== 'running' && this.ctx.state !== 'closed') this.ctx.resume().catch(report);
     if (this.main2Pending) this.playMain2();
     this.send('unlock');
   }

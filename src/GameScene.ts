@@ -79,6 +79,9 @@ type Order = { kind: 'move'; to: Vec2 } | { kind: 'attack'; target: Target } | n
 /** A projectile hit below this height (m) is a ground impact and splashes if it lands on water. */
 const GROUND_HIT_Y = 20;
 
+/** Events that can carry a user gesture for audio. */
+const GESTURES = ['pointerdown', 'pointerup', 'touchend', 'keydown'] as const;
+
 export class GameScene {
   readonly events = new GameEventEmitter();
 
@@ -123,7 +126,10 @@ export class GameScene {
   private hudT = 0;
   private stateBeforePause: GameState = 'playing';
   private music = new Music();
-  /** Any pointer or key press: the first starts the music (browsers allow audio only after a gesture). */
+  /**
+   * Any pointer, touch or key gesture: the first starts the music (browsers allow audio only after a gesture).
+   * Touch counts as a gesture only on release (pointerup / touchend), a mouse on press, so all of them are listened to.
+   */
   private onGesture = (): void => this.music.unlock();
   private debug: DebugOverlay | null = null;
   /** Pending levels granted by the Konami cheat; each one's offer lists every choice. */
@@ -266,8 +272,7 @@ export class GameScene {
     this.lighting.follow(new THREE.Vector3());
     if (new URLSearchParams(location.search).has('debug')) this.debug = new DebugOverlay(this.container);
 
-    window.addEventListener('pointerdown', this.onGesture, true);
-    window.addEventListener('keydown', this.onGesture, true);
+    for (const ev of GESTURES) window.addEventListener(ev, this.onGesture, true);
     this.resizeObserver = new ResizeObserver(this.onResize);
     this.resizeObserver.observe(container);
     this.clock.start();
@@ -1631,8 +1636,7 @@ export class GameScene {
   };
 
   dispose(): void {
-    window.removeEventListener('pointerdown', this.onGesture, true);
-    window.removeEventListener('keydown', this.onGesture, true);
+    for (const ev of GESTURES) window.removeEventListener(ev, this.onGesture, true);
     this.music.dispose();
     this.input.dispose();
     this.debug?.dispose();
