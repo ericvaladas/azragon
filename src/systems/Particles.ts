@@ -57,10 +57,11 @@ const HIDDEN = new THREE.Matrix4().makeScale(0, 0, 0);
 /** Opacity per draw layer. Smoke and dust are see-through so trails never hide units behind them. */
 /** `murk`: the Wendigo's dark smoke and mist, dense enough to read as dark over light ground. */
 /** `cloud`: the intro's crater cloud: where it is thick it hides what is inside; where thin, a dark shape looms through. */
-const LAYER_OPACITY = { solid: 1, dust: 0.65, smoke: 0.35, murk: 0.85, cloud: 0.6 } as const;
+/** `splash`: water spray, opaque, in its own small pool so fire, debris and sparks filling `solid` never starve it. */
+const LAYER_OPACITY = { solid: 1, dust: 0.65, smoke: 0.35, murk: 0.85, cloud: 0.6, splash: 1 } as const;
 type LayerName = keyof typeof LAYER_OPACITY;
-const LAYER_OF: Record<ParticleKind, LayerName> = { dust: 'dust', smoke: 'smoke', debris: 'solid', fire: 'solid', spark: 'solid', acid: 'solid', plasma: 'solid', trail: 'dust', ink: 'smoke', rot: 'solid', shade: 'murk', mist: 'murk', bone: 'solid', wisp: 'dust', hexfire: 'solid', hexember: 'solid', wraith: 'murk', billow: 'dust', veil: 'cloud', splash: 'solid' };
-const LAYER_MAX: Record<LayerName, number> = { solid: 500, dust: 400, smoke: 500, murk: 400, cloud: 160 };
+const LAYER_OF: Record<ParticleKind, LayerName> = { dust: 'dust', smoke: 'smoke', debris: 'solid', fire: 'solid', spark: 'solid', acid: 'solid', plasma: 'solid', trail: 'dust', ink: 'smoke', rot: 'solid', shade: 'murk', mist: 'murk', bone: 'solid', wisp: 'dust', hexfire: 'solid', hexember: 'solid', wraith: 'murk', billow: 'dust', veil: 'cloud', splash: 'splash' };
+const LAYER_MAX: Record<LayerName, number> = { solid: 500, dust: 400, smoke: 500, murk: 400, cloud: 160, splash: 200 };
 
 /** One pooled InstancedMesh: swap-remove on death, no per-frame allocation. */
 class Layer {
@@ -167,7 +168,7 @@ class Layer {
   }
 }
 
-/** Chunky puffs, drawn in layers (solid, dust, smoke, murk) so see-through effects blend over solid ones. */
+/** Chunky puffs, drawn in layers (solid, dust, smoke, murk, cloud, splash) so see-through effects blend over solid ones. */
 export class Particles {
   private layers: Record<LayerName, Layer>;
 
@@ -179,6 +180,7 @@ export class Particles {
       smoke: new Layer(scene, geo, LAYER_OPACITY.smoke, LAYER_MAX.smoke),
       murk: new Layer(scene, geo, LAYER_OPACITY.murk, LAYER_MAX.murk),
       cloud: new Layer(scene, geo, LAYER_OPACITY.cloud, LAYER_MAX.cloud),
+      splash: new Layer(scene, geo, LAYER_OPACITY.splash, LAYER_MAX.splash),
     };
   }
 

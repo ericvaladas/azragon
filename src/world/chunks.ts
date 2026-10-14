@@ -26,7 +26,7 @@ export type SeaWallSpec = { x: number; z: number; axis: Axis; side: 1 | -1; ends
  */
 export type SeaWallEnd = 'convex' | 'concave' | 'straight';
 /** Sea-wall dimensions (m): height, thickness, foam strip width, overlap at straight ends. */
-export const SEA_WALL_SIZE = { height: 10, thick: 6, foam: 12, overlap: 6 } as const;
+export const SEA_WALL_SIZE = { height: 14, thick: 8, foam: 12, overlap: 6 } as const;
 export type Rect = { x0: number; x1: number; z0: number; z1: number };
 
 /**

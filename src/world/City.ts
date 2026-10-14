@@ -130,8 +130,8 @@ const Y = { water: 0.1, foam: 0.15, park: 0.2, road: 0.3, node: 0.32, overlay: 0
 /** Bridge deck slab: this much wider than its road, this thick (hanging below its top), in this grey. */
 const SLAB = { extra: 8, thick: 1.8, color: 0x9aa0a6 } as const;
 const WATER_COLOR = 0x3f8fc9;
-/** Sea wall concrete and top-cap colours. */
-const SEA_WALL = { color: 0xcfcac0, cap: 0x8e8a82 } as const;
+/** Sea wall colours: a pale concrete cap over a dark face that darkens further to a wet band at the waterline. */
+const SEA_WALL = { cap: 0xf2eee4, face: 0x5a554e, waterline: 0x262422 } as const;
 
 /**
  * Foam opacity 0.35 + 0.2·sin(1.3·time + phase), the phase taken from the instance's world position so strips pulse
@@ -341,10 +341,12 @@ export class City {
     this.craneMesh = new THREE.InstancedMesh(craneGeometry(), toonMat(0xffffff, { vertexColors: true }), world.maxCranes);
     this.craneMesh.castShadow = true;
     this.craneMesh.receiveShadow = true;
-    // Wall: base at y = 0, runs along local x; the top face (BoxGeometry's +y vertices 8-11) is a darker cap.
+    // Wall: base at y = 0, runs along local x; the top face (BoxGeometry's +y vertices 8-11) is the pale cap, the
+    // side faces shade from the dark face at the top to the waterline colour at the base.
     const wallGeo = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
     const wallColors = new Float32Array(24 * 3);
-    for (let v = 0; v < 24; v++) _c.setHex(v >= 8 && v < 12 ? SEA_WALL.cap : SEA_WALL.color).toArray(wallColors, v * 3);
+    const wallY = wallGeo.getAttribute('position');
+    for (let v = 0; v < 24; v++) _c.setHex(v >= 8 && v < 12 ? SEA_WALL.cap : wallY.getY(v) > 0.5 ? SEA_WALL.face : SEA_WALL.waterline).toArray(wallColors, v * 3);
     wallGeo.setAttribute('color', new THREE.BufferAttribute(wallColors, 3));
     this.wallMesh = new THREE.InstancedMesh(wallGeo, toonMat(0xffffff, { vertexColors: true }), world.maxSeaWall);
     this.wallMesh.castShadow = true;
