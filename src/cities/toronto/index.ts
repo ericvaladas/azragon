@@ -1,6 +1,9 @@
 import type { CityStyle } from '../types';
 import { TORONTO_DISTRICTS } from './districts';
-import { DON, TORONTO_ISLANDS, TORONTO_LAKE, districtAt } from './layout';
+import { CITY_HALL_SITE, CN_TOWER_SITE, DON, ROGERS_CENTRE_SITE, TORONTO_ISLANDS, TORONTO_LAKE, districtAt } from './layout';
+import { CN_TOWER, cnTowerGeometry } from './cnTower';
+import { ROGERS_CENTRE, rogersCentreGeometry } from './rogersCentre';
+import { CITY_HALL, cityHallGeometry } from './cityHall';
 
 export const TORONTO: CityStyle = {
   id: 'toronto',
@@ -22,7 +25,11 @@ export const TORONTO: CityStyle = {
   districtAt,
   districts: TORONTO_DISTRICTS,
   parkTrees: [20, 28],
-  landmarks: [],
+  landmarks: [
+    { id: 'cn-tower', x: CN_TOWER_SITE.x, z: CN_TOWER_SITE.z, w: CN_TOWER.w, d: CN_TOWER.d, h: CN_TOWER.h, build: cnTowerGeometry },
+    { id: 'rogers-centre', x: ROGERS_CENTRE_SITE.x, z: ROGERS_CENTRE_SITE.z, w: ROGERS_CENTRE.w, d: ROGERS_CENTRE.d, h: ROGERS_CENTRE.h, build: rogersCentreGeometry },
+    { id: 'city-hall', x: CITY_HALL_SITE.x, z: CITY_HALL_SITE.z, w: CITY_HALL.w, d: CITY_HALL.d, h: CITY_HALL.h, build: cityHallGeometry },
+  ],
   specialLots: [],
   overlays: [],
   river: DON,
