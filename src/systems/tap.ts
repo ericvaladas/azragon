@@ -13,17 +13,22 @@ export function canTap(pointerType: string, button: number): boolean {
   return pointerType !== 'mouse' || button === 0;
 }
 
-export type ScreenPoint = { index: number; x: number; y: number; visible: boolean };
+/** An enemy on screen: its centre (px), whether it is pickable, and `r`, how far (px) it visibly extends from its centre. */
+export type ScreenPoint = { index: number; x: number; y: number; visible: boolean; r?: number };
 
-/** Nearest visible screen point within radiusPx of (x, y). Generous radius makes tiny targets tappable on phones. */
+/**
+ * The visible screen point whose pick zone holds (x, y): each zone is the larger of `radiusPx` (so tiny targets stay
+ * tappable on phones) and the target's own on-screen size `r` (so a click anywhere on a big blimp counts). Where
+ * zones overlap, the target whose centre is relatively closest wins.
+ */
 export function pickEnemy(points: ScreenPoint[], x: number, y: number, radiusPx: number): number | null {
   let best: number | null = null;
-  let bestD = radiusPx;
+  let bestScore = 1;
   for (const p of points) {
     if (!p.visible) continue;
-    const d = Math.hypot(p.x - x, p.y - y);
-    if (d <= bestD) {
-      bestD = d;
+    const score = Math.hypot(p.x - x, p.y - y) / Math.max(radiusPx, p.r ?? 0);
+    if (score <= bestScore) {
+      bestScore = score;
       best = p.index;
     }
   }

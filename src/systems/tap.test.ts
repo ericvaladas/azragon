@@ -18,6 +18,24 @@ describe('classifyGesture', () => {
   });
 });
 
+describe('pickEnemy on-screen size', () => {
+  it('hits anywhere on a target that looks bigger than the minimum radius (a blimp), not just near its centre', () => {
+    const blimp = { index: 0, x: 500, y: 100, visible: true, r: 70 };
+    expect(pickEnemy([blimp], 560, 100, 28)).toBe(0);
+    expect(pickEnemy([blimp], 580, 100, 28)).toBeNull();
+  });
+  it('keeps the minimum radius for small targets', () => {
+    const tank = { index: 0, x: 100, y: 100, visible: true, r: 6 };
+    expect(pickEnemy([tank], 125, 100, 28)).toBe(0);
+  });
+  it('prefers the target whose centre is relatively closer when zones overlap', () => {
+    const blimp = { index: 0, x: 100, y: 100, visible: true, r: 80 };
+    const heli = { index: 1, x: 160, y: 100, visible: true, r: 10 };
+    expect(pickEnemy([blimp, heli], 155, 100, 28)).toBe(1);
+    expect(pickEnemy([blimp, heli], 110, 100, 28)).toBe(0);
+  });
+});
+
 describe('pickEnemy', () => {
   const pts = [
     { index: 0, x: 100, y: 100, visible: true },

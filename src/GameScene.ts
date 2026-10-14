@@ -111,6 +111,7 @@ export class GameScene {
   private ndc = new THREE.Vector2();
   private groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
   private tmpV = new THREE.Vector3();
+  private tmpV2 = new THREE.Vector3();
   private particles: Particles;
   private splasher: Splasher;
   private inkFx: InkFx;
@@ -1159,14 +1160,16 @@ export class GameScene {
   private pickTarget(x: number, y: number): Target | null {
     const enemies = this.enemyTargets();
     const el = this.pixel.domElement;
+    // Screen size: how far a point `radius` m to the camera's right of the target lands from its centre.
+    const right = this.tmpV2.setFromMatrixColumn(this.camera.matrixWorld, 0);
     const pts = enemies.map((t, index) => {
       this.tmpV.copy(t.position).project(this.camera);
-      return {
-        index,
-        x: (this.tmpV.x * 0.5 + 0.5) * el.clientWidth,
-        y: (-this.tmpV.y * 0.5 + 0.5) * el.clientHeight,
-        visible: this.tmpV.z < 1 && t.isAlive(),
-      };
+      const x = (this.tmpV.x * 0.5 + 0.5) * el.clientWidth;
+      const y = (-this.tmpV.y * 0.5 + 0.5) * el.clientHeight;
+      const visible = this.tmpV.z < 1 && t.isAlive();
+      this.tmpV.copy(t.position).addScaledVector(right, t.radius).project(this.camera);
+      const r = Math.hypot((this.tmpV.x * 0.5 + 0.5) * el.clientWidth - x, (-this.tmpV.y * 0.5 + 0.5) * el.clientHeight - y);
+      return { index, x, y, visible, r };
     });
     const hit = pickEnemy(pts, x, y, CONFIG.input.pickRadiusPx);
     if (hit !== null) return enemies[hit]!;
