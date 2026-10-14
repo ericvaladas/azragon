@@ -11,7 +11,6 @@ import { resolveHit, type DamageSource, type Target } from './combat';
 import { City, CRATER_RADIUS } from './world/City';
 import { IntroCinematic } from './intro/IntroCinematic';
 import { Music } from './audio/Music';
-import { SimpleMusic } from './audio/SimpleMusic';
 import { nearestRoadPoint, planRoadPath, ringOnRoads } from './world/roads';
 import { Monster } from './monster/Monster';
 import { CameraRig } from './systems/CameraRig';
@@ -126,8 +125,7 @@ export class GameScene {
   private dyingT = 0;
   private hudT = 0;
   private stateBeforePause: GameState = 'playing';
-  /** `?music=simple` streams every track and crossfades on the reveal (low memory); the default plays bar-aligned. */
-  private music = new URLSearchParams(location.search).get('music') === 'simple' ? new SimpleMusic() : new Music();
+  private music = new Music();
   /**
    * Any pointer, touch or key gesture: the first starts the music (browsers allow audio only after a gesture).
    * Touch counts as a gesture only on release (pointerup / touchend), a mouse on press, so all of them are listened to.
@@ -474,7 +472,6 @@ export class GameScene {
     this.intro.start();
     this.setState('intro');
     this.events.emit('skipHint', true);
-    this.music.prepareFight();
   }
 
   /** Skip (tap, click or key): jump to just before the reveal, or end the intro if that has happened. Public for scripted checks and the M4 menus. */

@@ -15,53 +15,40 @@ This is the game's first audio. Sound effects are out of scope.
 - Pause, level-up, death, game over and Play Again (which replays the cutscene) leave the music alone.
 - Entering **monster select** switches back to the Intro. Entering the **title** from the pause menu's exit does the same, by extension of this rule.
 - **Skip** no longer jumps to gameplay. It jumps to just before the reveal, so the reveal still plays and still starts the fight music.
+- **Transition:** a plain crossfade, started the moment the reveal begins. A bar-aligned version (Main 1 started on the Intro's next bar line, from decoded buffers) was built and compared by ear on 2026-10-14. The owner heard no difference, so the simpler, lower-memory streamed version was kept.
 
-## Measured tracks
+## Tracks
 
-All three are 48 kHz, stereo, 16-bit PCM WAVs. They were measured with librosa beat tracking.
+All three masters are 48 kHz, stereo, 16-bit PCM WAVs.
 
-| Track | Length | Tempo | Notes |
-|---|---|---|---|
-| Intro | 119.76 s | **120.0 BPM, steady** (beats within ~10 ms of a fixed grid) | First tracked beat at ≈4.04 s. Loud from 0 s. Fades out from ≈106 s. |
-| Main gameplay 1 | 209.56 s | ≈132.5 → 136 BPM, drifts up slowly | Quiet build-up opening (≈−27 dB rising). Hard stop at ≈207.3 s, a reverb tail to ≈208 s, then near-silence. |
-| Main gameplay 2 | 242.80 s | Steady, swung feel (≈90 or ≈170 BPM depending on how it's counted) | ≈1 s quiet start. Fades out over the last ≈10 s. |
-
-Only the Intro's beat grid is used in code. The other two tracks never need beat alignment.
+| Track | Length | Notes |
+|---|---|---|
+| Intro | 111.61 s (updated 2026-10-14) | ≈1 s quiet start; fades out over its last ≈6 s. Loops as a whole file. |
+| Main gameplay 1 | 209.56 s, cut to 207.9 s | Quiet build-up opening (≈−24 dB for its first ≈14 s). Hard stop at ≈207.3 s, then a reverb tail; the file is cut at 207.9 s with a 0.3 s fade. |
+| Main gameplay 2 | 242.80 s | ≈1 s quiet start; fades out over the last ≈10 s. Loops as a whole file. |
 
 ## Music behaviour
 
-### Tracks and when they play
-
 ```
-first tap ─► INTRO (loops its loop region)
-                │  silhouette reveal (only while INTRO plays)
-                ▼  waits for the Intro's next bar line
-             MAIN 1 (from 0 s, once) ── its trimmed end ──► MAIN 2 (loops whole file)
-                ▲                                              │
-                └──────── enter select / title: back to INTRO ◄┘
+first tap ─► INTRO (loops)
+                │  silhouette reveal (only while INTRO plays): crossfade
+                ▼
+             MAIN 1 (from 0 s, once) ── ends ──► MAIN 2 (loops)
+                ▲                                    │
+                └──── enter select / title: back to INTRO ◄┘
 ```
 
 | Event | Music now | Result |
 |---|---|---|
-| First user gesture (pointer or key) | nothing | Intro starts from 0 s |
-| Silhouette reveal | Intro | Main 1 starts from 0 s on the Intro's next bar line; the Intro fades out over `handoffFade` (one beat) |
+| First user gesture (pointer, touch or key) | nothing | Intro starts from 0 s |
+| Silhouette reveal | Intro | the Intro fades out and Main 1 fades in from 0 s, both over `crossfade` (1 s), starting at once |
 | Silhouette reveal | Main 1 / Main 2 (Play Again) | no change |
-| Main 1 reaches its end point | Main 1 | Main 2 starts at once; no fade |
-| Enter `select` or `title` | Main 1 / Main 2 | the current track fades out over `returnFade`; the Intro starts from 0 s |
+| Main 1 ends | Main 1 | Main 2 starts at once; no fade |
+| Enter `select` or `title` | Main 1 / Main 2 | the current track fades out over `returnFade` (1 s); the Intro starts from 0 s |
 | Enter `select` or `title` | Intro | no change |
 | Pause, level-up, dying, game over, intro (Play Again) | any | no change |
 
-### The Intro's bar grid and loop
-
-- The grid is `bpm` 120, `beatsPerBar` 4, and `firstBeat` ≈4.04 s. It is a config value, set exactly from the measured beats.
-- The tracker can find beats, but it can't tell which beat is beat 1 of the bar. During implementation, `firstBeat` is checked by ear and moved 1–3 beats if needed. The transitions should land on the bar's downbeat.
-- **Loop region:** `loopEnd` is a bar line before the fade-out, about 104 s. `loopStart` is a bar line where the music matches what comes just before `loopEnd`. Candidate pairs are picked by comparing audio similarity at bar lines, then confirmed by ear. The Intro plays 0 → `loopEnd` once, then loops `loopStart` → `loopEnd`.
-- **Next bar line:** the Intro's current musical position is mapped through the loop back to song time. The next grid line where `(songTime − firstBeat)` is a whole number of bars is found, and Main 1 is scheduled at the matching audio-clock time. If the reveal lands within `minLead` (≈50 ms) of a bar line, the following bar is used, so the start is never scheduled in the past.
-- **Worst-case delay:** one bar, 2.0 s, after the reveal starts. The reveal itself lasts 2.0 s (emerge at 10 s, done at 12 s). Main 1's first beat therefore lands between the silhouette appearing and the start of play.
-
-### Main 1's end
-
-The Main 1 file is trimmed at encode time to keep its hard stop plus a short part of the reverb tail. The end point is ≈207.9 s, tuned by ear. When Main 1's buffer source ends (its `ended` event), Main 2's streamed element starts playing. The start may be a few tens of ms late, which falls inside Main 1's reverb tail.
+A track told to play while it is still fading out (a menu straight after the reveal) carries on from where it is and fades back up, rather than restarting.
 
 ## Skip to the reveal
 
@@ -88,44 +75,31 @@ The skip hint stays visible until the jump. After that, it hides. A second tap s
 
 | Unit | Responsibility | Depends on |
 |---|---|---|
-| `src/audio/musicPlan.ts` | Pure logic with no Web Audio: the event → action rules in the table above, Intro position-in-loop mapping, next-bar time | config only |
-| `src/audio/Music.ts` | Owns the `AudioContext`, gain nodes, buffer sources and the streamed Main 2 element. Loads and decodes tracks, carries out the actions `musicPlan` returns, frees buffers | `musicPlan`, `RundotGameAPI.cdn` |
-| `GameScene.ts` | Creates `Music`. Calls `music.unlock()` on the first gesture, `music.reveal()` from the intro's `onReveal`, and `music.enterMenu()` when the state becomes `select` or `title` | `Music` |
+| `src/audio/musicPlan.ts` | Pure logic with no Web Audio: the event → action rules in the table above | — |
+| `src/audio/Music.ts` | Owns the `AudioContext`, one `<audio>` element and gain node per track. Loads the tracks and carries out the actions `musicPlan` returns | `musicPlan`, `RundotGameAPI.cdn` |
+| `GameScene.ts` | Creates `Music`. Calls `music.unlock()` on every gesture, `music.reveal()` from the intro's `onReveal`, and `music.enterMenu()` when the state becomes `select` or `title` | `Music` |
 | `IntroCinematic.ts` | New skip rule, `onReveal` callback | timeline |
-| `intro/timeline.ts` | Exports `SKIP_TO`, and helpers the skip needs (e.g. the cloud state at `t`) | config |
-| `config.ts` | `music` block: per-track file, gain, grid, loop points, end trim, fades. `intro.skipLead` | — |
+| `intro/timeline.ts` | Exports `SKIP_TO`, `skipAction` and `revealCrossed` | config |
+| `config.ts` | `music` block: per-track file, volume, fetch timeout, `crossfade`, `returnFade`. `intro.skipLead` | — |
 
-`Music` holds no knowledge of game states. It exposes `unlock()`, `reveal()`, `prepareFight()` (called when the cutscene starts, to decode Main 1) and `enterMenu()`. It is a plain TypeScript class, with no React and no hooks, as the project's rules require.
+`Music` holds no knowledge of game states. It exposes `unlock()`, `reveal()`, `enterMenu()` and `dispose()`. It is a plain TypeScript class, with no React and no hooks, as the project's rules require.
 
 ### Playback
 
-- **Intro and Main 1: decoded buffers.** `AudioBufferSourceNode` → per-track `GainNode` → master `GainNode` → destination. Buffer sources give sample-exact scheduling on the audio clock and custom loop points. The Intro's bar grid and loop region need them, and so does Main 1's start on the bar line.
-- **Main 2: streamed.** An `HTMLAudioElement` with `loop = true` → `MediaElementAudioSourceNode` → its own `GainNode` → master. The browser decodes it a little at a time, so it is never held fully decoded. It needs no exact timing: its start follows Main 1's `ended` event, and any tiny gap at the loop seam falls between its fade-out and its quiet start. The element's own `volume` is not used, because iOS ignores it. All volume goes through the gain node.
-- **Fades** are gain ramps on the audio clock, the same for both kinds.
-- **Unlock:** browsers block audio until a user gesture. `AudioContext.resume()` is called on the first `pointerdown` or `keydown` anywhere, and the Intro starts then. The loading screen and the title before the first tap are silent; that is unavoidable on web.
-- **Volume:** a fixed master gain from config. A mute or volume control is out of scope.
+- **Every track streams.** Each has an `HTMLAudioElement` → `MediaElementAudioSourceNode` → its own `GainNode` → master `GainNode` → destination. The browser decodes a little at a time, so no track is ever held fully decoded. The Intro and Main 2 loop as whole files (`loop = true`); Main 1's `ended` event starts Main 2.
+- **Volume** goes through the gain nodes, because iOS ignores an element's own `volume`. Fades are gain ramps on the audio clock. The master gain is a fixed config value; a mute or volume control is out of scope.
+- **Unlock:** browsers block audio until a user gesture. `unlock()` runs on every `pointerdown`, `pointerup`, `touchend` and `keydown` (touch counts as a gesture only on release). The first creates the audio graph, plays a silent clip on each element inside the gesture (so iOS lets it play later without one), and starts the Intro. Any later gesture resumes a context that is not running (including iOS's `interrupted` state after a call or Siri) and retries a track whose `play()` was refused. The loading screen and the title before the first tap are silent; that is unavoidable on web.
 
 ### Loading and memory
 
-- **Files:** only compressed audio ships; no WAV file is in the repo or the build. The WAV masters are encoded with ffmpeg's `aac` encoder to `public/cdn-assets/audio/*.m4a` at 128 kb/s. That is about 9 MB in total, against 110 MB of WAVs. The Main 1 trim happens here. A script, `scripts/encode-music.sh`, records the exact ffmpeg commands. The WAV masters stay outside the repo.
-- **Loading:** every track is fetched with `RundotGameAPI.cdn.fetchAsset('audio/<name>.m4a')`, the SDK's documented path for CDN audio. The Intro and Main 1 then go through `arrayBuffer()` and `decodeAudioData`. Main 2's blob gets an object URL that becomes the `<audio>` element's `src`. Audio is not packed in StowKit, because StowKit audio doesn't give decoded buffers for clock scheduling. Loading never blocks the game. The Intro is fetched at boot, and Main 1 and Main 2 right after it.
-- **Encoder offset:** AAC adds priming samples at the start. Browsers that honour the MP4 edit list strip them. During implementation, a decoded file is checked in Chrome and Safari against the WAV, and any remaining offset is made a per-track config value, so the grid and loop points stay exact.
-- **Memory (RAM at runtime, not download size):** to schedule a track exactly, the browser decodes the whole compressed file into raw samples in memory, and decoded PCM is large: 48 kHz stereo float is ≈23 MB per minute. That puts the Intro at ≈46 MB and Main 1 at ≈80 MB. Main 2 is streamed, so it is never fully decoded. Only the playing tracks are kept decoded:
-  - The compressed bytes of all three stay cached, about 9 MB.
-  - The Intro is decoded at unlock, and Main 1 when the cutscene starts.
-  - A buffer is dropped once its track has stopped and faded. The Intro goes after the handoff, and Main 1 after it ends.
-  - Returning to monster select decodes the Intro again from the cached bytes.
-
-  The peak is ≈126 MB, with the Intro and Main 1 both decoded, from the start of the cutscene until the handoff fade ends. While Main 2 loops, nothing is decoded.
-- **Not ready in time:** if the Intro isn't decoded at unlock, it starts when ready. If Main 1 isn't decoded at the reveal, it starts on the Intro's next bar line after it is ready, or at once if the Intro never started. A decode or fetch failure logs through `RundotGameAPI.error()`, and the game carries on silent.
+- **Files:** only compressed audio ships; no WAV file is in the repo or the build. The WAV masters are encoded with ffmpeg's `aac` encoder to `public/cdn-assets/audio/*.m4a` at 128 kb/s, about 9.3 MB in total. The Main 1 cut happens here. `scripts/encode-music.sh` records the exact ffmpeg commands. The WAV masters stay outside the repo.
+- **Loading:** every track is fetched at boot with `RundotGameAPI.cdn.fetchAsset('audio/<name>.m4a')`, the SDK's documented path for CDN audio. Each blob gets an object URL that becomes its element's `src`, replacing the silent clip as soon as it has downloaded. Loading never blocks the game.
+- **Memory:** a few MB for the compressed files; nothing is fully decoded.
+- **Not ready in time:** a track that has not downloaded when it is due starts as soon as it has. A fetch failure logs through `RundotGameAPI.error()`, and the game carries on without that track.
 
 ## Testing
 
-- **`musicPlan` unit tests (vitest):**
-  - every row of the event table, including Play Again's reveal while Main is playing and entering select while the Intro already plays;
-  - loop-position mapping before and after the first loop;
-  - next-bar time on and near a bar line (the `minLead` rule);
-  - Main 1 ending starts Main 2.
+- **`musicPlan` unit tests (vitest):** every row of the event table, including Play Again's reveal while Main is playing, entering select while the Intro already plays, and a menu straight after the reveal.
 - **Timeline and skip tests:**
   - `SKIP_TO` is before `EMERGE_TIME`;
   - a skip from any `t < SKIP_TO` lands on `SKIP_TO`;
@@ -133,11 +107,10 @@ The skip hint stays visible until the jump. After that, it hides. A second tap s
   - `onReveal` fires once per intro in both the watched and the skipped case.
 - **`Music`:** a thin adapter. It is checked in the browser, not with a mocked Web Audio.
 - **By ear and eye (owner):**
-  - the downbeat of the Intro grid;
-  - the Intro loop seam;
-  - Main 1's end trim;
+  - Main 1's end cut;
   - the skipped reveal's cloud matching the watched one;
-  - the feel of the handoff.
+  - the feel of the crossfade;
+  - on an iPhone: the Intro on the first tap, and Main 2 after Main 1.
 
 ## Out of scope
 
@@ -145,6 +118,5 @@ Sound effects, a volume or mute setting, more intensity layers, music changes on
 
 ## Risks
 
-- **Suno drift.** Main 1 and Main 2 aren't on a fixed grid. The design avoids needing their grids.
-- **Phone memory** for decoded audio: ≈126 MB peak (Intro + Main 1). If phone testing shows that is too much, Main 1 can also be streamed, at the cost of a less exact bar-line start.
+- **iOS media elements.** Each element is primed with a silent clip inside the first gesture, then given its song. If iOS refuses `play()` later anyway, the track starts on the next tap.
 - **`globe-geography` conflict.** That branch, unmerged, also changes the intro (`worldMap`). The skip work in `IntroCinematic` may need a small merge.

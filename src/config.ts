@@ -488,24 +488,16 @@ export const CONFIG = {
     volume: 0.8,
     /** CDN fetch timeout (ms); each file is a few MB. */
     fetchTimeout: 60000,
-    /**
-     * The Intro: 120 BPM in 4/4, bar lines at firstBar + 2k s. It plays 0 → loopEnd once, then loops
-     * loopStart → loopEnd; both are bar lines, before the fade-out (≈112 s). `offset`: seconds of encoder
-     * priming left at the front of the decoded file (0 when the browser strips it).
-     */
-    intro: { file: 'audio/intro.m4a', bpm: 120, beatsPerBar: 4, firstBar: 0.031, loopStart: 42.031, loopEnd: 96.031, offset: 0 },
+    /** The Intro: loops as a whole file through the menus and the cutscene. */
+    intro: { file: 'audio/intro.m4a' },
     /** Main gameplay 1: starts from its top on the reveal, plays once (the file ends after its final hit). */
-    main1: { file: 'audio/main1.m4a', offset: 0 },
+    main1: { file: 'audio/main1.m4a' },
     /** Main gameplay 2: follows Main 1 and loops as a whole song. */
     main2: { file: 'audio/main2.m4a' },
-    /** The Intro fades out over this long (s) from the bar line Main 1 starts on: one beat at 120 BPM. */
-    handoffFade: 0.5,
+    /** The Intro and Main 1 crossfade over this long (s) the moment the reveal starts. */
+    crossfade: 1.0,
     /** Gameplay music fades out over this long (s) when a menu brings the Intro back. */
     returnFade: 1.0,
-    /** A bar line closer than this (s) is too soon to schedule on; the one after it is used. */
-    minLead: 0.05,
-    /** `?music=simple`: the Intro and Main 1 crossfade over this long (s) the moment the reveal starts. */
-    simpleCrossfade: 1.0,
   },
   readability: {
     threatKinds: ['blimp', 'sam', 'artillery', 'truck'] as readonly string[],
