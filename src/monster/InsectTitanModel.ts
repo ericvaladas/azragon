@@ -76,13 +76,16 @@ function elytronPoints(side: 1 | -1): THREE.Vector3[] {
   return pts;
 }
 
+/** How big the tail is: its curve (grown from where it joins the body), thickness and stinger. */
+const TAIL_SCALE = 1.1;
+const TAIL_ROOT = new THREE.Vector3(0, 350, -380);
 const TAIL_BASE: THREE.Vector3[] = [
   new THREE.Vector3(0, 350, -380),
   new THREE.Vector3(0, 450, -440),
   new THREE.Vector3(0, 540, -330),
   new THREE.Vector3(0, 550, -190),
   new THREE.Vector3(0, 510, -90),
-];
+].map((p) => p.sub(TAIL_ROOT).multiplyScalar(TAIL_SCALE).add(TAIL_ROOT));
 
 /** Built from primitives. Faces +Z, Y-up; +X is the monster's left. ~550 tall at the stinger. */
 export class InsectTitanModel {
@@ -146,10 +149,10 @@ export class InsectTitanModel {
 
     const tailGeo = faceted(new THREE.CylinderGeometry(0.5, 0.6, 1, 6));
     for (let i = 0; i < TAIL_BASE.length - 1; i++) {
-      const r = 70 - i * 12;
+      const r = (70 - i * 12) * TAIL_SCALE;
       this.tailSegs.push(add(this.body, tailGeo, i % 2 ? shellDark : shell, [0, 0, 0], [r, 1, r]));
     }
-    this.stinger = add(this.body, faceted(new THREE.ConeGeometry(22, 90, 5)), glow, [0, 0, 0]);
+    this.stinger = add(this.body, faceted(new THREE.ConeGeometry(22 * TAIL_SCALE, 90 * TAIL_SCALE, 5)), glow, [0, 0, 0]);
     this.body.add(this.stingerTip);
     this.updateTail(0);
 
@@ -190,7 +193,7 @@ export class InsectTitanModel {
     }
     const tip = this.tailPts[this.tailPts.length - 1]!;
     const prev = this.tailPts[this.tailPts.length - 2]!;
-    const end = tip.clone().addScaledVector(tip.clone().sub(prev).normalize(), 70);
+    const end = tip.clone().addScaledVector(tip.clone().sub(prev).normalize(), 70 * TAIL_SCALE);
     placeSegment(this.stinger, tip, end);
     this.stinger.scale.set(1, 1, 1);
     this.stingerTip.position.copy(end);
