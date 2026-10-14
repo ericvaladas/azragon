@@ -1,6 +1,6 @@
 import type { CityStyle } from '../types';
-import { TOKYO_DISTRICTS } from './districts';
-import { districtAt, SHIBUYA_CROSSING, SKYTREE_SITE, TMG_SITE, TOKYO_TOWER_SITE } from './layout';
+import { TOKYO_DISTRICTS, TOKYO_ISLAND_RULES } from './districts';
+import { districtAt, SHIBUYA_CROSSING, TOKYO_BAY, TOKYO_ISLAND, SKYTREE_SITE, TMG_SITE, TOKYO_TOWER_SITE } from './layout';
 import { SKYTREE, skytreeGeometry, TOKYO_TOWER, tokyoTowerGeometry } from './towers';
 import { SCRAMBLE, SHIBUYA_LOTS } from './shibuya';
 import { TMG, tmgGeometry } from './tmg';
@@ -17,6 +17,7 @@ export const TOKYO: CityStyle = {
     crosswalk: 0xf2f0ea,
     roof: 0xd4d6d8,
     tree: 0x4c8f39,
+    quay: 0xb9b2a4,
   },
   // Magenta, cyan, warm white, yellow, violet: no reds (they belong to threats).
   signColors: [0xff3fb4, 0x35e8ff, 0xfff4d6, 0xffd23a, 0x7a5cff],
@@ -31,8 +32,10 @@ export const TOKYO: CityStyle = {
   specialLots: SHIBUYA_LOTS,
   overlays: [SCRAMBLE],
   river: { z0: 1300, amp: 180, wavelength: 900, halfWidth: 130 },
-  bay: { dir: { x: -Math.SQRT1_2, z: -Math.SQRT1_2 }, offset: 2000, amp: 150, wavelength: 1400 },
-  island: { center: { x: -2613, z: -1913 }, halfAlong: 350, halfAcross: 450 },
-  roadRemoval: { highrise: 0.15, neon: 0.15, office: 0.3, residential: 0.3, park: 0.5 },
+  bay: TOKYO_BAY,
+  island: TOKYO_ISLAND,
+  islandRules: TOKYO_ISLAND_RULES,
+  // The port matches office and residential (what the coast was before it), so the network there keeps its streets.
+  roadRemoval: { highrise: 0.15, neon: 0.15, office: 0.3, residential: 0.3, park: 0.5, port: 0.3 },
   keepNodes: [SHIBUYA_CROSSING],
 };

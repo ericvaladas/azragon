@@ -1,6 +1,6 @@
 import { CONFIG } from '../config';
 import { hash2 } from '../cities/noise';
-import type { CityStyle } from '../cities/types';
+import type { CityStyle, Shoreline } from '../cities/types';
 import type { Vec2 } from '../util/math';
 
 export const PITCH = CONFIG.world.blockSize;
@@ -31,7 +31,7 @@ export function isRiver(style: CityStyle, ci: number, cj: number): boolean {
 }
 
 /** True when cell (ci, cj) lies on the island: a rounded rectangle aligned to the bay axes. */
-export function isIsland(style: CityStyle, ci: number, cj: number): boolean {
+export function isIsland(style: Shoreline, ci: number, cj: number): boolean {
   const is = style.island;
   const bay = style.bay;
   if (!is || !bay) return false;
@@ -45,7 +45,7 @@ export function isIsland(style: CityStyle, ci: number, cj: number): boolean {
 }
 
 /** True when the centre of cell (ci, cj) lies seaward of the coastline; island cells are never bay. */
-export function isBay(style: CityStyle, ci: number, cj: number): boolean {
+export function isBay(style: Shoreline, ci: number, cj: number): boolean {
   const bay = style.bay;
   if (!bay) return false;
   const { x, z } = cellCentre(ci, cj);

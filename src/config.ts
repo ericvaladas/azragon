@@ -104,6 +104,8 @@ export const CONFIG = {
     maxScreens: 60,
     /** Pool size for park ground pads across all loaded chunks. */
     maxParks: 2000,
+    /** Gantry crane pool (scenery along the coast): a full load peaks at 19 (swept ±12 km), so 32 leaves headroom. */
+    maxCranes: 32,
     maxRubble: 2500,
     /** Road segment pool: at most 32 segments start in a chunk, times maxLoadedChunks (185), rounded up. */
     maxRoads: 6000,

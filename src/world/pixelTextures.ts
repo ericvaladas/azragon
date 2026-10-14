@@ -53,9 +53,12 @@ export const FACADE_TILE = { w: 16, h: 24 } as const;
 const CELL_W = 16;
 const CELL_H = 24;
 
+/** One shipping container's height in atlas pixels (1 px per metre). */
+const CONTAINER_PX = 2.6;
+
 /**
  * Facade atlas: FACADE_COUNT cells of CELL_W × CELL_H px, left to right: glass curtain wall, office window bands,
- * residential balconies, shop fronts. Light greys and whites, so the per-building tint colours them.
+ * residential balconies, shop fronts, ribbed container sides. Light greys and whites, so the per-building tint colours them.
  */
 export function facadeAtlas(): THREE.CanvasTexture {
   const c = document.createElement('canvas');
@@ -103,6 +106,17 @@ export function facadeAtlas(): THREE.CanvasTexture {
       g.fillStyle = rng() < 0.35 ? '#ffe9a8' : '#8796aa';
       g.fillRect(x0 + x, y, 2, 2);
     }
+  });
+  // 4: container sides: 1 px light and dark vertical ribs, crossed by a dark rail at every container joint (1 px =
+  // 1 m, so the rails repeat every 2.6 m, rounded down to the pixel, and each stack shows its tiers).
+  cell(4, (x0) => {
+    for (let x = 0; x < CELL_W; x++) {
+      g.fillStyle = x % 2 === 0 ? '#f4f4f4' : '#b4b4b4';
+      g.fillRect(x0 + x, 0, 1, CELL_H);
+    }
+    g.fillStyle = '#5a5a5a';
+    // Canvas rows run top-down; the facade's v runs up from the building's base.
+    for (let k = 0; k * CONTAINER_PX < CELL_H; k++) g.fillRect(x0, CELL_H - 1 - Math.floor(k * CONTAINER_PX), CELL_W, 1);
   });
   return finish(c);
 }

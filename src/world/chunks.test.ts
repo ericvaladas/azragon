@@ -1,11 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { AVENUE_PAVEMENT, BUILDINGS_PER_CHUNK, CHUNK_SIZE, DestroyedLog, SIGNS_PER_CHUNK, TREES_PER_CHUNK, blastTopples, chunkKey, chunksInRadius, generateChunk, maxLoadedChunks, planStreaming } from './chunks';
-import type { BuildingSpec } from './chunks';
+import type { BuildingSpec, ChunkContent } from './chunks';
 import { CONFIG } from '../config';
 import { TOKYO } from '../cities/tokyo';
 import { SHIBUYA_CROSSING } from '../cities/tokyo/layout';
-import type { CityStyle } from '../cities/types';
-import { AVENUE_WIDTH, PITCH, isBay, isWater, lineWidth, segmentAt, type Axis } from './roads';
+import { FACADE, type CityStyle } from '../cities/types';
+import { CONTAINER_COLORS } from '../cities/tokyo/districts';
+import { AVENUE_WIDTH, PITCH, isBay, isIsland, isWater, lineWidth, segmentAt, type Axis } from './roads';
 
 const W = CONFIG.world;
 
@@ -411,5 +412,129 @@ describe('blastTopples', () => {
     expect(share(750)).toBeGreaterThan(0.3);
     expect(share(750)).toBeLessThan(0.7);
     for (const l of lots) expect(blastTopples(l.x, l.z, 750, 500, 1000)).toBe(blastTopples(l.x, l.z, 750, 500, 1000));
+  });
+});
+
+describe('harbour and island', () => {
+  const bayNeighbour = (i: number, j: number) => [[i - 1, j], [i + 1, j], [i, j - 1], [i, j + 1]].some(([a, b]) => isBay(TOKYO, a!, b!));
+  const coastal = (i: number, j: number) => !isWater(TOKYO, i, j) && !isIsland(TOKYO, i, j) && bayNeighbour(i, j);
+  const cellOf = (x: number, z: number): [number, number] => [Math.floor(x / PITCH), Math.floor(z / PITCH)];
+  const districtOf = (x: number, z: number) => {
+    const [i, j] = cellOf(x, z);
+    return TOKYO.districtAt(PITCH * (i + 0.5), PITCH * (j + 0.5));
+  };
+  const islandAt = (x: number, z: number) => isIsland(TOKYO, ...cellOf(x, z));
+  // The coast south-east of the crash and the island, chunk by chunk.
+  const REGION: [number, number][] = [];
+  for (let cx = -6; cx <= 2; cx++) for (let cz = -6; cz <= 2; cz++) REGION.push([cx, cz]);
+  const chunks = REGION.map(([cx, cz]) => ({ cx, cz, c: generateChunk(TOKYO, 1337, cx, cz) }));
+  const all = <T>(pick: (c: ChunkContent) => T[]) => chunks.flatMap(({ c }) => pick(c));
+  const portBuildings = all((c) => c.buildings).filter((b) => districtOf(b.x, b.z) === 'port');
+  const yard = TOKYO.districts.port.yard!;
+
+  it('makes every coastal land cell port and paves every port cell with a full-cell quay pad', () => {
+    let coast = 0;
+    for (const { cx, cz, c } of chunks) {
+      const want: string[] = [];
+      for (let i = 4 * cx; i < 4 * cx + 4; i++) for (let j = 4 * cz; j < 4 * cz + 4; j++) {
+        if (coastal(i, j)) {
+          coast++;
+          expect(TOKYO.districtAt(PITCH * (i + 0.5), PITCH * (j + 0.5)), `cell ${i},${j}`).toBe('port');
+        }
+        if (!isWater(TOKYO, i, j) && TOKYO.districtAt(PITCH * (i + 0.5), PITCH * (j + 0.5)) === 'port') want.push(`${PITCH * (i + 0.5)},${PITCH * (j + 0.5)}`);
+      }
+      expect(c.quays.map((q) => `${q.x},${q.z}`).sort()).toEqual(want.sort());
+    }
+    expect(coast).toBeGreaterThan(20);
+  });
+
+  it('fills the port with container stacks (container colours, ribbed facade, whole containers tall) and warehouses', () => {
+    const stacks = portBuildings.filter((b) => b.facade === FACADE.container);
+    const sheds = portBuildings.filter((b) => b.facade !== FACADE.container);
+    expect(stacks.length).toBeGreaterThan(50);
+    expect(sheds.length).toBeGreaterThan(5);
+    for (const b of stacks) {
+      expect(CONTAINER_COLORS).toContain(b.color);
+      const tiers = b.h / yard.tier;
+      expect(Math.abs(tiers - Math.round(tiers))).toBeLessThan(1e-9);
+      expect(Math.round(tiers)).toBeGreaterThanOrEqual(2);
+      expect(Math.round(tiers)).toBeLessThanOrEqual(4);
+      expect([`${b.w}x${b.d}`]).toContain(b.w > b.d ? `${yard.stack[0]}x${yard.stack[1]}` : `${yard.stack[1]}x${yard.stack[0]}`);
+    }
+    for (const b of sheds) {
+      expect(b.facade).toBe(yard.warehouseFacade);
+      expect(yard.warehouseColors).toContain(b.color);
+      expect(b.h).toBeGreaterThanOrEqual(12);
+      expect(b.h).toBeLessThanOrEqual(22);
+    }
+  });
+
+  it('puts no signs, billboards or trees in port cells', () => {
+    for (const b of portBuildings) expect(b.signs).toEqual([]);
+    for (const t of all((c) => c.trees)) {
+      // A tree on a lattice line counts for the cells on both sides of it.
+      for (const [x, z] of [[t.x - 0.5, t.z - 0.5], [t.x + 0.5, t.z + 0.5], [t.x - 0.5, t.z + 0.5], [t.x + 0.5, t.z - 0.5]] as const) {
+        expect(districtOf(x, z), `tree at ${t.x},${t.z}`).not.toBe('port');
+      }
+    }
+  });
+
+  it('stands gantry cranes only on coastal land cells, two or three cells apart, jibs out over the water', () => {
+    const cranes = all((c) => c.cranes);
+    let coast = 0;
+    for (const [cx, cz] of REGION) for (let i = 4 * cx; i < 4 * cx + 4; i++) for (let j = 4 * cz; j < 4 * cz + 4; j++) if (coastal(i, j)) coast++;
+    expect(cranes.length).toBeGreaterThan(5);
+    // About one crane every 2–3 coastal cells.
+    expect(coast / cranes.length).toBeGreaterThanOrEqual(2);
+    expect(coast / cranes.length).toBeLessThanOrEqual(4);
+    const cells = cranes.map((k) => cellOf(k.x, k.z));
+    for (const [k, [i, j]] of cells.entries()) {
+      expect(coastal(i, j), `crane in ${i},${j}`).toBe(true);
+      const crane = cranes[k]!;
+      // The jib's tip is over a bay cell.
+      const tip = cellOf(crane.x + 50 * Math.sin(crane.yaw), crane.z + 50 * Math.cos(crane.yaw));
+      expect(isBay(TOKYO, ...tip), `crane in ${i},${j}`).toBe(true);
+      for (const [i2, j2] of cells.slice(k + 1)) expect(Math.max(Math.abs(i2 - i), Math.abs(j2 - j))).toBeGreaterThanOrEqual(2);
+    }
+  });
+
+  it('fits a full load of cranes, quay and park pads, and buildings in the pools at three coast positions', () => {
+    for (const [x, z] of [[-1100, -900], [-2000, 400], [600, -2600]] as const) {
+      let cranes = 0, pads = 0, buildings = 0;
+      for (const r of chunksInRadius(x, z, W.unloadRadius)) {
+        const c = generateChunk(TOKYO, 1337, r.cx, r.cz);
+        cranes += c.cranes.length;
+        pads += c.parks.length + c.quays.length;
+        buildings += c.buildings.length;
+      }
+      expect(cranes).toBeGreaterThan(0);
+      expect(cranes).toBeLessThanOrEqual(W.maxCranes);
+      expect(pads).toBeLessThanOrEqual(W.maxParks);
+      expect(buildings).toBeLessThanOrEqual(W.maxBuildings);
+    }
+  });
+
+  it('builds the island: office towers 40–110 m with no roads, signs or trees, and one park block', () => {
+    const island = all((c) => c.buildings).filter((b) => islandAt(b.x, b.z));
+    expect(island.length).toBeGreaterThan(5);
+    for (const b of island) {
+      expect(b.signs).toEqual([]);
+      expect(b.h).toBeGreaterThanOrEqual(40);
+      expect(b.h).toBeLessThanOrEqual(110);
+    }
+    const centre = cellOf(TOKYO.island!.center.x, TOKYO.island!.center.z);
+    const parks = all((c) => c.parks).filter((p) => islandAt(p.x, p.z));
+    expect(parks.map((p) => cellOf(p.x, p.z))).toEqual([centre]);
+    for (const s of all((c) => c.roads)) {
+      const [ai, aj] = s.axis === 'x' ? [s.i, s.j - 1] : [s.i - 1, s.j];
+      expect(isIsland(TOKYO, ai, aj) || isIsland(TOKYO, s.i, s.j)).toBe(false);
+    }
+    // No lane trees down the island's road-less lattice lines and no avenue rows: trees only in its park block.
+    for (const t of all((c) => c.trees)) {
+      for (const [x, z] of [[t.x - 0.5, t.z - 0.5], [t.x + 0.5, t.z + 0.5], [t.x - 0.5, t.z + 0.5], [t.x + 0.5, t.z - 0.5]] as const) {
+        if (!islandAt(x, z)) continue;
+        expect(cellOf(t.x, t.z), `tree at ${t.x},${t.z}`).toEqual(centre);
+      }
+    }
   });
 });

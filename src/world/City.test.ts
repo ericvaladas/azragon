@@ -4,6 +4,7 @@ import { CONFIG } from '../config';
 import { TOKYO } from '../cities/tokyo';
 import type { CityStyle } from '../cities/types';
 import { City, CRATER_RADIUS, SlotPool } from './City';
+import { chunksInRadius, generateChunk } from './chunks';
 import { isWater, PITCH } from './roads';
 import type { CityTextures } from './pixelTextures';
 import type { Target } from '../combat';
@@ -386,5 +387,59 @@ describe('signs', () => {
     for (let i = 0; i < 200; i++) city.update(0.016, new THREE.Vector3(30000, 0, 0));
     for (let i = 0; i < 200; i++) city.update(0.016, new THREE.Vector3());
     expect(city.screenCount()).toBe(after);
+  });
+});
+
+describe('harbour', () => {
+  const PORT = new THREE.Vector3(-1100, 0, -900);
+  const near = () => chunksInRadius(PORT.x, PORT.z, 1200).map((r) => generateChunk(TOKYO, CONFIG.world.seed, r.cx, r.cz));
+  const crane = (city: City) => (city as unknown as { craneMesh: THREE.InstancedMesh }).craneMesh;
+
+  it('draws the gantry cranes on one instanced mesh, pooled: slots return after streaming away and back', () => {
+    const { city, scene } = make();
+    for (let i = 0; i < 300; i++) city.update(0.016, PORT);
+    const mesh = crane(city);
+    expect(scene.children.filter((o) => o === mesh)).toHaveLength(1);
+    expect(mesh.instanceMatrix.count).toBe(CONFIG.world.maxCranes);
+    const before = city.craneCount();
+    expect(before).toBeGreaterThan(0);
+    expect(mesh.count).toBeGreaterThanOrEqual(before);
+    for (let i = 0; i < 300; i++) city.update(0.016, new THREE.Vector3(30000, 0, 0));
+    expect(city.craneCount()).toBe(0);
+    for (let i = 0; i < 300; i++) city.update(0.016, PORT);
+    expect(city.craneCount()).toBe(before);
+    // Vertex coloured (red and white bands).
+    expect(mesh.geometry.getAttribute('color')).toBeDefined();
+  });
+
+  it('cranes are scenery: no target, no blocked ground, at a crane', () => {
+    const { city } = make();
+    for (let i = 0; i < 300; i++) city.update(0.016, PORT);
+    const cranes = near().flatMap((c) => c.cranes);
+    expect(cranes.length).toBeGreaterThan(0);
+    for (const k of cranes) {
+      city.forEachStandingInRadius({ x: k.x, z: k.z }, 1, (t) => expect(Math.hypot(t.position.x - k.x, t.position.z - k.z)).toBeGreaterThan(0.5));
+      if (!city.landmarkAt(k.x, k.z)) expect(city.blockedAt(k.x, k.z)).toBe(false);
+    }
+  });
+
+  it('paves port cells with quay-coloured pads on the park mesh', () => {
+    const { city } = make();
+    for (let i = 0; i < 300; i++) city.update(0.016, PORT);
+    const park = (city as unknown as { parkMesh: THREE.InstancedMesh }).parkMesh;
+    const quays = new Set(near().flatMap((c) => c.quays).map((q) => `${q.x},${q.z}`));
+    expect(quays.size).toBeGreaterThan(0);
+    const m = new THREE.Matrix4(), p = new THREE.Vector3(), q = new THREE.Quaternion(), s = new THREE.Vector3(), c = new THREE.Color();
+    let found = 0;
+    for (let i = 0; i < park.count; i++) {
+      park.getMatrixAt(i, m);
+      m.decompose(p, q, s);
+      if (s.x === 0 || !quays.has(`${p.x},${p.z}`)) continue;
+      park.getColorAt(i, c);
+      expect(c.getHex()).toBe(TOKYO.colors.quay);
+      expect(s.x).toBe(PITCH);
+      found++;
+    }
+    expect(found).toBe(quays.size);
   });
 });

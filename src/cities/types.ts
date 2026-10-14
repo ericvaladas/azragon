@@ -1,11 +1,28 @@
 import type * as THREE from 'three';
 
-export type DistrictId = 'highrise' | 'neon' | 'office' | 'residential' | 'park';
-export const DISTRICTS: readonly DistrictId[] = ['highrise', 'neon', 'office', 'residential', 'park'];
+export type DistrictId = 'highrise' | 'neon' | 'office' | 'residential' | 'park' | 'port';
+export const DISTRICTS: readonly DistrictId[] = ['highrise', 'neon', 'office', 'residential', 'park', 'port'];
 
 /** Facade atlas cells (see pixelTextures.facadeAtlas): left to right. */
-export const FACADE = { glass: 0, office: 1, balcony: 2, shop: 3 } as const;
-export const FACADE_COUNT = 4;
+export const FACADE = { glass: 0, office: 1, balcony: 2, shop: 3, container: 4 } as const;
+export const FACADE_COUNT = 5;
+
+/**
+ * A container yard (the port): each built lot holds either a pair of container stacks or one warehouse. Stacks are
+ * `stack` m (w × d, turned 90° on a coin toss per lot), `tier` m × tiers[0]..tiers[1] tall, in the district's facades
+ * and colours; a warehouse covers `warehouseFootprint` of its lot.
+ */
+export type YardRules = {
+  stack: readonly [number, number];
+  tier: number;
+  tiers: readonly [number, number];
+  /** Chance a built lot is a warehouse instead of container stacks. */
+  warehouse: number;
+  warehouseFootprint: number;
+  warehouseHeight: readonly [number, number];
+  warehouseFacade: number;
+  warehouseColors: readonly number[];
+};
 
 /** How one district fills a block (164 m inside the roads). */
 export type DistrictRules = {
@@ -30,6 +47,8 @@ export type DistrictRules = {
   billboard: number;
   /** Street trees per block. */
   trees: number;
+  /** Present for a container yard: lots hold container stacks and warehouses instead of `footprint` buildings. */
+  yard?: YardRules;
 };
 
 export type SignKind = 'vertical' | 'billboard' | 'screen';
@@ -56,6 +75,8 @@ export type BaySpec = { dir: { x: number; z: number }; offset: number; amp: numb
 
 /** A rounded-rectangle island: half extents along the bay's dir and perp axes from center. Never reached by road. */
 export type IslandSpec = { center: { x: number; z: number }; halfAlong: number; halfAcross: number };
+/** Shape of the coast and island only (what the water tests read). */
+export type Shoreline = { bay?: BaySpec; island?: IslandSpec };
 
 export type CityStyle = {
   id: string;
@@ -69,6 +90,8 @@ export type CityStyle = {
     crosswalk: number;
     roof: number;
     tree: number;
+    /** Port quay paving, drawn as a pad over each port cell. */
+    quay: number;
   };
   /** Neon sign colours (never near the threat reds). */
   signColors: readonly number[];
@@ -83,6 +106,11 @@ export type CityStyle = {
   river?: RiverSpec;
   bay?: BaySpec;
   island?: IslandSpec;
+  /**
+   * Rules for the island's built cells (districtAt reports them as office, its centre cell as park): no streets, so
+   * no signs and no street trees.
+   */
+  islandRules?: DistrictRules;
   /** Fraction of removable street segments removed, by the district at the segment's midpoint. */
   roadRemoval: Readonly<Record<DistrictId, number>>;
   /** Lattice nodes (world x, z) whose four segments always exist (e.g. the Shibuya Crossing). */

@@ -8,6 +8,7 @@ import { blastTopples, chunksInRadius, DestroyedLog, generateChunk, nodeSize, pl
 import { isIsland, isWater, PITCH, type Segment } from './roads';
 import { canvasCityTextures, patchFacadeShader, patchRoadShader, SCREEN_FRAMES, SIGN_RECTS, type CityTextures } from './pixelTextures';
 import { rubbleGeometry } from './rubble';
+import { craneGeometry } from './crane';
 import { faceted, toonMat } from '../render/toon';
 
 type BuildingState = 'standing' | 'collapsing' | 'rubble';
@@ -65,6 +66,7 @@ type LoadedChunk = {
   roadSlots: number[];
   nodeSlots: number[];
   waterSlots: number[];
+  craneSlots: number[];
 };
 
 const ZERO = new THREE.Matrix4().makeScale(0, 0, 0);
@@ -167,8 +169,11 @@ export class City {
   private roadMesh: THREE.InstancedMesh;
   /** Intersection squares and bridge deck slabs: flat-topped boxes tinted per instance. */
   private nodeMesh: THREE.InstancedMesh;
-  /** River cells. */
+  /** River and bay cells. */
   private waterMesh: THREE.InstancedMesh;
+  /** Gantry cranes along the coast: scenery, never targets. */
+  private craneMesh: THREE.InstancedMesh;
+  private cranes: SlotPool;
   private roads: SlotPool;
   private nodes: SlotPool;
   private waters: SlotPool;
@@ -274,6 +279,9 @@ export class City {
     this.nodeMesh.receiveShadow = true;
     this.waterMesh = new THREE.InstancedMesh(flat, layered(toonMat(WATER_COLOR), 1), world.maxWater);
     this.waterMesh.receiveShadow = true;
+    this.craneMesh = new THREE.InstancedMesh(craneGeometry(), toonMat(0xffffff, { vertexColors: true }), world.maxCranes);
+    this.craneMesh.castShadow = true;
+    this.craneMesh.receiveShadow = true;
     const signBox = new THREE.BoxGeometry(1, 1, 1);
     const signGeo = new THREE.BoxGeometry(1, 1, 1);
     this.signRect = new THREE.InstancedBufferAttribute(new Float32Array(world.maxSigns * 4), 4);
@@ -307,6 +315,7 @@ export class City {
     this.roads = new SlotPool(this.roadMesh);
     this.nodes = new SlotPool(this.nodeMesh);
     this.waters = new SlotPool(this.waterMesh);
+    this.cranes = new SlotPool(this.craneMesh);
     this.resetPools();
     scene.add(...this.instanced());
     this.landmarkMat = toonMat(0xffffff, { vertexColors: true });
@@ -318,7 +327,7 @@ export class City {
 
   /** Every pooled instanced mesh. */
   private instanced(): THREE.InstancedMesh[] {
-    return [this.buildingMesh, this.rubbleMesh, this.treeMesh, this.parkMesh, this.signMesh, this.screenMesh, this.roadMesh, this.nodeMesh, this.waterMesh];
+    return [this.buildingMesh, this.rubbleMesh, this.treeMesh, this.parkMesh, this.signMesh, this.screenMesh, this.roadMesh, this.nodeMesh, this.waterMesh, this.craneMesh];
   }
 
   get style(): CityStyle {
@@ -398,6 +407,7 @@ export class City {
     this.roads.reset();
     this.nodes.reset();
     this.waters.reset();
+    this.cranes.reset();
   }
 
   /**
@@ -417,7 +427,7 @@ export class City {
     this.buildingMesh.count = high((i) => this.slotOwner[i] !== null, this.slotOwner.length);
     this.treeMesh.count = high((i) => this.treeUsed[i]!, this.treeUsed.length);
     this.parkMesh.count = high((i) => this.parkUsed[i]!, this.parkUsed.length);
-    for (const p of [this.roads, this.nodes, this.waters]) p.mesh.count = p.highWater();
+    for (const p of [this.roads, this.nodes, this.waters, this.cranes]) p.mesh.count = p.highWater();
   }
 
   /** Forget all destruction and rebuild the city around the origin, in `style` if given. */
@@ -447,6 +457,11 @@ export class City {
   /** Road, intersection-and-slab, and water slots in use. */
   roadNetworkCount(): { roads: number; nodes: number; water: number } {
     return { roads: this.roads.inUse(), nodes: this.nodes.inUse(), water: this.waters.inUse() };
+  }
+
+  /** Crane slots in use. */
+  craneCount(): number {
+    return this.cranes.inUse();
   }
 
   /** Sign slots in use. */
@@ -632,13 +647,15 @@ export class City {
       else this.writeStanding(b, 0, 0);
       buildings.push(b);
     });
-    for (const p of content.parks) {
+    // Park greens and port quays share the pad mesh, tinted per instance.
+    const pads = [...content.parks.map((p) => ({ ...p, color: this._style.colors.park })), ...content.quays.map((q) => ({ ...q, color: this._style.colors.quay }))];
+    for (const p of pads) {
       const slot = this.freeParks.pop();
       if (slot === undefined) break;
-      // The full cell, so neighbouring parks (and the lane between them) read as one green space.
+      // The full cell, so neighbouring pads (and the lane between them) read as one green space or one quay.
       _m.compose(_p.set(p.x, 0, p.z), _q.identity(), _s.set(PITCH, 1, PITCH));
       this.parkMesh.setMatrixAt(slot, _m);
-      this.parkMesh.setColorAt(slot, _c.setHex(this._style.colors.park));
+      this.parkMesh.setColorAt(slot, _c.setHex(p.color));
       this.parkUsed[slot] = true;
       parkSlots.push(slot);
     }
@@ -653,6 +670,7 @@ export class City {
     const roadSlots: number[] = [];
     const nodeSlots: number[] = [];
     const waterSlots: number[] = [];
+    const craneSlots: number[] = [];
     const keep = (slots: number[], slot: number | undefined) => { if (slot !== undefined) slots.push(slot); };
     for (const seg of content.roads) this.writeRoad(seg, roadSlots, nodeSlots);
     for (const n of content.nodes) {
@@ -665,7 +683,11 @@ export class City {
       _m.compose(_p.set(w.x, Y.water, w.z), _q.identity(), _s.set(PITCH, 1, PITCH));
       keep(waterSlots, this.waters.take(_m));
     }
-    this.chunks.set(key, { content, buildings, treeSlots, parkSlots, roadSlots, nodeSlots, waterSlots });
+    for (const c of content.cranes) {
+      _m.compose(_p.set(c.x, 0, c.z), _q.setFromAxisAngle(UP, c.yaw), _s.setScalar(1));
+      keep(craneSlots, this.cranes.take(_m));
+    }
+    this.chunks.set(key, { content, buildings, treeSlots, parkSlots, roadSlots, nodeSlots, waterSlots, craneSlots });
     this.loadedKeys.add(key);
     this.dirtyStream = true;
   }
@@ -700,6 +722,7 @@ export class City {
     for (const slot of chunk.roadSlots) this.roads.release(slot);
     for (const slot of chunk.nodeSlots) this.nodes.release(slot);
     for (const slot of chunk.waterSlots) this.waters.release(slot);
+    for (const slot of chunk.craneSlots) this.cranes.release(slot);
     if (this.collapsing.length) this.collapsing = this.collapsing.filter((b) => b.chunk !== key);
     this.chunks.delete(key);
     this.loadedKeys.delete(key);

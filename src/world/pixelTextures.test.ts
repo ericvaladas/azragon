@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { FACADE_COUNT } from '../cities/types';
+import { FACADE, FACADE_COUNT } from '../cities/types';
 import { SCRAMBLE } from '../cities/tokyo/shibuya';
 import { FACADE_TILE, patchFacadeShader, patchRoadShader, scrambleArms, scrambleStripes } from './pixelTextures';
 
@@ -14,7 +14,9 @@ describe('patchFacadeShader', () => {
     expect(sh.vertexShader).toContain('instanceMatrix');
     expect(sh.vertexShader).toContain(`/ ${FACADE_TILE.h.toFixed(1)}`);
     expect(sh.fragmentShader).toContain('fract(vFacadeUv.x)');
-    expect(sh.fragmentShader).toContain(`/ ${FACADE_COUNT.toFixed(1)}`);
+    expect(FACADE_COUNT).toBe(5);
+    expect(FACADE.container).toBe(4);
+    expect(sh.fragmentShader).toContain('/ 5.0');
     expect(sh.fragmentShader).not.toContain('#include <map_fragment>');
   });
 });
