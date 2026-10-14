@@ -3,8 +3,8 @@ import { box, merge, ring } from '../shapes';
 
 /** Drawn 1.3 × life size (like Tokyo Tower): 720 m to the antenna tip, the tallest structure in either city. */
 export const CN_TOWER = { w: 100, d: 100, h: 720 } as const;
-const CONCRETE = 0xd9d2c5;
-const CONCRETE_DARK = 0xbfb6a6;
+const CONCRETE = 0xbdb5a8;
+const CONCRETE_DARK = 0x9e9586;
 const GLASS = 0x2e3a4a;
 const LIGHT = 0xffd98a;
 const RED = 0xd8322a;

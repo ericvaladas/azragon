@@ -18,7 +18,7 @@ export const TORONTO: CityStyle = {
     road: 0x4f4b48,
     roadLine: 0xeeeae0,
     crosswalk: 0xf0ece2,
-    roof: 0x5e5550,
+    roof: 0xa89c94,
     tree: 0x3f7a2f,
     quay: 0xb3aa9a,
     water: 0x3d8fa8,
@@ -41,20 +41,21 @@ export const TORONTO: CityStyle = {
   // A very regular grid: fewer removed streets than Tokyo (neon and port per Ruling R8).
   roadRemoval: { highrise: 0.1, neon: 0.1, office: 0.15, residential: 0.15, park: 0.4, port: 0.15 },
   keepNodes: [],
-  // A warm evening: the sun low in the west (−X), so shadows fall long to the east. The fog is the horizon's colour,
-  // so fully fogged ground meets the sky without a band; it starts beyond Tokyo's near so the lake around the islands
-  // reads as water rather than haze.
+  // A warm evening: the sun low in the west-north-west (−X, a little −Z, where Toronto's summer sun sets), so
+  // shadows fall long to the east and the faces turned toward the start camera catch its light. The fog is the
+  // horizon's gold, so the far edge melts into the sky; it starts beyond Tokyo's near so the lake and the islands
+  // read behind the skyline. The ambient is a cool violet so shaded faces stay cool against the warm sunlit ones.
   atmosphere: {
     skyZenith: 0x4b4a8c,
     skyHorizon: 0xf2c08c,
     fog: 0xf2c08c,
     fogNear: 3000,
-    hemiSky: 0xffc59a,
-    hemiGround: 0x4a3550,
-    hemiIntensity: 0.8,
-    sun: 0xffa25a,
-    sunIntensity: 2,
-    sunDir: { x: -0.9, y: 0.3, z: 0.2 },
+    hemiSky: 0x9c9ad6,
+    hemiGround: 0x4e4466,
+    hemiIntensity: 1.1,
+    sun: 0xffb468,
+    sunIntensity: 2.4,
+    sunDir: { x: -0.85, y: 0.42, z: -0.35 },
     windowGlow: { color: 0xffc46b, strength: 0.45 },
   },
   glyphs: 'latin',

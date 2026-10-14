@@ -23,7 +23,7 @@ export const TORONTO_DISTRICTS: Record<DistrictId, DistrictRules> = {
   // Midtown: small red, brown and dark-red brick houses, some cream stone, on leafy streets.
   residential: {
     lots: 4, fill: 0.55, minPerBlock: 4, height: [10, 22], heightCurve: 1.4, footprint: [0.55, 0.75],
-    facades: [FACADE.balcony], colors: [0xa4442f, 0x8c3b2a, 0x7a2f24, 0xb5583c, 0x6b2a22, 0xd8c7a3],
+    facades: [FACADE.balcony], colors: [0xb84d35, 0xa04632, 0x8e3a2c, 0xc6654a, 0x7f342a, 0xe2d3b2],
     signs: 0, billboard: 0, trees: 6,
   },
   park: {

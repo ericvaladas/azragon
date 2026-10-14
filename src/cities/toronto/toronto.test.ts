@@ -40,11 +40,11 @@ describe('TORONTO', () => {
     expect(TORONTO.roadRemoval).toMatchObject({ residential: 0.15, office: 0.15, highrise: 0.1, park: 0.4 });
   });
 
-  it('is a warm evening: dusky sky, gold horizon fog pushed past the lakeshore, low western sun, warm window glow', () => {
+  it('is a warm evening: dusky sky, gold horizon fog pushed past the lakeshore, low west-north-west sun, warm window glow', () => {
     expect(TORONTO.atmosphere).toEqual({
       skyZenith: 0x4b4a8c, skyHorizon: 0xf2c08c, fog: 0xf2c08c, fogNear: 3000,
-      hemiSky: 0xffc59a, hemiGround: 0x4a3550, hemiIntensity: 0.8,
-      sun: 0xffa25a, sunIntensity: 2, sunDir: { x: -0.9, y: 0.3, z: 0.2 },
+      hemiSky: 0x9c9ad6, hemiGround: 0x4e4466, hemiIntensity: 1.1,
+      sun: 0xffb468, sunIntensity: 2.4, sunDir: { x: -0.85, y: 0.42, z: -0.35 },
       windowGlow: { color: 0xffc46b, strength: 0.45 },
     });
   });
