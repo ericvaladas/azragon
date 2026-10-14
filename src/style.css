@@ -137,7 +137,7 @@ body {
 .hud-bars { flex: 0 1 560px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .hud-bars .bar { align-self: stretch; }
 .hud-top .bar-hp { height: 20px; }
-.hud-top .bar-hp .bar-label { font-size: 11px; line-height: 18px; }
+.hud-top .bar-hp .bar-label { font-size: 11px; line-height: 18px; color: #000; text-shadow: none; }
 /* All three share one height. */
 .hud-top .hud-level, .hud-top .hud-time { height: 20px; padding: 0 6px; display: flex; align-items: center; font-size: 12px; }
 
