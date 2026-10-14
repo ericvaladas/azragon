@@ -84,8 +84,13 @@ export type LandmarkSpec = { id: string; x: number; z: number; w: number; d: num
 /** A ground decal drawn over the road texture, `size` m square, centred on (x, z). */
 export type GroundOverlay = { id: string; x: number; z: number; size: number };
 
-/** A winding river: centreline z = z0 + amp · sin(x / wavelength); cells within halfWidth (vertical) are water. */
-export type RiverSpec = { z0: number; amp: number; wavelength: number; halfWidth: number };
+/**
+ * A winding river. Along axis 'x' (the default: it runs east–west) the centreline is z = c0 + amp · sin(x / wavelength);
+ * along 'z' (north–south) it is x = c0 + amp · sin(z / wavelength). Cells whose centre lies within halfWidth of the
+ * centreline, measured across the axis, are water. With `bankPark`, land blocks within that many blocks of river
+ * water (Chebyshev distance) are park.
+ */
+export type RiverSpec = { axis?: 'x' | 'z'; c0: number; amp: number; wavelength: number; halfWidth: number; bankPark?: number };
 
 /**
  * A coastline: cells whose centre c has dot(c, dir) > offset + amp · sin(dot(c, perp) / wavelength) are sea, with

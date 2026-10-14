@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { CONFIG } from '../config';
 import { TOKYO } from '../cities/tokyo';
+import type { CityStyle } from '../cities/types';
 import { mulberry32 } from '../util/rng';
-import { nearestRoadPoint, planRoadPath, ringOnRoads, segmentAt, isWater, isBay, isIsland, isRiver, lineWidth, PITCH, AVENUE_WIDTH, type Axis } from './roads';
+import { nearestRoadPoint, planRoadPath, ringOnRoads, segmentAt, isWater, isBay, isIsland, isRiver, bridgeAxis, blockDistrict, isRiverBank, lineWidth, PITCH, AVENUE_WIDTH, type Axis } from './roads';
 
 const R = 30;
 const mod = (n: number, m: number) => ((n % m) + m) % m;
@@ -285,7 +286,7 @@ describe('bay and island', () => {
     const r = TOKYO.river!;
     const start: [number, number] = [Math.floor(-4000 / PITCH), 0];
     for (let j = -40; j <= 40; j++) if (isRiver(TOKYO, start[0], j)) { start[1] = j; break; }
-    expect(isRiver(TOKYO, start[0], start[1]), `river near z ${r.z0}`).toBe(true);
+    expect(isRiver(TOKYO, start[0], start[1]), `river near z ${r.c0}`).toBe(true);
     const seen = new Set<string>([start.join(',')]);
     const queue = [start];
     let reachedBay = false;
@@ -371,6 +372,92 @@ describe('bay and island', () => {
         const inside = cellRange(x).every((i) => cellRange(z).every((j) => isBay(TOKYO, i, j)));
         expect(inside, `${x},${z}`).toBe(false);
       }
+    }
+  });
+});
+
+describe('a north–south river (axis z)', () => {
+  const NS: CityStyle = { ...TOKYO, river: { axis: 'z', c0: 1500, amp: 150, wavelength: 1100, halfWidth: 130, bankPark: 1 }, bay: undefined, island: undefined };
+  const xc = (z: number) => 1500 + 150 * Math.sin(z / 1100);
+
+  it('makes water of the cells whose centre is within 130 m of x = 1500 + 150·sin(z / 1100), in every row', () => {
+    for (let cj = -30; cj <= 30; cj++) {
+      let n = 0;
+      for (let ci = -10; ci <= 20; ci++) {
+        const x = PITCH * ci + PITCH / 2, z = PITCH * cj + PITCH / 2;
+        expect(isRiver(NS, ci, cj), `${ci},${cj}`).toBe(Math.abs(x - xc(z)) < 130);
+        if (isRiver(NS, ci, cj)) n++;
+      }
+      expect(n, `row ${cj}`).toBeGreaterThan(0);
+    }
+  });
+
+  it("keeps Tokyo's east–west river: axis defaults to 'x' and its bridges run along z", () => {
+    expect(TOKYO.river!.axis).toBeUndefined();
+    expect(bridgeAxis(TOKYO)).toBe('z');
+    expect(bridgeAxis(NS)).toBe('x');
+  });
+
+  it('bridges it only on x-avenues (z a multiple of 1000); no z segment runs along it', () => {
+    let bridges = 0;
+    for (let i = -R; i <= R; i++) for (let j = -R; j <= R; j++) for (const axis of ['x', 'z'] as const) {
+      const [a, b] = cellsOf(axis, i, j);
+      if (!(isRiver(NS, a[0], a[1]) && isRiver(NS, b[0], b[1]))) continue;
+      const seg = segmentAt(NS, axis, i, j);
+      if (axis === 'x' && mod(j, 5) === 0) {
+        expect(seg?.bridge, `${axis} ${i},${j}`).toBe(true);
+        bridges++;
+      } else expect(seg, `${axis} ${i},${j}`).toBeNull();
+    }
+    expect(bridges).toBeGreaterThan(10);
+  });
+
+  it('keeps every x-avenue continuous across it', () => {
+    for (let j = -30; j <= 30; j += 5) for (let i = 0; i < 12; i++) expect(segmentAt(NS, 'x', i, j), `z=${PITCH * j} seg ${i}`).not.toBeNull();
+  });
+
+  it('routes ground units across it on bridges only', () => {
+    const start = { x: 900, z: 500 }, goal = { x: 2300, z: 500 };
+    const path = planRoadPath(NS, start, goal);
+    expect(path.length).toBeGreaterThan(0);
+    const wet = (p: { x: number; z: number }) => cellRange(p.x).every((i) => cellRange(p.z).every((j) => isWater(NS, i, j)));
+    const pts = [nearestRoadPoint(NS, start), ...path];
+    for (let k = 1; k < pts.length; k++) {
+      const a = pts[k - 1]!, b = pts[k]!;
+      const n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.z - a.z) / 10));
+      for (let s = 0; s <= n; s++) {
+        const q = { x: a.x + ((b.x - a.x) * s) / n, z: a.z + ((b.z - a.z) * s) / n };
+        if (wet(q)) expect(Math.abs(q.z - Math.round(q.z / 1000) * 1000), `water ${q.x},${q.z}`).toBeLessThan(1e-6);
+      }
+    }
+    expect(path[path.length - 1]).toEqual(nearestRoadPoint(NS, goal));
+  });
+
+  it('nearestRoadPoint never returns a water point off a bridge line', () => {
+    const rnd = mulberry32(29);
+    for (let k = 0; k < 400; k++) {
+      const p = { x: 1000 + rnd() * 1000, z: (rnd() - 0.5) * 6000 };
+      const q = nearestRoadPoint(NS, p);
+      const wet = cellRange(q.x).every((i) => cellRange(q.z).every((j) => isWater(NS, i, j)));
+      if (wet) expect(Math.abs(q.z - Math.round(q.z / 1000) * 1000), `${q.x},${q.z}`).toBeLessThan(1e-6);
+    }
+  });
+
+  it('makes park of the land blocks within one block of the river (bankPark), and nothing else changes', () => {
+    let banks = 0;
+    for (let ci = 0; ci <= 14; ci++) for (let cj = -10; cj <= 10; cj++) {
+      const near = [-1, 0, 1].some((di) => [-1, 0, 1].some((dj) => isRiver(NS, ci + di, cj + dj)));
+      const bank = near && !isWater(NS, ci, cj);
+      expect(isRiverBank(NS, ci, cj), `${ci},${cj}`).toBe(bank);
+      const x = PITCH * (ci + 0.5), z = PITCH * (cj + 0.5);
+      expect(blockDistrict(NS, x, z)).toBe(bank ? 'park' : NS.districtAt(x, z));
+      if (bank) banks++;
+    }
+    expect(banks).toBeGreaterThan(20);
+    // Tokyo sets no bankPark: its blocks keep their districts.
+    for (let ci = -10; ci <= 10; ci++) for (let cj = 0; cj <= 12; cj++) {
+      expect(isRiverBank(TOKYO, ci, cj)).toBe(false);
+      expect(blockDistrict(TOKYO, PITCH * (ci + 0.5), PITCH * (cj + 0.5))).toBe(TOKYO.districtAt(PITCH * (ci + 0.5), PITCH * (cj + 0.5)));
     }
   });
 });

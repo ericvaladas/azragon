@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { TOKYO } from '../cities/tokyo';
 import { isRiver, isBay } from './roads';
+import type { CityStyle } from '../cities/types';
+
 import { blockedAt, inBay, landingSpot, shoreStep, shoreStopped, slideAlongShore } from './shore';
 import { CONFIG } from '../config';
 import { leapPosition } from '../monster/leap';
@@ -180,5 +182,19 @@ describe('shore', () => {
       expect(shoreStopped(prev, next, { x: 3, z: 0 })).toBe(false);
       expect(shoreStopped(prev, { ...prev }, prev)).toBe(false);
     });
+  });
+});
+
+describe('shore with a north–south river', () => {
+  const NS: CityStyle = { ...TOKYO, river: { axis: 'z', c0: 1500, amp: 150, wavelength: 1100, halfWidth: 130 }, bay: undefined, island: undefined };
+  it('never blocks its cells: the monster wades through', () => {
+    let rivers = 0;
+    for (let ci = 0; ci <= 12; ci++) for (let cj = -20; cj <= 20; cj++) {
+      if (!isRiver(NS, ci, cj)) continue;
+      rivers++;
+      expect(inBay(NS, ci * 200 + 100, cj * 200 + 100)).toBe(false);
+      expect(blockedAt(NS, ci * 200 + 100, cj * 200 + 100, 100)).toBe(false);
+    }
+    expect(rivers).toBeGreaterThan(20);
   });
 });

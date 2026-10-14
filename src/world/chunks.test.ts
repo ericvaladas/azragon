@@ -6,7 +6,7 @@ import { TOKYO } from '../cities/tokyo';
 import { SHIBUYA_CROSSING } from '../cities/tokyo/layout';
 import { FACADE, type CityStyle } from '../cities/types';
 import { CONTAINER_COLORS } from '../cities/tokyo/districts';
-import { AVENUE_WIDTH, PITCH, isBay, isIsland, isWater, lineWidth, segmentAt, type Axis } from './roads';
+import { AVENUE_WIDTH, PITCH, isBay, isIsland, isRiverBank, isWater, lineWidth, segmentAt, type Axis } from './roads';
 
 const W = CONFIG.world;
 
@@ -686,5 +686,22 @@ describe('Rainbow Bridge (a span landmark)', () => {
       const d = Math.hypot(k.x - (span.from.x + ux * t), k.z - (span.from.z + uz * t));
       expect(d).toBeGreaterThan(reach + span.halfWidth);
     }
+  });
+});
+
+describe('river bank parks', () => {
+  const NS: CityStyle = { ...TOKYO, river: { axis: 'z', c0: 1500, amp: 150, wavelength: 1100, halfWidth: 130, bankPark: 1 }, bay: undefined, island: undefined, landmarks: [], specialLots: [] };
+  it('lays every bank block as a park: a pad, and no building on it', () => {
+    let banks = 0;
+    for (let cx = 0; cx <= 3; cx++) for (let cz = -3; cz <= 2; cz++) {
+      const c = generateChunk(NS, 1337, cx, cz);
+      for (let i = 4 * cx; i < 4 * cx + 4; i++) for (let j = 4 * cz; j < 4 * cz + 4; j++) {
+        if (!isRiverBank(NS, i, j)) continue;
+        banks++;
+        expect(c.parks).toContainEqual({ x: PITCH * (i + 0.5), z: PITCH * (j + 0.5) });
+        expect(c.buildings.some((b) => Math.floor(b.x / PITCH) === i && Math.floor(b.z / PITCH) === j), `${i},${j}`).toBe(false);
+      }
+    }
+    expect(banks).toBeGreaterThan(20);
   });
 });

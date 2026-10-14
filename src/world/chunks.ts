@@ -2,7 +2,7 @@ import { CONFIG } from '../config';
 import { mulberry32, pick, range } from '../util/rng';
 import type { BuildingSpec, CityStyle, DistrictRules, LandmarkSpec, SignDef, YardRules } from '../cities/types';
 import { hash2 } from '../cities/noise';
-import { AVENUE_WIDTH, PITCH, isBay, isIsland, isWater, lineWidth, segmentAt, type Axis, type Segment } from './roads';
+import { AVENUE_WIDTH, PITCH, isBay, blockDistrict, isIsland, isWater, lineWidth, segmentAt, type Axis, type Segment } from './roads';
 
 export type { BuildingSpec } from '../cities/types';
 export type TreeSpec = { x: number; z: number; s: number };
@@ -339,12 +339,12 @@ export function generateChunk(style: CityStyle, seed: number, cx: number, cz: nu
       if (landmark) {
         if (!craterSite) landmarks.push(landmark);
         // A landmark in a park stands on the park's green (Tokyo Tower in Shiba Park); one in the port on the quay.
-        const district = style.districtAt(bx, bz);
+        const district = blockDistrict(style, bx, bz);
         if (!craterSite && district === 'park') parks.push({ x: bx, z: bz });
         if (!craterSite && district === 'port') quays.push({ x: bx, z: bz });
         continue;
       }
-      let district = style.districtAt(bx, bz);
+      let district = blockDistrict(style, bx, bz);
       if (craterSite && district === 'park') district = 'office';
       const island = isIsland(style, bi, bj);
       const rules = island && district !== 'park' && style.islandRules ? style.islandRules : style.districts[district];
@@ -457,8 +457,8 @@ export function generateChunk(style: CityStyle, seed: number, cx: number, cz: nu
         const [ai, aj] = axis === 'x' ? [i, j - 1] : [i - 1, j];
         // The island has no streets at all, so its lattice lines are no lanes.
         if (isWater(style, ai, aj) || isWater(style, i, j) || isIsland(style, ai, aj) || isIsland(style, i, j)) continue;
-        const da = style.districtAt((ai + 0.5) * pitch + ROAD_ORIGIN, (aj + 0.5) * pitch + ROAD_ORIGIN);
-        const db = style.districtAt((i + 0.5) * pitch + ROAD_ORIGIN, (j + 0.5) * pitch + ROAD_ORIGIN);
+        const da = blockDistrict(style, (ai + 0.5) * pitch + ROAD_ORIGIN, (aj + 0.5) * pitch + ROAD_ORIGIN);
+        const db = blockDistrict(style, (i + 0.5) * pitch + ROAD_ORIGIN, (j + 0.5) * pitch + ROAD_ORIGIN);
         if ((!lane(da) && !lane(db)) || da === 'port' || db === 'port') continue;
         for (const f of [0.25, 0.5, 0.75]) {
           const x = (axis === 'x' ? i + f : i) * pitch + ROAD_ORIGIN;

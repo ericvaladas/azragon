@@ -34,7 +34,7 @@ export const TOKYO: CityStyle = {
   ],
   specialLots: SHIBUYA_LOTS,
   overlays: [SCRAMBLE],
-  river: { z0: 1300, amp: 180, wavelength: 900, halfWidth: 130 },
+  river: { c0: 1300, amp: 180, wavelength: 900, halfWidth: 130 },
   bay: TOKYO_BAY,
   island: TOKYO_ISLAND,
   islandRules: TOKYO_ISLAND_RULES,

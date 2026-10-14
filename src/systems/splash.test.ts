@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import { TOKYO } from '../cities/tokyo';
+import type { CityStyle } from '../cities/types';
 import { isBay, isRiver, isWater, lineWidth, PITCH } from '../world/roads';
 import { SEA_WALL_SIZE } from '../world/chunks';
 import { PRESETS } from './Particles';
@@ -91,5 +92,21 @@ describe('Splasher', () => {
       }
     }
     expect(checked).toBeGreaterThan(0);
+  });
+});
+
+describe('Splasher on a north–south river', () => {
+  const NS: CityStyle = { ...TOKYO, river: { axis: 'z', c0: 1500, amp: 150, wavelength: 1100, halfWidth: 130 }, bay: undefined, island: undefined };
+  it('splashes mid-channel, and not on the bank road along the x line at its west edge', () => {
+    let ci = 0;
+    while (!(isRiver(NS, ci, 0) && !isRiver(NS, ci - 1, 0))) ci++;
+    const { out, fx } = stub();
+    const sp = new Splasher(() => NS, fx);
+    expect(sp.at(new THREE.Vector3(PITCH * (ci + 0.5), 0, PITCH * 0.5))).toBe(true);
+    expect(out.emitted).toBeGreaterThan(0);
+    sp.newFrame();
+    const margin = lineWidth(ci) / 2 + SEA_WALL_SIZE.thick;
+    expect(sp.at(new THREE.Vector3(PITCH * ci + margin - 2, 0, PITCH * 0.5))).toBe(false);
+    expect(sp.at(new THREE.Vector3(PITCH * ci + margin + 2, 0, PITCH * 0.5))).toBe(true);
   });
 });
