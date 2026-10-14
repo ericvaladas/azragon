@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
-import { CUT_TIME, EMERGE_TIME, FALL_PITCH, IMPACT_TIME, INTRO_LENGTH, blackAt, cameraPath, silhouetteAt, flashAt, gameplayPose, introFog, monsterCrouch, phaseAt, podLengthFor, podPath, podSpin, shakeAt } from './timeline';
+import { CUT_TIME, EMERGE_TIME, FALL_PITCH, IMPACT_TIME, INTRO_LENGTH, SKIP_TO, blackAt, revealCrossed, skipAction, cameraPath, silhouetteAt, flashAt, gameplayPose, introFog, monsterCrouch, phaseAt, podLengthFor, podPath, podSpin, shakeAt } from './timeline';
 import { spaceCamera } from './spaceMath';
 import { CONFIG } from '../config';
 
@@ -220,5 +220,61 @@ describe('podLengthFor', () => {
     const big = podLengthFor({ width: 300, length: 700, height: 400 });
     expect(big).toBeGreaterThan(700);
     expect(big).toBeCloseTo(700 * CONFIG.intro.podFit);
+  });
+});
+
+describe('skip', () => {
+  it('lands just before the reveal, after the cloud has stopped being fed', () => {
+    expect(SKIP_TO).toBeCloseTo(EMERGE_TIME - CONFIG.intro.skipLead);
+    expect(SKIP_TO).toBeLessThan(EMERGE_TIME);
+    expect(SKIP_TO).toBeGreaterThan(IMPACT_TIME + CONFIG.intro.reveal.feedFor);
+  });
+  it('jumps to SKIP_TO from anywhere before it, space scene included', () => {
+    for (const t of [0, 2, CUT_TIME, IMPACT_TIME, SKIP_TO - 0.01]) expect(skipAction(t)).toEqual({ kind: 'jump', to: SKIP_TO });
+  });
+  it('finishes from SKIP_TO on, firing the reveal first when the clock has not reached it', () => {
+    expect(skipAction(SKIP_TO)).toEqual({ kind: 'finish', reveal: true });
+    expect(skipAction(EMERGE_TIME - 0.01)).toEqual({ kind: 'finish', reveal: true });
+    expect(skipAction(EMERGE_TIME)).toEqual({ kind: 'finish', reveal: false });
+    expect(skipAction(INTRO_LENGTH - 0.1)).toEqual({ kind: 'finish', reveal: false });
+  });
+});
+
+describe('revealCrossed', () => {
+  /** Steps the clock at 60 fps from 0, applying a skip at `skipAt` (and again at `skipAgainAt`); counts reveals. */
+  function reveals(skipAt?: number, skipAgainAt?: number): number {
+    let t = 0;
+    let n = 0;
+    const skip = (): boolean => {
+      const a = skipAction(t);
+      if (a.kind === 'jump') {
+        t = a.to;
+        return false;
+      }
+      if (a.reveal) n++;
+      return true;
+    };
+    while (t < INTRO_LENGTH) {
+      if (skipAt !== undefined && t >= skipAt) {
+        skipAt = undefined;
+        if (skip()) return n;
+      }
+      if (skipAgainAt !== undefined && t >= skipAgainAt) {
+        skipAgainAt = undefined;
+        if (skip()) return n;
+      }
+      const prev = t;
+      t += 1 / 60;
+      if (revealCrossed(prev, t)) n++;
+    }
+    return n;
+  }
+  it('fires exactly once per intro: watched, skipped, skipped twice, or skipped in the last half-second', () => {
+    expect(reveals()).toBe(1);
+    expect(reveals(1)).toBe(1);
+    expect(reveals(8)).toBe(1);
+    expect(reveals(1, 10.5)).toBe(1);
+    expect(reveals(9.7)).toBe(1);
+    expect(reveals(11)).toBe(1);
   });
 });

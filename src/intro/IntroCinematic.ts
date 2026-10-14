@@ -9,7 +9,7 @@ import { PodModel } from './PodModel';
 import { SpaceScene } from './SpaceScene';
 import { fogDistances } from '../render/atmosphere';
 import { heatColor } from './spaceMath';
-import { CUT_TIME, EMERGE_TIME, FALL_PITCH, IMPACT_TIME, INTRO_LENGTH, blackAt, cameraPath, flashAt, silhouetteAt, introFog, monsterCrouch, podLengthFor, podPath, podSpin, shakeAt } from './timeline';
+import { CUT_TIME, EMERGE_TIME, FALL_PITCH, IMPACT_TIME, INTRO_LENGTH, blackAt, cameraPath, flashAt, silhouetteAt, introFog, monsterCrouch, podLengthFor, podPath, podSpin, revealCrossed, shakeAt, skipAction } from './timeline';
 
 export type IntroHost = {
   scene: THREE.Scene;
@@ -19,6 +19,8 @@ export type IntroHost = {
   monster: Monster;
   city: City;
   particles: Particles;
+  /** Called once per intro, when the reveal starts (the silhouette shows through the cloud). */
+  onReveal?: () => void;
 };
 
 const I = CONFIG.intro;
@@ -99,6 +101,7 @@ export class IntroCinematic {
     if (!this.active) return false;
     const prev = this.t;
     const t = (this.t += dt);
+    if (revealCrossed(prev, t)) this.host.onReveal?.();
     if (t < CUT_TIME) this.space.update(t, dt);
     else this.updateWorld(prev, t, dt);
     this.flashEl.style.opacity = flashAt(t).toFixed(3);
@@ -108,13 +111,63 @@ export class IntroCinematic {
     return true;
   }
 
-  /** Jump to the end state: crater blasted, pod and boulders gone, monster standing at the origin. */
-  skip(): void {
-    if (!this.active) return;
+  /**
+   * Skip (tap, click or key). Before SKIP_TO the intro jumps there, with the crater, the crouched black monster
+   * and its dust cloud as they would be then, and plays the reveal on from it. From SKIP_TO on it finishes now,
+   * firing the reveal first if the clock has not reached it. Returns true when the intro is over.
+   */
+  skip(): boolean {
+    if (!this.active) return true;
+    const a = skipAction(this.t);
+    if (a.kind === 'jump') {
+      this.jumpTo(a.to);
+      return false;
+    }
+    if (a.reveal) this.host.onReveal?.();
     this.host.city.blast({ x: 0, z: 0 }, CRATER_RADIUS, true, CRATER_RADIUS * X.outer);
     this.host.particles.clear();
     for (const r of this.rings) r.clear();
     this.finish();
+    return true;
+  }
+
+  /**
+   * Move the clock to `to` (after impact, before the reveal). From before impact, the crater is blasted at once
+   * (no shock wave), the pod and space scene are gone, and the black, crouched monster stands under a fresh
+   * cloud. The cloud, rings and boulders are then aged to `to` at 60 steps a second, fed as the watched intro
+   * feeds them, so the reveal looks the same either way.
+   */
+  private jumpTo(to: number): void {
+    const h = this.host;
+    let from = this.t;
+    if (from < IMPACT_TIME) {
+      h.city.blast({ x: 0, z: 0 }, CRATER_RADIUS, true, CRATER_RADIUS * X.outer);
+      h.particles.clear();
+      for (const r of this.rings) r.clear();
+      this.clearBoulders();
+      this.pod.root.visible = false;
+      this.flashEl.style.opacity = '0';
+      this.blackEl.style.opacity = '0';
+      h.monster.visible = true;
+      h.monster.setSilhouette(1);
+      for (let i = 0; i < I.reveal.cloud; i++) this.cloudPuff();
+      from = IMPACT_TIME;
+    }
+    const step = 1 / 60;
+    let feed = 0;
+    for (let s = from; s < to; s += step) {
+      const dt = Math.min(step, to - s);
+      if (s < IMPACT_TIME + I.reveal.feedFor) {
+        feed += dt * I.reveal.feedRate;
+        for (; feed >= 1; feed--) this.cloudPuff();
+      }
+      h.particles.update(dt);
+      for (const r of this.rings) r.update(dt);
+      this.updateBoulders(s + dt, dt);
+    }
+    this.t = to;
+    h.monster.pose.dip = I.crouchDip * monsterCrouch(to);
+    h.monster.setSilhouette(silhouetteAt(to));
   }
 
   private updateWorld(prev: number, t: number, dt: number): void {

@@ -23,6 +23,22 @@ export const CUT_TIME = S.clouds;
 export const IMPACT_TIME = S.impact;
 export const EMERGE_TIME = S.emerge;
 
+/** Where a skip lands: just before the reveal, so the reveal (and the music change on it) still plays. */
+export const SKIP_TO = EMERGE_TIME - I.skipLead;
+
+export type SkipAction = { kind: 'jump'; to: number } | { kind: 'finish'; reveal: boolean };
+
+/** A skip at intro time `t`: before SKIP_TO, jump there; from SKIP_TO on, finish, firing the reveal first if the clock has not reached it. */
+export function skipAction(t: number): SkipAction {
+  if (t < SKIP_TO) return { kind: 'jump', to: SKIP_TO };
+  return { kind: 'finish', reveal: t < EMERGE_TIME };
+}
+
+/** True on the frame the intro clock passes the start of the reveal (emerge). */
+export function revealCrossed(prev: number, t: number): boolean {
+  return prev < EMERGE_TIME && t >= EMERGE_TIME;
+}
+
 export function phaseAt(t: number): { phase: IntroPhase; k: number } {
   if (t >= INTRO_LENGTH) return { phase: 'done', k: 1 };
   for (let i = ORDER.length - 1; i >= 0; i--) {

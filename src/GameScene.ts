@@ -10,6 +10,7 @@ import { clampDelta, yawTo, type Vec2 } from './util/math';
 import { resolveHit, type DamageSource, type Target } from './combat';
 import { City, CRATER_RADIUS } from './world/City';
 import { IntroCinematic } from './intro/IntroCinematic';
+import { Music } from './audio/Music';
 import { nearestRoadPoint, planRoadPath, ringOnRoads } from './world/roads';
 import { Monster } from './monster/Monster';
 import { CameraRig } from './systems/CameraRig';
@@ -78,6 +79,9 @@ type Order = { kind: 'move'; to: Vec2 } | { kind: 'attack'; target: Target } | n
 /** A projectile hit below this height (m) is a ground impact and splashes if it lands on water. */
 const GROUND_HIT_Y = 20;
 
+/** Events that can carry a user gesture for audio. */
+const GESTURES = ['pointerdown', 'pointerup', 'touchend', 'keydown'] as const;
+
 export class GameScene {
   readonly events = new GameEventEmitter();
 
@@ -121,6 +125,12 @@ export class GameScene {
   private dyingT = 0;
   private hudT = 0;
   private stateBeforePause: GameState = 'playing';
+  private music = new Music();
+  /**
+   * Any pointer, touch or key gesture: the first starts the music (browsers allow audio only after a gesture).
+   * Touch counts as a gesture only on release (pointerup / touchend), a mouse on press, so all of them are listened to.
+   */
+  private onGesture = (): void => this.music.unlock();
   private debug: DebugOverlay | null = null;
   /** Pending levels granted by the Konami cheat; each one's offer lists every choice. */
   private cheatLevels = 0;
@@ -199,7 +209,7 @@ export class GameScene {
     this.enemies.add(new LaserTrucks(this.scene));
     this.enemies.add(new OrbitalLaser(this.scene));
     this.ctx = this.buildContext();
-    this.intro = new IntroCinematic({ scene: this.scene, camera: this.camera, overlay: container, monster: this.monster, city: this.city, particles: this.particles });
+    this.intro = new IntroCinematic({ scene: this.scene, camera: this.camera, overlay: container, monster: this.monster, city: this.city, particles: this.particles, onReveal: () => this.music.reveal() });
     this.city.onCollapseStart = (pos, size) => {
       this.particles.ring('dust', pos, size, 14);
       this.particles.emit('debris', pos.clone().setY(30), 8);
@@ -262,6 +272,7 @@ export class GameScene {
     this.lighting.follow(new THREE.Vector3());
     if (new URLSearchParams(location.search).has('debug')) this.debug = new DebugOverlay(this.container);
 
+    for (const ev of GESTURES) window.addEventListener(ev, this.onGesture, true);
     this.resizeObserver = new ResizeObserver(this.onResize);
     this.resizeObserver.observe(container);
     this.clock.start();
@@ -460,13 +471,14 @@ export class GameScene {
   private startIntro(): void {
     this.intro.start();
     this.setState('intro');
+    this.events.emit('skipHint', true);
   }
 
-  /** Skip the rest of the intro (tap, click, or key). Public for scripted checks and the M4 menus. */
+  /** Skip (tap, click or key): jump to just before the reveal, or end the intro if that has happened. Public for scripted checks and the M4 menus. */
   skipIntro(): void {
     if (this.state !== 'intro') return;
-    this.intro.skip();
-    this.endIntro();
+    if (this.intro.skip()) this.endIntro();
+    else this.events.emit('skipHint', false);
   }
 
   /** The intro drove the camera; hand it back exactly on the default gameplay pose (no leftover trauma or drag). */
@@ -547,6 +559,7 @@ export class GameScene {
   private setState(next: GameState): void {
     if (this.state === next) return;
     this.state = next;
+    if (next === 'select' || next === 'title') this.music.enterMenu();
     if (next !== 'playing') {
       this.abilities.cancelAim();
       this.monster.crouch = false;
@@ -1622,6 +1635,8 @@ export class GameScene {
   };
 
   dispose(): void {
+    for (const ev of GESTURES) window.removeEventListener(ev, this.onGesture, true);
+    this.music.dispose();
     this.input.dispose();
     this.debug?.dispose();
     this.intro.dispose();

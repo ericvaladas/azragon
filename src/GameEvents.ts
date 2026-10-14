@@ -31,6 +31,8 @@ export type GameEventMap = {
   threats: ThreatArrow[];
   abilities: AbilityView[];
   roster: { entries: RosterEntry[]; index: number };
+  /** Whether the intro's skip hint shows: on when the intro starts, off once a skip has jumped to the reveal. */
+  skipHint: boolean;
 };
 
 type Handler<T> = (data: T) => void;

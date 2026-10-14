@@ -446,6 +446,8 @@ export const CONFIG = {
     /** In the cloud the monster starts curled down by crouchDip (model units of body drop); it straightens over riseTime s (see reveal.riseAfter). */
     crouchDip: 170,
     riseTime: 1.4,
+    /** A skip lands this long (s) before `emerge`, so the reveal and the music change on it still play. */
+    skipLead: 0.5,
     /** Cocoon length = the monster's largest dimension × podFit (the Insect's 484 m span gets a 620 m cocoon). */
     podFit: 1.28,
     /** Screen wash: builds over `rise` s before the cut, holds, fades; a full white-out at impact. */
@@ -480,6 +482,22 @@ export const CONFIG = {
      */
     space: { earthRadius: 1000, atmosphere: 1.08, gapStart: 8000, gapEnd: 25, earthDrop: 650,
       stars: 700, podLength: 20 },
+  },
+  music: {
+    /** Master volume, 0..1. */
+    volume: 0.8,
+    /** CDN fetch timeout (ms); each file is a few MB. */
+    fetchTimeout: 60000,
+    /** The Intro: loops as a whole file through the menus and the cutscene. */
+    intro: { file: 'audio/intro.m4a' },
+    /** Main gameplay 1: starts from its top on the reveal, plays once (the file ends after its final hit). */
+    main1: { file: 'audio/main1.m4a' },
+    /** Main gameplay 2: follows Main 1 and loops as a whole song. */
+    main2: { file: 'audio/main2.m4a' },
+    /** The Intro and Main 1 crossfade over this long (s) the moment the reveal starts. */
+    crossfade: 1.0,
+    /** Gameplay music fades out over this long (s) when a menu brings the Intro back. */
+    returnFade: 1.0,
   },
   readability: {
     threatKinds: ['blimp', 'sam', 'artillery', 'truck'] as readonly string[],

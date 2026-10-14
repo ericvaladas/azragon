@@ -44,6 +44,7 @@ function applySafeArea(el: HTMLElement): void {
 function App() {
   const gameRef = useRef<GameScene | null>(null);
   const [state, setState] = useState<GameState>('loading');
+  const [skipHint, setSkipHint] = useState(false);
   const [hud, setHud] = useState<HudSnapshot>(EMPTY_HUD);
   const [offer, setOffer] = useState<{ seq: number; level: number; offers: UpgradeOffer[]; all: boolean } | null>(null);
   const [stats, setStats] = useState<RunStats | null>(null);
@@ -65,6 +66,7 @@ function App() {
     game.events.on('threats', setThreats);
     game.events.on('abilities', setAbilities);
     game.events.on('roster', setRoster);
+    game.events.on('skipHint', setSkipHint);
     game.events.on('expGain', (amount) => setExpPop((p) => ({ amount, key: (p?.key ?? 0) + 1 })));
     // The constructor already entered 'title' before these subscriptions existed.
     setState(game.getState());
@@ -104,7 +106,7 @@ function App() {
         {state !== 'loading' && state !== 'intro' && !inMenu && <Hud hud={hud} expPop={expPop} />}
         {state === 'title' && <Title />}
         {state === 'select' && roster && <MonsterSelect entries={roster.entries} index={roster.index} onStep={step} onPlay={play} />}
-        {state === 'intro' && <div className="skip-hint">{SKIP_HINT}</div>}
+        {state === 'intro' && skipHint && <div className="skip-hint">{SKIP_HINT}</div>}
         {hud.levelingUp && <div className="level-up-banner">Level Up!</div>}
         {state === 'playing' && <AbilityButtons views={abilities} onPress={press} />}
         {state === 'levelup' && offer && (
