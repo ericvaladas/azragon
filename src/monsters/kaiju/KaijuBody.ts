@@ -43,12 +43,12 @@ const PLATES: readonly (readonly [number, number, number, number, number, number
   [0, 420, -118, 52, 80, -1.0],
   [0, 372, -160, 42, 60, -1.1],
 ];
-/** Launch vents on the back, beside the spine between the plates (body space): x, y, z. */
+/** Launch vents on the back, beside the spine between the plates (body space): x, y, z — sunk into the torso's surface. */
 const VENTS: readonly (readonly [number, number, number])[] = [
-  [52, 548, -8],
-  [-52, 548, -8],
-  [50, 478, -78],
-  [-50, 478, -78],
+  [42, 523, -1],
+  [-42, 523, -1],
+  [40, 464, -56],
+  [-40, 464, -56],
 ];
 const _hip = new THREE.Vector3();
 const _foot = new THREE.Vector3();
