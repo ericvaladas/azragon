@@ -56,4 +56,5 @@ export const TOKYO: CityStyle = {
     windowGlow: { color: 0xffd27a, strength: 0 },
   },
   glyphs: 'kanji',
+  globe: { lat: 35.7, lon: 139.7 },
 };

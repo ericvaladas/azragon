@@ -80,6 +80,7 @@ export class IntroCinematic {
     this.podLength = podLengthFor(this.host.monster.kind.stats.size);
     this.pod.setLength(this.podLength);
     this.space.setSun(this.host.city.style.atmosphere.sun);
+    this.space.setCity(this.host.city.style.globe);
     this.active = true;
     this.t = 0;
     this.trailT = 0;

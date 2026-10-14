@@ -62,3 +62,47 @@ export function starDirections(n: number, rng: () => number): THREE.Vector3[] {
   }
   return out;
 }
+
+/** Earth's spin through the space phase (rad/s), eastward about its own axis. */
+export const EARTH_SPIN = 0.04;
+const RAD = Math.PI / 180;
+
+/**
+ * Unit direction, in the globe's own frame, of the point at (lat, lon) degrees as SphereGeometry textures it:
+ * the texture's u = (lon + 180) / 360 runs from −X (lon ±180) through +Z (−90), +X (0) and −Z (+90); north is +Y.
+ */
+export function globeDir(lat: number, lon: number, out: THREE.Vector3): THREE.Vector3 {
+  const c = Math.cos(lat * RAD);
+  return out.set(c * Math.cos(lon * RAD), Math.sin(lat * RAD), -c * Math.sin(lon * RAD));
+}
+
+const _m = new THREE.Matrix4();
+const _w = new THREE.Matrix4();
+const _n = new THREE.Vector3();
+const _north = new THREE.Vector3();
+const _east = new THREE.Vector3();
+const _spin = new THREE.Quaternion();
+const AXIS_Y = new THREE.Vector3(0, 1, 0);
+
+/**
+ * The globe's world orientation at time t: at the cut, the point at `globe` (lat, lon) sits straight under the pod
+ * (on the line from Earth's centre to the pod) with its north pointing ahead along the flight (+Z), so the city's
+ * continent reads right-way-up from the chase camera. Before the cut it is turned back about Earth's own axis by
+ * EARTH_SPIN rad/s, so the Earth spins slowly eastward and carries the city in under the pod.
+ */
+export function globeQuaternion(globe: { lat: number; lon: number }, t: number, out: THREE.Quaternion): THREE.Quaternion {
+  // The globe's local frame at the city: east, north, up (the outward normal).
+  const lat = globe.lat * RAD;
+  const lon = globe.lon * RAD;
+  const up = globeDir(globe.lat, globe.lon, _n);
+  _north.set(-Math.sin(lat) * Math.cos(lon), Math.cos(lat), Math.sin(lat) * Math.sin(lon));
+  _east.crossVectors(_north, up);
+  _m.makeBasis(_east, _north, up);
+  // The world frame under the pod at the cut: up toward the pod, north along +Z flattened onto the ground there.
+  earthCenter(CUT_TIME, _n).negate().normalize();
+  _north.set(0, 0, 1).addScaledVector(_n, -_n.z).normalize();
+  _east.crossVectors(_north, _n);
+  _w.makeBasis(_east, _north, _n);
+  out.setFromRotationMatrix(_w.multiply(_m.transpose()));
+  return out.multiply(_spin.setFromAxisAngle(AXIS_Y, (t - CUT_TIME) * EARTH_SPIN));
+}

@@ -5,7 +5,7 @@ import { fovForAspect } from '../systems/orbit';
 import { mulberry32 } from '../util/rng';
 import { earthTexture } from './earthTexture';
 import { PodModel } from './PodModel';
-import { earthCenter, heatAt, spaceCamera, heatColor, starDirections } from './spaceMath';
+import { earthCenter, globeQuaternion, heatAt, spaceCamera, heatColor, starDirections } from './spaceMath';
 import { podSpin, shakeAt } from './timeline';
 
 const SP = CONFIG.intro.space;
@@ -27,6 +27,7 @@ export class SpaceScene {
   private emberPos: Float32Array;
   private rng = mulberry32(CONFIG.world.seed + 41);
   private sun: THREE.DirectionalLight;
+  private globe = { lat: 0, lon: 0 };
 
   constructor() {
     this.scene.background = new THREE.Color(0x05060f);
@@ -51,7 +52,6 @@ export class SpaceScene {
       new THREE.SphereGeometry(R * SP.atmosphere, 40, 24),
       new THREE.MeshBasicMaterial({ color: 0x7fe0ff, transparent: true, opacity: 0.4, side: THREE.BackSide, depthWrite: false }),
     );
-    globe.rotation.z = 0.35;
     this.earth.add(globe, rim);
     this.scene.add(this.earth, this.pod.root);
 
@@ -86,10 +86,15 @@ export class SpaceScene {
     this.sun.color.setHex(color);
   }
 
+  /** The run city's place on the globe (degrees): the Earth turns so it lies under the pod at the cut. */
+  setCity(globe: { lat: number; lon: number }): void {
+    this.globe = { lat: globe.lat, lon: globe.lon };
+  }
+
   update(t: number, dt: number): void {
     // Earth sits below the flight path (lower half of the frame) and swells as it closes in.
     earthCenter(t, this.earth.position);
-    this.earth.rotation.y = t * 0.04;
+    globeQuaternion(this.globe, t, this.earth.quaternion);
     this.pod.root.rotation.z = podSpin(t);
 
     const h = heatAt(t);
