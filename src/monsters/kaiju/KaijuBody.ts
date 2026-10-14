@@ -126,8 +126,8 @@ export class KaijuBody implements MonsterBody {
     {
       // Dragon scales over the back, shoulders and flanks; banded plates down the belly.
       const parts: THREE.BufferGeometry[] = [];
-      scaleRows(parts, [C.scaleLight, C.scaleDark], [0, 410, 30], [125, 150, 115], 0.35, 7, 12, [0.25, 2.2], [0.75, Math.PI * 2 - 0.75], 34);
-      scaleRows(parts, [C.scaleLight, C.scaleDark], [0, 300, -40], [120, 105, 140], 0, 5, 12, [0.35, 2.0], [0.9, Math.PI * 2 - 0.9], 32);
+      scaleRows(parts, [C.scaleLight, C.scaleDark], [0, 410, 30], [125, 150, 115], 0.35, 5, 12, [0.25, 1.45], [0.75, Math.PI * 2 - 0.75], 34);
+      scaleRows(parts, [C.scaleLight, C.scaleDark], [0, 300, -40], [120, 105, 140], 0, 3, 12, [0.4, 1.35], [0.9, Math.PI * 2 - 0.9], 32);
       scaleRows(parts, C.scale, [0, 410, 30], [125, 150, 115], 0.35, 1, 6, [0.2, 0.3], [0, Math.PI * 2], 40);
       for (let i = 0; i < 7; i++) {
         const th = 0.95 + i * 0.22;
@@ -243,12 +243,12 @@ export class KaijuBody implements MonsterBody {
     for (const side of [1, -1] as const) {
       // Built at true size, then scaled so the IK's stretch (width, bone length, depth) brings it back.
       const thighParts: THREE.BufferGeometry[] = [];
-      at(thighParts, SHAPES.blob, C.scale, [0, 8, 4], [42, 96, 46]);
-      scaleRows(thighParts, [C.scaleLight, C.scaleDark], [0, 8, 4], [42, 96, 46], 0, 6, 9, [0.45, 2.7], [0, Math.PI * 2], 22);
+      at(thighParts, SHAPES.blob, C.scale, [0, 4, 2], [33, 92, 36]);
+      scaleRows(thighParts, [C.scaleLight, C.scaleDark], [0, 4, 2], [33, 92, 36], 0, 6, 8, [0.45, 2.7], [0, Math.PI * 2], 19);
       const thighGeo = merge(thighParts).scale(1 / 70, 1 / THIGH, 1 / 75);
       const shinParts: THREE.BufferGeometry[] = [];
       at(shinParts, SHAPES.limb, C.scaleDark, [0, 0, 0], [50, SHIN, 50]);
-      scaleRows(shinParts, C.scale, [0, 0, 0], [26, SHIN * 0.5, 26], 0, 6, 7, [0.4, 2.7], [0, Math.PI * 2], 16);
+      scaleRows(shinParts, C.scale, [0, 0, 0], [24, SHIN * 0.5, 24], 0, 6, 7, [0.4, 2.7], [0, Math.PI * 2], 14);
       at(shinParts, SHAPES.spike, C.scaleDark, [0, SHIN * 0.42, 22], [14, 30, 14], [0.9, 0, 0]);
       const shinGeo = merge(shinParts).scale(1 / 50, 1 / SHIN, 1 / 50);
       const footParts: THREE.BufferGeometry[] = [];
