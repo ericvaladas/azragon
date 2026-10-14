@@ -70,7 +70,8 @@ function wallEnds(style: CityStyle, i: number, j: number, di: number, dj: number
 /**
  * `roads`: existing segments whose start node lies in the chunk. `nodes`: the chunk's intersections that have at
  * least one incident segment. `water`: the chunk's water cells (river and bay). `quays`: the chunk's port cells, by
- * centre, drawn as paving pads. `cranes`: gantry cranes on the chunk's coastal port cells. `seaWall`: one entry per land-cell edge that borders
+ * centre, drawn as paving pads. `lawns`: the chunk's residential cells off the crater, by centre, when the style has a
+ * lawn colour (drawn as green pads under the houses). `cranes`: gantry cranes on the chunk's coastal port cells. `seaWall`: one entry per land-cell edge that borders
  * a bay cell, emitted by the chunk owning the land cell.
  */
 export type ChunkContent = {
@@ -78,6 +79,7 @@ export type ChunkContent = {
   trees: TreeSpec[];
   parks: ParkSpec[];
   quays: ParkSpec[];
+  lawns: ParkSpec[];
   cranes: CraneSpec[];
   landmarks: LandmarkSpec[];
   roads: Segment[];
@@ -281,7 +283,8 @@ function craneAt(style: CityStyle, seed: number, i: number, j: number): CraneSpe
  * Landmarks claim their block (the chunk holding the landmark's centre, or a long landmark's `from` end, owns it); special lots replace the random lots
  * they overlap; the crash site is never a park. Per-chunk caps thin the random buildings (never special lots), then
  * their signs, then the trees (other trees before avenue rows). Port cells are paved quays of container blocks and
- * warehouses with cranes along the water (no warehouse on a crane's sea side, nothing in its portal), and no trees. Island cells use the style's islandRules (its centre park
+ * warehouses with cranes along the water (no warehouse on a crane's sea side, nothing in its portal), and no trees. With a
+ * lawn colour, residential cells off the crater (and off the island) also get a lawn pad. Island cells use the style's islandRules (its centre park
  * aside) and get no street, avenue or lane trees. Same inputs, same chunk.
  */
 export function generateChunk(style: CityStyle, seed: number, cx: number, cz: number): ChunkContent {
@@ -294,6 +297,7 @@ export function generateChunk(style: CityStyle, seed: number, cx: number, cz: nu
   const avenueTrees: TreeSpec[] = [];
   const parks: ParkSpec[] = [];
   const quays: ParkSpec[] = [];
+  const lawns: ParkSpec[] = [];
   const cranes: CraneSpec[] = [];
   const landmarks: LandmarkSpec[] = [];
   const water: WaterSpec[] = [];
@@ -351,6 +355,7 @@ export function generateChunk(style: CityStyle, seed: number, cx: number, cz: nu
       const crane = district === 'port' ? craneAt(style, seed, bi, bj) : null;
       if (district === 'port') quays.push({ x: bx, z: bz });
       if (crane) cranes.push(crane);
+      if (district === 'residential' && style.colors.lawn !== undefined && !craterSite && !island) lawns.push({ x: bx, z: bz });
 
       if (district === 'park') {
         parks.push({ x: bx, z: bz });
@@ -498,7 +503,7 @@ export function generateChunk(style: CityStyle, seed: number, cx: number, cz: nu
   };
   const keptAvenue = thin(avenueTrees, TREES_PER_CHUNK);
   const keptTrees = [...keptAvenue, ...thin(trees, TREES_PER_CHUNK - keptAvenue.length)];
-  return { buildings: out, trees: keptTrees, parks, quays, cranes, landmarks, roads, nodes, water, seaWall };
+  return { buildings: out, trees: keptTrees, parks, quays, lawns, cranes, landmarks, roads, nodes, water, seaWall };
 }
 
 /** Chunks to load (within loadRadius, nearest first) and to unload (beyond unloadRadius). */

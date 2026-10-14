@@ -814,8 +814,13 @@ export class City {
       else this.writeStanding(b, 0, 0);
       buildings.push(b);
     });
-    // Park greens and port quays share the pad mesh, tinted per instance.
-    const pads = [...content.parks.map((p) => ({ ...p, color: this._style.colors.park })), ...content.quays.map((q) => ({ ...q, color: this._style.colors.quay }))];
+    // Park greens, port quays and residential lawns share the pad mesh, tinted per instance.
+    const colors = this._style.colors;
+    const pads = [
+      ...content.parks.map((p) => ({ ...p, color: colors.park })),
+      ...content.quays.map((q) => ({ ...q, color: colors.quay })),
+      ...content.lawns.map((l) => ({ ...l, color: colors.lawn ?? colors.park })),
+    ];
     for (const p of pads) {
       const slot = this.freeParks.pop();
       if (slot === undefined) break;

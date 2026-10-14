@@ -102,8 +102,11 @@ export const CONFIG = {
     maxSigns: 12000,
     /** Pool size for animated video-screen signs across all loaded chunks. */
     maxScreens: 60,
-    /** Pool size for park ground pads across all loaded chunks. */
-    maxParks: 2000,
+    /**
+     * Pool size for ground pads (park greens, port quays, residential lawns) across all loaded chunks. A cell holds at
+     * most one pad, so maxLoadedChunks (185) × 16 cells = 2960 always fits.
+     */
+    maxParks: 3000,
     /** Gantry crane pool (scenery along the coast): a full load peaks at 19 (swept ±12 km), so 32 leaves headroom. */
     maxCranes: 32,
     /** Sea-wall edges and foam strips: a full load peaks at 110 (swept 200 m grid, x -6000..4000, z -6000..4000), so 128 leaves 16% headroom. */

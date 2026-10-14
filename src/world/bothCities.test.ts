@@ -3,7 +3,7 @@ import { CONFIG } from '../config';
 import { CITIES } from '../cities';
 import type { BuildingSpec, CityStyle } from '../cities/types';
 import { mulberry32 } from '../util/rng';
-import { CHUNK_SIZE, chunksInRadius, generateChunk } from './chunks';
+import { CHUNK_SIZE, chunksInRadius, generateChunk, maxLoadedChunks } from './chunks';
 import { AVENUE_WIDTH, PITCH, bridgeAxis, isBay, isIsland, isRiver, isWater, lineWidth, nearestRoadPoint, planRoadPath, segmentAt, type Axis } from './roads';
 import { inBay } from './shore';
 import { openWater } from '../systems/splash';
@@ -40,10 +40,10 @@ const across = (s: CityStyle): [{ x: number; z: number }, { x: number; z: number
   const c0 = s.river!.c0;
   return s.river!.axis === 'z' ? [{ x: c0 - 600, z: 500 }, { x: c0 + 800, z: 500 }] : [{ x: 430, z: c0 - 900 }, { x: 610, z: c0 + 1100 }];
 };
-/** Full-load centres: the origin, the river, the coast and (Toronto) the lakeshore beside the islands and the Don's mouth. */
+/** Full-load centres: the origin, the river, the coast and (Toronto) the lakeshore beside the islands, the Don's mouth and Yonge-Eglinton on the corridor. */
 const LOAD_POINTS: Record<string, readonly (readonly [number, number])[]> = {
   tokyo: [[0, 0], [0, 1300], [-1100, -900], [-2000, 400]],
-  toronto: [[0, 0], [1500, 0], [0, 2100], [-300, 2100], [1500, 2100], [-3000, 2100], [6000, 2100]],
+  toronto: [[0, 0], [1500, 0], [0, 2100], [-300, 2100], [1500, 2100], [-3000, 2100], [6000, 2100], [0, -4200], [-3000, -3000]],
 };
 // Chunks around the crash, the river and the coast, in every city.
 const SAMPLE: [number, number][] = [];
@@ -216,7 +216,11 @@ describe.each(CITIES.map((c) => [c.id, c] as const))('%s: chunks', (id, style) =
     }
   });
 
-  it('fits a full load in every pool: roads, intersections and bridges, water, pads, sea wall, cranes, buildings, trees, signs, screens', () => {
+  it('has a pad slot for every cell of a full load (each cell holds at most one park, quay or lawn pad)', () => {
+    expect(W.maxParks).toBeGreaterThanOrEqual(maxLoadedChunks() * W.chunkBlocks * W.chunkBlocks);
+  });
+
+  it('fits a full load in every pool: roads, intersections and bridges, water, pads (parks, quays, lawns), sea wall, cranes, buildings, trees, signs, screens', () => {
     for (const [x, z] of LOAD_POINTS[id]!) {
       let roads = 0, nodes = 0, water = 0, pads = 0, walls = 0, cranes = 0, buildings = 0, trees = 0, signs = 0, screens = 0;
       for (const r of chunksInRadius(x, z, W.unloadRadius)) {
@@ -224,7 +228,7 @@ describe.each(CITIES.map((c) => [c.id, c] as const))('%s: chunks', (id, style) =
         roads += c.roads.length;
         nodes += c.nodes.length + c.roads.filter((s) => s.bridge).length;
         water += c.water.length;
-        pads += c.parks.length + c.quays.length;
+        pads += c.parks.length + c.quays.length + c.lawns.length;
         walls += c.seaWall.length;
         cranes += c.cranes.length;
         buildings += c.buildings.length;

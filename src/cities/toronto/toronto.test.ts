@@ -14,7 +14,8 @@ import { NATHAN_PHILLIPS, SQUARE_LAYOUT, SQUARE_PX, letterRects, squareRects } f
 import { LATIN_FONT } from '../../world/latinFont';
 import { overlayPainter } from '../../world/pixelTextures';
 import type { BuildingSpec } from '../types';
-import { PITCH, isIsland, isWater, lineWidth } from '../../world/roads';
+import { PITCH, blockDistrict, isIsland, isWater, lineWidth } from '../../world/roads';
+import { TOKYO } from '../tokyo';
 import { gameplayPose } from '../../intro/timeline';
 import { fovForAspect } from '../../systems/orbit';
 
@@ -82,6 +83,40 @@ describe('TORONTO', () => {
 
   it('generates the same chunk from the same inputs', () => {
     expect(generateChunk(TORONTO, 1337, -1, 2)).toEqual(generateChunk(TORONTO, 1337, -1, 2));
+  });
+});
+
+describe('Toronto lawns', () => {
+  const W = CONFIG.world;
+  const cell = (v: number) => Math.floor(v / PITCH);
+
+  it('paints lawns a green a little lighter than its parks; Tokyo has none', () => {
+    const lawn = new THREE.Color(TORONTO.colors.lawn!), park = new THREE.Color(TORONTO.colors.park);
+    expect(lawn.g).toBeGreaterThan(lawn.r);
+    expect(lawn.g).toBeGreaterThan(lawn.b);
+    const l = lawn.r + lawn.g + lawn.b, p = park.r + park.g + park.b;
+    expect(l).toBeGreaterThan(p);
+    expect(l).toBeLessThan(p * 1.35);
+    expect(TOKYO.colors.lawn).toBeUndefined();
+  });
+
+  it('lays one lawn pad under every residential block, off the crater, water and islands, never on a park', () => {
+    let lawns = 0;
+    for (let cx = -4; cx <= 4; cx++) for (let cz = -6; cz <= 3; cz++) {
+      const c = generateChunk(TORONTO, 1337, cx, cz);
+      const want: string[] = [];
+      for (let i = 0; i < W.chunkBlocks; i++) for (let j = 0; j < W.chunkBlocks; j++) {
+        const bi = cx * W.chunkBlocks + i, bj = cz * W.chunkBlocks + j;
+        const x = PITCH * (bi + 0.5), z = PITCH * (bj + 0.5);
+        if (isWater(TORONTO, bi, bj) || isIsland(TORONTO, bi, bj) || Math.hypot(x, z) < W.clearRadius + PITCH / 2) continue;
+        if (TORONTO.landmarks.some((l) => cell(l.x) === bi && cell(l.z) === bj)) continue;
+        if (blockDistrict(TORONTO, x, z) === 'residential') want.push(`${x},${z}`);
+      }
+      expect(c.lawns.map((p) => `${p.x},${p.z}`).sort(), `${cx},${cz}`).toEqual(want.sort());
+      for (const p of c.lawns) expect(c.parks.some((q) => q.x === p.x && q.z === p.z)).toBe(false);
+      lawns += c.lawns.length;
+    }
+    expect(lawns).toBeGreaterThan(300);
   });
 });
 

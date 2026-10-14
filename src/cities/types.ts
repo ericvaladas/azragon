@@ -144,6 +144,8 @@ export type CityStyle = {
     quay: number;
     /** River and bay water. */
     water: number;
+    /** Lawn under every residential block (a full-block pad), when set; unset means no lawns. */
+    lawn?: number;
   };
   /** Neon sign colours (never near the threat reds). */
   signColors: readonly number[];

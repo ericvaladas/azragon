@@ -15,6 +15,8 @@ export const TORONTO: CityStyle = {
     paved: 0x9a948c,
     pavedSpeck: 0x8a847c,
     park: 0x5f9a43,
+    // Residential lawns: a touch lighter than the parks, so parkettes and ravines still read as parks.
+    lawn: 0x6aa64c,
     road: 0x4f4b48,
     roadLine: 0xeeeae0,
     crosswalk: 0xf0ece2,
