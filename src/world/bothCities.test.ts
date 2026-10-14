@@ -40,10 +40,14 @@ const across = (s: CityStyle): [{ x: number; z: number }, { x: number; z: number
   const c0 = s.river!.c0;
   return s.river!.axis === 'z' ? [{ x: c0 - 600, z: 500 }, { x: c0 + 800, z: 500 }] : [{ x: 430, z: c0 - 900 }, { x: 610, z: c0 + 1100 }];
 };
-/** Full-load centres: the origin, the river, the coast and (Toronto) the lakeshore beside the islands, the Don's mouth and Yonge-Eglinton on the corridor. */
+/**
+ * Full-load centres: the origin, the river, the coast and (Toronto) the lakeshore beside the islands, the Don's mouth,
+ * Yonge-Eglinton on the corridor, Chinatown, Queen's Park, King West, High Park, Casa Loma and the Distillery District.
+ */
 const LOAD_POINTS: Record<string, readonly (readonly [number, number])[]> = {
   tokyo: [[0, 0], [0, 1300], [-1100, -900], [-2000, 400]],
-  toronto: [[0, 0], [1500, 0], [0, 2100], [-300, 2100], [1500, 2100], [-3000, 2100], [6000, 2100], [0, -4200], [-3000, -3000]],
+  toronto: [[0, 0], [1500, 0], [0, 2100], [-300, 2100], [1500, 2100], [-3000, 2100], [6000, 2100], [0, -4200], [-3000, -3000],
+    [-1800, 700], [-1000, -100], [-2400, 1500], [-5000, 1000], [-1700, -2300], [1100, 1700]],
 };
 // Chunks around the crash, the river and the coast, in every city.
 const SAMPLE: [number, number][] = [];

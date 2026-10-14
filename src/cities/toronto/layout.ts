@@ -44,6 +44,62 @@ export const YONGE_NODES = [
 /** Chance a residential block is a parkette (a park block), by a hash of its cell. */
 export const PARKETTE_CHANCE = 1 / 8;
 
+/** Pale condo glass: CityPlace and King West. */
+export const CONDO_COLORS = [0xcfe3e6, 0x9fd0cf, 0x7fb8c4, 0xe2ecec, 0x8cc4c9, 0xb7d3dc] as const;
+/** Kensington Market's painted houses: pink, teal, yellow, purple, orange, sky blue. */
+export const KENSINGTON_COLORS = [0xe86aa0, 0x3fb8a8, 0xf2c94c, 0x9a4fd0, 0xf08a5d, 0x6cc4e8] as const;
+
+/**
+ * A named area: the blocks ci0..ci1 × cj0..cj1 (inclusive), or the blocks whose centre lies in the ellipse of radii
+ * rx × rz about (x, z). `colors`, when set, replaces the district's facade tints on the area's random buildings.
+ */
+export type Area = { name: string; district: DistrictId; colors?: readonly number[] } & (
+  | { ci0: number; ci1: number; cj0: number; cj1: number }
+  | { x: number; z: number; rx: number; rz: number }
+);
+
+/**
+ * Toronto's named areas west of Yonge, and the Distillery District east of it, checked inside and beyond the core
+ * ahead of everything but the islands (High Park reaches down over the lakeshore band to the water).
+ */
+export const AREAS: readonly Area[] = [
+  // Yorkville: towers just west of the Bloor-Yonge node.
+  { name: 'Yorkville', district: 'highrise', ci0: -4, ci1: -3, cj0: -7, cj1: -6 },
+  // University Avenue: the blocks either side of the x = −1000 avenue, from Queen's Park south to the Financial row.
+  { name: 'University Avenue', district: 'highrise', ci0: -6, ci1: -5, cj0: 0, cj1: 6 },
+  // CityPlace: condo towers west of the Rogers Centre.
+  { name: 'CityPlace', district: 'highrise', colors: CONDO_COLORS, ci0: -7, ci1: -6, cj0: 8, cj1: 9 },
+  // King West / Liberty Village: condo towers, a block clear of the lakeshore band.
+  { name: 'King West', district: 'highrise', colors: CONDO_COLORS, ci0: -13, ci1: -12, cj0: 7, cj1: 8 },
+  // Chinatown: both sides of Spadina (x = −1800), from z 200 to 1200.
+  { name: 'Chinatown', district: 'neon', ci0: -10, ci1: -9, cj0: 1, cj1: 5 },
+  // Kensington Market: painted houses just west of Chinatown.
+  { name: 'Kensington Market', district: 'residential', colors: KENSINGTON_COLORS, ci0: -12, ci1: -11, cj0: 1, cj1: 3 },
+  // Queen's Park: the green round the Legislature, at the head of University Avenue.
+  { name: "Queen's Park", district: 'park', ci0: -7, ci1: -5, cj0: -2, cj1: -1 },
+  // U of T: campus lawns west of Queen's Park (its stone halls are hand-placed lots).
+  { name: 'U of T', district: 'park', ci0: -9, ci1: -8, cj0: -3, cj1: -1 },
+  // High Park: about 1.8 km across, far west, down to the lake.
+  { name: 'High Park', district: 'park', x: -4900, z: 1100, rx: 850, rz: 1100 },
+  // Casa Loma's gardens: the castle's block.
+  { name: 'Casa Loma', district: 'park', ci0: -9, ci1: -9, cj0: -12, cj1: -12 },
+  // The Distillery District: brick warehouses (hand-placed lots) on paved lanes.
+  { name: 'Distillery District', district: 'office', ci0: 4, ci1: 5, cj0: 8, cj1: 8 },
+];
+
+/** The area holding the block that contains (x, z), if any. */
+export function areaAt(x: number, z: number): Area | undefined {
+  const cell = CONFIG.world.blockSize;
+  const ci = Math.floor(x / cell), cj = Math.floor(z / cell);
+  const cx = (ci + 0.5) * cell, cz = (cj + 0.5) * cell;
+  return AREAS.find((a) => ('ci0' in a ? ci >= a.ci0 && ci <= a.ci1 && cj >= a.cj0 && cj <= a.cj1 : ((cx - a.x) / a.rx) ** 2 + ((cz - a.z) / a.rz) ** 2 <= 1));
+}
+
+/** The facade tints for the random buildings of the block at (x, z): its area's, if the area sets them. */
+export function blockColors(x: number, z: number): readonly number[] | undefined {
+  return areaAt(x, z)?.colors;
+}
+
 type Region = { district: DistrictId } & ({ x0: number; z0: number; x1: number; z1: number } | { x: number; z: number; r: number });
 
 /** The hand-laid core, ahead of the corridor. First match wins. */
@@ -80,7 +136,7 @@ function midtown(x: number, z: number): DistrictId {
 }
 
 /**
- * Toronto's district at world point (x, z). The islands are park. The lakeshore band (PORT_DEPTH of the coast, off
+ * Toronto's district at world point (x, z). The islands are park, then the named AREAS hold their blocks. The lakeshore band (PORT_DEPTH of the coast, off
  * the crash site) is port: in the core only on the waterfront, beyond it all along. Then Yonge-Dundas and the Financial
  * District, the Yonge corridor (inside and beyond the core), the rest of the hand-laid core, midtown where unmatched,
  * and seeded noise beyond. Midtown residential blocks, in the core and beyond, are parkettes on a seeded hash. The
@@ -89,6 +145,8 @@ function midtown(x: number, z: number): DistrictId {
 export function districtAt(x: number, z: number): DistrictId {
   const cell = CONFIG.world.blockSize;
   if (isIsland({ bay: TORONTO_LAKE, island: TORONTO_ISLANDS }, Math.floor(x / cell), Math.floor(z / cell))) return 'park';
+  const area = areaAt(x, z);
+  if (area) return area.district;
   const r = Math.hypot(x, z);
   const coast = coastDistance(TORONTO_LAKE, x, z);
   const lakeshore = coast >= 0 && coast <= PORT_DEPTH && r > CONFIG.world.clearRadius + cell;

@@ -1,6 +1,6 @@
 import type { CityStyle } from '../types';
 import { TORONTO_DISTRICTS } from './districts';
-import { CITY_HALL_SITE, CN_TOWER_SITE, DON, ROGERS_CENTRE_SITE, TORONTO_ISLANDS, TORONTO_LAKE, districtAt } from './layout';
+import { CITY_HALL_SITE, CN_TOWER_SITE, DON, ROGERS_CENTRE_SITE, TORONTO_ISLANDS, TORONTO_LAKE, blockColors, districtAt } from './layout';
 import { CN_TOWER, cnTowerGeometry } from './cnTower';
 import { ROGERS_CENTRE, rogersCentreGeometry } from './rogersCentre';
 import { CITY_HALL, cityHallGeometry } from './cityHall';
@@ -28,6 +28,7 @@ export const TORONTO: CityStyle = {
   // Warm white, amber, cyan, magenta, mint: no reds (they belong to threats).
   signColors: [0xfff4d6, 0xffc23a, 0x35e8ff, 0xff3fb4, 0x5cf2a0],
   districtAt,
+  blockColors,
   districts: TORONTO_DISTRICTS,
   parkTrees: [20, 28],
   landmarks: [

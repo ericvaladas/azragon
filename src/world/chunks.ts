@@ -354,6 +354,7 @@ export function generateChunk(style: CityStyle, seed: number, cx: number, cz: nu
       if (craterSite && district === 'park') district = 'office';
       const island = isIsland(style, bi, bj);
       const rules = island && district !== 'park' && style.islandRules ? style.islandRules : style.districts[district];
+      const palette = style.blockColors?.(bx, bz) ?? rules.colors;
       const crane = district === 'port' ? craneAt(style, seed, bi, bj) : null;
       if (district === 'port') quays.push({ x: bx, z: bz });
       if (crane) cranes.push(crane);
@@ -401,7 +402,7 @@ export function generateChunk(style: CityStyle, seed: number, cx: number, cz: nu
         const bd = lotD * range(rng, rules.footprint[0], rules.footprint[1]);
         const h = rules.height[0] + (rules.height[1] - rules.height[0]) * Math.pow(rng(), rules.heightCurve);
         const facade = pick(rules.facades, rng);
-        const color = pick(rules.colors, rng);
+        const color = pick(palette, rng);
         const central = Math.abs(r.lx - midX) <= 200 && Math.abs(r.lz - midZ) <= 200;
         const signs = makeSigns(rules, style, bw, bd, h, central && !billboardPlaced, rng);
         if (signs.some((s) => s.kind === 'billboard')) billboardPlaced = true;

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { CONFIG } from '../../config';
 import { DISTRICTS, type DistrictId } from '../types';
 import { coastDistance } from '../coast';
-import { CORE_RADIUS, DON, FINANCIAL, PORT_DEPTH, TORONTO_ISLANDS, TORONTO_LAKE, WATERFRONT, YONGE_CORRIDOR, YONGE_DUNDAS, YONGE_NODES, blockInterior, districtAt, lotCentre } from './layout';
+import { AREAS, CORE_RADIUS, DON, FINANCIAL, PORT_DEPTH, TORONTO_ISLANDS, TORONTO_LAKE, WATERFRONT, YONGE_CORRIDOR, YONGE_DUNDAS, YONGE_NODES, blockInterior, districtAt, lotCentre } from './layout';
 import { TORONTO } from './index';
 import { AVENUE_WIDTH, PITCH, blockDistrict, isBay, isIsland, isRiver, isRiverBank, isWater, lineWidth, segmentAt } from '../../world/roads';
 import { inBay } from '../../world/shore';
@@ -20,8 +20,9 @@ describe('Toronto layout', () => {
     expect(YONGE_DUNDAS).toEqual({ x: -100, z: 900 });
     expect(districtAt(-100, 900)).toBe('neon');
     for (const [x, z] of [[100, 900], [-300, 900], [-100, 700], [-100, 1100]] as const) expect(districtAt(x, z)).not.toBe('neon');
+    // Chinatown (on Spadina, x −2000..−1600) aside.
     let neon = 0;
-    for (let i = -20; i < 20; i++) for (let j = -20; j < 20; j++) if (districtAt(centre(i), centre(j)) === 'neon') neon++;
+    for (let i = -20; i < 20; i++) for (let j = -20; j < 20; j++) if (districtAt(centre(i), centre(j)) === 'neon' && (centre(i) < -2000 || centre(i) > -1600)) neon++;
     expect(neon).toBe(1);
   });
 
@@ -212,5 +213,69 @@ describe('Toronto layout', () => {
     expect(blockInterior(-2, 7)).toEqual({ x0: -382, x1: -218, z0: 1418, z1: 1582 });
     expect(lotCentre(-2, 7, 2, 0, 0)).toEqual({ x: -341, z: 1459 });
     expect(lotCentre(-1, 4, 2, 1, 1)).toEqual({ x: -72.5, z: 927.5 });
+  });
+});
+
+describe('Toronto west and new areas', () => {
+  const W = CONFIG.world;
+  /** Block centres per area and the district each must be. */
+  const SAMPLES: [string, DistrictId, [number, number][]][] = [
+    ['Yorkville', 'highrise', [[-500, -1100], [-700, -1100], [-500, -1300], [-700, -1300]]],
+    ['University Avenue', 'highrise', [-1100, -900].flatMap((x) => [100, 300, 500, 700, 900, 1100, 1300].map((z): [number, number] => [x, z]))],
+    ['CityPlace', 'highrise', [[-1300, 1700], [-1100, 1700], [-1300, 1900], [-1100, 1900]]],
+    ['King West', 'highrise', [[-2500, 1500], [-2300, 1500], [-2500, 1700], [-2300, 1700]]],
+    ['Chinatown', 'neon', [-1900, -1700].flatMap((x) => [300, 500, 700, 900, 1100].map((z): [number, number] => [x, z]))],
+    ['Kensington Market', 'residential', [[-2300, 300], [-2100, 300], [-2300, 500], [-2100, 500], [-2300, 700], [-2100, 700]]],
+    ["Queen's Park", 'park', [[-1300, -300], [-1100, -300], [-900, -300], [-1300, -100], [-1100, -100], [-900, -100]]],
+    ['U of T', 'park', [[-1700, -500], [-1500, -500], [-1700, -300], [-1500, -300], [-1700, -100], [-1500, -100]]],
+    ['High Park', 'park', [[-4900, 1100], [-5100, 900], [-4300, 1100], [-5500, 1100], [-4900, 300], [-4900, 1900], [-4900, 2100]]],
+    ['Casa Loma', 'park', [[-1700, -2300]]],
+    ['Distillery District', 'office', [[900, 1700], [1100, 1700]]],
+  ];
+
+  it.each(SAMPLES)('lays %s as %s at its sample blocks', (_name, want, points) => {
+    for (const [x, z] of points) {
+      expect(districtAt(x, z), `${x},${z}`).toBe(want);
+      // The whole block agrees, wherever in it districtAt is asked.
+      expect(districtAt(x - 99, z + 99), `${x},${z}`).toBe(want);
+      expect(isWater(TORONTO, Math.floor(x / PITCH), Math.floor(z / PITCH)), `${x},${z}`).toBe(false);
+      expect(Math.hypot(x, z), `${x},${z}`).toBeGreaterThan(W.clearRadius + PITCH);
+    }
+  });
+
+  it('names every area once, and lists the areas the samples cover', () => {
+    const names = AREAS.map((a) => a.name);
+    expect(new Set(names).size).toBe(names.length);
+    for (const [name] of SAMPLES) expect(names).toContain(name);
+  });
+
+  it('keeps the areas apart from each other and from the hand-laid landmarks blocks (no block in two areas)', () => {
+    const owner = new Map<string, string>();
+    for (const a of AREAS) for (let i = -40; i < 20; i++) for (let j = -20; j < 12; j++) {
+      const inside = 'ci0' in a ? i >= a.ci0 && i <= a.ci1 && j >= a.cj0 && j <= a.cj1 : ((centre(i) - a.x) / a.rx) ** 2 + ((centre(j) - a.z) / a.rz) ** 2 <= 1;
+      if (!inside) continue;
+      expect(owner.get(`${i},${j}`), `${a.name} at ${i},${j}`).toBeUndefined();
+      owner.set(`${i},${j}`, a.name);
+    }
+    for (const id of ['cn-tower', 'rogers-centre', 'city-hall']) {
+      const l = TORONTO.landmarks.find((m) => m.id === id)!;
+      expect(owner.get(`${Math.floor(l.x / PITCH)},${Math.floor(l.z / PITCH)}`), id).toBeUndefined();
+    }
+  });
+
+  it('keeps Yonge-Dundas the neon block it was, and the condo clusters off the lakeshore water', () => {
+    expect(districtAt(YONGE_DUNDAS.x, YONGE_DUNDAS.z)).toBe('neon');
+    for (const [x, z] of [[-2400, 2100], [-2400, 2300]] as const) expect(districtAt(x, z)).not.toBe('highrise');
+  });
+
+  it('spreads High Park about 1.8 km across, down to the lakeshore (park, not port, by the water)', () => {
+    let cols = 0;
+    for (let i = -40; i < -15; i++) if (districtAt(centre(i), 1100) === 'park' && (centre(i) > -6000 && centre(i) < -3800)) cols++;
+    expect(cols * PITCH).toBeGreaterThanOrEqual(1600);
+    expect(cols * PITCH).toBeLessThanOrEqual(2000);
+    // Its southern edge reaches the last land row before the lake.
+    const j = Math.floor(2100 / PITCH);
+    expect(isWater(TORONTO, Math.floor(-4900 / PITCH), j)).toBe(false);
+    expect(districtAt(-4900, 2100)).toBe('park');
   });
 });

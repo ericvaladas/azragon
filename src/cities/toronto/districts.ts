@@ -9,11 +9,12 @@ export const TORONTO_DISTRICTS: Record<DistrictId, DistrictRules> = {
     facades: [FACADE.glass, FACADE.glass, FACADE.office], colors: [0x2b3a4a, 0x22302c, 0x313844, 0x1f2a35, 0x3a4a52],
     signs: 0, billboard: 0.02, trees: 2,
   },
-  // Yonge-Dundas: low brick and cream shop blocks with blades (its screens and billboards are hand-placed).
+  // Chinatown: low, dense shop houses in jade, gold, vermilion brick, teal, pink and cream, hung with blade signs.
+  // (Yonge-Dundas is neon too, but its block is filled by its hand-placed lots, so these rules never build there.)
   neon: {
-    lots: 3, fill: 0.7, minPerBlock: 4, height: [40, 90], heightCurve: 1.1, footprint: [0.75, 0.92],
-    facades: [FACADE.shop, FACADE.office, FACADE.shop], colors: [0xb5543c, 0x8a4a3a, 0xd9c8a8, 0x6e3b32, 0xe0d6c2],
-    signs: 1.5, billboard: 0.02, trees: 0,
+    lots: 4, fill: 0.85, minPerBlock: 10, height: [15, 30], heightCurve: 1, footprint: [0.78, 0.92],
+    facades: [FACADE.shop, FACADE.shop, FACADE.office], colors: [0x3f9a7a, 0xe0b040, 0xc0583e, 0x4aa3b0, 0xd9708f, 0xe8dcc0],
+    signs: 2.5, billboard: 0.02, trees: 0,
   },
   // Warm grey stone and buff brick.
   office: {

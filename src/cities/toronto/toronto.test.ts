@@ -4,7 +4,7 @@ import { CONFIG } from '../../config';
 import { DISTRICTS, FACADE } from '../types';
 import { TORONTO } from './index';
 import { chunksInRadius, generateChunk } from '../../world/chunks';
-import { CN_TOWER_SITE, CITY_HALL_SITE, ROGERS_CENTRE_SITE, blockInterior, districtAt } from './layout';
+import { AREAS, CN_TOWER_SITE, CITY_HALL_SITE, ROGERS_CENTRE_SITE, blockInterior, districtAt } from './layout';
 import { CN_TOWER, cnTowerGeometry } from './cnTower';
 import { ROGERS_CENTRE, rogersCentreGeometry } from './rogersCentre';
 import { CITY_HALL, cityHallGeometry } from './cityHall';
@@ -25,7 +25,7 @@ describe('TORONTO', () => {
     for (const d of DISTRICTS) expect(D[d]).toBeDefined();
     expect(D.park.lots).toBe(0);
     expect(D.highrise.height).toEqual([150, 300]);
-    expect(D.neon.height).toEqual([40, 90]);
+    expect(D.neon.height).toEqual([15, 30]);
     expect(D.office.height).toEqual([40, 100]);
     expect(D.residential.height).toEqual([10, 22]);
     expect(D.residential.trees).toBe(6);
@@ -375,3 +375,81 @@ describe('Nathan Phillips Square', () => {
     expect(() => overlayPainter('nathan-phillips')).not.toThrow();
   });
 });
+
+describe('Chinatown and Kensington Market', () => {
+  const blockOf = (v: number) => Math.floor(v / PITCH);
+  const area = (name: string) => AREAS.find((a) => a.name === name)!;
+  const inArea = (name: string, b: { x: number; z: number }) => {
+    const a = area(name);
+    return 'ci0' in a && blockOf(b.x) >= a.ci0 && blockOf(b.x) <= a.ci1 && blockOf(b.z) >= a.cj0 && blockOf(b.z) <= a.cj1;
+  };
+  const hsl = (c: number) => {
+    const o = { h: 0, s: 0, l: 0 };
+    new THREE.Color(c).getHSL(o, THREE.SRGBColorSpace);
+    return o;
+  };
+  const collect = (name: string) => {
+    const a = area(name);
+    if (!('ci0' in a)) throw new Error(name);
+    const out: BuildingSpec[] = [];
+    const seen = new Set<string>();
+    for (let i = a.ci0; i <= a.ci1; i++) for (let j = a.cj0; j <= a.cj1; j++) {
+      const cx = Math.floor(i / 4), cz = Math.floor(j / 4);
+      if (seen.has(`${cx},${cz}`)) continue;
+      seen.add(`${cx},${cz}`);
+      out.push(...generateChunk(TORONTO, 1337, cx, cz).buildings.filter((b) => inArea(name, b)));
+    }
+    return out;
+  };
+
+  it("retunes Toronto's neon for Chinatown: low (15–30 m), dense small lots, many blade signs, rare billboards, colourful facades", () => {
+    const N = TORONTO.districts.neon;
+    expect(N.height).toEqual([15, 30]);
+    expect(N.lots).toBeGreaterThanOrEqual(4);
+    expect(N.fill).toBeGreaterThanOrEqual(0.75);
+    expect(N.signs).toBeGreaterThanOrEqual(2);
+    expect(N.billboard).toBeLessThanOrEqual(0.02);
+    const vivid = N.colors.filter((c) => hsl(c).s > 0.35);
+    expect(new Set(vivid.map((c) => Math.round(hsl(c).h * 6) % 6)).size).toBeGreaterThanOrEqual(3);
+  });
+
+  it('builds Chinatown low and dense, hung with blade signs', () => {
+    const shops = collect('Chinatown');
+    // After the per-chunk cap (Chinatown shares its chunks with Kensington and midtown), about half the lots stand.
+    expect(shops.length).toBeGreaterThan(60);
+    for (const b of shops) {
+      expect(b.h).toBeGreaterThanOrEqual(15);
+      expect(b.h).toBeLessThanOrEqual(30);
+    }
+    const blades = shops.reduce((n, b) => n + b.signs.filter((s) => s.kind === 'vertical').length, 0);
+    expect(blades / shops.length).toBeGreaterThanOrEqual(0.7);
+  });
+
+  it('leaves Yonge-Dundas exactly its four hand-placed lots: no random building on its block', () => {
+    const bs = generateChunk(TORONTO, 1337, Math.floor(YD_BLOCK.ci / 4), Math.floor(YD_BLOCK.cj / 4)).buildings.filter((b) => blockOf(b.x) === YD_BLOCK.ci && blockOf(b.z) === YD_BLOCK.cj);
+    expect(bs).toEqual(YONGE_DUNDAS_LOTS);
+  });
+
+  it('paints Kensington Market in bright pinks, teals, yellows and purples, from its own palette', () => {
+    const colors = area('Kensington Market').colors!;
+    const hues = colors.map((c) => hsl(c)).filter((c) => c.s > 0.45).map((c) => c.h * 360);
+    const near = (h: number) => hues.some((x) => Math.min(Math.abs(x - h), 360 - Math.abs(x - h)) < 25);
+    for (const h of [330, 175, 48, 275]) expect(near(h), `hue ${h}`).toBe(true);
+    const homes = collect('Kensington Market');
+    expect(homes.length).toBeGreaterThan(20);
+    for (const b of homes) expect(colors).toContain(b.color);
+    expect(TOKYO.blockColors).toBeUndefined();
+  });
+
+  it('gives CityPlace and King West pale condo glass, unlike the dark Financial District', () => {
+    for (const name of ['CityPlace', 'King West']) {
+      const towers = collect(name);
+      expect(towers.length, name).toBeGreaterThan(3);
+      for (const b of towers) {
+        expect(area(name).colors, name).toContain(b.color);
+        expect(hsl(b.color).l, name).toBeGreaterThan(0.4);
+      }
+    }
+  });
+});
+
