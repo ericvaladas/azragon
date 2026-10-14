@@ -15,9 +15,15 @@ export type WaterSpec = { x: number; z: number };
 /** A gantry crane: portal centre (x, z) and yaw, its jib pointing along (sin yaw, cos yaw). Scenery only. */
 export type CraneSpec = { x: number; z: number; yaw: number };
 /**
+ * A sea-wall edge: the centre (x, z) of a land cell's edge on a lattice line that borders a bay cell. `axis` is the
+ * direction the wall runs along, `side` the direction (+1 or -1 along the other axis) from the land cell to the bay.
+ */
+export type SeaWallSpec = { x: number; z: number; axis: Axis; side: 1 | -1 };
+/**
  * `roads`: existing segments whose start node lies in the chunk. `nodes`: the chunk's intersections that have at
  * least one incident segment. `water`: the chunk's water cells (river and bay). `quays`: the chunk's port cells, by
- * centre, drawn as paving pads. `cranes`: gantry cranes on the chunk's coastal port cells.
+ * centre, drawn as paving pads. `cranes`: gantry cranes on the chunk's coastal port cells. `seaWall`: one entry per land-cell edge that borders
+ * a bay cell, emitted by the chunk owning the land cell.
  */
 export type ChunkContent = {
   buildings: BuildingSpec[];
@@ -29,6 +35,7 @@ export type ChunkContent = {
   roads: Segment[];
   nodes: NodeSpec[];
   water: WaterSpec[];
+  seaWall: SeaWallSpec[];
 };
 export type ChunkRef = { cx: number; cz: number; key: string; dist: number };
 
@@ -242,6 +249,7 @@ export function generateChunk(style: CityStyle, seed: number, cx: number, cz: nu
   const cranes: CraneSpec[] = [];
   const landmarks: LandmarkSpec[] = [];
   const water: WaterSpec[] = [];
+  const seaWall: SeaWallSpec[] = [];
   const blockOf = (v: number) => Math.floor(v / pitch);
   // Billboards: at most one per chunk, only on a building whose centre is in the chunk's central 400 × 400 m.
   const midX = (cx + 0.5) * CHUNK_SIZE + ROAD_ORIGIN;
@@ -258,6 +266,11 @@ export function generateChunk(style: CityStyle, seed: number, cx: number, cz: nu
       if (isWater(style, bi, bj)) {
         water.push({ x: bx, z: bz });
         continue;
+      }
+      for (const [di, dj] of baySides(style, bi, bj)) {
+        seaWall.push(di !== 0
+          ? { x: (di > 0 ? bi + 1 : bi) * pitch + ROAD_ORIGIN, z: bz, axis: 'z', side: di > 0 ? 1 : -1 }
+          : { x: bx, z: (dj > 0 ? bj + 1 : bj) * pitch + ROAD_ORIGIN, axis: 'x', side: dj > 0 ? 1 : -1 });
       }
       // The buildable block: the cell inset by half of each bordering line's width, plus pavement beside an avenue.
       const inset = (line: number) => lineWidth(line) / 2 + (lineWidth(line) === AVENUE_WIDTH ? AVENUE_PAVEMENT : 0);
@@ -431,7 +444,7 @@ export function generateChunk(style: CityStyle, seed: number, cx: number, cz: nu
   };
   const keptAvenue = thin(avenueTrees, TREES_PER_CHUNK);
   const keptTrees = [...keptAvenue, ...thin(trees, TREES_PER_CHUNK - keptAvenue.length)];
-  return { buildings: out, trees: keptTrees, parks, quays, cranes, landmarks, roads, nodes, water };
+  return { buildings: out, trees: keptTrees, parks, quays, cranes, landmarks, roads, nodes, water, seaWall };
 }
 
 /** Chunks to load (within loadRadius, nearest first) and to unload (beyond unloadRadius). */

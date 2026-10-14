@@ -458,3 +458,34 @@ describe('crane geometry', () => {
     expect(Math.max(-bb.min.x, bb.max.x)).toBeLessThanOrEqual(CRANE_PORTAL.halfAlong + CRANE_PORTAL.leg / 2 + 1);
   });
 });
+
+
+describe('City sea wall and foam', () => {
+  const COAST = new THREE.Vector3(-1100, 0, -900);
+  const INLAND = new THREE.Vector3(8000, 0, 8000);
+  const counts = (city: City) => city.seaWallCount();
+  const settle = (city: City, at: THREE.Vector3) => { for (let i = 0; i < 300; i++) city.update(0.016, at); };
+
+  it('draws walls and foam near the coast, none inland, equal counts after reset twice and a 30 km round trip', () => {
+    const { city, scene } = make();
+    settle(city, COAST);
+    const near = counts(city);
+    expect(near.walls).toBeGreaterThan(0);
+    expect(near.foam).toBe(near.walls);
+    const m = city as unknown as { wallMesh: THREE.InstancedMesh; foamMesh: THREE.InstancedMesh };
+    expect(scene.children.filter((o) => o === m.wallMesh || o === m.foamMesh)).toHaveLength(2);
+    expect(m.wallMesh.instanceMatrix.count).toBe(CONFIG.world.maxSeaWall);
+    expect(m.foamMesh.material).toHaveProperty('transparent', true);
+    city.reset();
+    city.reset();
+    settle(city, COAST);
+    expect(counts(city)).toEqual(near);
+    settle(city, new THREE.Vector3(30000, 0, 0));
+    expect(counts(city)).toEqual({ walls: 0, foam: 0 });
+    settle(city, COAST);
+    expect(counts(city)).toEqual(near);
+    const inland = make().city;
+    settle(inland, INLAND);
+    expect(counts(inland)).toEqual({ walls: 0, foam: 0 });
+  });
+});

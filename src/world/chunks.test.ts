@@ -574,3 +574,44 @@ describe('harbour and island', () => {
     }
   });
 });
+
+
+describe('sea wall', () => {
+  const chunks: ChunkContent[] = [];
+  // A 6 km stretch of coast.
+  for (let cx = -6; cx <= 2; cx++) for (let cz = -6; cz <= 2; cz++) chunks.push(generateChunk(TOKYO, 1337, cx, cz));
+  const walls = chunks.flatMap((c) => c.seaWall);
+
+  it('has exactly one wall per land/bay cell edge, none where both sides are land, none on river edges', () => {
+    const want = new Set<string>();
+    for (let i = -24; i < 12; i++) for (let j = -24; j < 12; j++) {
+      if (isWater(TOKYO, i, j)) continue;
+      for (const [di, dj] of [[-1, 0], [1, 0], [0, -1], [0, 1]] as const) {
+        if (isBay(TOKYO, i + di, j + dj)) want.add(di !== 0 ? `z,${(di > 0 ? i + 1 : i) * PITCH},${j * PITCH + PITCH / 2}` : `x,${i * PITCH + PITCH / 2},${(dj > 0 ? j + 1 : j) * PITCH}`);
+      }
+    }
+    expect(want.size).toBeGreaterThan(20);
+    const got = walls.map((w) => `${w.axis},${w.x},${w.z}`);
+    expect(got.length).toBe(new Set(got).size);
+    expect(new Set(got)).toEqual(want);
+  });
+
+  it('puts every wall on a land/bay edge with side pointing from the land cell to the bay', () => {
+    for (const w of walls) {
+      const px = w.axis === 'z' ? w.side : 0, pz = w.axis === 'x' ? w.side : 0;
+      const bay = [Math.floor((w.x + px * PITCH / 2) / PITCH), Math.floor((w.z + pz * PITCH / 2) / PITCH)] as const;
+      const land = [Math.floor((w.x - px * PITCH / 2) / PITCH), Math.floor((w.z - pz * PITCH / 2) / PITCH)] as const;
+      expect(isBay(TOKYO, bay[0], bay[1])).toBe(true);
+      expect(isWater(TOKYO, land[0], land[1])).toBe(false);
+    }
+  });
+
+  it('fits a full load along the coast in the wall and foam pools', () => {
+    for (const [x, z] of [[-1100, -900], [-2000, 400], [600, -2600], [-2600, -1900]] as const) {
+      let n = 0;
+      for (const r of chunksInRadius(x, z, W.unloadRadius)) n += generateChunk(TOKYO, 1337, r.cx, r.cz).seaWall.length;
+      expect(n).toBeLessThanOrEqual(W.maxSeaWall);
+      expect(n).toBeLessThanOrEqual(W.maxFoam);
+    }
+  });
+});

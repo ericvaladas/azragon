@@ -4,8 +4,8 @@ import type { OnDestroyed, Target } from '../combat';
 import type { Vec2 } from '../util/math';
 import { mulberry32 } from '../util/rng';
 import type { CityStyle, LandmarkSpec, SignDef } from '../cities/types';
-import { blastTopples, chunksInRadius, DestroyedLog, generateChunk, nodeSize, planStreaming, type BuildingSpec, type ChunkContent } from './chunks';
-import { isIsland, isWater, PITCH, type Segment } from './roads';
+import { blastTopples, chunksInRadius, DestroyedLog, generateChunk, nodeSize, planStreaming, type BuildingSpec, type ChunkContent, type SeaWallSpec } from './chunks';
+import { isIsland, isWater, lineWidth, PITCH, type Segment } from './roads';
 import { canvasCityTextures, patchFacadeShader, patchRoadShader, SCREEN_FRAMES, SIGN_RECTS, type CityTextures } from './pixelTextures';
 import { rubbleGeometry } from './rubble';
 import { craneGeometry } from './crane';
@@ -67,6 +67,8 @@ type LoadedChunk = {
   nodeSlots: number[];
   waterSlots: number[];
   craneSlots: number[];
+  wallSlots: number[];
+  foamSlots: number[];
 };
 
 const ZERO = new THREE.Matrix4().makeScale(0, 0, 0);
@@ -116,10 +118,26 @@ export class SlotPool {
 }
 
 /** Heights of the ground layers. The flat layers also stack by polygon offset: water and park 1 (they never overlap), road 2, node 3, overlay 4, crater 5. */
-const Y = { water: 0.1, park: 0.2, road: 0.3, node: 0.32, overlay: 0.35, crater: 0.5, bridge: 2.5, slab: 2.0 } as const;
+const Y = { water: 0.1, foam: 0.15, park: 0.2, road: 0.3, node: 0.32, overlay: 0.35, crater: 0.5, bridge: 2.5, slab: 2.0 } as const;
 /** Bridge deck slab: this much wider than its road, this thick (hanging below its top), in this grey. */
 const SLAB = { extra: 8, thick: 1.8, color: 0x9aa0a6 } as const;
 const WATER_COLOR = 0x3f8fc9;
+/** Sea wall (m) and its concrete / cap colours; foam strip width; `overlap` extends each end so corner walls meet. */
+const SEA_WALL = { height: 10, thick: 6, foam: 12, overlap: 6, color: 0xcfcac0, cap: 0x8e8a82 } as const;
+
+/**
+ * Foam opacity 0.35 + 0.2·sin(1.3·time + phase), the phase taken from the instance's world position so strips pulse
+ * out of step. Time is shared through a uniform object.
+ */
+function patchFoamShader(sh: { uniforms: Record<string, { value: unknown }>; vertexShader: string; fragmentShader: string }, time: { value: number }): void {
+  sh.uniforms['uFoamTime'] = time;
+  sh.vertexShader = sh.vertexShader
+    .replace('#include <common>', '#include <common>\nvarying float vFoamPhase;')
+    .replace('#include <begin_vertex>', '#include <begin_vertex>\n  vFoamPhase = instanceMatrix[3].x * 0.011 + instanceMatrix[3].z * 0.017;');
+  sh.fragmentShader = sh.fragmentShader
+    .replace('#include <common>', '#include <common>\nuniform float uFoamTime;\nvarying float vFoamPhase;')
+    .replace('#include <opaque_fragment>', 'diffuseColor.a = 0.35 + 0.2 * sin(uFoamTime * 1.3 + vFoamPhase);\n  #include <opaque_fragment>');
+}
 
 /**
  * Flag an instanced attribute for upload, limited to the first `count` instances (the draw range): three uploads that
@@ -174,6 +192,12 @@ export class City {
   /** Gantry cranes along the coast: scenery, never targets. */
   private craneMesh: THREE.InstancedMesh;
   private cranes: SlotPool;
+  /** Sea wall along every land/bay edge, and the pulsing foam strip beyond it. */
+  private wallMesh: THREE.InstancedMesh;
+  private foamMesh: THREE.InstancedMesh;
+  private walls: SlotPool;
+  private foams: SlotPool;
+  private foamTime = { value: 0 };
   private roads: SlotPool;
   private nodes: SlotPool;
   private waters: SlotPool;
@@ -282,6 +306,18 @@ export class City {
     this.craneMesh = new THREE.InstancedMesh(craneGeometry(), toonMat(0xffffff, { vertexColors: true }), world.maxCranes);
     this.craneMesh.castShadow = true;
     this.craneMesh.receiveShadow = true;
+    // Wall: base at y = 0, runs along local x; the top face (BoxGeometry's +y vertices 8-11) is a darker cap.
+    const wallGeo = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
+    const wallColors = new Float32Array(24 * 3);
+    for (let v = 0; v < 24; v++) _c.setHex(v >= 8 && v < 12 ? SEA_WALL.cap : SEA_WALL.color).toArray(wallColors, v * 3);
+    wallGeo.setAttribute('color', new THREE.BufferAttribute(wallColors, 3));
+    this.wallMesh = new THREE.InstancedMesh(wallGeo, toonMat(0xffffff, { vertexColors: true }), world.maxSeaWall);
+    this.wallMesh.castShadow = true;
+    this.wallMesh.receiveShadow = true;
+    const foamMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, depthWrite: false });
+    foamMat.onBeforeCompile = (sh) => patchFoamShader(sh, this.foamTime);
+    foamMat.customProgramCacheKey = () => 'city-foam';
+    this.foamMesh = new THREE.InstancedMesh(flat, layered(foamMat, 2), world.maxFoam);
     const signBox = new THREE.BoxGeometry(1, 1, 1);
     const signGeo = new THREE.BoxGeometry(1, 1, 1);
     this.signRect = new THREE.InstancedBufferAttribute(new Float32Array(world.maxSigns * 4), 4);
@@ -316,6 +352,8 @@ export class City {
     this.nodes = new SlotPool(this.nodeMesh);
     this.waters = new SlotPool(this.waterMesh);
     this.cranes = new SlotPool(this.craneMesh);
+    this.walls = new SlotPool(this.wallMesh);
+    this.foams = new SlotPool(this.foamMesh);
     this.resetPools();
     scene.add(...this.instanced());
     this.landmarkMat = toonMat(0xffffff, { vertexColors: true });
@@ -327,7 +365,7 @@ export class City {
 
   /** Every pooled instanced mesh. */
   private instanced(): THREE.InstancedMesh[] {
-    return [this.buildingMesh, this.rubbleMesh, this.treeMesh, this.parkMesh, this.signMesh, this.screenMesh, this.roadMesh, this.nodeMesh, this.waterMesh, this.craneMesh];
+    return [this.buildingMesh, this.rubbleMesh, this.treeMesh, this.parkMesh, this.signMesh, this.screenMesh, this.roadMesh, this.nodeMesh, this.waterMesh, this.craneMesh, this.wallMesh, this.foamMesh];
   }
 
   get style(): CityStyle {
@@ -408,6 +446,8 @@ export class City {
     this.nodes.reset();
     this.waters.reset();
     this.cranes.reset();
+    this.walls.reset();
+    this.foams.reset();
   }
 
   /**
@@ -427,7 +467,7 @@ export class City {
     this.buildingMesh.count = high((i) => this.slotOwner[i] !== null, this.slotOwner.length);
     this.treeMesh.count = high((i) => this.treeUsed[i]!, this.treeUsed.length);
     this.parkMesh.count = high((i) => this.parkUsed[i]!, this.parkUsed.length);
-    for (const p of [this.roads, this.nodes, this.waters, this.cranes]) p.mesh.count = p.highWater();
+    for (const p of [this.roads, this.nodes, this.waters, this.cranes, this.walls, this.foams]) p.mesh.count = p.highWater();
   }
 
   /** Forget all destruction and rebuild the city around the origin, in `style` if given. */
@@ -462,6 +502,11 @@ export class City {
   /** Crane slots in use. */
   craneCount(): number {
     return this.cranes.inUse();
+  }
+
+  /** Sea-wall and foam instances in use (equal: one foam strip per wall). */
+  seaWallCount(): { walls: number; foam: number } {
+    return { walls: this.walls.inUse(), foam: this.foams.inUse() };
   }
 
   /** Sign slots in use. */
@@ -585,6 +630,7 @@ export class City {
       this.dirtyBuildings = true;
     }
     this.screenT += dt;
+    this.foamTime.value += dt;
     this.screenTex.offset.x = (Math.floor(this.screenT / 0.7) % SCREEN_FRAMES) / SCREEN_FRAMES;
     if (this.dirtyStream) {
       // Streaming (load, unload, reset) writes every pool and its per-instance attributes.
@@ -687,9 +733,32 @@ export class City {
       _m.compose(_p.set(c.x, 0, c.z), _q.setFromAxisAngle(UP, c.yaw), _s.setScalar(1));
       keep(craneSlots, this.cranes.take(_m));
     }
-    this.chunks.set(key, { content, buildings, treeSlots, parkSlots, roadSlots, nodeSlots, waterSlots, craneSlots });
+    const wallSlots: number[] = [];
+    const foamSlots: number[] = [];
+    for (const e of content.seaWall) this.writeSeaWall(e, wallSlots, foamSlots);
+    this.chunks.set(key, { content, buildings, treeSlots, parkSlots, roadSlots, nodeSlots, waterSlots, craneSlots, wallSlots, foamSlots });
     this.loadedKeys.add(key);
     this.dirtyStream = true;
+  }
+
+  /**
+   * One sea-wall edge: a wall just outside the waterfront road (its inner face half the road's width past the edge, on
+   * the bay side), and a foam strip on the water beyond it. Both run 2·SEA_WALL.overlap longer than the cell so walls
+   * meet at coastal corners.
+   */
+  private writeSeaWall(e: SeaWallSpec, wallSlots: number[], foamSlots: number[]): void {
+    const z = e.axis === 'x';
+    const line = Math.round((z ? e.z : e.x) / PITCH);
+    const inner = lineWidth(line) / 2;
+    const len = PITCH + 2 * SEA_WALL.overlap;
+    const place = (offset: number, y: number, thick: number, tall: number): THREE.Matrix4 => {
+      const x = z ? e.x : e.x + e.side * offset;
+      const zz = z ? e.z + e.side * offset : e.z;
+      return _m.compose(_p.set(x, y, zz), _q.setFromAxisAngle(UP, z ? 0 : Math.PI / 2), _s.set(len, tall, thick));
+    };
+    const keep = (slots: number[], slot: number | undefined) => { if (slot !== undefined) slots.push(slot); };
+    keep(wallSlots, this.walls.take(place(inner + SEA_WALL.thick / 2, 0, SEA_WALL.thick, SEA_WALL.height)));
+    keep(foamSlots, this.foams.take(place(inner + SEA_WALL.thick + SEA_WALL.foam / 2, Y.foam, SEA_WALL.foam, 1)));
   }
 
   private unloadChunk(key: string): void {
@@ -723,6 +792,8 @@ export class City {
     for (const slot of chunk.nodeSlots) this.nodes.release(slot);
     for (const slot of chunk.waterSlots) this.waters.release(slot);
     for (const slot of chunk.craneSlots) this.cranes.release(slot);
+    for (const slot of chunk.wallSlots) this.walls.release(slot);
+    for (const slot of chunk.foamSlots) this.foams.release(slot);
     if (this.collapsing.length) this.collapsing = this.collapsing.filter((b) => b.chunk !== key);
     this.chunks.delete(key);
     this.loadedKeys.delete(key);
