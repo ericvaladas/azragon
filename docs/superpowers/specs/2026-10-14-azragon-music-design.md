@@ -95,7 +95,7 @@ The skip hint stays visible until the jump. After that, it hides. A second tap s
 | `intro/timeline.ts` | Exports `SKIP_TO`, and helpers the skip needs (e.g. the cloud state at `t`) | config |
 | `config.ts` | `music` block: per-track file, gain, grid, loop points, end trim, fades. `intro.skipLead` | — |
 
-`Music` holds no knowledge of game states. It exposes `unlock()`, `reveal()`, `enterMenu()` and `setHidden(hidden)`. It is a plain TypeScript class, with no React and no hooks, as the project's rules require.
+`Music` holds no knowledge of game states. It exposes `unlock()`, `reveal()` and `enterMenu()`. It is a plain TypeScript class, with no React and no hooks, as the project's rules require.
 
 ### Playback
 
@@ -103,7 +103,6 @@ The skip hint stays visible until the jump. After that, it hides. A second tap s
 - **Main 2: streamed.** An `HTMLAudioElement` with `loop = true` → `MediaElementAudioSourceNode` → its own `GainNode` → master. The browser decodes it a little at a time, so it is never held fully decoded. It needs no exact timing: its start follows Main 1's `ended` event, and any tiny gap at the loop seam falls between its fade-out and its quiet start. The element's own `volume` is not used, because iOS ignores it. All volume goes through the gain node.
 - **Fades** are gain ramps on the audio clock, the same for both kinds.
 - **Unlock:** browsers block audio until a user gesture. `AudioContext.resume()` is called on the first `pointerdown` or `keydown` anywhere, and the Intro starts then. The loading screen and the title before the first tap are silent; that is unavoidable on web.
-- **Hidden tab or app:** the context is suspended while `document.hidden` and resumed when the page is visible. This is not a game-state change, so it doesn't break the "pause leaves music alone" rule.
 - **Volume:** a fixed master gain from config. A mute or volume control is out of scope.
 
 ### Loading and memory
@@ -142,7 +141,7 @@ The skip hint stays visible until the jump. After that, it hides. A second tap s
 
 ## Out of scope
 
-Sound effects, a volume or mute setting, more intensity layers, and music changes on pause, level-up or game over.
+Sound effects, a volume or mute setting, more intensity layers, music changes on pause, level-up or game over, and pausing music while the game is in the background. The browser or app host may still silence a background page on its own; the game does nothing either way.
 
 ## Risks
 
