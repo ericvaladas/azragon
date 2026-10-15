@@ -27,7 +27,10 @@ const STANDING: KaijuLeapPose = { sink: 0, pitch: 0, tuck: 0, arms: 0, tail: 0 }
 /** Walking tail wag: sideways swing at the tip (model units) and the phase lag per segment (rad). */
 const TAIL_WAG = 230;
 const TAIL_LAG = 0.45;
-const NECK_BASE = new THREE.Vector3(0, 470, 110);
+/** Neck pivot, set high on the shoulders so the neck's top line carries straight on from the top of the back. */
+const NECK_BASE = new THREE.Vector3(0, 500, 88);
+/** Centre of the neck's top end (neck space): the neck leans well forward, rising gently into the head that sits on it. */
+const NECK_TIP = new THREE.Vector3(0, 40, 50);
 const TAIL_BASE: readonly THREE.Vector3[] = [
   new THREE.Vector3(0, 300, -90),
   new THREE.Vector3(0, 255, -220),
@@ -89,7 +92,7 @@ function headPoints(): THREE.Vector3[] {
 function neckPoints(): THREE.Vector3[] {
   const pts: THREE.Vector3[] = [];
   oval(pts, new THREE.Vector3(0, 0, 4), new THREE.Vector3(44, 44, 46));
-  oval(pts, new THREE.Vector3(0, 48, 39), new THREE.Vector3(32, 32, 34));
+  oval(pts, NECK_TIP, new THREE.Vector3(32, 32, 34));
   return pts;
 }
 
@@ -167,7 +170,7 @@ export class KaijuBody implements MonsterBody {
     this.neck.position.copy(NECK_BASE);
     add(this.neck, this.keep(faceted(new ConvexGeometry(neckPoints()))), scale, [0, 0, 0], [1, 1, 1]);
     const head = new THREE.Object3D();
-    head.position.set(0, 57, 50);
+    head.position.set(0, NECK_TIP.y + 9, NECK_TIP.z + 11);
     head.scale.setScalar(HEAD_SCALE);
     this.neck.add(head);
     add(head, this.keep(faceted(new ConvexGeometry(headPoints()))), scale, [0, 0, 0], [1, 1, 1]);
