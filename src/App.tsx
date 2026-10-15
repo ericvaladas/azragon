@@ -8,6 +8,7 @@ import type { AbilityView, ActiveId } from './systems/abilities';
 import { Hud } from './ui/Hud';
 import { LevelUpCards } from './ui/LevelUpCards';
 import { PauseMenu } from './ui/PauseMenu';
+import { PauseButton, showPauseButton } from './ui/PauseButton';
 import { GameOver } from './ui/GameOver';
 import { Title } from './ui/Title';
 import { MonsterSelect } from './ui/MonsterSelect';
@@ -16,7 +17,8 @@ import type { PickStore } from './monsters/pick';
 import './style.css';
 
 /** Touch devices tap; desktops click or press a key. */
-const SKIP_HINT = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches ? 'Tap to skip' : 'Click or press any key to skip';
+const TOUCH = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+const SKIP_HINT = TOUCH ? 'Tap to skip' : 'Click or press any key to skip';
 const EMPTY_HUD: HudSnapshot = { hp: 1, maxHp: 1, exp: 0, expToNext: 1, level: 1, timeSec: 0, levelingUp: false };
 
 /** RUN app storage for the remembered pick, or null outside the RUN host. */
@@ -98,6 +100,7 @@ function App() {
     gameRef.current?.changeMonster();
   }, []);
   const resume = useCallback(() => gameRef.current?.resume(), []);
+  const openMenu = useCallback(() => gameRef.current?.togglePause(), []);
   const toggleMusic = useCallback(() => {
     const game = gameRef.current;
     if (game) game.setMusicOn(!game.isMusicOn());
@@ -121,6 +124,7 @@ function App() {
         {state === 'levelup' && offer && (
           <LevelUpCards key={offer.seq} level={offer.level} offers={offer.offers} all={offer.all} onPick={(id) => pick(id, offer.seq)} />
         )}
+        {showPauseButton(state, TOUCH) && <PauseButton onPress={openMenu} onSelect={state === 'select'} />}
         {state === 'paused' && <PauseMenu musicOn={musicOn} onResume={resume} onToggleMusic={toggleMusic} onExit={exitGame} />}
         {state === 'gameover' && stats && <GameOver stats={stats} onRestart={restart} onChangeMonster={changeMonster} />}
       </div>
