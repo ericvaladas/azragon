@@ -395,6 +395,11 @@ export const CONFIG = {
     threatRange: 700,
     earlyAbilityPicks: 3,
   },
+  /**
+   * Snare (Osprey nets): while active the monster walks at speedMult × its speed and cannot leap or dash.
+   * It lasts `duration` s; each attack takes `perAttack` s off, but never ends it sooner than `minDuration` s after it started.
+   */
+  snare: { duration: 6, perAttack: 1, minDuration: 2, speedMult: 0.3 },
   abilities: {
     /** Cooldown multiplier by rank (Dash/Roar ranks come from level-up picks; Leap is always rank 1). */
     rankCooldown: [1, 1, 0.8, 0.65],
