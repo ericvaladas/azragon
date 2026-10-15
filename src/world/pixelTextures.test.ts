@@ -123,8 +123,8 @@ describe('window glow', () => {
   });
 
   it('counts only the bluish window inks of the facade atlas as windows', () => {
-    for (const ink of [0x7f93ab, 0x8a9aae, 0x8796aa]) expect(isWindowTexel(ink), ink.toString(16)).toBe(true);
-    for (const ink of [0xc9d4dc, 0xe8eef2, 0x5d6a74, 0xffffff, 0xb8b0a4, 0xd9d3c8, 0xf2efe9, 0xffe9a8, 0xf4f4f4, 0xb4b4b4, 0x5a5a5a]) {
+    for (const ink of [0x4c6890, 0x4f6a8e, 0x4a6488]) expect(isWindowTexel(ink), ink.toString(16)).toBe(true);
+    for (const ink of [0xc9d4dc, 0xe8eef2, 0x3c4852, 0xffffff, 0xb8b0a4, 0xd9d3c8, 0xf2efe9, 0xffe9a8, 0xf4f4f4, 0xb4b4b4, 0x5a5a5a]) {
       expect(isWindowTexel(ink), ink.toString(16)).toBe(false);
     }
   });

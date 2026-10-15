@@ -20,6 +20,25 @@ function finish(canvas: HTMLCanvasElement): THREE.CanvasTexture {
   return tex;
 }
 
+/** Turn on mipmaps; the shader that samples the texture picks and caps the level (see signLod). */
+function mipmapped(tex: THREE.CanvasTexture): THREE.CanvasTexture {
+  tex.minFilter = THREE.NearestMipmapLinearFilter;
+  tex.generateMipmaps = true;
+  return tex;
+}
+
+/**
+ * Signs, billboards and video screens: only distant ones blend. The level starts SIGN_LOD.bias later than plain
+ * mipmapping would (so near and mid-distance signs stay crisp) and stops at SIGN_LOD.max (so even far ones keep their
+ * colour blocks). Every sign atlas cell edge sits on a multiple of 4 px, so up to level 2 no cell bleeds into another.
+ */
+export const SIGN_LOD = { bias: 0.5, max: 1.5 } as const;
+
+/** GLSL: the capped, late-starting mip level for texture coordinate `uv` on a `texels`-sized texture. */
+export function signLod(uv: string, texels: string): string {
+  return `clamp(0.5 * log2(max(dot(dFdx(${uv}) * ${texels}, dFdx(${uv}) * ${texels}), dot(dFdy(${uv}) * ${texels}, dFdy(${uv}) * ${texels}))) - ${SIGN_LOD.bias.toFixed(2)}, 0.0, ${SIGN_LOD.max.toFixed(2)})`;
+}
+
 /** Round dirt patch for the crash crater; transparent outside the circle (use with alphaTest). */
 export function craterTexture(): THREE.CanvasTexture {
   const { palette, world } = CONFIG;
@@ -52,6 +71,11 @@ export function craterTexture(): THREE.CanvasTexture {
 
 /** One facade cell repeats every FACADE_TILE metres (width along the face, height up it). */
 export const FACADE_TILE = { w: 16, h: 24 } as const;
+/**
+ * Deepest facade mip level the shader samples. Fractional: 2.2 blends the 4 × 6 px and 2 × 3 px versions of each cell
+ * 80 / 20 (the minFilter interpolates between mip levels), trading some distant window contrast for less moiré.
+ */
+const FACADE_MAX_MIP = 2.2;
 const CELL_W = 16;
 const CELL_H = 24;
 
@@ -74,7 +98,7 @@ export function facadeAtlas(): THREE.CanvasTexture {
     g.fillRect(x0, 0, CELL_W, CELL_H);
     g.fillStyle = '#e8eef2';
     g.fillRect(x0, 4, CELL_W, 6);
-    g.fillStyle = '#5d6a74';
+    g.fillStyle = '#3c4852';
     for (let x = 0; x < CELL_W; x += 4) g.fillRect(x0 + x, 0, 1, CELL_H);
     for (let y = 0; y < CELL_H; y += 6) g.fillRect(x0, y, CELL_W, 1);
   });
@@ -82,7 +106,7 @@ export function facadeAtlas(): THREE.CanvasTexture {
   cell(1, (x0) => {
     g.fillStyle = '#ffffff';
     g.fillRect(x0, 0, CELL_W, CELL_H);
-    g.fillStyle = '#7f93ab';
+    g.fillStyle = '#4c6890';
     for (let y = 2; y < CELL_H; y += 6) g.fillRect(x0, y, CELL_W, 3);
     g.fillStyle = '#b8b0a4';
     for (let x = 0; x < CELL_W; x += 8) g.fillRect(x0 + x, 0, 1, CELL_H);
@@ -92,7 +116,7 @@ export function facadeAtlas(): THREE.CanvasTexture {
     g.fillStyle = '#ffffff';
     g.fillRect(x0, 0, CELL_W, CELL_H);
     for (let y = 0; y < CELL_H; y += 8) {
-      g.fillStyle = '#8a9aae';
+      g.fillStyle = '#4f6a8e';
       g.fillRect(x0 + 2, y + 2, 4, 4);
       g.fillRect(x0 + 10, y + 2, 4, 4);
       g.fillStyle = '#d9d3c8';
@@ -105,7 +129,7 @@ export function facadeAtlas(): THREE.CanvasTexture {
     g.fillRect(x0, 0, CELL_W, CELL_H);
     const rng = mulberry32(CONFIG.world.seed + 7);
     for (let y = 1; y < CELL_H; y += 4) for (let x = 1; x < CELL_W; x += 4) {
-      g.fillStyle = rng() < 0.35 ? '#ffe9a8' : '#8796aa';
+      g.fillStyle = rng() < 0.35 ? '#ffe9a8' : '#4a6488';
       g.fillRect(x0 + x, y, 2, 2);
     }
   });
@@ -121,7 +145,13 @@ export function facadeAtlas(): THREE.CanvasTexture {
     // Canvas rows run top-down; the facade's v runs up from the building's base.
     for (let k = 0; k * CONTAINER_PX < CELL_H; k++) g.fillRect(x0, CELL_H - 1 - Math.floor(k * CONTAINER_PX), CELL_W, 1);
   });
-  return finish(c);
+  // Distant towers: mipmaps average the window grid instead of picking one texel per screen pixel (which beats
+  // into moiré bands); close up stays crisp (nearest magnification). The facade shader caps the level
+  // (FACADE_MAX_MIP) so neighbouring atlas cells never bleed into each other.
+  const tex = finish(c);
+  tex.minFilter = THREE.NearestMipmapLinearFilter;
+  tex.generateMipmaps = true;
+  return tex;
 }
 
 /** Ground tile covering 2 × 2 blocks in a city's colours: plain paving with speckle (roads are their own meshes). Wraps seamlessly. */
@@ -160,19 +190,9 @@ export function roadTexture(style: CityStyle): THREE.CanvasTexture {
   const g = c.getContext('2d')!;
   g.fillStyle = hex(C.road);
   g.fillRect(0, 0, w, h);
+  // A simple white dashed line down the middle, clear of the ends.
   g.fillStyle = hex(C.roadLine);
-  g.fillRect(0, 0, 1, h);
-  g.fillRect(w - 1, 0, 1, h);
   for (let y = 9; y < h - 9; y += 8) g.fillRect(w / 2 - 1, y, 2, 4);
-  // Crosswalks: stripes along the road, symmetric about the centre; the middle pair meets as one wide stripe.
-  g.fillStyle = hex(C.road);
-  g.fillRect(0, 0, w, 6);
-  g.fillRect(0, h - 6, w, 6);
-  g.fillStyle = hex(C.crosswalk);
-  for (const x of [1, 3, 4, 6]) {
-    g.fillRect(x, 1, 1, 5);
-    g.fillRect(x, h - 6, 1, 5);
-  }
   return finish(c);
 }
 
@@ -261,11 +281,13 @@ export function patchRoadShader(sh: { vertexShader: string; fragmentShader: stri
 }
 
 export const SCREEN_FRAMES = 4;
+/** One video-screen frame's size in px. */
+export const SCREEN_FRAME_PX = { w: 32, h: 18 } as const;
 
 /** Video-screen frames left to right (SCREEN_FRAMES × 32 × 18 px): bold pixel pictures in neon colours. */
 export function screenTexture(): THREE.CanvasTexture {
-  const fw = 32;
-  const fh = 18;
+  const fw = SCREEN_FRAME_PX.w;
+  const fh = SCREEN_FRAME_PX.h;
   const c = document.createElement('canvas');
   c.width = fw * SCREEN_FRAMES;
   c.height = fh;
@@ -282,7 +304,7 @@ export function screenTexture(): THREE.CanvasTexture {
     if (f === 2) for (let i = 0; i < 4; i++) g.fillRect(x0 + 3, 3 + i * 4, 6 + ((i * 7) % 20), 2);
     if (f === 3) { g.fillRect(x0 + 4, 4, 24, 3); g.fillRect(x0 + 4, 11, 24, 3); g.fillStyle = '#ffffff'; g.fillRect(x0 + 14, 2, 4, 14); }
   }
-  return finish(c);
+  return mipmapped(finish(c));
 }
 
 /** An n × n decal of solid rectangles (canvas row 0 at the decal's −z edge), transparent elsewhere (use with alphaTest). */
@@ -380,13 +402,22 @@ export function patchFacadeShader(
     .replace(
       '#include <map_fragment>',
       `vec2 facadeUv = vec2((fract(vFacadeUv.x) + vFacade) / ${FACADE_COUNT.toFixed(1)}, fract(vFacadeUv.y));
-  vec4 facadeTexel = texture2D(map, facadeUv);
+  // Mip level from the continuous (unwrapped) UV: fract() jumps at every tile edge, and its derivative there would
+  // pick the smallest mip and draw a seam round each tile. Capped at FACADE_MAX_MIP (between a 16 × 24 cell's 4 × 6 and
+  // 2 × 3 px versions) so far towers keep some window contrast and neighbouring atlas cells never blend.
+  vec2 facadeTexels = vec2(${(CELL_W * FACADE_COUNT).toFixed(1)}, ${CELL_H.toFixed(1)}) * vec2(1.0 / ${FACADE_COUNT.toFixed(1)}, 1.0);
+  vec2 facadeDx = dFdx(vFacadeUv) * facadeTexels;
+  vec2 facadeDy = dFdy(vFacadeUv) * facadeTexels;
+  float facadeLod = clamp(0.5 * log2(max(dot(facadeDx, facadeDx), dot(facadeDy, facadeDy))), 0.0, ${FACADE_MAX_MIP.toFixed(1)});
+  vec4 facadeTexel = textureLod(map, facadeUv, facadeLod);
   diffuseColor *= facadeTexel;${glowAdd}`,
     );
 }
 
 /** Sign atlas size (px) and the UV rect (u0, v0, u1, v1) of each cell: 0–2 vertical glyph boards, 3–5 billboards. */
 const SA = 64;
+/** Sign atlas size in px (square). */
+export const SIGN_ATLAS_PX = SA;
 const rect = (x: number, y: number, w: number, h: number): readonly [number, number, number, number] => [x / SA, 1 - (y + h) / SA, (x + w) / SA, 1 - y / SA];
 export const SIGN_RECTS = [rect(0, 0, 12, 48), rect(12, 0, 12, 48), rect(24, 0, 12, 48), rect(36, 0, 28, 16), rect(36, 16, 28, 16), rect(36, 32, 28, 16)] as const;
 
@@ -426,7 +457,7 @@ export function signAtlas(glyphs: GlyphSet = 'kanji'): THREE.CanvasTexture {
   }
   if (glyphs === 'latin') latinBillboards(g);
   else kanjiBillboards(g);
-  return finish(c);
+  return mipmapped(finish(c));
 }
 
 /** Tokyo's billboards (cells 3–5): a drink can on yellow, an anime face on pink, a logo and text on deep blue. */

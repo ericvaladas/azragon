@@ -6,7 +6,7 @@ import { mulberry32 } from '../util/rng';
 import type { CityStyle, LandmarkSpec, SignDef } from '../cities/types';
 import { blastTopples, chunksInRadius, DestroyedLog, generateChunk, nodeSize, planStreaming, seaWallRects, SEA_WALL_SIZE, type BuildingSpec, type ChunkContent, type Rect, type SeaWallSpec } from './chunks';
 import { isIsland, isWater, PITCH, type Segment } from './roads';
-import { canvasCityTextures, patchFacadeShader, patchRoadShader, SCREEN_FRAMES, SIGN_RECTS, type CityTextures } from './pixelTextures';
+import { canvasCityTextures, patchFacadeShader, patchRoadShader, SCREEN_FRAME_PX, SCREEN_FRAMES, SIGN_ATLAS_PX, SIGN_RECTS, signLod, type CityTextures } from './pixelTextures';
 import { rubbleGeometry } from './rubble';
 import { craneColors, craneGeometry } from './crane';
 import { faceted, toonMat } from '../render/toon';
@@ -392,13 +392,25 @@ export class City {
         .replace('#include <uv_vertex>', '#include <uv_vertex>\n  vRect = aRect;');
       sh.fragmentShader = sh.fragmentShader
         .replace('#include <common>', '#include <common>\nvarying vec4 vRect;')
-        .replace('#include <map_fragment>', 'diffuseColor *= texture2D(map, mix(vRect.xy, vRect.zw, vMapUv));');
+        .replace(
+          '#include <map_fragment>',
+          `vec2 signUv = mix(vRect.xy, vRect.zw, vMapUv);
+  diffuseColor *= textureLod(map, signUv, ${signLod('signUv', `vec2(${SIGN_ATLAS_PX.toFixed(1)})`)});`,
+        );
     };
     signMat.customProgramCacheKey = () => 'city-sign';
     this.signMesh = new THREE.InstancedMesh(signGeo, signMat, world.maxSigns);
     this.screenTex = this.textures.screen();
     this.screenTex.repeat.set(1 / SCREEN_FRAMES, 1);
-    this.screenMesh = new THREE.InstancedMesh(signBox, new THREE.MeshBasicMaterial({ map: this.screenTex }), world.maxScreens);
+    const screenMat = new THREE.MeshBasicMaterial({ map: this.screenTex });
+    screenMat.onBeforeCompile = (sh) => {
+      sh.fragmentShader = sh.fragmentShader.replace(
+        '#include <map_fragment>',
+        `diffuseColor *= textureLod(map, vMapUv, ${signLod('vMapUv', `vec2(${(SCREEN_FRAME_PX.w * SCREEN_FRAMES).toFixed(1)}, ${SCREEN_FRAME_PX.h.toFixed(1)})`)});`,
+      );
+    };
+    screenMat.customProgramCacheKey = () => 'city-screen';
+    this.screenMesh = new THREE.InstancedMesh(signBox, screenMat, world.maxScreens);
     for (let i = 0; i < world.maxSigns; i++) this.signMesh.setColorAt(i, _c.setHex(0xffffff));
     this.signUsed = new Array(world.maxSigns).fill(false);
     this.screenUsed = new Array(world.maxScreens).fill(false);
