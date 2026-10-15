@@ -57,10 +57,21 @@ export const CONFIG = {
     cable: 0x1d1f22,
     strike: 0xff3b2f,
     artillery: 0x5f6b45,
+    /** Towed howitzer (olive is `artillery`): dark carriage/cradle, sand camo patches, gunmetal tube ends, tyres, hubs. */
+    artilleryDark: 0x363d26,
+    artillerySand: 0xb8a271,
+    artilleryMetal: 0x2a2d2b,
+    artilleryTyre: 0x1f2022,
+    artilleryHub: 0x6c705e,
     samLauncher: 0xeceae2,
     samTube: 0xd8322a,
     samHazard: 0xf2c230,
     samHazardDark: 0x2b2b2b,
+    /** SAM launcher: sand-khaki turntable and cab, olive missile pod, dark frame/cradle accents, pale radar face. */
+    samBody: 0xc2b27a,
+    samBodyDark: 0x34352a,
+    samPod: 0x7f8a4a,
+    samRadar: 0xc9cdb8,
     missile: 0xf2f2ee,
     blimpTrim: 0xd8322a,
     blimpTrimDark: 0x5a1612,
@@ -69,6 +80,19 @@ export const CONFIG = {
     heliDark: 0x2f3620,
     heliGlass: 0x7fb4c4,
     heliRotor: 0x1d1f22,
+    /** Fighter jet (body is `jet`): pale underside, dark panel stripes, tinted canopy, nozzle ring, afterburner glow. */
+    jetBelly: 0x9aa3ab,
+    jetDark: 0x111316,
+    jetCanopy: 0x6f9fb2,
+    jetNozzle: 0x15171a,
+    jetBurner: 0xff8a2a,
+    napalmBomber: 0x48512f,
+    napalmBelly: 0x9aa58a,
+    napalmGlass: 0x7fb4c4,
+    napalmDark: 0x262b1a,
+    napalmBomb: 0x22241f,
+    napalmFire: 0xff7a1a,
+    napalmScorch: 0x1c120b,
   },
   fog: { near: 2200, far: 4700 },
   camera: {
@@ -334,7 +358,7 @@ export const CONFIG = {
     },
   },
   artillery: {
-    hp: 120, exp: 20, size: 40, guns: 3, gunSpacing: 70, distMin: 2500, distMax: 3500,
+    hp: 120, exp: 20, size: 62, guns: 3, gunSpacing: 109, distMin: 2500, distMax: 3500,
     salvoEvery: 6, fillTime: 3.2, shellFlight: 1.8, shellArc: 750, radius: 90, damage: 60, buildingDamage: 200, spread: 260,
     baseSalvo: 3, levelsPerExtra: 3, maxSalvo: 8,
   },
@@ -384,14 +408,14 @@ export const CONFIG = {
    * monster walking across the line at 700 m, so it drags behind and the monster slips out before lock.
    * turnRate (rad/s) caps how fast the truck body turns to face its waypoint or the monster.
    */
-  truck: { hp: 70, exp: 22, size: 110, speed: 45, range: 1200, deployTime: 0.8, aimTime: 2, trackRate: 0.08, turnRate: 2, lockTime: 1.2, fireTime: 1.2, cooldown: 5, beamWidth: 50, beamLength: 1700, hitRadius: 93, dps: 140, buildingDps: 300, aimHeight: 250 },
+  truck: { hp: 70, exp: 22, size: 88, speed: 45, range: 1200, deployTime: 0.8, aimTime: 2, trackRate: 0.08, turnRate: 2, lockTime: 1.2, fireTime: 1.2, cooldown: 5, beamWidth: 50, beamLength: 1700, hitRadius: 93, dps: 140, buildingDps: 300, aimHeight: 250 },
   sam: {
-    hp: 260, exp: 30, size: 130, spawnMin: 600, spawnMax: 1400,
+    hp: 260, exp: 30, size: 91, spawnMin: 600, spawnMax: 1400,
     riseTime: 1, upTime: 6, sinkTime: 1, downMin: 4, downMax: 6, fireDelay: 1.2,
     missiles: 4, missileSpeed: 300, missileTurn: 1.6, missileDamage: 35, missileExp: 2, missileTtl: 12, missileHitDist: 120,
   },
-  blimp: { hp: 180, speed: 40, size: 170, spawnDist: 2200, altitude: 520, headHeight: 330, triggerDist: 190, damage: 120, exp: 25 },
-  tank: { hp: 30, speed: 45, range: 950, damage: 6, fireCooldown: 3.2, shellFlightTime: 1.6, shellArc: 140, exp: 5, size: 40 },
+  blimp: { hp: 180, speed: 40, size: 136, spawnDist: 2200, altitude: 520, headHeight: 330, triggerDist: 190, damage: 120, exp: 25 },
+  tank: { hp: 30, speed: 45, range: 950, damage: 6, fireCooldown: 3.2, shellFlightTime: 1.6, shellArc: 140, exp: 5, size: 48 },
   /**
    * Attack helicopters: spawn spawnMin..spawnMax m out, fly in at up to approachSpeed (closing speed eases off as
    * approachGain × distance-to-orbit, tangential speed fading in over fadeDist), then circle a centre that eases
@@ -407,6 +431,23 @@ export const CONFIG = {
     firstVolley: 2, volleyEvery: 4, rocketsPerVolley: 2,
     bankGain: 2.2, bankMax: 0.35, pitchMax: 0.2,
     rotorSpin: 18, tailRotorSpin: 40,
+  },
+  /**
+   * Napalm bombers: spawn spawnDist m from the monster on a random bearing and fly a straight line at `speed`
+   * over the monster's position at spawn (the aim point), despawning exitDist m past it. They lay `bombs` bombs
+   * whose impacts sit `spacing` m apart along the flight line, centred on the aim point; each falls from the
+   * bomber under bombGravity (m/s²) keeping the bomber's forward speed. A dark strip marks the line warnLead s
+   * before the first release. Each impact leaves a burning patch (patchRadius m, patchLife s, fading over the last
+   * patchFade s); the monster burns at `dps` while its centre is within patchRadius + contactFrac × body radius
+   * of any patch (patches never stack), dealt in burnTick-s ticks (the first on stepping in) so the hit flash
+   * pulses instead of holding the monster white. `span` is the wingspan; propellers spin at propSpin rad/s.
+   */
+  napalm: {
+    hp: 90, exp: 30, span: 90, hitRadius: 80,
+    spawnDist: 2600, exitDist: 2600, altitude: 650, speed: 240,
+    bombs: 6, spacing: 90, bombGravity: 160, warnLead: 1.2,
+    patchRadius: 60, patchLife: 6, patchFade: 1, dps: 12, contactFrac: 0.25, burnTick: 0.5,
+    propSpin: 30,
   },
   jet: { hp: 60, speed: 260, altitude: 430 * MONSTER_SCALE, turnRate: 0.9, damage: 10, rocketsPerSalvo: 3, salvoMin: 700, salvoMax: 1600, rocketSpeed: 650, exp: 15, size: 70, hitRadius: 90, exitDistance: 2600 },
   director: {
@@ -426,6 +467,7 @@ export const CONFIG = {
     truck: { unlockLevel: 9, cost: 5, cap: 4, weight: 2 },
     laser: { unlockLevel: 11, cost: 10, cap: 1, weight: 4 },
     heli: { unlockLevel: 2, cost: 4, cap: 4, weight: 3 },
+    napalm: { unlockLevel: 6, cost: 6, cap: 2, weight: 2 },
   },
   /** Enemy HP and damage multipliers grow with the player's level (not run time). */
   difficulty: { hpPerLevel: 0.12, dmgPerLevel: 0.075 },
@@ -522,7 +564,7 @@ export const CONFIG = {
     returnFade: 1.0,
   },
   readability: {
-    threatKinds: ['blimp', 'sam', 'artillery', 'truck', 'heli'] as readonly string[],
+    threatKinds: ['blimp', 'sam', 'artillery', 'truck', 'heli', 'napalm'] as readonly string[],
     maxArrows: 8,
     arrowMarginPx: 28,
     chevronMax: 80,

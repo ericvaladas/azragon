@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { CONFIG } from '../config';
 import { faceted } from '../render/toon';
 
-export type ParticleKind = 'dust' | 'debris' | 'fire' | 'smoke' | 'spark' | 'acid' | 'plasma' | 'trail' | 'ink' | 'rot' | 'shade' | 'mist' | 'bone' | 'wisp' | 'hexfire' | 'hexember' | 'wraith' | 'billow' | 'veil' | 'splash';
+export type ParticleKind = 'dust' | 'debris' | 'fire' | 'smoke' | 'spark' | 'acid' | 'plasma' | 'trail' | 'ink' | 'rot' | 'shade' | 'mist' | 'bone' | 'wisp' | 'hexfire' | 'hexember' | 'wraith' | 'billow' | 'veil' | 'splash' | 'napalm' | 'ember';
 
 /**
  * `stretch`: drawn upright and this many times taller than wide, flickering (flame tongues) instead of tumbling.
@@ -32,6 +32,10 @@ export const PRESETS: Record<ParticleKind, Preset> = {
   hexfire: { color: W.hexfire, life: 0.6, size0: 34, size1: 6, speed: 45, up: 210, gravity: -220, drag: 1.6, stretch: 2.4 },
   /** The deep violet heart of black fire, a few among the black tongues. */
   hexember: { color: W.hexember, life: 0.5, size0: 20, size1: 4, speed: 50, up: 200, gravity: -200, drag: 1.4, stretch: 1.8 },
+  /** Napalm fire: orange flame tongues that leap up off a burning patch and shrink away, flickering. */
+  napalm: { color: P.napalmFire, life: 0.7, size0: 40, size1: 8, speed: 40, up: 230, gravity: -200, drag: 1.6, stretch: 2.2 },
+  /** Bright embers that drift up out of napalm fire. */
+  ember: { color: 0xffc23a, life: 1.2, size0: 8, size1: 3, speed: 60, up: 150, gravity: -30, drag: 1.2 },
   /** A Hungry Ghost's short smoky tail. */
   wraith: { color: W.shade, life: 0.32, size0: 24, size1: 30, speed: 8, up: 8, gravity: -10, drag: 2 },
   /** Pale ghost-light motes shed by the Hungry Ghosts. */
@@ -60,7 +64,7 @@ const HIDDEN = new THREE.Matrix4().makeScale(0, 0, 0);
 /** `splash`: water spray, opaque, in its own small pool so fire, debris and sparks filling `solid` never starve it. */
 const LAYER_OPACITY = { solid: 1, dust: 0.65, smoke: 0.35, murk: 0.85, cloud: 0.6, splash: 1 } as const;
 type LayerName = keyof typeof LAYER_OPACITY;
-const LAYER_OF: Record<ParticleKind, LayerName> = { dust: 'dust', smoke: 'smoke', debris: 'solid', fire: 'solid', spark: 'solid', acid: 'solid', plasma: 'solid', trail: 'dust', ink: 'smoke', rot: 'solid', shade: 'murk', mist: 'murk', bone: 'solid', wisp: 'dust', hexfire: 'solid', hexember: 'solid', wraith: 'murk', billow: 'dust', veil: 'cloud', splash: 'splash' };
+const LAYER_OF: Record<ParticleKind, LayerName> = { dust: 'dust', smoke: 'smoke', debris: 'solid', fire: 'solid', spark: 'solid', acid: 'solid', plasma: 'solid', trail: 'dust', ink: 'smoke', rot: 'solid', shade: 'murk', mist: 'murk', bone: 'solid', wisp: 'dust', hexfire: 'solid', hexember: 'solid', wraith: 'murk', billow: 'dust', veil: 'cloud', splash: 'splash', napalm: 'solid', ember: 'solid' };
 const LAYER_MAX: Record<LayerName, number> = { solid: 500, dust: 400, smoke: 500, murk: 400, cloud: 160, splash: 200 };
 
 /** One pooled InstancedMesh: swap-remove on death, no per-frame allocation. */

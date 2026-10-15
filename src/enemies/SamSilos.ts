@@ -3,6 +3,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { CONFIG } from '../config';
 import type { Target } from '../combat';
 import { faceted, painted, toonMat } from '../render/toon';
+import { samLauncherGeometry, samLaunchDir, samMuzzle } from './samModel';
 import { steerToward } from './steer';
 import type { EnemySystem, WorldContext } from './types';
 
@@ -17,6 +18,8 @@ const _p = new THREE.Vector3();
 const _aim = new THREE.Vector3();
 const _d = new THREE.Vector3();
 const FWD = new THREE.Vector3(0, 1, 0);
+/** How fast a launcher's turntable yaws to keep its rack facing the monster (rad/s). */
+const YAW_RATE = 1.2;
 const HIDDEN = new THREE.Matrix4().makeScale(0, 0, 0);
 
 class Silo implements Target {
@@ -29,6 +32,8 @@ class Silo implements Target {
   phase: Phase = 'rising';
   t = 0;
   raise = 0;
+  /** Turntable heading (0 faces +Z); the rack keeps turning toward the monster. */
+  yaw = 0;
   /** Seconds into the 'up' phase when the next volley launches. */
   nextVolley: number = C.fireDelay;
 
@@ -91,18 +96,8 @@ export class SamSilos implements EnemySystem {
       painted(faceted(new THREE.CylinderGeometry(0.72, 0.72, 0.03, 8)), P.samHazard),
     ])!;
     this.hatch = new THREE.InstancedMesh(hatchGeo, toonMat(0xffffff, { vertexColors: true }), MAX);
-    // White launcher body with a hazard-striped band, red missile tubes with white caps.
-    const stripes = [0, 1, 2, 3].map((k) =>
-      painted(faceted(new THREE.BoxGeometry(0.21, 0.1, 0.84)).translate(-0.3 + k * 0.2, 0.42, 0), k % 2 ? P.samHazardDark : P.samHazard),
-    );
-    const tubes = [-0.18, 0.18].flatMap((x) =>
-      [-0.18, 0.18].flatMap((z) => [
-        painted(faceted(new THREE.CylinderGeometry(0.11, 0.11, 0.6, 6)).translate(x, 0.7, z), P.samTube),
-        painted(faceted(new THREE.CylinderGeometry(0.12, 0.12, 0.08, 6)).translate(x, 1.04, z), P.samLauncher),
-      ]),
-    );
-    const launcherGeo = mergeGeometries([painted(faceted(new THREE.BoxGeometry(0.8, 0.5, 0.8)).translate(0, 0.25, 0), P.samLauncher), ...stripes, ...tubes])!;
-    this.launcher = new THREE.InstancedMesh(launcherGeo, toonMat(0xffffff, { vertexColors: true }), MAX);
+    // Mobile launcher: turntable, cab, radar and a 2×2 missile pod pitched up 45°, yawed toward the monster.
+    this.launcher = new THREE.InstancedMesh(samLauncherGeometry(), toonMat(0xffffff, { vertexColors: true }), MAX);
     // White missile body with a red nose (the cone's tip is +Y, the flight direction).
     const missileGeo = mergeGeometries([
       painted(faceted(new THREE.CylinderGeometry(0.3, 0.3, 0.7, 5)).translate(0, -0.15, 0), P.missile),
@@ -142,6 +137,7 @@ export class SamSilos implements EnemySystem {
     // A silo rises out of the ground, so never onto a bridge deck.
     const p = ctx.roads.nearestLand({ x: m.x + Math.cos(a) * r, z: m.z + Math.sin(a) * r });
     s.position.set(p.x, C.size * 0.4, p.z);
+    s.yaw = Math.atan2(m.x - p.x, m.z - p.z);
     ctx.particles.ring('dust', s.position.clone().setY(0), C.size * 1.5, 10);
     this.silos.push(s);
   }
@@ -174,6 +170,9 @@ export class SamSilos implements EnemySystem {
         continue;
       }
       s.t += dt;
+      const turn = Math.atan2(mp.x - s.position.x, mp.z - s.position.z) - s.yaw;
+      const wrapped = Math.atan2(Math.sin(turn), Math.cos(turn));
+      s.yaw += Math.sign(wrapped) * Math.min(Math.abs(wrapped), YAW_RATE * dt);
       if (s.phase === 'rising') {
         s.raise = Math.min(1, s.t / C.riseTime);
         if (s.t >= C.riseTime) this.enter(s, 'up');
@@ -220,8 +219,13 @@ export class SamSilos implements EnemySystem {
   private launch(s: Silo, k: number, ctx: WorldContext): void {
     if (this.missiles.length >= MAX_MISSILES) return;
     const m = new Missile(this.damageMissile);
-    m.position.set(s.position.x + (k % 2 ? 1 : -1) * C.size * 0.18, C.size * 1.3, s.position.z + (k < 2 ? 1 : -1) * C.size * 0.18);
-    m.dir.set((ctx.rng() - 0.5) * 0.3, 1, (ctx.rng() - 0.5) * 0.3).normalize();
+    // Out of tube k's mouth along the rack's 45° axis, with a little scatter; the missile then homes on the monster.
+    samLaunchDir(s.yaw, m.dir);
+    samMuzzle(k, s.yaw, C.size, _p);
+    m.position.set(s.position.x + _p.x, _p.y, s.position.z + _p.z).addScaledVector(m.dir, C.size * 0.08);
+    m.dir.x += (ctx.rng() - 0.5) * 0.3;
+    m.dir.z += (ctx.rng() - 0.5) * 0.3;
+    m.dir.normalize();
     ctx.particles.emit('fire', m.position, 3, 0.4);
     this.missiles.push(m);
   }
@@ -233,7 +237,8 @@ export class SamSilos implements EnemySystem {
       if (s.raise <= 0.01) {
         this.launcher.setMatrixAt(i, HIDDEN);
       } else {
-        _m.compose(_p.set(s.position.x, -C.size * 1.5 * (1 - s.raise), s.position.z), _q.identity(), _s.setScalar(C.size));
+        _q.setFromAxisAngle(FWD, s.yaw);
+        _m.compose(_p.set(s.position.x, -C.size * 1.5 * (1 - s.raise), s.position.z), _q, _s.setScalar(C.size));
         this.launcher.setMatrixAt(i, _m);
       }
     });

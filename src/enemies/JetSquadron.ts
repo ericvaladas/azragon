@@ -2,12 +2,11 @@ import * as THREE from 'three';
 import { CONFIG } from '../config';
 import type { Target } from '../combat';
 import type { EnemySystem, WorldContext } from './types';
-import { faceted, toonMat } from '../render/toon';
+import { toonMat } from '../render/toon';
+import { burnerGeometry, jetGeometry } from './jetModel';
 import { steerToward } from './steer';
-import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 type Mode = 'attack' | 'exit' | 'crashing';
-const S = CONFIG.jet.size;
 const _desired = new THREE.Vector3();
 const _look = new THREE.Vector3();
 
@@ -48,12 +47,10 @@ export class JetSquadron implements EnemySystem {
   readonly kind = 'jet' as const;
   private ctx: WorldContext | null = null;
   private jets: Jet[] = [];
-  /** Fuselage, wings and tail fin merged so each jet is one draw call. */
-  private body = mergeGeometries([
-    faceted(new THREE.BoxGeometry(S * 0.22, S * 0.18, S)),
-    faceted(new THREE.BoxGeometry(S * 0.95, S * 0.04, S * 0.32)).translate(0, 0, -S * 0.05),
-    faceted(new THREE.BoxGeometry(S * 0.04, S * 0.26, S * 0.2)).translate(0, S * 0.15, -S * 0.4),
-  ])!;
+  /** Airframe (one vertex-coloured mesh per jet, sharing this geometry) and the unlit afterburner flame. */
+  private body = jetGeometry();
+  private burnerGeo = burnerGeometry();
+  private burnerMat = new THREE.MeshBasicMaterial({ color: CONFIG.palette.jetBurner });
 
   constructor(private scene: THREE.Scene) {}
 
@@ -74,11 +71,11 @@ export class JetSquadron implements EnemySystem {
     this.ctx = ctx;
     const around = ctx.monster.position;
     const rng = ctx.rng;
-    const mat = toonMat(CONFIG.palette.jet);
+    const mat = toonMat(0xffffff, { vertexColors: true });
     const j = new Jet(mat, this.damage);
     const mesh = new THREE.Mesh(this.body, mat);
     mesh.castShadow = true;
-    j.group.add(mesh);
+    j.group.add(mesh, new THREE.Mesh(this.burnerGeo, this.burnerMat));
     const a = rng() * Math.PI * 2;
     const r = CONFIG.director.spawnRing * 1.2;
     j.hp = CONFIG.jet.hp * ctx.difficulty.hpMult;
