@@ -33,6 +33,8 @@ import { JetSquadron } from './enemies/JetSquadron';
 import { Blimps } from './enemies/Blimps';
 import { Helicopters } from './enemies/Helicopters';
 import { NapalmBombers } from './enemies/NapalmBombers';
+import { OspreyNets } from './enemies/OspreyNets';
+import { Snare } from './systems/snare';
 import { SamSilos } from './enemies/SamSilos';
 import { Artillery } from './enemies/Artillery';
 import { LaserTrucks } from './enemies/LaserTrucks';
@@ -43,7 +45,7 @@ import type { CityStyle } from './cities/types';
 import { Progression, expToNext } from './systems/Progression';
 import { healOnKill, regen } from './monster/vitals';
 import { DebugOverlay } from './systems/DebugOverlay';
-import { Abilities, type ActiveId } from './systems/abilities';
+import { Abilities, type AbilityView, type ActiveId } from './systems/abilities';
 import { Shockwave } from './systems/Shockwave';
 import { LevelUpMoment } from './systems/levelUpMoment';
 import { LevelUpAura } from './systems/LevelUpAura';
@@ -154,6 +156,9 @@ export class GameScene {
   private jaws = new THREE.Vector3();
   private swatCd = 0;
   private tailCd = 0;
+  /** The monster's snare (Osprey nets), and a snare that arrived mid-leap, waiting for the landing (s; 0 = none). */
+  private snare = new Snare();
+  private pendingSnare = 0;
   /** Ravenous Hunger heat 0..1 (Wendigo); always 0 when the passive isn't taken. */
   private heat = 0;
   /** Wendigo: Shadow Hands (anti-air) and Ravenous Hunger's withering aura. */
@@ -218,6 +223,7 @@ export class GameScene {
     this.enemies.add(new OrbitalLaser(this.scene));
     this.enemies.add(new Helicopters(this.scene));
     this.enemies.add(new NapalmBombers(this.scene));
+    this.enemies.add(new OspreyNets(this.scene));
     this.ctx = this.buildContext();
     this.intro = new IntroCinematic({ scene: this.scene, camera: this.camera, overlay: container, monster: this.monster, city: this.city, particles: this.particles, onReveal: () => this.music.reveal() });
     this.city.onCollapseStart = (pos, size) => {
@@ -409,6 +415,8 @@ export class GameScene {
     this.runTime = 0;
     this.openingDone = false;
     this.abilities.reset();
+    this.snare.clear();
+    this.pendingSnare = 0;
     this.swatCd = 0;
     this.tailCd = 0;
     this.heat = 0;
@@ -598,6 +606,8 @@ export class GameScene {
 
   private startDying(): void {
     this.breath.clear();
+    this.snare.clear();
+    this.pendingSnare = 0;
     this.monster.body.arms?.clear();
     this.monster.charge = 0;
     this.monster.lookAt = null;
@@ -647,6 +657,11 @@ export class GameScene {
       if (this.state === 'playing') {
         this.runTime += dt;
         this.abilities.tick(dt);
+        if (this.pendingSnare > 0 && !this.monster.airborne) {
+          this.startSnare(this.pendingSnare);
+          this.pendingSnare = 0;
+        }
+        if (this.snare.update(dt)) this.enemies.get<OspreyNets>('osprey').netTornFree();
         const fire = this.passives.update(dt, this.monster.kind.interceptRate ?? 1);
         if (fire.storm > 0) this.spikeStorm(fire.storm);
         if (fire.brood > 0) this.brood.spawn(fire.brood, this.monster.launchOrigin(new THREE.Vector3()));
@@ -720,7 +735,7 @@ export class GameScene {
         this.hudT = 1 / CONFIG.hudHz;
         this.emitHud();
         this.emitThreats();
-        this.events.emit('abilities', this.abilities.view());
+        this.events.emit('abilities', this.abilityView());
       }
     }
 
@@ -750,8 +765,16 @@ export class GameScene {
   };
 
 
+  /** The ability buttons: Leap and Dash show not ready while snared. */
+  private abilityView(): AbilityView[] {
+    const view = this.abilities.view();
+    if (!this.snare.blocksMobility) return view;
+    return view.map((v) => (v.id === 'leap' || v.id === 'dash' ? { ...v, ready: false, aiming: false } : v));
+  }
+
   pressAbility(id: ActiveId): void {
     if (this.state !== 'playing' || !this.monster.alive) return;
+    if ((id === 'leap' || id === 'dash') && this.snare.blocksMobility) return;
     if (id === 'roar') {
       if (this.abilities.trigger('roar')) this.roar();
       return;
@@ -796,6 +819,7 @@ export class GameScene {
   }
 
     private leapTo(ground: THREE.Vector3): void {
+      if (this.snare.blocksMobility) return;
       const m = this.monster;
       const from = { x: m.position.x, z: m.position.z };
       const to = leapLanding(this.city.style, from, { x: ground.x, z: ground.z }, CONFIG.abilities.leap.range, this.ms.bodyRadius);
@@ -825,6 +849,7 @@ export class GameScene {
     }
 
     private roar(): void {
+      this.snare.onAttack();
       const R = CONFIG.abilities.roar;
       const m = this.monster;
       const p = m.position;
@@ -883,6 +908,7 @@ export class GameScene {
     const target = tailSweepTarget(from, m.yaw, this.enemyTargets(), TS.reach, TS.rearHalf);
     if (!target) return;
     this.tailCd = TS.cooldown * this.progression.stats.cooldownMult;
+    this.snare.onAttack();
     const aim = { x: target.position.x, z: target.position.z };
     m.onTailImpact = () => {
       const at = { x: m.position.x, z: m.position.z };
@@ -948,6 +974,7 @@ export class GameScene {
     const hits = nearestWithin(head, sw.range, flyers, sw.targets, (t) => t.position);
     if (hits.length === 0) return;
     this.swatCd = sw.cooldown;
+    this.snare.onAttack();
     const dmg = sw.damage * this.dmgMult();
     const hands = this.monster.kind.antiAir === 'hands';
     // Shadow Hands: one hand per flyer, rising from the ground to arrive on the shared impact.
@@ -1118,7 +1145,16 @@ export class GameScene {
     const self = this;
     return {
       get monster() {
-        return { position: self.monster.position, alive: self.monster.alive, airborne: self.monster.airborne };
+        const m = self.monster;
+        return {
+          position: m.position,
+          alive: m.alive,
+          airborne: m.airborne,
+          bodyRadius: self.ms.bodyRadius,
+          width: self.ms.size.width,
+          height: self.ms.size.height,
+          leapTo: m.leapTarget,
+        };
       },
       get difficulty() {
         return difficulty(self.progression.level);
@@ -1136,6 +1172,7 @@ export class GameScene {
       },
       damageMonster: (amount, source, attacker) => this.damageMonster(amount, source, attacker),
       damageBuildings: (p, r, amount) => this.city.forEachStandingInRadius(p, r, (t) => t.applyDamage(amount)),
+      snareMonster: (duration) => this.snareMonster(duration),
       fireShell: (from, to, damage) => {
         this.projectiles.fireShell(from, to, damage);
         this.particles.emit('fire', from, 2, 0.3);
@@ -1174,6 +1211,21 @@ export class GameScene {
     if (this.passives.core()) this.heat = heatAfterHit(this.heat, r.damage, m.maxHp, CONFIG.passives.core.gain);
     this.rig.addTrauma(Math.min(0.4, 0.03 + r.damage * 0.004));
     if (m.hp <= 0) this.startDying();
+  }
+
+  /** An Osprey net lands: snares the monster now, or when it lands if it is mid-leap. Ignored once it is dead. */
+  private snareMonster(duration: number): void {
+    if (!this.monster.alive || this.state !== 'playing') return;
+    if (this.monster.airborne) this.pendingSnare = duration;
+    else this.startSnare(duration);
+  }
+
+  /** Starts (or restarts) the snare and drops any Leap aim. */
+  private startSnare(duration: number): void {
+    this.snare.start(duration);
+    this.abilities.cancelAim();
+    this.monster.crouch = false;
+    this.markers.setAim(null, 0);
   }
 
   private setRay(x: number, y: number): void {
@@ -1383,7 +1435,7 @@ export class GameScene {
         this.order = null;
         this.markers.setTarget(null);
       }
-      if (d.moveTo) m.moveToward(d.moveTo, dt, s.moveSpeedMult);
+      if (d.moveTo) m.moveToward(d.moveTo, dt, s.moveSpeedMult * this.snare.speedMult);
       else if (d.face) m.faceToward(d.face, dt);
       // An arc melee only strikes forward: turn to a target outside the arc first.
       const shape = m.kind.melee;
@@ -1391,6 +1443,7 @@ export class GameScene {
         d.attack === 'melee' && d.meleeAt !== null && shape.kind === 'arc' && !inArc(pos, m.yaw, Infinity, shape.halfAngle, d.meleeAt);
       if (outsideArc && !d.moveTo && !d.face && d.meleeAt) m.faceToward(d.meleeAt, dt);
       if (d.attack === 'melee' && d.meleeAt && !outsideArc) {
+        this.snare.onAttack();
         const plan = strikePlan(pos, m.yaw, d.meleeAt, this.ms.meleeRange);
         // Rending Claws: slam or backhand is decided once, here at the start, and the body is told it (so the pose
         // is the strike the damage uses); the backhand swings on its own slower timeline.
@@ -1422,6 +1475,7 @@ export class GameScene {
   private fireRanged(target: Target | null): void {
     // Gaze and hurled rocks only hit the ground: an ordered flyer is chased, not shot.
     if (target?.airborne && (this.monster.kind.ranged === 'hurl' || this.monster.kind.ranged === 'gaze')) return;
+    this.snare.onAttack();
     if (this.monster.kind.ranged === 'breath') this.breathAt(target);
     else if (this.monster.kind.ranged === 'hurl') this.hurlAt(target);
     else if (this.monster.kind.ranged === 'gaze') this.gazeAt(target);
@@ -1446,6 +1500,7 @@ export class GameScene {
     const cd = this.ms.meleeCooldown * this.progression.stats.cooldownMult;
     for (const { arm, target } of assignStrikes(free, m.yaw, from, cands, this.ms.meleeRange)) {
       arms.start(arm, 'slam', target.position, target, cd, this.ms.meleeTiming);
+      this.snare.onAttack();
     }
   }
 

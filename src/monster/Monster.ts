@@ -149,6 +149,11 @@ export class Monster {
     return this.leapT >= (this.kind.leapCrouch ?? 0) * CONFIG.abilities.leap.duration;
   }
 
+  /** Where the current leap lands; null when not leaping. */
+  get leapTarget(): Vec2 | null {
+    return this.leapT >= 0 ? this.leapTo : null;
+  }
+
   /** Leaping, roaring or dashing: the brain must not move or attack. */
   get busy(): boolean {
     return this.leapT >= 0 || this.roarT >= 0 || this.dashT >= 0;
