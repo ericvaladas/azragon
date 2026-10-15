@@ -467,16 +467,17 @@ export const CONFIG = {
     tank: { unlockLevel: 1, cost: 1, cap: 40, weight: 10 },
     jet: { unlockLevel: 2, cost: 4, cap: 8, weight: 4 },
     blimp: { unlockLevel: 3, cost: 3, cap: 6, weight: 3 },
-    sam: { unlockLevel: 5, cost: 5, cap: 4, weight: 2 },
-    artillery: { unlockLevel: 7, cost: 8, cap: 2, weight: 2 },
-    truck: { unlockLevel: 9, cost: 5, cap: 4, weight: 2 },
-    laser: { unlockLevel: 11, cost: 10, cap: 1, weight: 4 },
-    heli: { unlockLevel: 2, cost: 4, cap: 4, weight: 3 },
-    napalm: { unlockLevel: 6, cost: 6, cap: 2, weight: 2 },
+    sam: { unlockLevel: 6, cost: 5, cap: 4, weight: 2 },
+    artillery: { unlockLevel: 5, cost: 8, cap: 2, weight: 2 },
+    truck: { unlockLevel: 8, cost: 5, cap: 4, weight: 2 },
+    laser: { unlockLevel: 10, cost: 10, cap: 1, weight: 4 },
+    heli: { unlockLevel: 1, cost: 4, cap: 4, weight: 3 },
+    napalm: { unlockLevel: 4, cost: 6, cap: 2, weight: 2 },
   },
   /** Enemy HP and damage multipliers grow with the player's level (not run time). */
   difficulty: { hpPerLevel: 0.12, dmgPerLevel: 0.075 },
-  progression: { expBase: 20, expExponent: 1.55, offerCount: 3 },
+  /** EXP to reach the next level is expBase × level^expExponent, × earlyMult for levels up to earlyLevels. */
+  progression: { expBase: 20, expExponent: 1.55, earlyLevels: 3, earlyMult: 1.25, offerCount: 3 },
   /** One-off wave at the start of every run, outside the spawn budget. */
   opening: { time: 5, count: 8, radius: 1200 },
   /** Menu cameras: a slow high circle over the city (title), and a turntable orbit of the monster (select). */

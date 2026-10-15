@@ -5,10 +5,9 @@ import { ABILITIES, MAX_RANK, SHARED_ABILITIES, type AbilityId, type PoolSpec } 
 import { mulberry32 } from '../util/rng';
 
 describe('expToNext', () => {
-  it('follows expBase * level^expExponent, rounded (M2 curve: 20, 59, ...)', () => {
-    expect(expToNext(1)).toBe(20);
-    expect(expToNext(2)).toBe(59);
-    expect(expToNext(5)).toBeGreaterThan(expToNext(4));
+  it('follows expBase * level^expExponent, rounded, with the first three levels 25% steeper (25, 73, 137, then 171, ...)', () => {
+    expect([1, 2, 3, 4].map(expToNext)).toEqual([25, 73, 137, 171]);
+    for (let l = 1; l < 15; l++) expect(expToNext(l + 1)).toBeGreaterThan(expToNext(l));
   });
 });
 

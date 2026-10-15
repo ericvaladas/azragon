@@ -78,7 +78,9 @@ export const ABILITIES: Record<AbilityId, { title: string; desc(rank: number): s
 const emptyRanks = (): Record<AbilityId, number> => ({ dash: 0, roar: 0, acid: 0, storm: 0, chitin: 0, frenzy: 0, brood: 0, overload: 0, spines: 0, swat: 0, nova: 0, mortar: 0, bubble: 0, reflect: 0, meltdown: 0, grip: 0, core: 0 });
 
 export function expToNext(level: number): number {
-  return Math.round(CONFIG.progression.expBase * Math.pow(level, CONFIG.progression.expExponent));
+  const P = CONFIG.progression;
+  const early = level <= P.earlyLevels ? P.earlyMult : 1;
+  return Math.round(P.expBase * Math.pow(level, P.expExponent) * early);
 }
 
 export class Progression {

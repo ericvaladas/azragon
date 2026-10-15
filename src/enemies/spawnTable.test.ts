@@ -17,19 +17,22 @@ describe('difficulty', () => {
 
 describe('openKinds', () => {
   it('follows the unlock levels', () => {
-    expect(openKinds(1, none())).toEqual(['tank']);
+    expect(openKinds(1, none())).toEqual(['tank', 'heli']);
     expect(openKinds(2, none())).toEqual(['tank', 'jet', 'heli']);
+    expect(openKinds(2, none())).not.toContain('blimp');
     expect(openKinds(3, none())).toContain('blimp');
     expect(openKinds(4, none())).not.toContain('sam');
-    expect(openKinds(5, none())).toContain('sam');
-    expect(openKinds(7, none())).toContain('artillery');
-    expect(openKinds(9, none())).toContain('truck');
-    expect(openKinds(10, none())).not.toContain('laser');
-    expect(openKinds(11, none())).toEqual([...ENEMY_KINDS]);
+    expect(openKinds(4, none())).not.toContain('artillery');
+    expect(openKinds(5, none())).toContain('artillery');
+    expect(openKinds(5, none())).not.toContain('sam');
+    expect(openKinds(6, none())).toContain('sam');
+    expect(openKinds(7, none())).not.toContain('truck');
+    expect(openKinds(8, none())).toContain('truck');
+    expect(openKinds(9, none())).not.toContain('laser');
+    expect(openKinds(10, none())).toEqual([...ENEMY_KINDS]);
   });
-  it('unlocks helicopters at level 2', () => {
-    expect(openKinds(1, none())).not.toContain('heli');
-    expect(openKinds(2, none())).toContain('heli');
+  it('unlocks helicopters at level 1', () => {
+    expect(openKinds(1, none())).toContain('heli');
   });
   it('closes helicopters at their cap of 4', () => {
     expect(CONFIG.spawns.heli.cap).toBe(4);
@@ -39,9 +42,9 @@ describe('openKinds', () => {
     alive.heli = 4;
     expect(openKinds(5, alive)).not.toContain('heli');
   });
-  it('unlocks napalm bombers at level 6 and closes them at their cap of 2', () => {
-    expect(openKinds(5, none())).not.toContain('napalm');
-    expect(openKinds(6, none())).toContain('napalm');
+  it('unlocks napalm bombers at level 4 and closes them at their cap of 2', () => {
+    expect(openKinds(3, none())).not.toContain('napalm');
+    expect(openKinds(4, none())).toContain('napalm');
     expect(CONFIG.spawns.napalm.cap).toBe(2);
     expect(CONFIG.spawns.napalm.weight).toBeLessThan(CONFIG.spawns.jet.weight);
     const alive = none();
