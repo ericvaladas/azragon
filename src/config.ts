@@ -61,6 +61,11 @@ export const CONFIG = {
     samTube: 0xd8322a,
     samHazard: 0xf2c230,
     samHazardDark: 0x2b2b2b,
+    /** SAM launcher: sand-khaki turntable and cab, olive missile pod, dark frame/cradle accents, pale radar face. */
+    samBody: 0xc2b27a,
+    samBodyDark: 0x34352a,
+    samPod: 0x7f8a4a,
+    samRadar: 0xc9cdb8,
     missile: 0xf2f2ee,
     blimpTrim: 0xd8322a,
     blimpTrimDark: 0x5a1612,
