@@ -153,17 +153,11 @@ export function cityGroundTexture(style: CityStyle): THREE.CanvasTexture {
 }
 
 /** Road texture size: across the road (u) × along one segment (v), in px. */
-const ROAD_TEX = { w: 32, h: 256 } as const;
-/** Road texture px per old (8 × 64) px: the higher resolution lets the lines be thin, and keeps them sharp further out under mipmaps. */
-const RK = ROAD_TEX.w / 8;
-/** Depth (old px) of the crosswalk zone at each end, and the plain-asphalt row a switched-off end samples instead. */
-const CROSSWALK = { depth: 6, plainRow: 7.5 } as const;
-/** Deepest road mip level the shader samples: the 32 px road shrinks to 4 px, so its edge lines still show. */
-const ROAD_MAX_MIP = 3;
+const ROAD_TEX = { w: 8, h: 64 } as const;
 
 /**
  * One road segment, stretched over its quad (u across, v along): asphalt, white edge lines, a dashed centre line, and
- * zebra crosswalk stripes in the last CROSSWALK.depth (old) px at each end.
+ * zebra crosswalk stripes in the last 6 px at each end.
  */
 export function roadTexture(style: CityStyle): THREE.CanvasTexture {
   const C = style.colors;
@@ -174,27 +168,20 @@ export function roadTexture(style: CityStyle): THREE.CanvasTexture {
   const g = c.getContext('2d')!;
   g.fillStyle = hex(C.road);
   g.fillRect(0, 0, w, h);
-  // Thin lines: 1 px edge lines and a 2 px dashed centre line on the 32 px wide road.
   g.fillStyle = hex(C.roadLine);
   g.fillRect(0, 0, 1, h);
   g.fillRect(w - 1, 0, 1, h);
-  for (let y = 9 * RK; y < h - 9 * RK; y += 8 * RK) g.fillRect(w / 2 - 1, y, 2, 4 * RK);
+  for (let y = 9; y < h - 9; y += 8) g.fillRect(w / 2 - 1, y, 2, 4);
   // Crosswalks: stripes along the road, symmetric about the centre; the middle pair meets as one wide stripe.
-  const cw = CROSSWALK.depth * RK;
   g.fillStyle = hex(C.road);
-  g.fillRect(0, 0, w, cw);
-  g.fillRect(0, h - cw, w, cw);
+  g.fillRect(0, 0, w, 6);
+  g.fillRect(0, h - 6, w, 6);
   g.fillStyle = hex(C.crosswalk);
   for (const x of [1, 3, 4, 6]) {
-    g.fillRect(x * RK, RK, RK, cw - RK);
-    g.fillRect(x * RK, h - cw, RK, cw - RK);
+    g.fillRect(x, 1, 1, 5);
+    g.fillRect(x, h - 6, 1, 5);
   }
-  // Distant roads: mipmaps blend the dashes and crosswalks instead of letting them shimmer into stripes; the road
-  // shader caps the level (ROAD_MAX_MIP) so the edge lines never average away completely.
-  const tex = finish(c);
-  tex.minFilter = THREE.NearestMipmapLinearFilter;
-  tex.generateMipmaps = true;
-  return tex;
+  return finish(c);
 }
 
 export type Rect = { x: number; y: number; w: number; h: number };
@@ -267,8 +254,6 @@ export function scrambleTexture(ov: GroundOverlay): THREE.CanvasTexture {
  */
 export function patchRoadShader(sh: { vertexShader: string; fragmentShader: string }): void {
   const h = ROAD_TEX.h.toFixed(1);
-  const cw = (CROSSWALK.depth * RK).toFixed(1);
-  const plain = (CROSSWALK.plainRow * RK).toFixed(1);
   sh.vertexShader = sh.vertexShader
     .replace('#include <common>', '#include <common>\nattribute vec2 aPlainEnds;\nvarying vec2 vPlainEnds;')
     .replace('#include <uv_vertex>', '#include <uv_vertex>\n  vPlainEnds = aPlainEnds;');
@@ -277,13 +262,9 @@ export function patchRoadShader(sh: { vertexShader: string; fragmentShader: stri
     .replace(
       '#include <map_fragment>',
       `vec2 roadUv = vMapUv;
-  if (vPlainEnds.x > 0.5 && roadUv.y > 1.0 - ${cw} / ${h}) roadUv.y = 1.0 - ${plain} / ${h};
-  if (vPlainEnds.y > 0.5 && roadUv.y < ${cw} / ${h}) roadUv.y = ${plain} / ${h};
-  // Mip level from the unswitched UV, so the crosswalk switch-off above doesn't draw a seam where it jumps.
-  vec2 roadDx = dFdx(vMapUv) * vec2(${ROAD_TEX.w.toFixed(1)}, ${h});
-  vec2 roadDy = dFdy(vMapUv) * vec2(${ROAD_TEX.w.toFixed(1)}, ${h});
-  float roadLod = clamp(0.5 * log2(max(dot(roadDx, roadDx), dot(roadDy, roadDy))), 0.0, ${ROAD_MAX_MIP.toFixed(1)});
-  diffuseColor *= textureLod(map, roadUv, roadLod);`,
+  if (vPlainEnds.x > 0.5 && roadUv.y > 1.0 - 6.0 / ${h}) roadUv.y = 1.0 - 7.5 / ${h};
+  if (vPlainEnds.y > 0.5 && roadUv.y < 6.0 / ${h}) roadUv.y = 7.5 / ${h};
+  diffuseColor *= texture2D(map, roadUv);`,
     );
 }
 
