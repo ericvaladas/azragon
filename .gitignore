@@ -9,9 +9,4 @@ dist-ssr/
 coverage/
 rundot/docs/
 .rundot-docs/
-
-# StowKit
-*.stowcache
-!public/cdn-assets/CLAUDE.md
-.rundot/3d-engine-docs
 screenshots/

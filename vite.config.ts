@@ -3,7 +3,7 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { rundotGameLibrariesPlugin } from '@series-inc/rundot-game-sdk/vite';
 
-// CDN assets in cdn/ folder are automatically served in dev mode
+// Files in public/cdn-assets/ are served in dev mode and uploaded to the CDN by `rundot deploy`.
 
 export default defineConfig({
   plugins: [

@@ -1,7 +1,7 @@
 {
-  "name": "run-template-3d-react",
+  "name": "azragon",
   "version": "1.0.0",
-  "description": "Three.js + React UI + Vite + TypeScript template with RundotGameAPI integration",
+  "description": "AZRAGON: a kaiju city-smasher for RUN.game (Three.js + React UI + Vite + TypeScript)",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -17,10 +17,11 @@
     "shot": "node scripts/screenshot.mjs"
   },
   "keywords": [
+    "game",
+    "three.js",
     "react",
     "vite",
     "typescript",
-    "three.js",
     "RUN.game"
   ],
   "author": "",
@@ -31,7 +32,6 @@
     "@types/three": "~0.170.0",
     "@vitejs/plugin-react": "^4.3.4",
     "cross-env": "^7.0.3",
-    "firebase": "^12.12.1",
     "playwright": "^1.48.2",
     "prettier": "^3.4.2",
     "typescript": "^5.7.3",
@@ -40,15 +40,8 @@
   },
   "dependencies": {
     "@series-inc/rundot-game-sdk": "5.28.1",
-    "@series-inc/stowkit-packer-gui": "^0.1.1",
-    "@series-inc/stowkit-three-loader": "^0.1.43",
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "three": "0.170.0"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "@series-inc/rundot-game-sdk"
-    ]
   }
 }

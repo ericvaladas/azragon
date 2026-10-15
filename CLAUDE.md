@@ -1,66 +1,54 @@
 <agents-index>
 [RUN.game SDK Docs]|root:./.rundot-docs|version:5.3.2|IMPORTANT:Prefer retrieval-led reasoning over pre-training for RundotGameAPI tasks. Read the local docs before writing SDK code.|.:{README.md}|rundot-developer-platform:{deploying-your-game.md,getting-started.md,initializing-your-game.md,setting-your-game-thumbnail.md,troubleshooting.md}|rundot-developer-platform/api:{ACCESS_GATE.md,ADS.md,AI.md,ANALYTICS.md,ASSETS.md,BIGNUMBERS.md,BUILDING_TIMERS.md,CONTEXT.md,EMBEDDED_LIBRARIES.md,ENERGY_SYSTEM.md,ENTITLEMENTS.md,ENVIRONMENT.md,EXPERIMENTS.md,GACHA_SYSTEM.md,HAPTICS.md,IN_APP_MESSAGING.md,LEADERBOARD.md,LIFECYCLES.md,LOGGING.md,MULTIPLAYER.md,NOTIFICATIONS.md,PRELOADER.md,PROFILE.md,PURCHASES.md,SAFE_AREA.md,SERVER_AUTHORITATIVE.md,SHARED_ASSETS.md,SHARING.md,SHOP.md,SIMULATION_CONFIG.md,STORAGE.md,TIME.md,UGC.md}</agents-index>
 
-# Template: React UI + Three.js Game (Vite)
+# AZRAGON
+
+A kaiju city-smasher for RUN.game: React for the DOM UI, plain TypeScript classes for everything in Three.js, built with Vite and tested with Vitest. Started from the `run-template-3d-react` template; its sample code and StowKit asset pipeline have been removed.
 
 ## Architecture
 
 React handles **UI only** (HUD overlays, menus, popups). All 3D/game logic lives in plain TypeScript classes that own the Three.js renderer and game loop directly. React and the game layer meet at a single `<div>` mount point.
 
-When reasoning about orientation, movement, and camera placement, **assume all models are Y-up and face +Z forward** (positive Z is the character’s forward direction). In this right-handed system, **+X is the character’s LEFT** and **−X is the character’s RIGHT**. Do not assume +X = right — this is the most common source of inverted controls.
+When reasoning about orientation, movement, and camera placement, **assume all models are Y-up and face +Z forward**. In this right-handed system, **+X is the model's LEFT** and **−X is its RIGHT**; a heading `h` faces `(sin h, 0, cos h)`, so `heading = atan2(dx, dz)`. Do not assume +X = right.
 
-- **NEVER** use `useEffect` — it is banned in this project. Use `useCallback` refs for mount/unmount logic (see `App.tsx` pattern)
+- **NEVER** use `useEffect` — it is banned in this project. Use `useCallback` refs for mount/unmount logic (see `App.tsx`)
 - **NEVER** use React state, effects, or hooks for game logic, asset loading, audio, animation, or scene graph management
-- **NEVER** use React Three Fiber (`@react-three/fiber`) or `@react-three/drei` — they are not in this project
-- **DO** put game logic in classes (see `GameScene.ts` as the pattern)
+- **NEVER** use React Three Fiber (`@react-three/fiber`) or `@react-three/drei`
+- **DO** put game logic in classes (`GameScene.ts` and the systems it owns)
 - **DO** use React only for DOM UI elements
 
-## File Structure (as-shipped)
+## File Structure
 
-- **src/main.tsx** — Entry point. Applies theme via `applyTheme(theme)`, mounts `<App />` inside `ErrorBoundary` and `StrictMode`
-- **src/App.tsx** — Shell: mounts `GameScene`, subscribes to game events, renders HUD overlay (score display, game-over panel)
-- **src/GameScene.ts** — Game class. Owns Three.js renderer, camera, scene, lights, controls, `requestAnimationFrame` loop, state machine, asset loading, and event emitter. Extend this for game logic
-- **src/GameEvents.ts** — Typed event emitter (`GameEventEmitter`) and `GameState` type. The bridge between game logic and React UI
-- **src/loadStowKitPack.ts** — Plain async function to load StowKit `.stow` packs. Has a simple cache. No React
-- **src/components/** — Reusable UI: `ErrorBoundary`
-- **src/theme.ts** — Color tokens and `applyTheme()`. Edit colors here to match your game's aesthetic
-- **src/style.css** — Global styles; uses theme CSS color variables (e.g. `var(--color-primary)`)
-- **public/** — Static assets. Small essentials here; large assets in **public/cdn-assets/** (deployed to CDN via `rundot deploy`)
-- **vite.config.ts** — Vite + `@vitejs/plugin-react` + `rundotGameLibrariesPlugin()` from SDK; `base: './'`; esbuild/build target `es2022`
+- **src/main.tsx** — Entry point: records `game_loaded`, applies the theme, mounts `<App />` inside `ErrorBoundary` and `StrictMode`
+- **src/App.tsx** — Shell: mounts `GameScene`, wires RUN.game lifecycles, safe area and saved settings, subscribes to game events, renders the HUD and menus from `src/ui/`
+- **src/GameScene.ts** — Game class: renderer, camera, lights, `requestAnimationFrame` loop, state machine, and the systems below
+- **src/GameEvents.ts** — Typed event map (`GameEventMap`), `GameState`, and the emitter that bridges game → React
+- **src/config.ts** — `CONFIG`: every tuning number and the colour palette. Change values here rather than in code
+- **src/menuFlow.ts** — Menu and state transitions (title → select → intro → playing …)
+- **src/monster/**, **src/monsters/** — The player's monster (brain, gait, IK, strikes) and the roster of playable kinds (insect, kaiju, kraken, wendigo)
+- **src/enemies/** — Military units: one system class per kind (`TankFleet`, `JetSquadron`, `Artillery`, …), `SpawnDirector` and `spawnTable`, `*Model.ts` geometry and `*Math.ts` pure helpers
+- **src/world/**, **src/cities/** — Chunked procedural city, roads, rubble, the crater, pixel textures; per-city layouts and landmarks (Toronto, Tokyo)
+- **src/systems/** — Camera, input and taps, targeting, markers, projectiles, particles, abilities, progression, passives, effects
+- **src/render/** — Toon materials, pixel renderer, lighting, sky, atmosphere and fog, silhouettes
+- **src/intro/** — The space-to-city intro cinematic and the pod
+- **src/audio/** — Streamed music with crossfades, and the saved music preference
+- **src/ui/**, **src/components/** — React HUD and menu components; `ErrorBoundary`
+- **src/theme.ts**, **src/style.css** — Colour tokens (`applyTheme()`) and global styles
+- **public/cdn-assets/** — Files deployed to the CDN (the music in `audio/`). **public/thumbnail.jpg** — the 512×512 store thumbnail
+- **rundot/** — RUN.game project config (CLI hooks, service policies); commit it
+- **scripts/** — `screenshot.mjs` (`npm run shot`: Playwright capture of the dev server) and `encode-music.sh` (WAV masters kept outside the repo → AAC)
+- **docs/superpowers/** — Milestone specs and implementation plans
 
 ## Key Patterns
 
-- **3D/Game:** All game logic goes in plain TypeScript classes. `GameScene` owns the Three.js `WebGLRenderer`, camera, scene, and `requestAnimationFrame` loop. Load assets with `loadStowKitPack()`. Use `three` directly — `OrbitControls` from `three/addons/controls/OrbitControls.js`, etc. React never touches the scene graph.
-- **StowKit loading:** Always use `loadStowKitPack(packName)` from `src/loadStowKitPack.ts` — it handles CDN fetch, WASM config, and caching. Never load `.stow` files directly with `StowKitLoader.load()` in this template (CDN requires `RundotGameAPI.cdn.fetchAsset`).
-- **Game states:** `GameScene` has a state machine (`'loading' | 'playing' | 'paused' | 'gameover'`). The `update()` loop dispatches to `updatePlaying()` etc. based on state. Call `game.pause()`, `game.resume()`, `game.gameOver()`, `game.restart()` to transition. All transitions emit a `stateChange` event.
-- **Game events (Game → React):** `GameScene.events` is a typed `GameEventEmitter` from `src/GameEvents.ts`. React subscribes in the `useCallback` ref that mounts the game: `game.events.on('scoreChange', setScore)`. To add a new event, extend `GameEventMap` in `GameEvents.ts` and call `this.events.emit('yourEvent', data)` from `GameScene`. The game class never imports React.
-- **HUD overlay:** `App.tsx` renders a `.hud` div as an absolute-positioned sibling of `.scene-container`. It listens to game events and renders score, game-over panel, etc. HUD elements use `pointer-events: none` on the container, `pointer-events: auto` on interactive children.
-- **Score:** Call `game.setScore(n)` or `game.addScore(delta)` from game logic — these emit `scoreChange` which the HUD picks up automatically.
-- **RundotGameAPI:** Import `RundotGameAPI from '@series-inc/rundot-game-sdk/api'`. Use `RundotGameAPI.cdn.fetchAsset('filename.png')` (returns Promise<Blob>) for CDN assets; `RundotGameAPI.appStorage` for persistence; `RundotGameAPI.ads`, `RundotGameAPI.popups`, `RundotGameAPI.system.getSafeArea()` / `getDevice()` / `getEnvironment()`; `RundotGameAPI.error()` for logging. No initialization in code — SDK is wired by Vite plugin.
-- **Theme:** Edit `src/theme.ts`. `applyTheme(theme)` runs once in main.tsx; CSS uses variables like `var(--color-primary)`. Only color tokens — no spacing/radius/font variables.
-
-## What to Modify
-
-- **Game logic** — Put gameplay in `updatePlaying()` inside `GameScene.ts`. Call `this.addScore()` to update score, `this.gameOver()` when the game ends. Create new game classes as needed — all game logic stays in plain TypeScript, no React hooks or state.
-- **New events** — Add entries to `GameEventMap` in `src/GameEvents.ts`, emit from `GameScene`, subscribe in `App.tsx`.
-- **New HUD elements** — Add React elements inside the `.hud` div in `App.tsx`. Subscribe to game events via `game.events.on(...)`. Never render HUD as 3D text or sprites.
-- **New CDN assets** — Add files to `public/cdn-assets/`; load in code with `RundotGameAPI.cdn.fetchAsset('filename.ext')`. Use `public/` for small assets referenced by path.
-- **Look and feel** — `src/theme.ts` for colors, `src/style.css` for styles.
-- **Build/deploy** — `npm run build`; `rundot deploy` for production (includes CDN upload). Optional: `RUNDOT_GAME_DISABLE_EMBEDDED_LIBS=true` for bundled build.
-
-## StowKit Asset Pipeline
-
-**Adding assets is always a two-step process:**
-1. Place source file (FBX, GLB, PNG, WAV) in `assets/`, run `stowkit build`
-2. Load from `.stow` pack in game code: `pack.loadMesh('stringId')`, `pack.loadTexture('stringId')`, etc.
-
-- **NEVER** load raw source files directly (`THREE.FBXLoader`, `THREE.TextureLoader`, `THREE.GLTFLoader`, `fetch('assets/...')`)
-- **NEVER** manually create `.stowmeta` files — they are auto-generated by `stowkit build`
-- **NEVER** use `stowkit store` commands to find local project files — the store is a remote shared registry
-- To find local assets: glob `assets/`, read `.stowmeta` files, or run `stowkit status`
-- To add an asset: place file in `assets/` → `stowkit build` → use `loadStowKitPack('default')` then `pack.loadMesh()`/`pack.loadTexture()`/etc.
-- **CRITICAL: Always run `stowkit build` after adding or modifying any file in `assets/`.** The `.stow` bundle in `public/cdn-assets/` is what the game actually loads at runtime — if you skip the build, new/changed assets won't exist in the pack and `loadMesh()`/`loadTexture()`/etc. will fail silently or throw. This is the #1 forgotten step.
-- **Sounds/Audio:** When the user asks for sounds, **first** use the MCP asset store search to find existing sounds — there are many available. Only create/synthesize sounds as a last resort if nothing suitable exists in the store.
+- **3D models are built in code**, not loaded from files: each `*Model.ts` merges faceted, vertex-coloured box, cylinder and extrude parts (`faceted`, `painted` from `render/toon.ts`) into a few geometries, drawn as `InstancedMesh`es with `toonMat(0xffffff, { vertexColors: true })`. Instance colour tints them (e.g. the hit flash). Their colours are entries in `CONFIG.palette`.
+- **Game states:** `GameState` is `'loading' | 'title' | 'select' | 'intro' | 'playing' | 'paused' | 'levelup' | 'dying' | 'gameover'`; `GameScene.setState()` emits `stateChange`.
+- **Game events (Game → React):** extend `GameEventMap` in `GameEvents.ts`, `emit` from `GameScene`, subscribe in the `useCallback` ref in `App.tsx` that mounts the game. The game class never imports React. React → game goes through public methods on the `GameScene` instance.
+- **Enemies:** each kind is listed in `ENEMY_KINDS` and implemented as an `EnemySystem` (`src/enemies/types.ts`), which `GameScene` adds to its `EnemyRegistry`; spawn rules and costs are in `CONFIG.spawns`, difficulty scaling in `CONFIG.difficulty`.
+- **Tests:** Vitest, colocated as `*.test.ts`; `npm test` runs them. Pure maths and model geometry are tested directly. Check visuals in the dev server (`npm run dev`) or with `npm run shot`.
+- **RundotGameAPI:** `import RundotGameAPI from '@series-inc/rundot-game-sdk/api'`. In use: `cdn.resolveAssetUrl()` (music streams), `appStorage` (settings), `system.getSafeArea()`, `lifecycles.onPause`/`onResume`, `analytics`, `error()`. No initialization in code — the Vite plugin wires the SDK. Read `.rundot-docs/` before adding SDK calls.
+- **CDN assets:** put files in `public/cdn-assets/` and reach them with `RundotGameAPI.cdn.resolveAssetUrl()` (a streamable URL) or `cdn.fetchAsset()` (a Blob).
+- **Build:** `npm run build` (`tsc` then `vite build`). Deploy only when the user asks.
 
 ## UI Design Guidelines
 
@@ -150,13 +138,13 @@ Before writing ANY UI code, decide on an aesthetic direction that fits the game 
 
 ### Using the Theme System
 - **Always use CSS color variables** (`var(--color-primary)`, `var(--color-surface)`) — never hardcode colors in component styles
-- Update `src/theme.ts` to match the game's aesthetic BEFORE building any UI — the defaults are placeholders
+- New colour tokens go in `src/theme.ts` (applied as CSS variables by `applyTheme()`)
 
 ### Game HUD Patterns
 - Score/health/timer: absolutely-positioned HTML elements over the canvas — fast to update, accessible, styled with CSS. **Never** render HUD as 3D text or sprites
-- The template ships with a working HUD in `App.tsx`: score display at top, game-over overlay with "Play Again" button. See `.hud` styles in `style.css`
+- The HUD components live in `src/ui/` and are rendered by `App.tsx`; see the `.hud` styles in `style.css`
 - Animate HUD changes with CSS transitions on `transform`/`opacity` only — don't use JS `requestAnimationFrame` for UI animation, that's for the game loop
-- Game → React communication: `game.events.on('scoreChange', setScore)` in the `useCallback` ref that mounts the game. Add new event types to `GameEventMap` in `src/GameEvents.ts`. Game class never imports React
+- Game → React communication: `game.events.on('hud', …)` and friends in the `useCallback` ref that mounts the game. Add new event types to `GameEventMap` in `src/GameEvents.ts`. Game class never imports React
 - React → Game communication: call public methods on `gameRef.current` (e.g. `game.restart()`, `game.pause()`)
 
 ### Mobile Renderer Settings
@@ -168,62 +156,10 @@ Before writing ANY UI code, decide on an aesthetic direction that fits the game 
 - **NEVER** use `logarithmicDepthBuffer` — it uses `gl_FragDepth` which disables Early-Z testing on the GPU, devastating for mobile performance
 - Keep draw calls under ~100–200 for 60fps on mid-range mobile — use `InstancedMesh` or merged geometries to reduce. Check `renderer.info.render.calls` to monitor
 
-## Character Controller & Joystick Mapping
-
-Models face **+Z forward**, **+Y up** in Three.js's right-handed coordinate system. Because a character facing +Z faces *toward* the default camera (which looks down −Z), **+X is the character's LEFT and −X is the character's RIGHT**. This is the #1 source of inverted controls — getting the X sign wrong.
-
-**The #1 bug:** joystick axes get swapped or negated, producing inverted/rotated controls. Always derive movement from the **character's facing direction**, not raw axis assumptions. Remember: +X = character's LEFT, not right.
-
-**Correct joystick → world mapping (camera behind character, looking +Z):**
-```ts
-// Screen-space joystick: X right is positive, Y UP is negative (DOM convention)
-// +X = character's LEFT, so negate joystick X so "right" moves the character right (−X)
-const moveX = -joystickX;      // joystick right → world −X (character's right)
-const moveZ = -joystickY;      // joystick up (negative) → world +Z (character's forward)
-
-character.position.x += moveX * speed * delta;
-character.position.z += moveZ * speed * delta;
-```
-
-**Character rotation to face movement direction:**
-```ts
-if (moveX !== 0 || moveZ !== 0) {
-  const targetAngle = Math.atan2(moveX, moveZ);
-  character.rotation.y = targetAngle;
-}
-```
-
-Verify the rotation is correct:
-- Joystick UP → moveX=0, moveZ>0 → `atan2(0, +)` = 0 → faces +Z (forward) ✓
-- Joystick RIGHT → moveX<0, moveZ=0 → `atan2(-, 0)` = −π/2 → faces −X (character's right) ✓
-- Joystick LEFT → moveX>0, moveZ=0 → `atan2(+, 0)` = π/2 → faces +X (character's left) ✓
-
-**Common mistakes to avoid:**
-- Forgetting to negate joystick X — pushing right moves character LEFT (most common inversion bug)
-- Forgetting to negate joystick Y — pushing up moves character backward
-- Using `atan2(moveZ, moveX)` — rotates character 90° off from movement
-- Assuming +X is the character's right — it's the LEFT in this coordinate system
-- Applying joystick input in camera-local space without transforming to world space when the camera orbits
-
-**Camera-relative movement (orbiting/rotating camera):**
-```ts
-const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(camera.quaternion);
-forward.y = 0;
-forward.normalize();
-const right = new THREE.Vector3(-1, 0, 0).applyQuaternion(camera.quaternion);
-right.y = 0;
-right.normalize();
-
-const move = new THREE.Vector3();
-move.addScaledVector(right, joystickX);
-move.addScaledVector(forward, -joystickY);
-```
-
 ## Three.js Gotchas
 
 - `DirectionalLight` targets: always `scene.add(dirLight.target)` — Three.js needs the target in the scene graph for shadow camera orientation
-- `castShadow`/`receiveShadow` don't propagate to children — after loading a StowKit mesh, traverse to enable: `mesh.traverse(c => { if ((c as THREE.Mesh).isMesh) { c.castShadow = true; c.receiveShadow = true; } })`
-- StowKit `pack.loadMesh()` returns a `THREE.Group` with nested children — always traverse when setting per-mesh properties
+- `castShadow`/`receiveShadow` don't propagate to children — set them on each mesh
 - Always call `renderer.shadowMap.enabled = true` and set `dirLight.castShadow = true` for shadows to work
 - Near clipping plane (`camera.near`) too small causes z-fighting artifacts — if the camera zooms out far, increase `near` (e.g. `0.5` or `1` instead of `0.1`). Keep the near/far ratio reasonable (< 10000:1).
 
@@ -327,70 +263,3 @@ Toggle the `.bump` class from React, remove it after the transition. For number 
 - **Don't use CSS animations for game objects** — CSS animations run on the compositor thread and can't be synced to your game clock. Use them only for HUD elements.
 - **Don't add a tween library** (GSAP, Tween.js, etc.) — they add bundle size and a second animation loop competing with your `requestAnimationFrame`. The lerp + timer patterns above cover 99% of game tween needs.
 - **Don't animate material colors per-frame** — it's a GPU state change that breaks batching. Pre-bake color variants or use vertex colors.
-
-## Skinned Mesh + Animation
-
-`clone(true)` on a `SkinnedMesh` does **NOT** rebind the skeleton — every clone still points at the original bones, so they all T-pose or move in unison. And calling `loadSkinnedMesh()` per instance is way too expensive (re-decodes geometry + textures from scratch). The correct pattern is **load once, clone with rebind**.
-
-### Step 1 — Load template once (expensive, do it once at startup)
-```ts
-this.enemyTemplate = await pack.loadSkinnedMesh('character/my_character');
-this.enemyWalkClip = await pack.loadAnimationClip('animations/anim_walk');
-// Don't add the template to the scene — it's just a source to clone from
-```
-
-### Step 2 — Clone helper (rebinds skeleton to cloned bones)
-```ts
-function cloneSkinnedMesh(source: THREE.Group): THREE.Group {
-  const clone = source.clone(true);
-
-  const sourceBones: THREE.Bone[] = [];
-  const cloneBones: THREE.Bone[] = [];
-  source.traverse((n) => { if ((n as THREE.Bone).isBone) sourceBones.push(n as THREE.Bone); });
-  clone.traverse((n) =>  { if ((n as THREE.Bone).isBone) cloneBones.push(n as THREE.Bone); });
-
-  clone.traverse((n) => {
-    const sm = n as THREE.SkinnedMesh;
-    if (!sm.isSkinnedMesh) return;
-    const newBones = sm.skeleton.bones.map(
-      (b) => cloneBones[sourceBones.indexOf(b)] ?? b
-    );
-    sm.skeleton = new THREE.Skeleton(newBones, sm.skeleton.boneInverses);
-    sm.bind(sm.skeleton, sm.bindMatrix);
-  });
-
-  return clone;
-}
-```
-
-### Step 3 — Per spawn (cheap — just a CPU-side array remap)
-```ts
-const charGroup = cloneSkinnedMesh(this.enemyTemplate);
-scene.add(charGroup);
-const mixer = new THREE.AnimationMixer(charGroup);
-mixer.clipAction(this.enemyWalkClip).play();
-```
-
-### Step 4 — Every frame
-```ts
-mixer.update(delta);
-```
-
-### Step 5 — On death/removal
-```ts
-mixer.stopAllAction();
-scene.remove(charGroup);
-```
-
-### Quick Reference
-| Method | When to use |
-|--------|-------------|
-| `loadSkinnedMesh(id)` | Once, to get the template mesh |
-| `loadAnimationClip(id)` | Once, to get reusable clip data |
-| `loadAnimation(group, id)` | Convenience — loads + plays in one call. Only use for one-off instances |
-| `cloneSkinnedMesh()` + `new AnimationMixer` | Every subsequent instance — clone template, rebind skeleton, drive independently |
-
-- **NEVER** call `loadSkinnedMesh()` per enemy/instance — it re-decodes the full mesh from the asset pack every time
-- **NEVER** rely on `clone(true)` alone for skinned meshes — you will get T-posing clones that all share one skeleton
-
-[Run.3DEngine Docs Index]|root:.rundot/3d-engine-docs|core:{Component.md,GameObject.md,VenusGame.md}|patterns:{ComponentCommunication.md,CreatingGameObjects.md,MeshColliders.md,MeshLoading.md}|physics:{Colliders.md,PhysicsSystem.md,RigidBodyComponent.md}|rendering:{AssetManager.md,InstancedRenderer.md,MeshRenderer.md,SkeletalRenderer.md}|systems:{AnimationSystem.md,AudioSystem.md,InputManager.md,LightingSystem.md,NavigationSystem.md,ParticleSystem.md,PrefabSystem.md,SplineSystem.md,StowKitSystem.md,TweenSystem.md,UISystem.md}
