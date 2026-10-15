@@ -412,6 +412,14 @@ body {
   animation: menu-in 350ms ease-out both;
 }
 /* Browse arrows at the left and right edges, vertically centred on the monster. */
+/* Phones: opens the ESC menu (bottom left, clear of the ability buttons on the right). */
+.pause-btn {
+  position: absolute; left: calc(var(--safe-left) + 14px); bottom: calc(var(--safe-bottom) + 18px);
+  width: 52px; height: 52px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.14);
+  background: rgba(0, 0, 0, 0.75); color: var(--color-text); padding: 0; cursor: var(--cursor);
+  display: flex; align-items: center; justify-content: center; pointer-events: auto; touch-action: none;
+}
+.pause-btn:active { transform: scale(0.92); }
 .select-arrow {
   position: absolute; top: 50%; transform: translateY(-50%);
   width: 52px; height: 52px; border-radius: 50%; border: 0;
