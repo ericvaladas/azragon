@@ -25,6 +25,8 @@ export type GameEventMap = {
   stateChange: GameState;
   /** Whether the music is on (the player's saved setting, then each toggle). */
   music: boolean;
+  /** The music volume, 0..1 (the player's saved setting, then each slider move). */
+  musicVolume: number;
   hud: HudSnapshot;
   expGain: number;
   /** `all`: every available choice is listed (Konami-code levels), not the usual few. */

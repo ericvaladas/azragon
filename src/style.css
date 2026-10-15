@@ -450,5 +450,36 @@ body {
 .btn-secondary:active { transform: scale(0.95); }
 /* Escape menu: two equal buttons under the title. */
 .pause-menu .btn-primary, .pause-menu .btn-secondary { min-width: 220px; }
+/* Escape menu volume: label, slider, value on one row, as wide as the buttons. */
+.volume-row {
+  width: 220px; min-height: 44px; display: flex; align-items: center; gap: 10px;
+  font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.8em;
+}
+.volume-row.is-off { opacity: 0.35; filter: grayscale(0.5); }
+.volume-label { color: var(--color-text-muted); }
+.volume-value { width: 3ch; text-align: right; font-variant-numeric: tabular-nums; color: var(--color-text); }
+.volume-slider {
+  flex: 1; min-width: 0; height: 44px; margin: 0; background: transparent; cursor: var(--cursor);
+  -webkit-appearance: none; appearance: none; touch-action: none;
+}
+.volume-slider::-webkit-slider-runnable-track {
+  height: 6px; border-radius: 3px; border: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(to right, var(--color-primary) var(--fill), rgba(0, 0, 0, 0.5) var(--fill));
+}
+.volume-slider::-moz-range-track {
+  height: 6px; border-radius: 3px; border: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(to right, var(--color-primary) var(--fill), rgba(0, 0, 0, 0.5) var(--fill));
+}
+.volume-slider::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 18px; height: 18px; margin-top: -7px; border-radius: 2px;
+  background: var(--color-text); border: 2px solid var(--color-primary);
+}
+.volume-slider::-moz-range-thumb {
+  width: 14px; height: 14px; border-radius: 2px; background: var(--color-text); border: 2px solid var(--color-primary);
+}
+.volume-slider:focus { outline: none; }
+.volume-slider:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; border-radius: 2px; }
+.volume-slider:active::-webkit-slider-thumb { transform: scale(1.2); }
+.volume-slider:active::-moz-range-thumb { transform: scale(1.2); }
 
 @keyframes menu-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }

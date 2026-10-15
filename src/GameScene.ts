@@ -11,7 +11,7 @@ import { resolveHit, type DamageSource, type Target } from './combat';
 import { City, CRATER_RADIUS } from './world/City';
 import { IntroCinematic } from './intro/IntroCinematic';
 import { Music } from './audio/Music';
-import { loadMusicOn, saveMusicOn } from './audio/musicPref';
+import { loadMusicOn, loadVolume, saveMusicOn, saveVolume } from './audio/musicPref';
 import { nearestRoadPoint, planRoadPath, ringOnRoads } from './world/roads';
 import { Monster } from './monster/Monster';
 import { CameraRig } from './systems/CameraRig';
@@ -131,6 +131,9 @@ export class GameScene {
   private stateBeforePause: GameState = 'playing';
   private music = new Music();
   private musicOn = true;
+  private musicVolume = 1;
+  /** A slider drag saves once it settles, not on every step. */
+  private volumeSaveTimer = 0;
   /**
    * Any pointer, touch or key gesture: the first starts the music (browsers allow audio only after a gesture).
    * Touch counts as a gesture only on release (pointerup / touchend), a mouse on press, so all of them are listened to.
@@ -289,6 +292,12 @@ export class GameScene {
     void loadMusicOn(this.store).then((on) => {
       if (on !== this.musicOn) this.setMusicOn(on);
     });
+    void loadVolume(this.store).then((v) => {
+      if (v === this.musicVolume) return;
+      this.musicVolume = v;
+      this.music.setVolume(v);
+      this.events.emit('musicVolume', v);
+    });
     void loadPick(this.store).then((id) => {
       if (this.browsed) return;
       this.selIndex = ROSTER_ORDER.indexOf(id);
@@ -356,6 +365,19 @@ export class GameScene {
     this.music.setMuted(!on);
     this.events.emit('music', on);
     void saveMusicOn(this.store, on);
+  }
+
+  getMusicVolume(): number {
+    return this.musicVolume;
+  }
+
+  /** Pause menu → Volume slider: set the music volume (0..1) and remember it. */
+  setMusicVolume(v: number): void {
+    this.musicVolume = Math.min(1, Math.max(0, v));
+    this.music.setVolume(this.musicVolume);
+    this.events.emit('musicVolume', this.musicVolume);
+    clearTimeout(this.volumeSaveTimer);
+    this.volumeSaveTimer = window.setTimeout(() => void saveVolume(this.store, this.musicVolume), 300);
   }
 
   /** Pause menu → Exit Game: abandon the run and go back to the title screen. */
@@ -1668,6 +1690,7 @@ export class GameScene {
 
   dispose(): void {
     for (const ev of GESTURES) window.removeEventListener(ev, this.onGesture, true);
+    clearTimeout(this.volumeSaveTimer);
     this.music.dispose();
     this.input.dispose();
     this.debug?.dispose();

@@ -28,6 +28,8 @@ export class Music {
   private streams: Partial<Record<TrackId, Stream>> = {};
   private disposed = false;
   private muted = false;
+  /** The player's volume, 0..1, scaling CONFIG.music.volume. */
+  private level = 1;
 
   constructor() {
     const resolve = (file: string) => RundotGameAPI.cdn.resolveAssetUrl(file);
@@ -42,7 +44,7 @@ export class Music {
     if (!this.ctx) {
       this.ctx = new AudioContext();
       this.master = this.ctx.createGain();
-      this.master.gain.value = this.muted ? 0 : M.volume;
+      this.master.gain.value = this.target();
       this.master.connect(this.ctx.destination);
       for (const id of ['intro', 'main1', 'main2'] as const) this.setUp(id);
     }
@@ -55,12 +57,26 @@ export class Music {
   /** Silence the music or bring it back (a short fade). The tracks keep playing underneath, so the soundtrack stays in step with the game. */
   setMuted(muted: boolean): void {
     this.muted = muted;
+    this.rampMaster(0.25);
+  }
+
+  /** The player's volume, 0..1 (a very short ramp, so dragging a slider doesn't click). */
+  setVolume(level: number): void {
+    this.level = level;
+    this.rampMaster(0.05);
+  }
+
+  private target(): number {
+    return this.muted ? 0 : M.volume * this.level;
+  }
+
+  private rampMaster(dur: number): void {
     if (!this.ctx || !this.master) return;
     const g = this.master.gain;
     const now = this.ctx.currentTime;
     g.cancelScheduledValues(now);
     g.setValueAtTime(g.value, now);
-    g.linearRampToValueAtTime(muted ? 0 : M.volume, now + 0.25);
+    g.linearRampToValueAtTime(this.target(), now + dur);
   }
 
   /** The silhouette reveal started. */

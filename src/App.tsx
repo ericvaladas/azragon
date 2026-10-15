@@ -46,6 +46,7 @@ function applySafeArea(el: HTMLElement): void {
 function App() {
   const gameRef = useRef<GameScene | null>(null);
   const [musicOn, setMusicOn] = useState(true);
+  const [musicVolume, setMusicVolume] = useState(1);
   const [state, setState] = useState<GameState>('loading');
   const [skipHint, setSkipHint] = useState(false);
   const [hud, setHud] = useState<HudSnapshot>(EMPTY_HUD);
@@ -64,6 +65,7 @@ function App() {
     if (import.meta.env.DEV) (window as unknown as { __game: GameScene }).__game = game;
     game.events.on('stateChange', setState);
     game.events.on('music', setMusicOn);
+    game.events.on('musicVolume', setMusicVolume);
     game.events.on('hud', setHud);
     game.events.on('levelUpOffer', setOffer);
     game.events.on('gameOver', setStats);
@@ -75,6 +77,7 @@ function App() {
     // The constructor already entered 'title' before these subscriptions existed.
     setState(game.getState());
     setMusicOn(game.isMusicOn());
+    setMusicVolume(game.getMusicVolume());
     try {
       RundotGameAPI.lifecycles.onPause(() => game.pause());
       RundotGameAPI.lifecycles.onResume(() => game.resume());
@@ -105,6 +108,7 @@ function App() {
     const game = gameRef.current;
     if (game) game.setMusicOn(!game.isMusicOn());
   }, []);
+  const changeVolume = useCallback((v: number) => gameRef.current?.setMusicVolume(v), []);
   const exitGame = useCallback(() => gameRef.current?.exitToTitle(), []);
   // Paused from the select screen is still a menu: no run HUD behind the pause menu.
   const under = state === 'paused' ? gameRef.current?.pausedFrom() : state;
@@ -125,7 +129,7 @@ function App() {
           <LevelUpCards key={offer.seq} level={offer.level} offers={offer.offers} all={offer.all} onPick={(id) => pick(id, offer.seq)} />
         )}
         {showPauseButton(state, TOUCH) && <PauseButton onPress={openMenu} onSelect={state === 'select'} />}
-        {state === 'paused' && <PauseMenu musicOn={musicOn} onResume={resume} onToggleMusic={toggleMusic} onExit={exitGame} />}
+        {state === 'paused' && <PauseMenu musicOn={musicOn} volume={musicVolume} onResume={resume} onToggleMusic={toggleMusic} onVolume={changeVolume} onExit={exitGame} />}
         {state === 'gameover' && stats && <GameOver stats={stats} onRestart={restart} onChangeMonster={changeMonster} />}
       </div>
     </div>
