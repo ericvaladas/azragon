@@ -57,6 +57,12 @@ export const CONFIG = {
     cable: 0x1d1f22,
     strike: 0xff3b2f,
     artillery: 0x5f6b45,
+    /** Towed howitzer (olive is `artillery`): dark carriage/cradle, sand camo patches, gunmetal tube ends, tyres, hubs. */
+    artilleryDark: 0x363d26,
+    artillerySand: 0xb8a271,
+    artilleryMetal: 0x2a2d2b,
+    artilleryTyre: 0x1f2022,
+    artilleryHub: 0x6c705e,
     samLauncher: 0xeceae2,
     samTube: 0xd8322a,
     samHazard: 0xf2c230,
