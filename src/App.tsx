@@ -124,7 +124,7 @@ function App() {
         {state === 'levelup' && offer && (
           <LevelUpCards key={offer.seq} level={offer.level} offers={offer.offers} all={offer.all} onPick={(id) => pick(id, offer.seq)} />
         )}
-        {showPauseButton(state, TOUCH) && <PauseButton onPress={openMenu} />}
+        {showPauseButton(state, TOUCH) && <PauseButton onPress={openMenu} onSelect={state === 'select'} />}
         {state === 'paused' && <PauseMenu musicOn={musicOn} onResume={resume} onToggleMusic={toggleMusic} onExit={exitGame} />}
         {state === 'gameover' && stats && <GameOver stats={stats} onRestart={restart} onChangeMonster={changeMonster} />}
       </div>
