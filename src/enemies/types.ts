@@ -3,8 +3,8 @@ import type { DamageSource, OnDestroyed, Target } from '../combat';
 import type { Particles } from '../systems/Particles';
 import type { Vec2 } from '../util/math';
 
-export type EnemyKind = 'tank' | 'jet' | 'blimp' | 'sam' | 'artillery' | 'truck' | 'laser' | 'heli';
-export const ENEMY_KINDS: readonly EnemyKind[] = ['tank', 'jet', 'blimp', 'sam', 'artillery', 'truck', 'laser', 'heli'];
+export type EnemyKind = 'tank' | 'jet' | 'blimp' | 'sam' | 'artillery' | 'truck' | 'laser' | 'heli' | 'napalm';
+export const ENEMY_KINDS: readonly EnemyKind[] = ['tank', 'jet', 'blimp', 'sam', 'artillery', 'truck', 'laser', 'heli', 'napalm'];
 
 export type Difficulty = { hpMult: number; dmgMult: number };
 

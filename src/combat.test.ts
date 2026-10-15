@@ -28,4 +28,8 @@ describe('resolveHit', () => {
   it('beams are never deflected and still hit an airborne monster', () => {
     expect(resolveHit(10, 'beam', { ...base, airborne: true }, 0)).toEqual({ damage: 15, deflected: false });
   });
+  it('napalm fire is ground fire: misses an airborne monster and is never deflected', () => {
+    expect(resolveHit(10, 'napalm', { ...base, airborne: true }, 0.99).damage).toBe(0);
+    expect(resolveHit(10, 'napalm', base, 0)).toEqual({ damage: 15, deflected: false });
+  });
 });

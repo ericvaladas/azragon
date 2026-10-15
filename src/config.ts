@@ -69,6 +69,13 @@ export const CONFIG = {
     heliDark: 0x2f3620,
     heliGlass: 0x7fb4c4,
     heliRotor: 0x1d1f22,
+    napalmBomber: 0x48512f,
+    napalmBelly: 0x9aa58a,
+    napalmGlass: 0x7fb4c4,
+    napalmDark: 0x262b1a,
+    napalmBomb: 0x22241f,
+    napalmFire: 0xff7a1a,
+    napalmScorch: 0x1c120b,
   },
   fog: { near: 2200, far: 4700 },
   camera: {
@@ -408,6 +415,23 @@ export const CONFIG = {
     bankGain: 2.2, bankMax: 0.35, pitchMax: 0.2,
     rotorSpin: 18, tailRotorSpin: 40,
   },
+  /**
+   * Napalm bombers: spawn spawnDist m from the monster on a random bearing and fly a straight line at `speed`
+   * over the monster's position at spawn (the aim point), despawning exitDist m past it. They lay `bombs` bombs
+   * whose impacts sit `spacing` m apart along the flight line, centred on the aim point; each falls from the
+   * bomber under bombGravity (m/s²) keeping the bomber's forward speed. A dark strip marks the line warnLead s
+   * before the first release. Each impact leaves a burning patch (patchRadius m, patchLife s, fading over the last
+   * patchFade s); the monster burns at `dps` while its centre is within patchRadius + contactFrac × body radius
+   * of any patch (patches never stack), dealt in burnTick-s ticks (the first on stepping in) so the hit flash
+   * pulses instead of holding the monster white. `span` is the wingspan; propellers spin at propSpin rad/s.
+   */
+  napalm: {
+    hp: 150, exp: 30, span: 90, hitRadius: 80,
+    spawnDist: 2600, exitDist: 2600, altitude: 350 * MONSTER_SCALE, speed: 240,
+    bombs: 6, spacing: 90, bombGravity: 160, warnLead: 1.2,
+    patchRadius: 60, patchLife: 6, patchFade: 1, dps: 12, contactFrac: 0.25, burnTick: 0.5,
+    propSpin: 30,
+  },
   jet: { hp: 60, speed: 260, altitude: 430 * MONSTER_SCALE, turnRate: 0.9, damage: 10, rocketsPerSalvo: 3, salvoMin: 700, salvoMax: 1600, rocketSpeed: 650, exp: 15, size: 70, hitRadius: 90, exitDistance: 2600 },
   director: {
     baseRate: 0.6,
@@ -426,6 +450,7 @@ export const CONFIG = {
     truck: { unlockLevel: 9, cost: 5, cap: 4, weight: 2 },
     laser: { unlockLevel: 11, cost: 10, cap: 1, weight: 4 },
     heli: { unlockLevel: 2, cost: 4, cap: 4, weight: 3 },
+    napalm: { unlockLevel: 6, cost: 6, cap: 2, weight: 2 },
   },
   /** Enemy HP and damage multipliers grow with the player's level (not run time). */
   difficulty: { hpPerLevel: 0.12, dmgPerLevel: 0.075 },
@@ -522,7 +547,7 @@ export const CONFIG = {
     returnFade: 1.0,
   },
   readability: {
-    threatKinds: ['blimp', 'sam', 'artillery', 'truck', 'heli'] as readonly string[],
+    threatKinds: ['blimp', 'sam', 'artillery', 'truck', 'heli', 'napalm'] as readonly string[],
     maxArrows: 8,
     arrowMarginPx: 28,
     chevronMax: 80,

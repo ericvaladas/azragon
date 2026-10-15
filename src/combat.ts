@@ -1,6 +1,6 @@
 import type * as THREE from 'three';
 
-export type TargetKind = 'tank' | 'jet' | 'blimp' | 'sam' | 'missile' | 'artillery' | 'truck' | 'heli' | 'building';
+export type TargetKind = 'tank' | 'jet' | 'blimp' | 'sam' | 'missile' | 'artillery' | 'truck' | 'heli' | 'napalm' | 'building';
 
 /** Anything the monster can attack. Owners apply damage and report destruction via OnDestroyed. */
 export interface Target {
@@ -16,13 +16,13 @@ export interface Target {
 
 export type OnDestroyed = (target: Target, exp: number) => void;
 
-export type DamageSource = 'shell' | 'rocket' | 'missile' | 'blimp' | 'artillery' | 'laser' | 'beam';
+export type DamageSource = 'shell' | 'rocket' | 'missile' | 'blimp' | 'artillery' | 'laser' | 'beam' | 'napalm';
 
-const AREA: ReadonlySet<DamageSource> = new Set(['laser', 'artillery']);
+const AREA: ReadonlySet<DamageSource> = new Set(['laser', 'artillery', 'napalm']);
 const DEFLECTABLE: ReadonlySet<DamageSource> = new Set(['shell', 'rocket', 'missile', 'blimp']);
 
 /**
- * Damage the monster actually takes from one hit. Area attacks miss while airborne (mid-Leap);
+ * Damage the monster actually takes from one hit. Area attacks (laser, artillery, napalm fire) miss while airborne (mid-Leap);
  * nothing lands while invulnerable (Shield Bubble); projectiles and blimp blasts can be deflected (Chitin Deflection) when `roll` < deflectChance.
  */
 export function resolveHit(

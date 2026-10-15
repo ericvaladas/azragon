@@ -32,6 +32,7 @@ import { TankFleet } from './enemies/TankFleet';
 import { JetSquadron } from './enemies/JetSquadron';
 import { Blimps } from './enemies/Blimps';
 import { Helicopters } from './enemies/Helicopters';
+import { NapalmBombers } from './enemies/NapalmBombers';
 import { SamSilos } from './enemies/SamSilos';
 import { Artillery } from './enemies/Artillery';
 import { LaserTrucks } from './enemies/LaserTrucks';
@@ -213,6 +214,7 @@ export class GameScene {
     this.enemies.add(new LaserTrucks(this.scene));
     this.enemies.add(new OrbitalLaser(this.scene));
     this.enemies.add(new Helicopters(this.scene));
+    this.enemies.add(new NapalmBombers(this.scene));
     this.ctx = this.buildContext();
     this.intro = new IntroCinematic({ scene: this.scene, camera: this.camera, overlay: container, monster: this.monster, city: this.city, particles: this.particles, onReveal: () => this.music.reveal() });
     this.city.onCollapseStart = (pos, size) => {

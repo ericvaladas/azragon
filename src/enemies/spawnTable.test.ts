@@ -39,6 +39,17 @@ describe('openKinds', () => {
     alive.heli = 4;
     expect(openKinds(5, alive)).not.toContain('heli');
   });
+  it('unlocks napalm bombers at level 6 and closes them at their cap of 2', () => {
+    expect(openKinds(5, none())).not.toContain('napalm');
+    expect(openKinds(6, none())).toContain('napalm');
+    expect(CONFIG.spawns.napalm.cap).toBe(2);
+    expect(CONFIG.spawns.napalm.weight).toBeLessThan(CONFIG.spawns.jet.weight);
+    const alive = none();
+    alive.napalm = 1;
+    expect(openKinds(6, alive)).toContain('napalm');
+    alive.napalm = 2;
+    expect(openKinds(6, alive)).not.toContain('napalm');
+  });
   it('excludes kinds at their cap', () => {
     const alive = none();
     alive.laser = CONFIG.spawns.laser.cap;
