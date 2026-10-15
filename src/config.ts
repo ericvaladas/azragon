@@ -56,13 +56,13 @@ export const CONFIG = {
     truckCoil: 0xc98a3a,
     cable: 0x1d1f22,
     strike: 0xff3b2f,
-    artillery: 0x5f6b45,
-    /** Towed howitzer (olive is `artillery`): dark carriage/cradle, sand camo patches, gunmetal tube ends, tyres, hubs. */
-    artilleryDark: 0x363d26,
-    artillerySand: 0xb8a271,
+    artillery: 0xd0ae68,
+    /** Towed howitzer (desert tan is `artillery`): dark brown carriage/cradle, brown camo patches, gunmetal tube ends, tyres, hubs. */
+    artilleryDark: 0x5c4a30,
+    artilleryCamo: 0x8f6f40,
     artilleryMetal: 0x2a2d2b,
     artilleryTyre: 0x1f2022,
-    artilleryHub: 0x6c705e,
+    artilleryHub: 0x8d8266,
     samLauncher: 0xeceae2,
     samTube: 0xd8322a,
     samHazard: 0xf2c230,

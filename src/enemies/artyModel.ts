@@ -60,9 +60,9 @@ function wheel(sx: number): Part[] {
   const P = CONFIG.palette;
   const at = (g: THREE.CylinderGeometry, x: number, color: number) => painted(faceted(g.rotateZ(Math.PI / 2).translate(x, 0.19, 0)), color);
   return [
-    at(new THREE.CylinderGeometry(0.19, 0.19, 0.13, 10), sx * 0.44, P.artilleryTyre),
-    at(new THREE.CylinderGeometry(0.11, 0.11, 0.14, 10), sx * 0.445, P.artilleryHub),
-    at(new THREE.CylinderGeometry(0.045, 0.045, 0.18, 6), sx * 0.45, P.artilleryDark),
+    at(new THREE.CylinderGeometry(0.2, 0.2, 0.17, 10), sx * 0.46, P.artilleryTyre),
+    at(new THREE.CylinderGeometry(0.12, 0.12, 0.18, 10), sx * 0.465, P.artilleryHub),
+    at(new THREE.CylinderGeometry(0.05, 0.05, 0.22, 6), sx * 0.47, P.artilleryDark),
   ];
 }
 
@@ -71,49 +71,49 @@ export function carriageGeometry(): Part {
   const P = CONFIG.palette;
   const olive = P.artillery;
   const dark = P.artilleryDark;
-  const sand = P.artillerySand;
+  const camo = P.artilleryCamo;
   const parts: Part[] = [...wheel(-1), ...wheel(1)];
   // Axle and the lower carriage it carries.
-  parts.push(painted(faceted(new THREE.CylinderGeometry(0.04, 0.04, 0.82, 6).rotateZ(Math.PI / 2).translate(0, 0.19, 0)), dark));
-  parts.push(box(0.5, 0.12, 0.42, 0, 0.24, -0.04, olive));
-  parts.push(box(0.36, 0.06, 0.3, 0, 0.32, -0.04, dark));
-  // Split trail legs spread wide behind the gun, each with a sand camo band, a lifting handle and a ground spade.
+  parts.push(painted(faceted(new THREE.CylinderGeometry(0.05, 0.05, 0.86, 6).rotateZ(Math.PI / 2).translate(0, 0.19, 0)), dark));
+  parts.push(box(0.62, 0.18, 0.54, 0, 0.26, -0.05, olive));
+  parts.push(box(0.46, 0.07, 0.4, 0, 0.37, -0.05, dark));
+  // Split trail legs spread wide behind the gun, each with a brown camo band, a lifting handle and a ground spade.
   for (const sx of [-1, 1]) {
     const hinge: V3 = [sx * 0.16, 0.22, -0.18];
     const foot: V3 = [sx * 0.62, 0.05, -1.12];
-    parts.push(beam(hinge, foot, 0.1, 0.1, olive));
-    parts.push(beam([sx * 0.3, 0.17, -0.48], [sx * 0.42, 0.13, -0.7], 0.11, 0.11, sand));
-    parts.push(beam([sx * 0.56, 0.09, -0.98], [sx * 0.64, 0.05, -1.14], 0.12, 0.12, dark));
-    parts.push(box(0.2, 0.14, 0.04, sx * 0.64, 0.04, -1.16, dark));
+    parts.push(beam(hinge, foot, 0.15, 0.14, olive));
+    parts.push(beam([sx * 0.3, 0.17, -0.48], [sx * 0.42, 0.13, -0.7], 0.16, 0.15, camo));
+    parts.push(beam([sx * 0.56, 0.09, -0.98], [sx * 0.64, 0.05, -1.14], 0.17, 0.16, dark));
+    parts.push(box(0.26, 0.16, 0.05, sx * 0.64, 0.05, -1.17, dark));
     parts.push(beam([sx * 0.5, 0.15, -0.88], [sx * 0.5, 0.25, -0.92], 0.03, 0.03, dark));
   }
-  // Gun shield: two angled side plates flanking a notch for the barrel, with a sand camo patch and a top lip.
+  // Gun shield: two angled side plates flanking a notch for the barrel, with a brown camo patch and a top lip.
   const shield = (sx: number): Part[] => [
-    box(0.32, 0.34, 0.035, sx * 0.25, 0.48, 0, olive).rotateY(sx * 0.32).translate(0, 0, 0.2),
-    box(0.16, 0.14, 0.04, sx * 0.29, 0.52, 0.004, sand).rotateY(sx * 0.32).translate(0, 0, 0.2),
-    box(0.32, 0.03, 0.06, sx * 0.25, 0.66, -0.01, dark).rotateY(sx * 0.32).translate(0, 0, 0.2),
+    box(0.38, 0.4, 0.06, sx * 0.27, 0.5, 0, olive).rotateY(sx * 0.32).translate(0, 0, 0.2),
+    box(0.19, 0.17, 0.07, sx * 0.31, 0.54, 0.004, camo).rotateY(sx * 0.32).translate(0, 0, 0.2),
+    box(0.38, 0.04, 0.08, sx * 0.27, 0.71, -0.01, dark).rotateY(sx * 0.32).translate(0, 0, 0.2),
   ];
   parts.push(...shield(-1), ...shield(1));
-  parts.push(box(0.2, 0.08, 0.035, 0, 0.3, 0.24, olive));
+  parts.push(box(0.26, 0.1, 0.06, 0, 0.32, 0.25, olive));
   // Trunnion saddle: cheeks either side of the cradle and the trunnion pin.
-  for (const sx of [-1, 1]) parts.push(box(0.05, 0.22, 0.2, sx * 0.13, 0.36, GUN.pivot.z, dark));
-  parts.push(painted(faceted(new THREE.CylinderGeometry(0.035, 0.035, 0.32, 6).rotateZ(Math.PI / 2).translate(0, GUN.pivot.y, GUN.pivot.z)), dark));
+  for (const sx of [-1, 1]) parts.push(box(0.07, 0.24, 0.24, sx * 0.15, 0.36, GUN.pivot.z, dark));
+  parts.push(painted(faceted(new THREE.CylinderGeometry(0.04, 0.04, 0.38, 6).rotateZ(Math.PI / 2).translate(0, GUN.pivot.y, GUN.pivot.z)), dark));
   // Equilibrator struts from the carriage up to the cradle, both sides.
   for (const sx of [-1, 1]) {
     const c = Math.cos(GUN.pitch);
     const s = Math.sin(GUN.pitch);
     const top: V3 = [sx * 0.1, GUN.pivot.y + 0.32 * s + 0.04 * c, GUN.pivot.z + 0.32 * c - 0.04 * s];
-    parts.push(beam([sx * 0.12, 0.28, -0.16], top, 0.04, 0.04, olive));
+    parts.push(beam([sx * 0.14, 0.3, -0.16], top, 0.05, 0.05, olive));
   }
   // Cradle round the barrel's rear half with twin recoil cylinders riding on top and a buffer below.
   parts.push(
     onAxis([
-      box(0.17, 0.15, 0.62, 0, 0, 0.06, olive),
-      box(0.19, 0.03, 0.5, 0, 0.085, 0.06, dark),
-      box(0.175, 0.1, 0.2, 0, -0.01, -0.12, P.artillerySand),
-      ...[-1, 1].map((sx) => tube(0.035, 0.66, 6, -0.18, dark).translate(sx * 0.055, 0.12, 0)),
-      ...[-1, 1].map((sx) => box(0.035, 0.035, 0.08, sx * 0.055, 0.12, 0.5, P.artilleryHub)),
-      tube(0.04, 0.5, 6, -0.12, dark).translate(0, -0.1, 0),
+      box(0.21, 0.19, 0.64, 0, 0, 0.06, olive),
+      box(0.23, 0.035, 0.52, 0, 0.105, 0.06, dark),
+      box(0.215, 0.13, 0.2, 0, -0.01, -0.12, P.artilleryCamo),
+      ...[-1, 1].map((sx) => tube(0.04, 0.66, 6, -0.18, dark).translate(sx * 0.065, 0.145, 0)),
+      ...[-1, 1].map((sx) => box(0.04, 0.04, 0.08, sx * 0.065, 0.145, 0.5, P.artilleryHub)),
+      tube(0.05, 0.5, 6, -0.12, dark).translate(0, -0.12, 0),
     ]),
   );
   return merge(parts);
@@ -130,8 +130,8 @@ export function barrelGeometry(): Part {
     box(0.15, 0.15, 0.2, 0, 0, GUN.breech + 0.1, P.artilleryDark),
     box(0.11, 0.11, 0.04, 0, 0, GUN.breech - 0.01, P.artilleryMetal),
     tube(0.05, len - 0.16, 8, GUN.breech + 0.12, P.artillery, 0.04),
-    // Sand camo band partway up the tube.
-    tube(0.049, 0.22, 8, 0.42, P.artillerySand, 0.046),
+    // Brown camo band partway up the tube.
+    tube(0.049, 0.22, 8, 0.42, P.artilleryCamo, 0.046),
     // Fume extractor: a fat sleeve with tapered ends.
     tube(0.04, 0.05, 8, 0.86, P.artillery, 0.068),
     tube(0.068, 0.18, 8, 0.91, P.artillery),
