@@ -358,7 +358,7 @@ export const CONFIG = {
     },
   },
   artillery: {
-    hp: 120, exp: 20, size: 52, guns: 3, gunSpacing: 91, distMin: 2500, distMax: 3500,
+    hp: 120, exp: 20, size: 62, guns: 3, gunSpacing: 109, distMin: 2500, distMax: 3500,
     salvoEvery: 6, fillTime: 3.2, shellFlight: 1.8, shellArc: 750, radius: 90, damage: 60, buildingDamage: 200, spread: 260,
     baseSalvo: 3, levelsPerExtra: 3, maxSalvo: 8,
   },
