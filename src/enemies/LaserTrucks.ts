@@ -160,6 +160,11 @@ export class LaserTrucks implements EnemySystem {
     t.t = 0;
   }
 
+  /** Swings the turret onto the monster at the turn rate while the truck deploys (the truck itself never turns). */
+  private slewAt(t: LaserTruck, monster: THREE.Vector3, dt: number): void {
+    this.aimAt(t, monster, dt, T.turnRate);
+  }
+
   /** Swings the cannon back to lie along the truck's heading (stowed), at the body's turn rate. */
   private aimForward(t: LaserTruck, dt: number): void {
     rotateToward(t.aim, _fwd.set(Math.sin(t.heading), 0, Math.cos(t.heading)), T.turnRate * dt, t.aim);
@@ -169,9 +174,9 @@ export class LaserTrucks implements EnemySystem {
    * Turns the cannon toward the monster's body by at most `trackRate * dt`, then runs the beam
    * from the emitter out to full length along the cannon's direction.
    */
-  private aimAt(t: LaserTruck, monster: THREE.Vector3, dt: number): void {
+  private aimAt(t: LaserTruck, monster: THREE.Vector3, dt: number, rate: number = T.trackRate): void {
     _p.set(t.position.x, PIVOT_Y, t.position.z);
-    rotateToward(t.aim, _to.subVectors(bodyPoint(monster, _body), _p), T.trackRate * dt, t.aim);
+    rotateToward(t.aim, _to.subVectors(bodyPoint(monster, _body), _p), rate * dt, t.aim);
     t.muzzle.copy(t.aim).multiplyScalar(BARREL).add(_p);
     t.beamEnd.copy(t.aim).multiplyScalar(T.beamLength).add(t.muzzle);
   }
@@ -189,8 +194,10 @@ export class LaserTrucks implements EnemySystem {
       t.t += dt;
       const here = { x: t.position.x, z: t.position.z };
       const d = dist2(here, goal);
-      if (t.phase !== 'driving' && d > 1e-3) t.heading = stepAngle(t.heading, Math.atan2(goal.x - here.x, goal.z - here.z), T.turnRate * dt);
-      if (t.phase === 'driving' || t.phase === 'deploying') this.aimForward(t, dt);
+      // Parked trucks keep their road heading; only the turret turns to the monster.
+      if (t.phase === 'driving') this.aimForward(t, dt);
+      // Deploying, the turret makes the big swing onto the monster (at the old body turn rate); aiming then tracks slowly.
+      else if (t.phase === 'deploying') this.slewAt(t, mp, dt);
       t.deploy = THREE.MathUtils.clamp(t.deploy + (t.phase === 'driving' ? -dt : dt) / T.deployTime, 0, 1);
       switch (t.phase) {
         case 'driving': {

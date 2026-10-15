@@ -51,6 +51,16 @@ const run = (sys: LaserTrucks, ctx: WorldContext, s: number) => {
 };
 
 describe('LaserTrucks', () => {
+  it('keeps its road heading while deployed and firing: only the turret turns to the monster', () => {
+    const { ctx } = makeCtx();
+    // Parked side-on to the monster (heading east), as a truck on a cross street would be.
+    const { sys, t } = parked(ctx, 800, Math.PI / 2);
+    run(sys, ctx, T.deployTime + T.aimTime + T.lockTime + T.fireTime);
+    expect(t.heading).toBeCloseTo(Math.PI / 2, 6);
+    const toMonster = new THREE.Vector3(0, 0, -1);
+    expect(new THREE.Vector3(t.aim.x, 0, t.aim.z).normalize().dot(toMonster)).toBeGreaterThan(0.9);
+  });
+
   it('deploys, aims, locks, fires, then recharges', () => {
     const { ctx } = makeCtx();
     const { sys, t } = parked(ctx);
@@ -110,24 +120,29 @@ describe('LaserTrucks', () => {
     expect(maxRate).toBeLessThanOrEqual(T.trackRate + 1e-6);
   });
 
-  it('starts aiming from the forward heading, never snapping onto the monster', () => {
+  it('starts aiming from where the turret pointed when deployed, never snapping onto the monster', () => {
     const { ctx, monster } = makeCtx();
     const { sys, t } = parked(ctx, 700);
-    run(sys, ctx, T.deployTime);
+    let guard = 0;
+    while (t.phase !== 'aiming' && guard++ < 200) sys.update(0.05, ctx);
+    expect(t.phase).toBe('aiming');
+    const deployed = t.aim.clone();
     monster.position.x = 400;
-    while (t.phase !== 'aiming') sys.update(0.05, ctx);
-    const fwd = new THREE.Vector3(Math.sin(t.heading), 0, Math.cos(t.heading));
-    expect(t.aim.angleTo(fwd)).toBeLessThanOrEqual(T.trackRate * 0.05 + 1e-6);
+    sys.update(0.05, ctx);
+    expect(t.aim.angleTo(deployed)).toBeLessThanOrEqual(T.trackRate * 0.05 + 1e-6);
   });
 
-  it('turns the body toward the monster at a capped rate', () => {
+  it('swings the turret (not the body) onto the monster at a capped rate while deploying', () => {
     const { ctx } = makeCtx();
     const { sys, t } = parked(ctx, 800, Math.PI / 2);
+    const start = t.aim.clone();
     run(sys, ctx, 0.2);
-    expect(t.heading).toBeGreaterThan(Math.PI / 2);
-    expect(t.heading - Math.PI / 2).toBeLessThanOrEqual(T.turnRate * 0.2 + 1e-6);
+    expect(t.heading).toBeCloseTo(Math.PI / 2, 6);
+    expect(t.aim.angleTo(start)).toBeGreaterThan(0);
+    expect(t.aim.angleTo(start)).toBeLessThanOrEqual(T.turnRate * 0.2 + 1e-6);
     run(sys, ctx, T.deployTime);
-    expect(Math.abs(Math.abs(t.heading) - Math.PI)).toBeLessThan(1e-6);
+    const toMonster = new THREE.Vector3(0, 0, -1);
+    expect(new THREE.Vector3(t.aim.x, 0, t.aim.z).normalize().dot(toMonster)).toBeGreaterThan(0.95);
   });
 
   it('a monster walking across the line at mid range slips out of the sight line before lock and is missed', () => {
