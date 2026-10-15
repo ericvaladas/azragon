@@ -9,7 +9,7 @@ import type { EnemySystem, WorldContext } from './types';
 const C = CONFIG.sam;
 const MAX = CONFIG.spawns.sam.cap;
 const MAX_MISSILES = MAX * C.missiles * 2;
-type Phase = 'rising' | 'up' | 'sinking' | 'down';
+type Phase = 'rising' | 'up';
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
 const _s = new THREE.Vector3();
@@ -29,8 +29,8 @@ class Silo implements Target {
   phase: Phase = 'rising';
   t = 0;
   raise = 0;
-  fired = false;
-  downFor: number = C.downMin;
+  /** Seconds into the 'up' phase when the next volley launches. */
+  nextVolley: number = C.fireDelay;
 
   constructor(
     hp: number,
@@ -70,7 +70,10 @@ class Missile implements Target {
   }
 }
 
-/** Silos rise from hatches, fire a homing volley, and sink back. Missiles can be shot down. */
+/**
+ * Silos rise from hatches and stay up, firing a homing volley on the same rhythm a sinking silo used to (up, sink,
+ * down and rise again), so the player has the whole time to destroy them. Missiles can be shot down.
+ */
 export class SamSilos implements EnemySystem {
   readonly kind = 'sam' as const;
   private silos: Silo[] = [];
@@ -174,22 +177,11 @@ export class SamSilos implements EnemySystem {
       if (s.phase === 'rising') {
         s.raise = Math.min(1, s.t / C.riseTime);
         if (s.t >= C.riseTime) this.enter(s, 'up');
-      } else if (s.phase === 'up') {
-        if (!s.fired && s.t >= C.fireDelay && ctx.monster.alive) {
-          s.fired = true;
-          for (let k = 0; k < C.missiles; k++) this.launch(s, k, ctx);
-        }
-        if (s.t >= C.upTime) this.enter(s, 'sinking');
-      } else if (s.phase === 'sinking') {
-        s.raise = Math.max(0, 1 - s.t / C.sinkTime);
-        if (s.t >= C.sinkTime) {
-          s.downFor = C.downMin + ctx.rng() * (C.downMax - C.downMin);
-          this.enter(s, 'down');
-        }
-      } else if (s.t >= s.downFor) {
-        s.fired = false;
-        ctx.particles.ring('dust', s.position.clone().setY(0), C.size * 1.2, 8);
-        this.enter(s, 'rising');
+      } else if (s.t >= s.nextVolley) {
+        if (ctx.monster.alive) for (let k = 0; k < C.missiles; k++) this.launch(s, k, ctx);
+        // The gap a sinking silo took: the rest of its up time, sinking, a random spell down, and rising again.
+        const down = C.downMin + ctx.rng() * (C.downMax - C.downMin);
+        s.nextVolley += C.upTime + C.sinkTime + down + C.riseTime;
       }
     }
 
