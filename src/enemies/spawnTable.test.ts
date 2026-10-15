@@ -18,7 +18,7 @@ describe('difficulty', () => {
 describe('openKinds', () => {
   it('follows the unlock levels', () => {
     expect(openKinds(1, none())).toEqual(['tank']);
-    expect(openKinds(2, none())).toEqual(['tank', 'jet']);
+    expect(openKinds(2, none())).toEqual(['tank', 'jet', 'heli']);
     expect(openKinds(3, none())).toContain('blimp');
     expect(openKinds(4, none())).not.toContain('sam');
     expect(openKinds(5, none())).toContain('sam');
@@ -26,6 +26,18 @@ describe('openKinds', () => {
     expect(openKinds(9, none())).toContain('truck');
     expect(openKinds(10, none())).not.toContain('laser');
     expect(openKinds(11, none())).toEqual([...ENEMY_KINDS]);
+  });
+  it('unlocks helicopters at level 2', () => {
+    expect(openKinds(1, none())).not.toContain('heli');
+    expect(openKinds(2, none())).toContain('heli');
+  });
+  it('closes helicopters at their cap of 4', () => {
+    expect(CONFIG.spawns.heli.cap).toBe(4);
+    const alive = none();
+    alive.heli = 3;
+    expect(openKinds(5, alive)).toContain('heli');
+    alive.heli = 4;
+    expect(openKinds(5, alive)).not.toContain('heli');
   });
   it('excludes kinds at their cap', () => {
     const alive = none();
