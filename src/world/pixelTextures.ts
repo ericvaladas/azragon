@@ -52,6 +52,8 @@ export function craterTexture(): THREE.CanvasTexture {
 
 /** One facade cell repeats every FACADE_TILE metres (width along the face, height up it). */
 export const FACADE_TILE = { w: 16, h: 24 } as const;
+/** Deepest facade mip level the shader samples: 16 × 24 cells shrink to 2 × 3 px, so atlas cells never blend. */
+const FACADE_MAX_MIP = 3;
 const CELL_W = 16;
 const CELL_H = 24;
 
@@ -121,7 +123,13 @@ export function facadeAtlas(): THREE.CanvasTexture {
     // Canvas rows run top-down; the facade's v runs up from the building's base.
     for (let k = 0; k * CONTAINER_PX < CELL_H; k++) g.fillRect(x0, CELL_H - 1 - Math.floor(k * CONTAINER_PX), CELL_W, 1);
   });
-  return finish(c);
+  // Distant towers: mipmaps average the window grid instead of picking one texel per screen pixel (which beats
+  // into moiré bands); close up stays crisp (nearest magnification). The facade shader caps the level
+  // (FACADE_MAX_MIP) so neighbouring atlas cells never bleed into each other.
+  const tex = finish(c);
+  tex.minFilter = THREE.NearestMipmapLinearFilter;
+  tex.generateMipmaps = true;
+  return tex;
 }
 
 /** Ground tile covering 2 × 2 blocks in a city's colours: plain paving with speckle (roads are their own meshes). Wraps seamlessly. */
@@ -380,7 +388,14 @@ export function patchFacadeShader(
     .replace(
       '#include <map_fragment>',
       `vec2 facadeUv = vec2((fract(vFacadeUv.x) + vFacade) / ${FACADE_COUNT.toFixed(1)}, fract(vFacadeUv.y));
-  vec4 facadeTexel = texture2D(map, facadeUv);
+  // Mip level from the continuous (unwrapped) UV: fract() jumps at every tile edge, and its derivative there would
+  // pick the smallest mip and draw a seam round each tile. Capped at FACADE_MAX_MIP (a 16 × 24 cell at 2 × 3 px) so
+  // neighbouring atlas cells never blend.
+  vec2 facadeTexels = vec2(${(CELL_W * FACADE_COUNT).toFixed(1)}, ${CELL_H.toFixed(1)}) * vec2(1.0 / ${FACADE_COUNT.toFixed(1)}, 1.0);
+  vec2 facadeDx = dFdx(vFacadeUv) * facadeTexels;
+  vec2 facadeDy = dFdy(vFacadeUv) * facadeTexels;
+  float facadeLod = clamp(0.5 * log2(max(dot(facadeDx, facadeDx), dot(facadeDy, facadeDy))), 0.0, ${FACADE_MAX_MIP.toFixed(1)});
+  vec4 facadeTexel = textureLod(map, facadeUv, facadeLod);
   diffuseColor *= facadeTexel;${glowAdd}`,
     );
 }
