@@ -3,14 +3,26 @@ import type { DamageSource, OnDestroyed, Target } from '../combat';
 import type { Particles } from '../systems/Particles';
 import type { Vec2 } from '../util/math';
 
-export type EnemyKind = 'tank' | 'jet' | 'blimp' | 'sam' | 'artillery' | 'truck' | 'laser' | 'heli' | 'napalm';
-export const ENEMY_KINDS: readonly EnemyKind[] = ['tank', 'jet', 'blimp', 'sam', 'artillery', 'truck', 'laser', 'heli', 'napalm'];
+export type EnemyKind = 'tank' | 'jet' | 'blimp' | 'sam' | 'artillery' | 'truck' | 'laser' | 'heli' | 'napalm' | 'osprey';
+export const ENEMY_KINDS: readonly EnemyKind[] = ['tank', 'jet', 'blimp', 'sam', 'artillery', 'truck', 'laser', 'heli', 'napalm', 'osprey'];
 
 export type Difficulty = { hpMult: number; dmgMult: number };
 
 /** Everything an enemy system may read or call during spawn/update. Rebuilt by GameScene each frame. */
 export interface WorldContext {
-  readonly monster: { readonly position: THREE.Vector3; readonly alive: boolean; readonly airborne: boolean };
+  /**
+   * The monster: where it is, whether it is alive or mid-leap, its body radius, standing width and height (world m),
+   * and where a leap in progress will land (null when not leaping).
+   */
+  readonly monster: {
+    readonly position: THREE.Vector3;
+    readonly alive: boolean;
+    readonly airborne: boolean;
+    readonly bodyRadius: number;
+    readonly width: number;
+    readonly height: number;
+    readonly leapTo: Vec2 | null;
+  };
   readonly difficulty: Difficulty;
   /** Player level: drives unlocks, spawn rate, difficulty, and salvo sizes. */
   readonly level: number;
@@ -26,6 +38,8 @@ export interface WorldContext {
   /** `attacker` is the enemy dealing the hit, when there is one (Overload fires beams back at it). */
   damageMonster(amount: number, source: DamageSource, attacker?: Target): void;
   damageBuildings(p: Vec2, r: number, amount: number): void;
+  /** Snares the monster for `duration` s (an Osprey net); while it is mid-leap, the snare starts when it lands. */
+  snareMonster(duration: number): void;
   fireShell(from: THREE.Vector3, to: THREE.Vector3, damage: number): void;
   fireRocket(from: THREE.Vector3, to: THREE.Vector3, damage: number): void;
   /** Spray where something hits the ground; does nothing unless the point is water. */

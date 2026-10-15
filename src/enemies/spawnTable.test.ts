@@ -26,6 +26,8 @@ describe('openKinds', () => {
     expect(openKinds(5, none())).toContain('artillery');
     expect(openKinds(5, none())).not.toContain('sam');
     expect(openKinds(6, none())).toContain('sam');
+    expect(openKinds(6, none())).not.toContain('osprey');
+    expect(openKinds(7, none())).toContain('osprey');
     expect(openKinds(7, none())).not.toContain('truck');
     expect(openKinds(8, none())).toContain('truck');
     expect(openKinds(9, none())).not.toContain('laser');
@@ -52,6 +54,12 @@ describe('openKinds', () => {
     expect(openKinds(6, alive)).toContain('napalm');
     alive.napalm = 2;
     expect(openKinds(6, alive)).not.toContain('napalm');
+  });
+  it('unlocks Osprey squads at level 7, one at a time', () => {
+    expect(CONFIG.spawns.osprey.cap).toBe(1);
+    const alive = none();
+    alive.osprey = 1;
+    expect(openKinds(7, alive)).not.toContain('osprey');
   });
   it('excludes kinds at their cap', () => {
     const alive = none();

@@ -510,6 +510,7 @@ export const CONFIG = {
     laser: { unlockLevel: 10, cost: 10, cap: 1, weight: 4 },
     heli: { unlockLevel: 1, cost: 4, cap: 4, weight: 3 },
     napalm: { unlockLevel: 4, cost: 6, cap: 2, weight: 2 },
+    osprey: { unlockLevel: 7, cost: 8, cap: 1, weight: 2 },
   },
   /** Enemy HP and damage multipliers grow with the player's level (not run time). */
   difficulty: { hpPerLevel: 0.12, dmgPerLevel: 0.075 },
@@ -605,7 +606,7 @@ export const CONFIG = {
     returnFade: 1.0,
   },
   readability: {
-    threatKinds: ['blimp', 'sam', 'artillery', 'truck', 'heli', 'napalm'] as readonly string[],
+    threatKinds: ['blimp', 'sam', 'artillery', 'truck', 'heli', 'napalm', 'osprey'] as readonly string[],
     maxArrows: 8,
     arrowMarginPx: 28,
     chevronMax: 80,
