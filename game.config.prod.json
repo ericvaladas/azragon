@@ -1,0 +1,17 @@
+{
+  "gameId": "IbU4r7U50oGnz34wNn3s",
+  "relativePathToDistFolder": "dist",
+  "usesPreloader": false,
+  "fullscreenEnabled": true,
+  "maxDpr": 1.5,
+  "orientation": "both",
+  "platformFit": "both",
+  "keywords": [
+    "kaiju",
+    "monster",
+    "destruction",
+    "city",
+    "action"
+  ],
+  "kitId": null
+}
