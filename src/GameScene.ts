@@ -111,6 +111,7 @@ export class GameScene {
   private ndc = new THREE.Vector2();
   private groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
   private tmpV = new THREE.Vector3();
+  private tmpV2 = new THREE.Vector3();
   private particles: Particles;
   private splasher: Splasher;
   private inkFx: InkFx;
@@ -1159,14 +1160,16 @@ export class GameScene {
   private pickTarget(x: number, y: number): Target | null {
     const enemies = this.enemyTargets();
     const el = this.pixel.domElement;
+    // Screen size: how far a point `radius` m to the camera's right of the target lands from its centre.
+    const right = this.tmpV2.setFromMatrixColumn(this.camera.matrixWorld, 0);
     const pts = enemies.map((t, index) => {
       this.tmpV.copy(t.position).project(this.camera);
-      return {
-        index,
-        x: (this.tmpV.x * 0.5 + 0.5) * el.clientWidth,
-        y: (-this.tmpV.y * 0.5 + 0.5) * el.clientHeight,
-        visible: this.tmpV.z < 1 && t.isAlive(),
-      };
+      const x = (this.tmpV.x * 0.5 + 0.5) * el.clientWidth;
+      const y = (-this.tmpV.y * 0.5 + 0.5) * el.clientHeight;
+      const visible = this.tmpV.z < 1 && t.isAlive();
+      this.tmpV.copy(t.position).addScaledVector(right, t.radius).project(this.camera);
+      const r = Math.hypot((this.tmpV.x * 0.5 + 0.5) * el.clientWidth - x, (-this.tmpV.y * 0.5 + 0.5) * el.clientHeight - y);
+      return { index, x, y, visible, r };
     });
     const hit = pickEnemy(pts, x, y, CONFIG.input.pickRadiusPx);
     if (hit !== null) return enemies[hit]!;
@@ -1190,9 +1193,9 @@ export class GameScene {
       if (g) this.leapTo(g.clone());
       return;
     }
-    let target = this.pickTarget(x, y);
-    // A hurler or lobber cannot hit flyers, so a tap on one is a plain move tap.
-    if (target?.airborne && (this.monster.kind.ranged === 'hurl' || this.monster.kind.ranged === 'gaze')) target = null;
+    // Any enemy can be targeted, flyers too; a monster whose ranged attack can't reach the air just closes in (its
+    // anti-air still strikes on its own).
+    const target = this.pickTarget(x, y);
     if (target) {
       this.order = { kind: 'attack', target };
       this.markers.setTarget(target);
@@ -1337,10 +1340,6 @@ export class GameScene {
         this.spikeAim = orderedInRange ?? auto;
       } else this.spikeAim = null;
       const autoMelee = nearestInRange(pos, this.enemyTargets().filter((t) => !t.airborne), this.ms.meleeRange);
-      if (this.order?.kind === 'attack' && this.order.target.airborne && groundOnly) {
-        this.order = null;
-        this.markers.setTarget(null);
-      }
       const order: BrainOrder =
         this.order?.kind === 'attack' ? { kind: 'attack', target: this.toBrain(this.order.target) } : this.order;
       const d = decide({
@@ -1395,6 +1394,8 @@ export class GameScene {
   }
 
   private fireRanged(target: Target | null): void {
+    // Gaze and hurled rocks only hit the ground: an ordered flyer is chased, not shot.
+    if (target?.airborne && (this.monster.kind.ranged === 'hurl' || this.monster.kind.ranged === 'gaze')) return;
     if (this.monster.kind.ranged === 'breath') this.breathAt(target);
     else if (this.monster.kind.ranged === 'hurl') this.hurlAt(target);
     else if (this.monster.kind.ranged === 'gaze') this.gazeAt(target);
