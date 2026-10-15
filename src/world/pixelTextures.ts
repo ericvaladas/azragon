@@ -52,8 +52,8 @@ export function craterTexture(): THREE.CanvasTexture {
 
 /** One facade cell repeats every FACADE_TILE metres (width along the face, height up it). */
 export const FACADE_TILE = { w: 16, h: 24 } as const;
-/** Deepest facade mip level the shader samples: 16 × 24 cells shrink to 2 × 3 px, so atlas cells never blend. */
-const FACADE_MAX_MIP = 3;
+/** Deepest facade mip level the shader samples: 16 × 24 cells shrink to 4 × 6 px, keeping some window contrast far away. */
+const FACADE_MAX_MIP = 2;
 const CELL_W = 16;
 const CELL_H = 24;
 
@@ -389,8 +389,8 @@ export function patchFacadeShader(
       '#include <map_fragment>',
       `vec2 facadeUv = vec2((fract(vFacadeUv.x) + vFacade) / ${FACADE_COUNT.toFixed(1)}, fract(vFacadeUv.y));
   // Mip level from the continuous (unwrapped) UV: fract() jumps at every tile edge, and its derivative there would
-  // pick the smallest mip and draw a seam round each tile. Capped at FACADE_MAX_MIP (a 16 × 24 cell at 2 × 3 px) so
-  // neighbouring atlas cells never blend.
+  // pick the smallest mip and draw a seam round each tile. Capped at FACADE_MAX_MIP (a 16 × 24 cell at 4 × 6 px) so
+  // far towers keep some window contrast and neighbouring atlas cells never blend.
   vec2 facadeTexels = vec2(${(CELL_W * FACADE_COUNT).toFixed(1)}, ${CELL_H.toFixed(1)}) * vec2(1.0 / ${FACADE_COUNT.toFixed(1)}, 1.0);
   vec2 facadeDx = dFdx(vFacadeUv) * facadeTexels;
   vec2 facadeDy = dFdy(vFacadeUv) * facadeTexels;
