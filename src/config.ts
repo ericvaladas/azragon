@@ -98,6 +98,12 @@ export const CONFIG = {
     napalmBomb: 0x22241f,
     napalmFire: 0xff7a1a,
     napalmScorch: 0x1c120b,
+    /** Osprey (body is `ospreyBody`): light navy grey airframe, dark trim, tinted glass, gunmetal rotors; hemp-tan net rope that reads over the monsters' dark hides. */
+    ospreyBody: 0x8f9aa6,
+    ospreyDark: 0x3b434d,
+    ospreyGlass: 0x7fb4c4,
+    ospreyRotor: 0x1d1f22,
+    netRope: 0xd8c79a,
   },
   fog: { near: 2200, far: 4700 },
   camera: {
