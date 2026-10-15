@@ -69,6 +69,12 @@ export const CONFIG = {
     heliDark: 0x2f3620,
     heliGlass: 0x7fb4c4,
     heliRotor: 0x1d1f22,
+    /** Fighter jet (body is `jet`): pale underside, dark panel stripes, tinted canopy, nozzle ring, afterburner glow. */
+    jetBelly: 0x9aa3ab,
+    jetDark: 0x111316,
+    jetCanopy: 0x6f9fb2,
+    jetNozzle: 0x15171a,
+    jetBurner: 0xff8a2a,
     napalmBomber: 0x48512f,
     napalmBelly: 0x9aa58a,
     napalmGlass: 0x7fb4c4,
