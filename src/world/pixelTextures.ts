@@ -154,8 +154,6 @@ export function cityGroundTexture(style: CityStyle): THREE.CanvasTexture {
 
 /** Road texture size: across the road (u) × along one segment (v), in px. */
 const ROAD_TEX = { w: 8, h: 64 } as const;
-/** Deepest road mip level the shader samples: the 8 px wide road shrinks to 2 px, so its edge lines still show. */
-const ROAD_MAX_MIP = 2;
 
 /**
  * One road segment, stretched over its quad (u across, v along): asphalt, white edge lines, a dashed centre line, and
@@ -183,12 +181,7 @@ export function roadTexture(style: CityStyle): THREE.CanvasTexture {
     g.fillRect(x, 1, 1, 5);
     g.fillRect(x, h - 6, 1, 5);
   }
-  // Distant roads: mipmaps blend the dashes and crosswalks instead of letting them shimmer into stripes; the road
-  // shader caps the level (ROAD_MAX_MIP) so the edge lines never average away completely.
-  const tex = finish(c);
-  tex.minFilter = THREE.NearestMipmapLinearFilter;
-  tex.generateMipmaps = true;
-  return tex;
+  return finish(c);
 }
 
 export type Rect = { x: number; y: number; w: number; h: number };
@@ -271,11 +264,7 @@ export function patchRoadShader(sh: { vertexShader: string; fragmentShader: stri
       `vec2 roadUv = vMapUv;
   if (vPlainEnds.x > 0.5 && roadUv.y > 1.0 - 6.0 / ${h}) roadUv.y = 1.0 - 7.5 / ${h};
   if (vPlainEnds.y > 0.5 && roadUv.y < 6.0 / ${h}) roadUv.y = 7.5 / ${h};
-  // Mip level from the unswitched UV, so the crosswalk switch-off above doesn't draw a seam where it jumps.
-  vec2 roadDx = dFdx(vMapUv) * vec2(${ROAD_TEX.w.toFixed(1)}, ${h});
-  vec2 roadDy = dFdy(vMapUv) * vec2(${ROAD_TEX.w.toFixed(1)}, ${h});
-  float roadLod = clamp(0.5 * log2(max(dot(roadDx, roadDx), dot(roadDy, roadDy))), 0.0, ${ROAD_MAX_MIP.toFixed(1)});
-  diffuseColor *= textureLod(map, roadUv, roadLod);`,
+  diffuseColor *= texture2D(map, roadUv);`,
     );
 }
 
