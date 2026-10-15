@@ -33,7 +33,7 @@ export const CONFIG = {
     eye: 0xffe14d,
     tank: 0x6b7a3a,
     tankDark: 0x4a5528,
-    jet: 0x4f5963,
+    jet: 0x2c3238,
     fire: 0xff8a1f,
     smoke: 0x4d4a48,
     dust: 0xcbb592,
