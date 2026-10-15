@@ -27,7 +27,7 @@ Each squad runs through these phases in order. The phase durations and distances
 3. **Release.** At the end of positioning:
    - **3 or 4 Ospreys alive:** the net drops and snares the monster (see *The net*).
    - **2 or fewer alive:** the drop aborts. This check also runs the moment the second Osprey is destroyed during the approach or positioning, so an abort can happen before release time.
-4. **Leave.** The survivors climb back to `cruiseAltitude` and fly straight out along their current heading at `cruiseSpeed`, pods tilting forward again. They despawn `exitDist` (2600 m) from the monster. A squad never makes a second pass.
+4. **Leave.** The survivors turn straight away from the monster (or keep their heading if they are right over it), climb back to `cruiseAltitude` and fly out at `cruiseSpeed`, pods tilting forward again. They despawn `exitDist` (2600 m) from the monster. A squad never makes a second pass.
 
 During the leave phase the Ospreys are still targets. Killing them still pays EXP.
 
@@ -39,7 +39,7 @@ During the leave phase the Ospreys are still targets. Killing them still pays EX
 
 - **While carried:** dark rope lines in a grid strung between the corner Ospreys' positions, sagging in the middle. If a corner's Osprey is gone, that corner hangs down below the others.
 - **On release:** the net falls over `dropTime` (0.6 s) from the squad onto the monster, spreading as it falls. When it lands, the snare starts, the screen shakes briefly (`shake` 0.4) and dust bursts out at the monster's feet.
-- **Snared:** the net becomes a draped dome over the monster, sized from its `bodyRadius` and `size.height`, and follows the monster's position and yaw. It stays until the snare ends.
+- **Snared:** the net becomes a draped dome over the monster, sized from its `bodyRadius`, `size.width` and `size.height`, and follows the monster's position. It stays until the snare ends.
 - **Tearing free:** when the snare ends, the dome is removed and shreds burst outward, using the existing particle presets.
 - **Aborted drop:** the net falls to the ground below the squad's centre, lies flat for `groundLife` (4 s), then fades out over the last second. It has no effect on the monster.
 - **Monster mid-leap at release:** the net falls toward the leap's landing point, and the snare starts when the monster lands.
@@ -57,7 +57,7 @@ A small state object with no Three.js dependency, owned by `GameScene`:
 
 `CONFIG.snare = { duration: 6, perAttack: 1, minDuration: 2, speedMult: 0.3 }`.
 
-**What counts as an attack** for `onAttack()`: player-driven monster attacks, at their moment of impact or firing:
+**What counts as an attack** for `onAttack()`: player-driven monster attacks, counted when each attack starts or fires:
 - **Counted:** melee strikes (including the kraken's and wendigo's variants), each ranged shot or breath fire, anti-air strikes (bite, tail, lash, hands), tail sweeps, and Roar (the only active ability usable while snared, since Leap and Dash are blocked).
 - **Not counted:** passive auto-damage such as Nova, Mortar, Grip and auras.
 
@@ -65,7 +65,7 @@ A small state object with no Three.js dependency, owned by `GameScene`:
 
 - `EnemyKind` gains `'osprey'`, and it joins `ENEMY_KINDS`.
 - `WorldContext` gains `snareMonster(duration: number): void`. `GameScene` implements it by starting the snare, or, if the monster is airborne, by queueing the snare to start when the monster lands.
-- `WorldContext.monster` also exposes, read-only, what the squad needs to size itself: `bodyRadius`, `height` (standing height), and while leaping, the landing point (`leapTo`).
+- `WorldContext.monster` also exposes, read-only, what the squad needs to size itself: `bodyRadius`, `width` and `height` (standing size), and while leaping, the landing point (`leapTo`).
 - In `GameScene`:
   - Walking uses `moveSpeedMult × snare.speedMult`.
   - Leap and dash refuse to start while `snare.blocksMobility`. Their buttons use the existing unavailable look.
@@ -81,8 +81,8 @@ A small state object with no Three.js dependency, owned by `GameScene`:
   - **Details:** dark cockpit windows and a rear cargo ramp.
   - **Rotors:** an engine pod at each wingtip, each carrying a three-blade rotor. The pod and rotor are separate parts, so the pod can swivel between forward (0°) and up (90°).
   - **Colour:** a light navy grey, with darker trim and gunmetal rotors. This keeps them distinct from the olive tanks and helicopters and the tan artillery.
-- **Rendering:** the fuselages, pods and rotor blades are instanced. Rotors spin; a blurred disc shows at speed, as on the helicopters.
-- **Net:** a line or thin-ribbon grid (about 8×8 cells) in dark rope colour, rebuilt each frame from its corner positions and sag. It is one mesh per squad, plus one for the snared dome.
+- **Rendering:** one group per Osprey, as for the napalm bombers, with its own material for the hit flash. Rotors spin; a blurred disc shows at speed, as on the helicopters.
+- **Net:** a line grid (8×8 cells) in hemp-tan rope (`netRope`), light enough to read over the monsters' dark hides, rebuilt each frame from its corner positions and sag. It is one mesh per squad, plus one for the snared dome.
 
 ## Testing
 
