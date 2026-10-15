@@ -31,8 +31,13 @@ export const CONFIG = {
     joint: 0x7a2fa8,
     stinger: 0xe8ff6a,
     eye: 0xffe14d,
+    /** Main battle tank (olive is `tank`): darker olive lower hull/mantlet/hatches, tracks, road wheels, gunmetal fittings, lights. */
     tank: 0x6b7a3a,
     tankDark: 0x4a5528,
+    tankTrack: 0x2a2b2a,
+    tankWheel: 0x3c4425,
+    tankMetal: 0x2f3230,
+    tankLight: 0xffe7a3,
     jet: 0x2c3238,
     fire: 0xff8a1f,
     smoke: 0x4d4a48,

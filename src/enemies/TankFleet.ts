@@ -3,6 +3,7 @@ import { CONFIG } from '../config';
 import type { Target } from '../combat';
 import type { EnemySystem, WorldContext } from './types';
 import { toonMat } from '../render/toon';
+import { TURRET, hullGeometry, turretGeometry } from './tankModel';
 import { dist2, type Vec2 } from '../util/math';
 
 const REPLAN_EVERY = 4;
@@ -40,19 +41,18 @@ class Tank implements Target {
   }
 }
 
-/** Up to maxTanks tanks drawn as three InstancedMeshes (hull, turret, barrel). */
+/** Up to maxTanks tanks drawn as two vertex-coloured InstancedMeshes (hull, and turret with its gun). */
 export class TankFleet implements EnemySystem {
   readonly kind = 'tank' as const;
   private ctx: WorldContext | null = null;
   private tanks: Tank[] = [];
   private hull: THREE.InstancedMesh;
   private turret: THREE.InstancedMesh;
-  private barrel: THREE.InstancedMesh;
 
   constructor(scene: THREE.Scene) {
-    const box = new THREE.BoxGeometry(1, 1, 1);
-    const mk = (color: number) => {
-      const m = new THREE.InstancedMesh(box, toonMat(color), MAX_TANKS);
+    const mat = toonMat(0xffffff, { vertexColors: true });
+    const mk = (geo: THREE.BufferGeometry) => {
+      const m = new THREE.InstancedMesh(geo, mat, MAX_TANKS);
       m.castShadow = true;
       m.count = 0;
       m.frustumCulled = false;
@@ -60,9 +60,8 @@ export class TankFleet implements EnemySystem {
       scene.add(m);
       return m;
     };
-    this.hull = mk(CONFIG.palette.tank);
-    this.turret = mk(CONFIG.palette.tankDark);
-    this.barrel = mk(CONFIG.palette.tankDark);
+    this.hull = mk(hullGeometry());
+    this.turret = mk(turretGeometry());
   }
 
   targets(): readonly Target[] {
@@ -127,7 +126,7 @@ export class TankFleet implements EnemySystem {
         t.fireCd -= dt;
         if (t.fireCd <= 0) {
           t.fireCd = T.fireCooldown;
-          const muzzle = new THREE.Vector3(Math.sin(t.turretYaw), 0, Math.cos(t.turretYaw)).multiplyScalar(S * 0.8).add(t.position).setY(S * 0.5);
+          const muzzle = new THREE.Vector3(Math.sin(t.turretYaw), 0, Math.cos(t.turretYaw)).multiplyScalar(S * TURRET.muzzle).add(t.position).setY(S * TURRET.gunY);
           const aim = monster.clone().add(new THREE.Vector3((Math.random() - 0.5) * 160, (220 + Math.random() * 200) * CONFIG.monster.scale, (Math.random() - 0.5) * 160));
           ctx.fireShell(muzzle, aim, T.damage);
         }
@@ -156,19 +155,18 @@ export class TankFleet implements EnemySystem {
   private draw(): void {
     this.tanks.forEach((t, i) => {
       _q.setFromAxisAngle(UP, t.heading);
-      _m.compose(_p.set(t.position.x, S * 0.18, t.position.z), _q, _s.set(S * 0.6, S * 0.35, S));
+      _p.set(t.position.x, 0, t.position.z);
+      _s.setScalar(S);
+      _m.compose(_p, _q, _s);
       this.hull.setMatrixAt(i, _m);
       _q.setFromAxisAngle(UP, t.turretYaw);
-      _m.compose(_p.set(t.position.x, S * 0.45, t.position.z), _q, _s.set(S * 0.42, S * 0.22, S * 0.46));
+      _m.compose(_p, _q, _s);
       this.turret.setMatrixAt(i, _m);
-      _p.set(Math.sin(t.turretYaw), 0, Math.cos(t.turretYaw)).multiplyScalar(S * 0.5).add(t.position).setY(S * 0.47);
-      _m.compose(_p, _q, _s.set(S * 0.08, S * 0.08, S * 0.6));
-      this.barrel.setMatrixAt(i, _m);
       _c.setHex(t.flashT > 0 ? 0xffd0a0 : 0xffffff);
       this.hull.setColorAt(i, _c);
       this.turret.setColorAt(i, _c);
     });
-    for (const m of [this.hull, this.turret, this.barrel]) {
+    for (const m of [this.hull, this.turret]) {
       m.count = this.tanks.length;
       m.instanceMatrix.needsUpdate = true;
       if (m.instanceColor) m.instanceColor.needsUpdate = true;
