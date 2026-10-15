@@ -64,6 +64,11 @@ export const CONFIG = {
     missile: 0xf2f2ee,
     blimpTrim: 0xd8322a,
     blimpTrimDark: 0x5a1612,
+    /** Helicopter: olive drab body, darker engine/skids/boom accents, cockpit glass, rotor blades and their blur disc. */
+    heli: 0x4a5532,
+    heliDark: 0x2f3620,
+    heliGlass: 0x7fb4c4,
+    heliRotor: 0x1d1f22,
   },
   fog: { near: 2200, far: 4700 },
   camera: {
@@ -387,6 +392,22 @@ export const CONFIG = {
   },
   blimp: { hp: 180, speed: 40, size: 170, spawnDist: 2200, altitude: 520, headHeight: 330, triggerDist: 190, damage: 120, exp: 25 },
   tank: { hp: 30, speed: 45, range: 950, damage: 6, fireCooldown: 3.2, shellFlightTime: 1.6, shellArc: 140, exp: 5, size: 40 },
+  /**
+   * Attack helicopters: spawn spawnMin..spawnMax m out, fly in at up to approachSpeed (closing speed eases off as
+   * approachGain × distance-to-orbit, tangential speed fading in over fadeDist), then circle a centre that eases
+   * toward the monster (centreFollow /s, at most centreMaxSpeed m/s) at `radius` m and `altitude`, at orbitSpeed. "On orbit" is within settleDist
+   * of the radius; the first volley follows firstVolley s later, then one every volleyEvery s, rocketsPerVolley jet
+   * rockets each (jet damage). Banking: roll = yaw rate × bankGain, capped at bankMax rad. Rotors spin in rad/s.
+   */
+  heli: {
+    hp: 100, exp: 20, size: 70, hitRadius: 80,
+    spawnMin: 2200, spawnMax: 2600,
+    radius: 700, altitude: 300 * MONSTER_SCALE, orbitSpeed: 120, approachSpeed: 220, approachGain: 0.6, fadeDist: 600,
+    centreFollow: 2, centreMaxSpeed: 400, settleDist: 25,
+    firstVolley: 2, volleyEvery: 4, rocketsPerVolley: 2,
+    bankGain: 2.2, bankMax: 0.35, pitchMax: 0.2,
+    rotorSpin: 18, tailRotorSpin: 40,
+  },
   jet: { hp: 60, speed: 260, altitude: 430 * MONSTER_SCALE, turnRate: 0.9, damage: 10, rocketsPerSalvo: 3, salvoMin: 700, salvoMax: 1600, rocketSpeed: 650, exp: 15, size: 70, hitRadius: 90, exitDistance: 2600 },
   director: {
     baseRate: 0.6,
@@ -404,6 +425,7 @@ export const CONFIG = {
     artillery: { unlockLevel: 7, cost: 8, cap: 2, weight: 2 },
     truck: { unlockLevel: 9, cost: 5, cap: 4, weight: 2 },
     laser: { unlockLevel: 11, cost: 10, cap: 1, weight: 4 },
+    heli: { unlockLevel: 2, cost: 4, cap: 4, weight: 3 },
   },
   /** Enemy HP and damage multipliers grow with the player's level (not run time). */
   difficulty: { hpPerLevel: 0.12, dmgPerLevel: 0.075 },
@@ -500,7 +522,7 @@ export const CONFIG = {
     returnFade: 1.0,
   },
   readability: {
-    threatKinds: ['blimp', 'sam', 'artillery', 'truck'] as readonly string[],
+    threatKinds: ['blimp', 'sam', 'artillery', 'truck', 'heli'] as readonly string[],
     maxArrows: 8,
     arrowMarginPx: 28,
     chevronMax: 80,
