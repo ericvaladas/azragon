@@ -459,6 +459,32 @@ export const CONFIG = {
     patchRadius: 60, patchLife: 6, patchFade: 1, dps: 12, contactFrac: 0.25, burnTick: 0.5,
     propSpin: 30,
   },
+  /**
+   * Osprey Net squads: four Ospreys (one per net corner) spawn spawnDist m out and fly at cruiseSpeed and
+   * cruiseAltitude in a square tightHalf m from the centre to each, homing on the monster. Within arriveDist they
+   * position for positionTime s: the formation centre follows the monster at up to trackSpeed m/s, the square widens
+   * to bodyRadius × netHalfMult, the squad sinks to the monster's height + dropClearance (both over the first
+   * settleFrac of the phase), and the rotor pods swivel up over tiltTime s. Then, with at least minToDrop alive,
+   * the net falls over dropTime s and snares the monster; otherwise it falls to the ground, lies groundLife s
+   * (fading over the last second) and the squad aborts. Survivors climb back at climbRate m/s, close the square at
+   * tightenRate m/s and fly out, despawning exitDist m from the monster.
+   * Net: corners hang `cable` m below each Osprey; the middle sags sag × half; a lost corner droops droop × half
+   * below its neighbours. Snared, it drapes as a dome of radius max(bodyRadius × domeRadiusMult,
+   * width × domeWidthMult) and the monster's height. `size` is nose-to-tail length (m); rotors spin at rotorSpin rad/s.
+   */
+  osprey: {
+    hp: 100, exp: 15, size: 80, hitRadius: 80,
+    spawnDist: 2600, exitDist: 2600,
+    cruiseSpeed: 220, cruiseAltitude: 650, arriveDist: 150,
+    tightHalf: 45, netHalfMult: 1.8, dropClearance: 120,
+    positionTime: 4, settleFrac: 0.6, tiltTime: 1.2, trackSpeed: 400,
+    climbRate: 120, tightenRate: 60,
+    minToDrop: 3,
+    cable: 40, sag: 0.35, droop: 0.9,
+    dropTime: 0.6, groundLife: 4, groundY: 3,
+    domeRadiusMult: 2.2, domeWidthMult: 0.55,
+    rotorSpin: 14, landShake: 0.4,
+  },
   jet: { hp: 60, speed: 286, altitude: 430 * MONSTER_SCALE, turnRate: 0.9, damage: 10, rocketsPerSalvo: 3, salvoMin: 700, salvoMax: 1600, rocketSpeed: 650, exp: 15, size: 70, hitRadius: 90, exitDistance: 2600 },
   director: {
     baseRate: 0.6,
