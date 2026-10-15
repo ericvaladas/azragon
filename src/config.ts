@@ -427,7 +427,7 @@ export const CONFIG = {
    */
   napalm: {
     hp: 150, exp: 30, span: 90, hitRadius: 80,
-    spawnDist: 2600, exitDist: 2600, altitude: 350 * MONSTER_SCALE, speed: 240,
+    spawnDist: 2600, exitDist: 2600, altitude: 650, speed: 240,
     bombs: 6, spacing: 90, bombGravity: 160, warnLead: 1.2,
     patchRadius: 60, patchLife: 6, patchFade: 1, dps: 12, contactFrac: 0.25, burnTick: 0.5,
     propSpin: 30,

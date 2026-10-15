@@ -10,8 +10,8 @@ describe('napalm bomber flight', () => {
     const run = newRun(M, 0.7);
     const p0 = bomberPosition(run, 0);
     expect(Math.hypot(p0.x - M.x, p0.z - M.z)).toBeCloseTo(N.spawnDist, 3);
-    expect(p0.y).toBeCloseTo(350 * CONFIG.monster.scale, 6);
-    expect(N.altitude).toBeCloseTo(350 * CONFIG.monster.scale, 6);
+    expect(p0.y).toBe(650);
+    expect(N.altitude).toBe(650);
     // Over the aim point at spawnDist / speed seconds.
     const over = bomberPosition(run, N.spawnDist / N.speed);
     expect(over.x).toBeCloseTo(M.x, 3);
