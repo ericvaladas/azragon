@@ -76,7 +76,7 @@ export function facadeAtlas(): THREE.CanvasTexture {
     g.fillRect(x0, 0, CELL_W, CELL_H);
     g.fillStyle = '#e8eef2';
     g.fillRect(x0, 4, CELL_W, 6);
-    g.fillStyle = '#5d6a74';
+    g.fillStyle = '#3c4852';
     for (let x = 0; x < CELL_W; x += 4) g.fillRect(x0 + x, 0, 1, CELL_H);
     for (let y = 0; y < CELL_H; y += 6) g.fillRect(x0, y, CELL_W, 1);
   });
@@ -84,7 +84,7 @@ export function facadeAtlas(): THREE.CanvasTexture {
   cell(1, (x0) => {
     g.fillStyle = '#ffffff';
     g.fillRect(x0, 0, CELL_W, CELL_H);
-    g.fillStyle = '#7f93ab';
+    g.fillStyle = '#4c6890';
     for (let y = 2; y < CELL_H; y += 6) g.fillRect(x0, y, CELL_W, 3);
     g.fillStyle = '#b8b0a4';
     for (let x = 0; x < CELL_W; x += 8) g.fillRect(x0 + x, 0, 1, CELL_H);
@@ -94,7 +94,7 @@ export function facadeAtlas(): THREE.CanvasTexture {
     g.fillStyle = '#ffffff';
     g.fillRect(x0, 0, CELL_W, CELL_H);
     for (let y = 0; y < CELL_H; y += 8) {
-      g.fillStyle = '#8a9aae';
+      g.fillStyle = '#4f6a8e';
       g.fillRect(x0 + 2, y + 2, 4, 4);
       g.fillRect(x0 + 10, y + 2, 4, 4);
       g.fillStyle = '#d9d3c8';
@@ -107,7 +107,7 @@ export function facadeAtlas(): THREE.CanvasTexture {
     g.fillRect(x0, 0, CELL_W, CELL_H);
     const rng = mulberry32(CONFIG.world.seed + 7);
     for (let y = 1; y < CELL_H; y += 4) for (let x = 1; x < CELL_W; x += 4) {
-      g.fillStyle = rng() < 0.35 ? '#ffe9a8' : '#8796aa';
+      g.fillStyle = rng() < 0.35 ? '#ffe9a8' : '#4a6488';
       g.fillRect(x0 + x, y, 2, 2);
     }
   });
