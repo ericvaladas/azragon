@@ -4,10 +4,14 @@ import type { Target } from '../combat';
 
 const TAP_TIME = 0.6;
 
+/**
+ * Ground rings carry twice the crater decal's polygon offset (City's layer 5: factor -1.25, units -5): at the
+ * camera's grazing angle that offset pulls the decal metres toward the camera, past a ring a few metres above it.
+ */
 function ring(color: number, inner: number): THREE.Mesh {
   const m = new THREE.Mesh(
     new THREE.RingGeometry(inner, 1, 16).rotateX(-Math.PI / 2),
-    new THREE.MeshBasicMaterial({ color, transparent: true, depthWrite: false, fog: false }),
+    new THREE.MeshBasicMaterial({ color, transparent: true, depthWrite: false, fog: false, polygonOffset: true, polygonOffsetFactor: -2.5, polygonOffsetUnits: -10 }),
   );
   m.renderOrder = 2;
   m.visible = false;
