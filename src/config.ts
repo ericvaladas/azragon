@@ -550,8 +550,6 @@ export const CONFIG = {
   music: {
     /** Master volume, 0..1. */
     volume: 0.8,
-    /** CDN fetch timeout (ms); each file is a few MB. */
-    fetchTimeout: 60000,
     /** The Intro: loops as a whole file through the menus and the cutscene. */
     intro: { file: 'audio/intro.m4a' },
     /** Main gameplay 1: starts from its top on the reveal, plays once (the file ends after its final hit). */

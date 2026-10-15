@@ -16,24 +16,24 @@ const report = (e: unknown): void => RundotGameAPI.error('[music]', e);
  * - Main 2 follows Main 1 and loops.
  * - A menu brings the Intro back.
  *
- * Every track streams from an <audio> element routed through a gain node (iOS ignores an element's own volume),
- * so none is ever fully decoded.
+ * Every track streams from its CDN URL in an <audio> element routed through a gain node (iOS ignores an element's
+ * own volume), so none is ever fully downloaded up front or decoded. Safari plays media only from a URL it can
+ * range-request with a real audio type, which a blob URL from fetchAsset is not.
  */
 export class Music {
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
   private playing: TrackId | null = null;
-  private blobs: Record<TrackId, Promise<Blob>>;
+  private srcs: Record<TrackId, Promise<string>>;
   private streams: Partial<Record<TrackId, Stream>> = {};
-  private urls: string[] = [];
   private disposed = false;
   private muted = false;
 
   constructor() {
-    const fetch = (file: string) => RundotGameAPI.cdn.fetchAsset(file, { timeout: M.fetchTimeout });
-    this.blobs = { intro: fetch(M.intro.file), main1: fetch(M.main1.file), main2: fetch(M.main2.file) };
+    const resolve = (file: string) => RundotGameAPI.cdn.resolveAssetUrl(file);
+    this.srcs = { intro: resolve(M.intro.file), main1: resolve(M.main1.file), main2: resolve(M.main2.file) };
     // Failures are reported where each promise is used; these keep an unused rejection from going unhandled.
-    for (const p of Object.values(this.blobs)) p.catch(() => {});
+    for (const p of Object.values(this.srcs)) p.catch(() => {});
   }
 
   /** Call on every user gesture. The first creates the audio graph and starts the Intro; any later one retries a blocked track. */
@@ -76,7 +76,6 @@ export class Music {
   dispose(): void {
     this.disposed = true;
     for (const s of Object.values(this.streams)) s.el.pause();
-    for (const u of this.urls) URL.revokeObjectURL(u);
     this.ctx?.close().catch(() => {});
   }
 
@@ -102,10 +101,12 @@ export class Music {
     }
   }
 
-  /** An element primed with a silent clip inside the first gesture (iOS), given its song once it has downloaded. */
+  /** An element primed with a silent clip inside the first gesture (iOS), given its song's URL once it has resolved. */
   private setUp(id: TrackId): void {
     const ctx = this.ctx!;
     const el = new Audio();
+    // A cross-origin element feeds Web Audio silence unless fetched with CORS.
+    el.crossOrigin = 'anonymous';
     el.preload = 'auto';
     el.src = SILENT_WAV;
     const gain = ctx.createGain();
@@ -113,11 +114,9 @@ export class Music {
     const s: Stream = { el, gain, ready: false, pending: false };
     this.streams[id] = s;
     el.play().catch(() => {});
-    this.blobs[id]
-      .then((blob) => {
+    this.srcs[id]
+      .then((url) => {
         if (this.disposed) return;
-        const url = URL.createObjectURL(blob);
-        this.urls.push(url);
         el.loop = id !== 'main1';
         el.src = url;
         if (id === 'main1') el.onended = () => this.playing === 'main1' && this.send('main1Ended');
