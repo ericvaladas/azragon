@@ -34,6 +34,7 @@ import { Blimps } from './enemies/Blimps';
 import { Helicopters } from './enemies/Helicopters';
 import { NapalmBombers } from './enemies/NapalmBombers';
 import { OspreyNets } from './enemies/OspreyNets';
+import { GustavFleet } from './enemies/GustavFleet';
 import { Snare } from './systems/snare';
 import { buildHeightfield, surfaceAt, type Heightfield } from './systems/heightfield';
 import { SamSilos } from './enemies/SamSilos';
@@ -240,6 +241,7 @@ export class GameScene {
     this.enemies.add(new Helicopters(this.scene));
     this.enemies.add(new NapalmBombers(this.scene));
     this.enemies.add(new OspreyNets(this.scene));
+    this.enemies.add(new GustavFleet(this.scene));
     this.ctx = this.buildContext();
     this.intro = new IntroCinematic({ scene: this.scene, camera: this.camera, overlay: container, monster: this.monster, city: this.city, particles: this.particles, onReveal: () => this.music.reveal() });
     this.city.onCollapseStart = (pos, size) => {
@@ -1204,6 +1206,10 @@ export class GameScene {
         this.projectiles.fireRocket(from, to, damage);
         this.particles.emit('fire', from, 2, 0.3);
       },
+      fireGustavShell: (from, to, damage) => {
+        this.projectiles.fireGustavShell(from, to, damage);
+        this.particles.explosion(from, 0.8);
+      },
       splash: (p, size) => this.splasher.at(p, size),
       shake: (a) => this.rig.addTrauma(a),
       onDestroyed: this.onTargetDestroyed,
@@ -1729,8 +1735,10 @@ export class GameScene {
       this.particles.emit('fire', h.point, 3, 0.5);
       return;
     }
-    this.particles.explosion(h.point, 0.6);
-    this.damageMonster(h.damage, h.kind === 'shell' ? 'shell' : 'rocket');
+    // The Gustav's shell bursts far bigger than a tank's; both are shells to the monster's defences.
+    this.particles.explosion(h.point, h.kind === 'gustav' ? 1.8 : 0.6);
+    if (h.kind === 'gustav') this.rig.addTrauma(0.3);
+    this.damageMonster(h.damage, h.kind === 'shell' || h.kind === 'gustav' ? 'shell' : 'rocket');
   };
 
   /** Shots in flight leave smoke puffs; Hungry Ghosts trail dark smoke and pale motes instead. */
@@ -1738,6 +1746,12 @@ export class GameScene {
     if (kind === 'wisp') {
       this.particles.emit('wraith', p, 1, 0.2);
       if (Math.random() < 0.5) this.particles.emit('wisp', p, 1, 0.3);
+      return;
+    }
+    if (kind === 'gustav') {
+      // A thick, lingering trail that leads the eye back to the gun.
+      this.particles.emit('trail', p, 2, 0.4);
+      this.particles.emit('smoke', p, 1, 0.3);
       return;
     }
     this.particles.emit('smoke', p, 1, 0.2);
