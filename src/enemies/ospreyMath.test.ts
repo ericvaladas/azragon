@@ -11,18 +11,18 @@ const at = (i: number, j: number) => i + j * (NET_N + 1);
 const mon = (x = 0, z = 0): MonsterInfo => ({ x, z, height: 385, bodyRadius: 84 });
 
 describe('squad flight', () => {
-  it('spawns spawnDist from the monster at cruise altitude, tight, pods forward, heading at it', () => {
-    const s = newSquad({ x: 100, z: -50 }, Math.PI / 2);
+  it('spawns spawnDist from the monster at cruise altitude, already spread to the net, pods forward, heading at it', () => {
+    const s = newSquad({ x: 100, z: -50 }, Math.PI / 2, 84);
     expect(Math.hypot(s.x - 100, s.z + 50)).toBeCloseTo(O.spawnDist, 6);
     expect(s.y).toBe(O.cruiseAltitude);
-    expect(s.half).toBe(O.tightHalf);
+    expect(s.half).toBeCloseTo(netHalf(84), 6);
     expect(s.tilt).toBe(0);
     expect(s.phase).toBe('approach');
     expect(Math.sin(s.yaw)).toBeCloseTo((100 - s.x) / O.spawnDist, 6);
   });
 
   it('approach follows a moving monster and switches to positioning within arriveDist', () => {
-    const s = newSquad({ x: 0, z: 0 }, 0);
+    const s = newSquad({ x: 0, z: 0 }, 0, 84);
     let mx = 0;
     for (let t = 0; t < 30 && s.phase === 'approach'; t += DT) {
       mx += 60 * DT;
@@ -30,10 +30,11 @@ describe('squad flight', () => {
     }
     expect(s.phase).toBe('position');
     expect(Math.hypot(s.x - mx, s.z)).toBeLessThanOrEqual(O.arriveDist + O.cruiseSpeed * DT);
+    expect(s.half).toBeCloseTo(netHalf(84), 6);
   });
 
   it('positions: sinks to the drop altitude, widens to the net, swivels the pods up, then is done', () => {
-    const s = newSquad({ x: 0, z: 0 }, 0);
+    const s = newSquad({ x: 0, z: 0 }, 0, 84);
     while (s.phase === 'approach') stepSquad(s, DT, mon());
     for (let t = 0; t < O.positionTime * O.settleFrac + DT; t += DT) stepSquad(s, DT, mon());
     expect(s.y).toBeCloseTo(dropAltitude(385), 0);
@@ -45,7 +46,7 @@ describe('squad flight', () => {
   });
 
   it('keeps its centre over a monster walking away while positioning', () => {
-    const s = newSquad({ x: 0, z: 0 }, 0);
+    const s = newSquad({ x: 0, z: 0 }, 0, 84);
     while (s.phase === 'approach') stepSquad(s, DT, mon());
     let mx = 0;
     for (let t = 0; t < O.positionTime; t += DT) {
@@ -56,7 +57,7 @@ describe('squad flight', () => {
   });
 
   it('leaves: flies straight on, climbs back, closes up, tilts the pods forward, and is gone past exitDist', () => {
-    const s = newSquad({ x: 0, z: 0 }, 0);
+    const s = newSquad({ x: 0, z: 0 }, 0, 84);
     while (!positionDone(s)) stepSquad(s, DT, mon());
     const yaw = s.yaw;
     startLeave(s, { x: 0, z: 0 });
@@ -71,7 +72,7 @@ describe('squad flight', () => {
   });
 
   it('an exit started away from the monster turns straight away from it', () => {
-    const s = newSquad({ x: 0, z: 0 }, 0);
+    const s = newSquad({ x: 0, z: 0 }, 0, 84);
     stepSquad(s, DT, mon());
     startLeave(s, { x: 0, z: 0 });
     expect(Math.sin(s.yaw) * s.x + Math.cos(s.yaw) * s.z).toBeGreaterThan(0);

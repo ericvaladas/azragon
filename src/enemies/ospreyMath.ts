@@ -33,10 +33,11 @@ export function domeRadius(bodyRadius: number, width: number): number {
   return Math.max(bodyRadius * O.domeRadiusMult, width * O.domeWidthMult);
 }
 
-export function newSquad(monster: Vec2, bearing: number): Squad {
+/** A squad spawnDist out on `bearing` from the monster, already spread to the net's width for a monster of `bodyRadius`. */
+export function newSquad(monster: Vec2, bearing: number, bodyRadius: number): Squad {
   const x = monster.x + Math.sin(bearing) * O.spawnDist;
   const z = monster.z + Math.cos(bearing) * O.spawnDist;
-  return { phase: 'approach', t: 0, x, y: O.cruiseAltitude, z, yaw: Math.atan2(monster.x - x, monster.z - z), half: O.tightHalf, tilt: 0 };
+  return { phase: 'approach', t: 0, x, y: O.cruiseAltitude, z, yaw: Math.atan2(monster.x - x, monster.z - z), half: netHalf(bodyRadius), tilt: 0 };
 }
 
 /** Moves the squad centre toward `to` by at most `step`; returns the distance left. */
@@ -69,7 +70,6 @@ export function stepSquad(s: Squad, dt: number, m: MonsterInfo): void {
     closeIn(s, m, O.trackSpeed * dt);
     const u = smooth(clamp01(s.t / (O.positionTime * O.settleFrac)));
     s.y = O.cruiseAltitude + (dropAltitude(m.height) - O.cruiseAltitude) * u;
-    s.half = O.tightHalf + (netHalf(m.bodyRadius) - O.tightHalf) * u;
     s.tilt = TILT_UP * smooth(clamp01(s.t / O.tiltTime));
     return;
   }

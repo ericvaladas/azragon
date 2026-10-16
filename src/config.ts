@@ -467,13 +467,13 @@ export const CONFIG = {
   },
   /**
    * Osprey Net squads: four Ospreys (one per net corner) spawn spawnDist m out and fly at cruiseSpeed and
-   * cruiseAltitude in a square tightHalf m from the centre to each, homing on the monster. Within arriveDist they
-   * position for positionTime s: the formation centre follows the monster at up to trackSpeed m/s, the square widens
-   * to bodyRadius × netHalfMult, the squad sinks to the monster's height + dropClearance (both over the first
-   * settleFrac of the phase), and the rotor pods swivel up over tiltTime s. Then, with at least minToDrop alive,
+   * cruiseAltitude in a square bodyRadius × netHalfMult m from the centre to each, carrying the net open, homing on
+   * the monster. Within arriveDist they position for positionTime s: the formation centre follows the monster at up
+   * to trackSpeed m/s, the squad sinks to the monster's height + dropClearance over the first settleFrac of the
+   * phase, and the rotor pods swivel up over tiltTime s. Then, with at least minToDrop alive,
    * the net falls over dropTime s and snares the monster; otherwise it falls to the ground, lies groundLife s
-   * (fading over the last second) and the squad aborts. Survivors climb back at climbRate m/s, close the square at
-   * tightenRate m/s and fly out, despawning exitDist m from the monster.
+   * (fading over the last second) and the squad aborts. Survivors climb back at climbRate m/s, close the square to
+   * tightHalf m at tightenRate m/s and fly out, despawning exitDist m from the monster.
    * Net: corners hang `cable` m below each Osprey; the middle sags sag × half; a lost corner droops droop × half
    * below its neighbours. Snared, it drapes as a dome of radius max(bodyRadius × domeRadiusMult,
    * width × domeWidthMult) and the monster's height. `size` is nose-to-tail length (m); rotors spin at rotorSpin rad/s.
