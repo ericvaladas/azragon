@@ -137,9 +137,10 @@ export class Projectiles {
     s.dur = SPIKE_TTL;
   }
 
+  /** A tank shell: flies at CONFIG.tank.shellSpeed on its arc, so nearer targets are hit sooner. */
   fireShell(from: THREE.Vector3, to: THREE.Vector3, damage: number): void {
     const s = this.alloc('shell', from, to, damage, null);
-    s.dur = CONFIG.tank.shellFlightTime;
+    s.dur = Math.max(0.1, from.distanceTo(to) / CONFIG.tank.shellSpeed);
   }
 
   /** The Schwerer Gustav's shell: a straight, fast flight at CONFIG.gustav.shellSpeed; it trails smoke. */

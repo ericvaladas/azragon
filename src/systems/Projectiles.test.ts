@@ -35,6 +35,22 @@ describe('Projectiles.fireChunk', () => {
   });
 });
 
+describe('Projectiles.fireShell', () => {
+  it('a tank shell flies at the tank shell speed, landing sooner from closer', () => {
+    const land = (dist: number) => {
+      const p = new Projectiles(new THREE.Scene());
+      let at = -1;
+      let t = 0;
+      p.onHit = () => (at = t);
+      p.fireShell(new THREE.Vector3(0, 30, 0), new THREE.Vector3(0, 30, dist), 6);
+      for (; t < 5 && at < 0; t += 0.01) p.update(0.01);
+      return at;
+    };
+    expect(land(950)).toBeCloseTo(950 / CONFIG.tank.shellSpeed, 1);
+    expect(land(400)).toBeCloseTo(400 / CONFIG.tank.shellSpeed, 1);
+  });
+});
+
 describe('Projectiles chunk trail', () => {
   it('a Kraken hurl chunk flies without a trail', () => {
     const p = new Projectiles(new THREE.Scene());

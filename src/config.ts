@@ -204,7 +204,7 @@ export const CONFIG = {
     /** Leg-strike reach from the monster's root. */
     meleeRange: 480,
     meleeRadius: 170 * MONSTER_SCALE,
-    meleeDamage: 60,
+    meleeDamage: 90,
     meleeCooldown: 0.7,
     meleeWindup: 0.3,
     spikeRange: 1700,
@@ -227,7 +227,7 @@ export const CONFIG = {
       footDamage: 150,
       meleeRange: 420,
       meleeRadius: 0,
-      meleeDamage: 75,
+      meleeDamage: 115,
       meleeCooldown: 0.9,
       meleeTiming: { windup: 0.25, impact: 0.4, end: 0.8 },
       rangedRange: 1300,
@@ -277,7 +277,7 @@ export const CONFIG = {
       /** Slam reach (world m) — also the brain's melee range for attack orders. */
       meleeRange: 400,
       meleeRadius: 90,
-      meleeDamage: 70,
+      meleeDamage: 105,
       meleeCooldown: 1.4,
       meleeTiming: { windup: 0.3, impact: 0.45, end: 0.85 },
       rangedRange: 1400,
@@ -319,7 +319,7 @@ export const CONFIG = {
       /** Fist reach (world m) — also the brain's melee range for attack orders. */
       meleeRange: 324,
       meleeRadius: 110,
-      meleeDamage: 95,
+      meleeDamage: 145,
       meleeCooldown: 1.2,
       meleeTiming: { windup: 0.3, impact: 0.45, end: 0.85 },
       rangedRange: 1400,
@@ -382,8 +382,9 @@ export const CONFIG = {
       handSmoke: 0x2b1d33,
     },
   },
+  /** Artillery batteries: `guns` guns gunSpacing m apart, placed distMin..distMax m from the monster; a battery fires a salvo every salvoEvery s while the monster is within `range` m of it. */
   artillery: {
-    hp: 120, exp: 20, size: 62, guns: 3, gunSpacing: 109, distMin: 2500, distMax: 3500,
+    hp: 120, exp: 20, size: 62, guns: 3, gunSpacing: 109, distMin: 1400, distMax: 2000, range: 2200,
     salvoEvery: 6, fillTime: 3.2, shellFlight: 1.8, shellArc: 750, radius: 90, damage: 60, buildingDamage: 200, spread: 260,
     baseSalvo: 3, levelsPerExtra: 3, maxSalvo: 8,
   },
@@ -445,7 +446,8 @@ export const CONFIG = {
     missiles: 4, missileSpeed: 300, missileTurn: 1.6, missileDamage: 35, missileExp: 2, missileTtl: 12, missileHitDist: 120,
   },
   blimp: { hp: 180, speed: 44, size: 136, spawnDist: 2200, altitude: 520, headHeight: 330, triggerDist: 190, damage: 120, exp: 25 },
-  tank: { hp: 30, speed: 50, range: 950, damage: 6, fireCooldown: 3.2, shellFlightTime: 1.6, shellArc: 140, exp: 5, size: 48 },
+  /** Tanks: their shells fly at shellSpeed m/s on an arc peaking shellArc m. */
+  tank: { hp: 30, speed: 50, range: 950, damage: 20, fireCooldown: 3.2, shellSpeed: 1100, shellArc: 140, exp: 5, size: 48 },
   /**
    * Schwerer Gustav, a gigantic tracked land battleship (`size` m nose to tail, its hull drawn `width` m across, just
    * wider than a road). It spawns on a road spawnBeyond..spawnBeyond + spawnSpread m beyond its range from the monster,

@@ -165,7 +165,11 @@ export class Artillery implements EnemySystem {
         g.sinceShot += dt;
       }
       b.salvoT -= dt;
-      if (b.salvoT <= 0 && ctx.monster.alive) {
+      // A battery fires only while the monster is within range of it; beyond that it holds its next salvo ready.
+      const cx = b.guns.reduce((n, g) => n + g.position.x, 0) / b.guns.length;
+      const cz = b.guns.reduce((n, g) => n + g.position.z, 0) / b.guns.length;
+      const inRange = Math.hypot(m.x - cx, m.z - cz) <= A.range;
+      if (b.salvoT <= 0 && ctx.monster.alive && inRange) {
         b.salvoT = A.salvoEvery;
         strikePoints({ x: m.x, z: m.z }, salvoSize(ctx.level), A.spread, ctx.rng).forEach((at, k) => {
           if (this.strikes.length >= MAX_STRIKES) return;
