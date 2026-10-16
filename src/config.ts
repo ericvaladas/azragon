@@ -557,6 +557,13 @@ export const CONFIG = {
   progression: { expBase: 20, expExponent: 1.55, earlyLevels: 3, earlyMult: 1.25, offerCount: 3 },
   /** One-off wave at the start of every run, outside the spawn budget. */
   opening: { time: 5, count: 8, radius: 1200 },
+  /**
+   * Runaway: the monster counts as running once its straight-line travel over the last `window` s (sampled every
+   * `sample` s) reaches `distance` m, and stops counting once that falls below release × distance. While it runs,
+   * enemies spawn within ±cone rad of its travel direction, and a run's start drops a wave of waveCount tanks on the
+   * roads waveRadius m around a point waveAhead m ahead (at most one wave every waveCooldown s).
+   */
+  runaway: { window: 15, sample: 0.5, distance: 1200, release: 0.5, cone: Math.PI / 4, waveCount: 6, waveAhead: 1200, waveRadius: 300, waveCooldown: 45 },
   /** Menu cameras: a slow high circle over the city (title), and a turntable orbit of the monster (select). */
   menu: {
     title: { radius: 2400, height: 1300, speed: 0.04, startAngle: 2.4 },
