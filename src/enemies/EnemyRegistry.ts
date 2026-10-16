@@ -32,7 +32,9 @@ export class EnemyRegistry {
   /** Spawns (when `spawning`), then updates every system. */
   update(dt: number, ctx: WorldContext, spawning: boolean): void {
     if (spawning) {
-      for (const kind of this.director.update(dt, this.counts(), ctx.level)) this.systems.get(kind)?.spawn(ctx);
+      for (const kind of this.director.update(dt, this.counts(), ctx.level)) {
+        if (this.systems.get(kind)?.spawn(ctx) === false) this.director.refund(kind);
+      }
     }
     for (const s of this.systems.values()) s.update(dt, ctx);
     this.cacheValid = false;

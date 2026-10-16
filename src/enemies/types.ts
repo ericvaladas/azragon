@@ -2,6 +2,7 @@ import type * as THREE from 'three';
 import type { DamageSource, OnDestroyed, Target } from '../combat';
 import type { Particles } from '../systems/Particles';
 import type { Vec2 } from '../util/math';
+import type { OpenSite } from '../world/City';
 
 export type EnemyKind = 'tank' | 'jet' | 'blimp' | 'sam' | 'artillery' | 'truck' | 'laser' | 'heli' | 'napalm' | 'osprey';
 export const ENEMY_KINDS: readonly EnemyKind[] = ['tank', 'jet', 'blimp', 'sam', 'artillery', 'truck', 'laser', 'heli', 'napalm', 'osprey'];
@@ -41,6 +42,8 @@ export interface WorldContext {
   /** `attacker` is the enemy dealing the hit, when there is one (Overload fires beams back at it). */
   damageMonster(amount: number, source: DamageSource, attacker?: Target): void;
   damageBuildings(p: Vec2, r: number, amount: number): void;
+  /** Open ground (rubble lots, park and plaza pads) between rMin and rMax m from the monster. */
+  openGround(rMin: number, rMax: number): readonly OpenSite[];
   /** Snares the monster for `duration` s (an Osprey net); while it is mid-leap, the snare starts when it lands. */
   snareMonster(duration: number): void;
   fireShell(from: THREE.Vector3, to: THREE.Vector3, damage: number): void;
@@ -53,7 +56,8 @@ export interface WorldContext {
 
 export interface EnemySystem {
   readonly kind: EnemyKind;
-  spawn(ctx: WorldContext): void;
+  /** Spawns one; false when there was nowhere to put it (the director then refunds its cost). */
+  spawn(ctx: WorldContext): boolean | void;
   update(dt: number, ctx: WorldContext): void;
   /** Live, targetable entities (may include missiles for SAM silos). */
   targets(): readonly Target[];

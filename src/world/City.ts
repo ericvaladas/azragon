@@ -80,6 +80,9 @@ type LoadedChunk = {
   foamSlots: number[];
 };
 
+/** Open ground something can rise out of: a destroyed building's rubble lot, or a park or plaza pad. */
+export type OpenSite = { x: number; z: number; rubble: boolean };
+
 const ZERO = new THREE.Matrix4().makeScale(0, 0, 0);
 
 /** Fixed-size slots of one instanced mesh: free slots are taken from a stack; released slots are zero-scaled. */
@@ -497,6 +500,23 @@ export class City {
   blockedAt(x: number, z: number): boolean {
     const ci = Math.floor(x / PITCH), cj = Math.floor(z / PITCH);
     return isWater(this._style, ci, cj) || isIsland(this._style, ci, cj) || this.landmarkAt(x, z);
+  }
+
+  /**
+   * Open ground in the loaded chunks between rMin and rMax m from `p`: rubble lots of destroyed buildings (not
+   * landmarks or kept lots) and park/plaza pads (not lawns, which lie under houses), never on blocked ground.
+   */
+  openGround(p: Vec2, rMin: number, rMax: number): OpenSite[] {
+    const out: OpenSite[] = [];
+    const add = (x: number, z: number, rubble: boolean) => {
+      const d = Math.hypot(x - p.x, z - p.z);
+      if (d >= rMin && d <= rMax && !this.blockedAt(x, z)) out.push({ x, z, rubble });
+    };
+    for (const c of this.chunks.values()) {
+      for (const b of c.buildings) if (b.state === 'rubble' && !b.mesh && !b.spec.keep) add(b.spec.x, b.spec.z, true);
+      for (const pad of c.content.parks) add(pad.x, pad.z, false);
+    }
+    return out;
   }
 
   /** Loaded landmark meshes. */

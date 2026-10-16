@@ -1195,6 +1195,7 @@ export class GameScene {
       damageMonster: (amount, source, attacker) => this.damageMonster(amount, source, attacker),
       damageBuildings: (p, r, amount) => this.city.forEachStandingInRadius(p, r, (t) => t.applyDamage(amount)),
       snareMonster: (duration) => this.snareMonster(duration),
+      openGround: (rMin, rMax) => this.city.openGround({ x: this.monster.position.x, z: this.monster.position.z }, rMin, rMax),
       fireShell: (from, to, damage) => {
         this.projectiles.fireShell(from, to, damage);
         this.particles.emit('fire', from, 2, 0.3);

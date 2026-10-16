@@ -6,8 +6,11 @@ import type { WorldContext } from './types';
 import type { Vec2 } from '../util/math';
 
 const LAND = { x: 123, z: 456 };
-const ctx = (): WorldContext =>
+const RUBBLE = { x: 900, z: -300, rubble: true };
+const PARK = { x: -700, z: 800, rubble: false };
+const ctx = (sites: { x: number; z: number; rubble: boolean }[] = [RUBBLE]): WorldContext =>
   ({
+    openGround: () => sites,
     monster: { position: new THREE.Vector3(), alive: true, airborne: false },
     difficulty: { hpMult: 1, dmgMult: 1 },
     level: 1,
@@ -18,13 +21,29 @@ const ctx = (): WorldContext =>
   }) as unknown as WorldContext;
 
 describe('SamSilos spawn', () => {
-  it('puts each silo on a land road point (never a bridge deck)', () => {
+  it('rises out of an open-ground site (rubble or a park), not a road', () => {
     const s = new SamSilos(new THREE.Scene());
-    s.spawn(ctx());
+    expect(s.spawn(ctx())).toBe(true);
     const silos = s.targets().filter((t) => t.kind === 'sam');
     expect(silos.length).toBe(1);
-    expect(silos[0]!.position.x).toBe(LAND.x);
-    expect(silos[0]!.position.z).toBe(LAND.z);
+    expect(silos[0]!.position.x).toBe(RUBBLE.x);
+    expect(silos[0]!.position.z).toBe(RUBBLE.z);
+  });
+
+  it('skips the spawn, reporting it, when there is no open ground in range', () => {
+    const s = new SamSilos(new THREE.Scene());
+    expect(s.spawn(ctx([]))).toBe(false);
+    expect(s.count()).toBe(0);
+  });
+
+  it('never puts a second silo on a site already holding one', () => {
+    const s = new SamSilos(new THREE.Scene());
+    const c = ctx([RUBBLE, PARK]);
+    s.spawn(c);
+    s.spawn(c);
+    const xs = s.targets().filter((t) => t.kind === 'sam').map((t) => t.position.x).sort((a, b) => a - b);
+    expect(xs).toEqual([PARK.x, RUBBLE.x]);
+    expect(s.spawn(c)).toBe(false);
   });
 });
 

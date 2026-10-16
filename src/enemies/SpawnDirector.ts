@@ -19,6 +19,11 @@ export class SpawnDirector {
     this.next = null;
   }
 
+  /** Gives back the cost of a spawn that did not happen (no room for it), up to the budget cap. */
+  refund(kind: EnemyKind): void {
+    this.budget = Math.min(CONFIG.director.budgetCap, this.budget + CONFIG.spawns[kind].cost);
+  }
+
   /** Spawns for this frame; the spending rate and unlocked kinds follow the player's level. */
   update(dt: number, alive: Record<EnemyKind, number>, level: number): EnemyKind[] {
     const D = CONFIG.director;

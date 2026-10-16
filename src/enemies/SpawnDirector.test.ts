@@ -45,6 +45,21 @@ describe('SpawnDirector', () => {
     expect(dir.update(10000, zero(), 10).length).toBeLessThanOrEqual(CONFIG.director.budgetCap);
   });
 
+  it('a refunded spawn gives its cost back, so more spawns follow', () => {
+    const plain = new SpawnDirector(mulberry32(5));
+    const refunded = new SpawnDirector(mulberry32(5));
+    let a = 0;
+    let b = 0;
+    for (let t = 0; t < 30; t += 0.1) {
+      a += plain.update(0.1, zero(), 3).length;
+      for (const k of refunded.update(0.1, zero(), 3)) {
+        b++;
+        refunded.refund(k);
+      }
+    }
+    expect(b).toBeGreaterThan(a * 1.5);
+  });
+
   it('reset clears the clock and budget', () => {
     const dir = new SpawnDirector(mulberry32(6));
     run(dir, 30, 5);

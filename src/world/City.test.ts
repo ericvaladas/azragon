@@ -394,6 +394,38 @@ describe('signs', () => {
   });
 });
 
+describe('open ground (SAM sites)', () => {
+  const ring = (p: { x: number; z: number }) => Math.hypot(p.x, p.z);
+
+  it('offers rubble lots and park pads in the ring, never a standing building, blocked ground or a spot outside it', () => {
+    const { city } = make();
+    let victim: Target | null = null;
+    city.forEachStandingInRadius({ x: 900, z: 0 }, 300, (b) => {
+      if (!victim && b.radius < 60 && Math.abs(ring(b.position) - 1000) < 300 && !city.landmarkAt(b.position.x, b.position.z)) victim = b;
+    });
+    const v = victim as Target | null;
+    expect(v).not.toBeNull();
+    v!.applyDamage(1e9);
+    city.update(CONFIG.world.collapseTime * 2, new THREE.Vector3());
+    const sites = city.openGround({ x: 0, z: 0 }, 600, 1400);
+    expect(sites.some((s) => s.rubble && s.x === v!.position.x && s.z === v!.position.z)).toBe(true);
+    expect(sites.some((s) => !s.rubble)).toBe(true);
+    for (const s of sites) {
+      expect(ring(s)).toBeGreaterThanOrEqual(600);
+      expect(ring(s)).toBeLessThanOrEqual(1400);
+      expect(city.blockedAt(s.x, s.z)).toBe(false);
+      let onBuilding = false;
+      city.forEachStandingInRadius(s, 1, () => (onBuilding = true));
+      expect(onBuilding).toBe(false);
+    }
+  });
+
+  it('is empty where the ring holds no rubble and no park', () => {
+    const { city } = make();
+    expect(city.openGround({ x: 0, z: 0 }, 0, 1)).toEqual([]);
+  });
+});
+
 describe('harbour', () => {
   const PORT = new THREE.Vector3(-1100, 0, -900);
   const near = () => chunksInRadius(PORT.x, PORT.z, 1200).map((r) => generateChunk(TOKYO, CONFIG.world.seed, r.cx, r.cz));

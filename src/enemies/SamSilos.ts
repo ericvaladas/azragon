@@ -127,19 +127,25 @@ export class SamSilos implements EnemySystem {
     this.draw();
   }
 
-  spawn(ctx: WorldContext): void {
+  /**
+   * A silo rises out of open ground spawnMin..spawnMax m from the monster: a rubble lot (bursting up through the
+   * wreckage) or a park or plaza, never one already holding a silo. False when there is no such site.
+   */
+  spawn(ctx: WorldContext): boolean {
     this.ctx = ctx;
-    if (this.silos.length >= MAX) return;
-    const a = ctx.rng() * Math.PI * 2;
-    const r = C.spawnMin + ctx.rng() * (C.spawnMax - C.spawnMin);
+    if (this.silos.length >= MAX) return false;
+    const free = ctx.openGround(C.spawnMin, C.spawnMax).filter((p) => !this.silos.some((s) => Math.hypot(s.position.x - p.x, s.position.z - p.z) < C.size * 2));
+    if (free.length === 0) return false;
+    const p = free[Math.floor(ctx.rng() * free.length)]!;
     const m = ctx.monster.position;
     const s = new Silo(C.hp * ctx.difficulty.hpMult, this.damageSilo);
-    // A silo rises out of the ground, so never onto a bridge deck.
-    const p = ctx.roads.nearestLand({ x: m.x + Math.cos(a) * r, z: m.z + Math.sin(a) * r });
     s.position.set(p.x, C.size * 0.4, p.z);
     s.yaw = Math.atan2(m.x - p.x, m.z - p.z);
-    ctx.particles.ring('dust', s.position.clone().setY(0), C.size * 1.5, 10);
+    const ground = s.position.clone().setY(0);
+    ctx.particles.ring('dust', ground, C.size * 1.5, 10);
+    if (p.rubble) ctx.particles.emit('debris', ground.setY(20), 14, 1.4);
     this.silos.push(s);
+    return true;
   }
 
   private damageSilo = (s: Silo, amount: number): void => {
