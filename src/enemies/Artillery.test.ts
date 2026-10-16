@@ -4,6 +4,7 @@ import { Artillery } from './Artillery';
 import { mulberry32 } from '../util/rng';
 import type { WorldContext } from './types';
 import type { Vec2 } from '../util/math';
+import { spawnDirection } from '../systems/runaway';
 
 const ctx = (blocked: (x: number, z: number) => boolean): WorldContext =>
   ({
@@ -11,6 +12,8 @@ const ctx = (blocked: (x: number, z: number) => boolean): WorldContext =>
     difficulty: { hpMult: 1, dmgMult: 1 },
     level: 1,
     rng: mulberry32(7),
+    // Spawns pick a direction all round the monster, as when it isn't running away.
+    spawnDir: ((r) => () => spawnDirection(r, null))(mulberry32(101)),
     blocked,
     roads: { nearest: (p: Vec2) => p, nearestLand: (p: Vec2) => p, path: (_a: Vec2, b: Vec2) => [b] },
   }) as unknown as WorldContext;

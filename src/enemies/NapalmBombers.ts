@@ -170,7 +170,9 @@ export class NapalmBombers implements EnemySystem {
     this.ctx = ctx;
     if (this.count() >= CONFIG.spawns.napalm.cap) return;
     const m = ctx.monster.position;
-    const run = newRun({ x: m.x, z: m.z }, ctx.rng() * Math.PI * 2);
+    const d = ctx.spawnDir();
+    // Napalm bearings put x on cos, z on sin.
+    const run = newRun({ x: m.x, z: m.z }, Math.atan2(d.z, d.x));
     const mat = toonMat(0xffffff, { vertexColors: true });
     const strip = new THREE.Mesh(this.stripGeo, new THREE.MeshBasicMaterial({ color: P.napalmScorch, transparent: true, opacity: 0, ...LIFT }));
     strip.position.set(run.aim.x, 2.5, run.aim.z);

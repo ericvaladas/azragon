@@ -6,6 +6,8 @@ import type { Vec2 } from '../util/math';
 import type { DamageSource } from '../combat';
 import { CONFIG } from '../config';
 import { pointSegmentDistance } from './beamMath';
+import { spawnDirection } from '../systems/runaway';
+import { mulberry32 } from '../util/rng';
 
 const T = CONFIG.truck;
 
@@ -18,6 +20,8 @@ function makeCtx() {
     difficulty: { hpMult: 1, dmgMult: 1 },
     minutes: 0,
     rng: () => 0.5,
+    // Spawns pick a direction all round the monster, as when it isn't running away.
+    spawnDir: ((r) => () => spawnDirection(r, null))(mulberry32(101)),
     particles: { ring: noop, emit: noop, explosion: noop },
     roads: { nearest: (p: Vec2) => p, nearestLand: (p: Vec2) => p, path: (_a: Vec2, b: Vec2) => [b] },
     damageMonster: (amount: number, source: DamageSource) => hits.push({ amount, source }),

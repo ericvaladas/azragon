@@ -88,9 +88,9 @@ export class Blimps implements EnemySystem {
     this.ctx = ctx;
     if (this.blimps.length >= MAX) return;
     const b = new Blimp(B.hp * ctx.difficulty.hpMult, this.damage);
-    const a = ctx.rng() * Math.PI * 2;
+    const d = ctx.spawnDir();
     const m = ctx.monster.position;
-    b.position.set(m.x + Math.cos(a) * B.spawnDist, B.altitude, m.z + Math.sin(a) * B.spawnDist);
+    b.position.set(m.x + d.x * B.spawnDist, B.altitude, m.z + d.z * B.spawnDist);
     this.blimps.push(b);
   }
 

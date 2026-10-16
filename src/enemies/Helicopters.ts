@@ -85,7 +85,9 @@ export class Helicopters implements EnemySystem {
     this.ctx = ctx;
     if (this.count() >= CONFIG.spawns.heli.cap) return;
     const m = ctx.monster.position;
-    const bearing = ctx.rng() * Math.PI * 2;
+    const d = ctx.spawnDir();
+    // Heli bearings put x on cos, z on sin.
+    const bearing = Math.atan2(d.z, d.x);
     const dist = H.spawnMin + ctx.rng() * (H.spawnMax - H.spawnMin);
     const state = newHeliState(m, bearing, dist, orbitDir(this.spawned++));
     const mat = toonMat(0xffffff, { vertexColors: true });

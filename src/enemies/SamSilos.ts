@@ -136,8 +136,13 @@ export class SamSilos implements EnemySystem {
     if (this.silos.length >= MAX) return false;
     const free = ctx.openGround(C.spawnMin, C.spawnMax).filter((p) => !this.silos.some((s) => Math.hypot(s.position.x - p.x, s.position.z - p.z) < C.size * 2));
     if (free.length === 0) return false;
-    const p = free[Math.floor(ctx.rng() * free.length)]!;
     const m = ctx.monster.position;
+    // Prefer sites inside the cone of ctx.spawnDir (ahead of a running monster); any free site otherwise.
+    const d = ctx.spawnDir();
+    const minDot = Math.cos(CONFIG.runaway.cone);
+    const ahead = free.filter((q) => ((q.x - m.x) * d.x + (q.z - m.z) * d.z) / Math.max(1e-6, Math.hypot(q.x - m.x, q.z - m.z)) >= minDot);
+    const pool = ahead.length > 0 ? ahead : free;
+    const p = pool[Math.floor(ctx.rng() * pool.length)]!;
     const s = new Silo(C.hp * ctx.difficulty.hpMult, this.damageSilo);
     s.position.set(p.x, C.size * 0.4, p.z);
     s.yaw = Math.atan2(m.x - p.x, m.z - p.z);

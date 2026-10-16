@@ -13,7 +13,7 @@ export class Runaway {
   dir: Vec2 | null = null;
   private samples: { t: number; x: number; z: number }[] = [];
   private clock = 0;
-  private sinceSample = R.sample;
+  private sinceSample: number = R.sample;
 
   /** Records the monster at `pos`; true only on the update a run starts. */
   update(dt: number, pos: Vec2): boolean {
@@ -49,4 +49,25 @@ export function spawnDirection(rng: () => number, run: Vec2 | null): Vec2 {
   const base = run ? Math.atan2(run.z, run.x) : 0;
   const a = run ? base + (rng() * 2 - 1) * R.cone : rng() * Math.PI * 2;
   return { x: Math.cos(a), z: Math.sin(a) };
+}
+
+/** Where a run's catch-up wave lands: CONFIG.runaway.waveAhead m ahead of the monster along its run. */
+export function waveCenter(monster: Vec2, run: Vec2): Vec2 {
+  return { x: monster.x + run.x * R.waveAhead, z: monster.z + run.z * R.waveAhead };
+}
+
+/** Lets a catch-up wave through at most once per CONFIG.runaway.waveCooldown s of run time. */
+export class WaveGate {
+  private last = -Infinity;
+
+  /** True (and the cooldown restarts) when a wave may go now, at run time `now`. */
+  open(now: number): boolean {
+    if (now - this.last < R.waveCooldown) return false;
+    this.last = now;
+    return true;
+  }
+
+  reset(): void {
+    this.last = -Infinity;
+  }
 }

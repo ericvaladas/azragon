@@ -42,6 +42,11 @@ export interface WorldContext {
   /** `attacker` is the enemy dealing the hit, when there is one (Overload fires beams back at it). */
   damageMonster(amount: number, source: DamageSource, attacker?: Target): void;
   damageBuildings(p: Vec2, r: number, amount: number): void;
+  /**
+   * Direction (unit, on the ground) from the monster to place a new enemy: anywhere around it, or ahead of it while it
+   * runs away (CONFIG.runaway), so the army appears in its path.
+   */
+  spawnDir(): Vec2;
   /** Open ground (rubble lots, park and plaza pads) between rMin and rMax m from the monster. */
   openGround(rMin: number, rMax: number): readonly OpenSite[];
   /** Snares the monster for `duration` s (an Osprey net); while it is mid-leap, the snare starts when it lands. */

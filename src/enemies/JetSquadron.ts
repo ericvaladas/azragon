@@ -76,11 +76,11 @@ export class JetSquadron implements EnemySystem {
     const mesh = new THREE.Mesh(this.body, mat);
     mesh.castShadow = true;
     j.group.add(mesh, new THREE.Mesh(this.burnerGeo, this.burnerMat));
-    const a = rng() * Math.PI * 2;
+    const d = ctx.spawnDir();
     const r = CONFIG.director.spawnRing * 1.2;
     j.hp = CONFIG.jet.hp * ctx.difficulty.hpMult;
-    j.position.set(around.x + Math.cos(a) * r, CONFIG.jet.altitude, around.z + Math.sin(a) * r);
-    j.dir.set(-Math.cos(a), 0, -Math.sin(a));
+    j.position.set(around.x + d.x * r, CONFIG.jet.altitude, around.z + d.z * r);
+    j.dir.set(-d.x, 0, -d.z);
     j.offset.set((rng() - 0.5) * 400, (rng() - 0.5) * 120, (rng() - 0.5) * 400);
     this.scene.add(j.group);
     this.jets.push(j);

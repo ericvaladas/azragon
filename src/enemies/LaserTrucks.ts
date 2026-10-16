@@ -137,11 +137,11 @@ export class LaserTrucks implements EnemySystem {
   spawn(ctx: WorldContext): void {
     this.ctx = ctx;
     if (this.trucks.length >= MAX) return;
-    const a = ctx.rng() * Math.PI * 2;
+    const d = ctx.spawnDir();
     const r = CONFIG.director.spawnRing * (0.8 + ctx.rng() * 0.3);
     const m = ctx.monster.position;
     const t = new LaserTruck(T.hp * ctx.difficulty.hpMult, this.damage);
-    const p = ctx.roads.nearest({ x: m.x + Math.cos(a) * r, z: m.z + Math.sin(a) * r });
+    const p = ctx.roads.nearest({ x: m.x + d.x * r, z: m.z + d.z * r });
     t.position.set(p.x, S * 0.3, p.z);
     this.trucks.push(t);
   }

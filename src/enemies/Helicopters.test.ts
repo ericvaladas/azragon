@@ -5,6 +5,7 @@ import { Helicopters } from './Helicopters';
 import { mulberry32 } from '../util/rng';
 import type { WorldContext } from './types';
 import type { Target } from '../combat';
+import { spawnDirection } from '../systems/runaway';
 
 function makeCtx(over: Partial<{ hpMult: number }> = {}) {
   const destroyed: { t: Target; exp: number }[] = [];
@@ -14,6 +15,8 @@ function makeCtx(over: Partial<{ hpMult: number }> = {}) {
     difficulty: { hpMult: over.hpMult ?? 1, dmgMult: 1 },
     level: 2,
     rng: mulberry32(11),
+    // Spawns pick a direction all round the monster, as when it isn't running away.
+    spawnDir: ((r) => () => spawnDirection(r, null))(mulberry32(101)),
     particles: { ring: () => {}, explosion: () => {}, emit: () => {} },
     roads: { nearest: (p: unknown) => p, nearestLand: (p: unknown) => p, path: () => [] },
     damageMonster: () => {},

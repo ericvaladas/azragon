@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { CONFIG } from '../config';
-import { Runaway, spawnDirection } from './runaway';
+import { Runaway, WaveGate, spawnDirection, waveCenter } from './runaway';
 import { mulberry32 } from '../util/rng';
 import type { Vec2 } from '../util/math';
 
@@ -86,5 +86,22 @@ describe('spawnDirection', () => {
       expect(Math.hypot(d.x, d.z)).toBeCloseTo(1, 6);
       expect(d.x * run.x + d.z * run.z).toBeGreaterThanOrEqual(Math.cos(R.cone) - 1e-9);
     }
+  });
+});
+
+describe('catch-up wave', () => {
+  it('lands waveAhead m ahead of the monster along its run', () => {
+    const c = waveCenter({ x: 100, z: -50 }, { x: 0.6, z: 0.8 });
+    expect(c.x).toBeCloseTo(100 + 0.6 * R.waveAhead, 6);
+    expect(c.z).toBeCloseTo(-50 + 0.8 * R.waveAhead, 6);
+  });
+
+  it('opens at most once per waveCooldown, and reset forgets it', () => {
+    const g = new WaveGate();
+    expect(g.open(10)).toBe(true);
+    expect(g.open(10 + R.waveCooldown - 1)).toBe(false);
+    expect(g.open(10 + R.waveCooldown)).toBe(true);
+    g.reset();
+    expect(g.open(0)).toBe(true);
   });
 });

@@ -6,6 +6,7 @@ import { mulberry32 } from '../util/rng';
 import type { WorldContext } from './types';
 import type { Target } from '../combat';
 import type { Vec2 } from '../util/math';
+import { spawnDirection } from '../systems/runaway';
 
 const G = CONFIG.gustav;
 const DT = 0.05;
@@ -24,6 +25,8 @@ function makeCtx(hpMult = 1) {
     difficulty: { hpMult, dmgMult: 1 },
     level: 1,
     rng: mulberry32(9),
+    // Spawns pick a direction all round the monster, as when it isn't running away.
+    spawnDir: ((r) => () => spawnDirection(r, null))(mulberry32(101)),
     particles: { ring: (kind: string, at: THREE.Vector3, r: number) => rings.push({ kind, x: at.x, z: at.z, r }), explosion: () => {}, emit: () => {} },
     roads: { nearest: (p: Vec2) => p, nearestLand: (p: Vec2) => p, path: (_a: Vec2, b: Vec2) => [b] },
     damageBuildings: (_p: Vec2, r: number, amount: number) => crushes.push({ r, amount }),

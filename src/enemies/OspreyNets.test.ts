@@ -5,6 +5,7 @@ import { OspreyNets } from './OspreyNets';
 import { mulberry32 } from '../util/rng';
 import type { WorldContext } from './types';
 import type { Target } from '../combat';
+import { spawnDirection } from '../systems/runaway';
 
 const O = CONFIG.osprey;
 const DT = 0.05;
@@ -22,6 +23,8 @@ function makeCtx() {
     difficulty: { hpMult: 1, dmgMult: 1 },
     level: 7,
     rng: mulberry32(3),
+    // Spawns pick a direction all round the monster, as when it isn't running away.
+    spawnDir: ((r) => () => spawnDirection(r, null))(mulberry32(101)),
     particles: { ring: () => {}, explosion: () => {}, emit: () => {} },
     roads: { nearest: (p: unknown) => p, nearestLand: (p: unknown) => p, path: () => [] },
     damageMonster: () => {},

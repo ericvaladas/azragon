@@ -36,6 +36,7 @@ import { NapalmBombers } from './enemies/NapalmBombers';
 import { OspreyNets } from './enemies/OspreyNets';
 import { GustavFleet } from './enemies/GustavFleet';
 import { Snare } from './systems/snare';
+import { Runaway, WaveGate, spawnDirection, waveCenter } from './systems/runaway';
 import { buildHeightfield, surfaceAt, type Heightfield } from './systems/heightfield';
 import { SamSilos } from './enemies/SamSilos';
 import { Artillery } from './enemies/Artillery';
@@ -164,6 +165,9 @@ export class GameScene {
   /** The monster's snare (Osprey nets), and a snare that arrived mid-leap, waiting for the landing (s; 0 = none). */
   private snare = new Snare();
   private pendingSnare = 0;
+  /** Watches for the monster running away in one direction, and gates the catch-up waves that cut it off. */
+  private runaway = new Runaway();
+  private waveGate = new WaveGate();
   /** The monster's top surface for nets to land on, measured from its meshes the first time a net needs it each run. */
   private netHF: Heightfield | null = null;
   private netSurface = (lx: number, lz: number): number => {
@@ -438,6 +442,8 @@ export class GameScene {
     this.snare.clear();
     this.pendingSnare = 0;
     this.netHF = null;
+    this.runaway.reset();
+    this.waveGate.reset();
     this.swatCd = 0;
     this.tailCd = 0;
     this.heat = 0;
@@ -684,6 +690,13 @@ export class GameScene {
           this.pendingSnare = 0;
         }
         if (this.snare.update(dt)) this.enemies.get<OspreyNets>('osprey').netTornFree();
+        const mp = this.monster.position;
+        if (this.runaway.update(dt, { x: mp.x, z: mp.z }) && this.runaway.dir && this.waveGate.open(this.runTime)) {
+          // The monster has started running away: drop a wave of tanks on the roads ahead of it.
+          const R = CONFIG.runaway;
+          const at = waveCenter({ x: mp.x, z: mp.z }, this.runaway.dir);
+          for (const p of ringOnRoads(this.city.style, at, R.waveCount, R.waveRadius)) this.enemies.get<TankFleet>('tank').spawnAt(p.x, p.z, this.ctx);
+        }
         const fire = this.passives.update(dt, this.monster.kind.interceptRate ?? 1);
         if (fire.storm > 0) this.spikeStorm(fire.storm);
         if (fire.brood > 0) this.brood.spawn(fire.brood, this.monster.launchOrigin(new THREE.Vector3()));
@@ -1197,6 +1210,7 @@ export class GameScene {
       damageMonster: (amount, source, attacker) => this.damageMonster(amount, source, attacker),
       damageBuildings: (p, r, amount) => this.city.forEachStandingInRadius(p, r, (t) => t.applyDamage(amount)),
       snareMonster: (duration) => this.snareMonster(duration),
+      spawnDir: () => spawnDirection(this.rng, this.runaway.dir),
       openGround: (rMin, rMax) => this.city.openGround({ x: this.monster.position.x, z: this.monster.position.z }, rMin, rMax),
       fireShell: (from, to, damage) => {
         this.projectiles.fireShell(from, to, damage);

@@ -79,10 +79,10 @@ export class TankFleet implements EnemySystem {
 
   spawn(ctx: WorldContext): void {
     this.ctx = ctx;
-    const a = ctx.rng() * Math.PI * 2;
+    const d = ctx.spawnDir();
     const r = CONFIG.director.spawnRing * (0.8 + ctx.rng() * 0.3);
     const around = ctx.monster.position;
-    const p = ctx.roads.nearest({ x: around.x + Math.cos(a) * r, z: around.z + Math.sin(a) * r });
+    const p = ctx.roads.nearest({ x: around.x + d.x * r, z: around.z + d.z * r });
     this.spawnAt(p.x, p.z, ctx);
   }
 

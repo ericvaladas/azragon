@@ -130,7 +130,9 @@ export class OspreyNets implements EnemySystem {
     this.ctx = ctx;
     if (this.teams.length >= CONFIG.spawns.osprey.cap) return;
     const m = ctx.monster.position;
-    const team: Team = { squad: newSquad({ x: m.x, z: m.z }, ctx.rng() * Math.PI * 2, ctx.monster.bodyRadius), ospreys: [], net: null };
+    const d = ctx.spawnDir();
+    // Squad bearings put x on sin, z on cos.
+    const team: Team = { squad: newSquad({ x: m.x, z: m.z }, Math.atan2(d.x, d.z), ctx.monster.bodyRadius), ospreys: [], net: null };
     for (let slot = 0; slot < SQUAD; slot++) {
       const mat = toonMat(0xffffff, { vertexColors: true });
       const o = new Osprey(team, slot, mat, O.hp * ctx.difficulty.hpMult, this.damage);

@@ -4,6 +4,7 @@ import { SamSilos } from './SamSilos';
 import { mulberry32 } from '../util/rng';
 import type { WorldContext } from './types';
 import type { Vec2 } from '../util/math';
+import { spawnDirection } from '../systems/runaway';
 
 const LAND = { x: 123, z: 456 };
 const RUBBLE = { x: 900, z: -300, rubble: true };
@@ -15,6 +16,8 @@ const ctx = (sites: { x: number; z: number; rubble: boolean }[] = [RUBBLE]): Wor
     difficulty: { hpMult: 1, dmgMult: 1 },
     level: 1,
     rng: mulberry32(7),
+    // Spawns pick a direction all round the monster, as when it isn't running away.
+    spawnDir: ((r) => () => spawnDirection(r, null))(mulberry32(101)),
     particles: { ring: () => {}, explosion: () => {}, emit: () => {} },
     // `nearest` may land on a bridge deck; `nearestLand` never does.
     roads: { nearest: (p: Vec2) => p, nearestLand: () => LAND, path: (_a: Vec2, b: Vec2) => [b] },

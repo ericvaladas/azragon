@@ -6,6 +6,7 @@ import { bombReleases, impactPoints, newRun } from './napalmMath';
 import { mulberry32 } from '../util/rng';
 import type { WorldContext } from './types';
 import type { DamageSource, Target } from '../combat';
+import { spawnDirection } from '../systems/runaway';
 
 const N = CONFIG.napalm;
 const DT = 0.05;
@@ -18,6 +19,8 @@ function makeCtx(over: Partial<{ hpMult: number }> = {}) {
     difficulty: { hpMult: over.hpMult ?? 1, dmgMult: 1 },
     level: 6,
     rng: mulberry32(7),
+    // Spawns pick a direction all round the monster, as when it isn't running away.
+    spawnDir: ((r) => () => spawnDirection(r, null))(mulberry32(101)),
     particles: { ring: () => {}, explosion: () => {}, emit: () => {} },
     roads: { nearest: (p: unknown) => p, nearestLand: (p: unknown) => p, path: () => [] },
     damageMonster: (amount: number, source: DamageSource) => hits.push({ amount, source }),

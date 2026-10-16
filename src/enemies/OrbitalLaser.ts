@@ -72,8 +72,8 @@ export class OrbitalLaser implements EnemySystem {
 
   spawn(ctx: WorldContext): void {
     const m = ctx.monster.position;
-    const a = ctx.rng() * Math.PI * 2;
-    this.state = startLaser(this.state, { x: m.x + Math.cos(a) * L.startOffset, z: m.z + Math.sin(a) * L.startOffset });
+    const d = ctx.spawnDir();
+    this.state = startLaser(this.state, { x: m.x + d.x * L.startOffset, z: m.z + d.z * L.startOffset });
   }
 
   update(dt: number, ctx: WorldContext): void {

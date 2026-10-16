@@ -119,14 +119,15 @@ export class Artillery implements EnemySystem {
     if (this.batteries.length >= MAX_BATTERIES) return;
     const m = ctx.monster.position;
     for (let attempt = 0; attempt < 8; attempt++) {
-      const a = ctx.rng() * Math.PI * 2;
+      const d = ctx.spawnDir();
       const r = A.distMin + ctx.rng() * (A.distMax - A.distMin);
-      const cx = m.x + Math.cos(a) * r;
-      const cz = m.z + Math.sin(a) * r;
+      const cx = m.x + d.x * r;
+      const cz = m.z + d.z * r;
       const spots: { x: number; z: number }[] = [];
       for (let i = 0; i < A.guns; i++) {
+        // Guns stand in a line across the direction to the monster.
         const off = (i - (A.guns - 1) / 2) * A.gunSpacing;
-        spots.push({ x: cx - Math.sin(a) * off, z: cz + Math.cos(a) * off });
+        spots.push({ x: cx - d.z * off, z: cz + d.x * off });
       }
       if (ctx.blocked && spots.some((s) => ctx.blocked!(s.x, s.z))) continue;
       const guns = spots.map((s) => {
