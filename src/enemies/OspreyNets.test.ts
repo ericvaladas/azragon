@@ -130,6 +130,15 @@ describe('OspreyNets', () => {
     expect(snares).toEqual([CONFIG.snare.duration]);
   });
 
+  it('a net that lands on a dead monster lies on the ground instead of snaring', () => {
+    const { nets, ctx, snares, monster } = spawned();
+    until(nets, ctx, () => nets.netModes()[0] === 'falling');
+    monster.alive = false;
+    until(nets, ctx, () => nets.netModes()[0] !== 'falling', O.dropTime + 0.2);
+    expect(nets.netModes()).toEqual(['ground']);
+    expect(snares).toEqual([]);
+  });
+
   it('leaves after the drop and despawns past exitDist', () => {
     const { nets, ctx } = spawned();
     until(nets, ctx, () => nets.count() === 0, 60);

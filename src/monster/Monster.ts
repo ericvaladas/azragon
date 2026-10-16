@@ -34,6 +34,8 @@ export class Monster {
   /** Extra body pose offsets driven by attacks, abilities, the intro, and death. */
   readonly pose = { dip: 0, pitch: 0, collapse: 0 };
   onLeapLand: (p: THREE.Vector3) => void = () => {};
+  /** Called each time a ranged attack spends the ranged cooldown (it really went off). */
+  onRangedSpent: () => void = () => {};
   onFootLand: (p: THREE.Vector3) => void = () => {};
   onMeleeImpact: (p: THREE.Vector3) => void = () => {};
   /** Fires once per anti-air strike, when the tail tip or jaws reach the target. */
@@ -302,6 +304,7 @@ export class Monster {
 
   consumeRanged(cooldownMult: number): void {
     this.rangedCd = this.kind.stats.rangedCooldown * cooldownMult;
+    this.onRangedSpent();
   }
 
   /** Place the body and pose it. Call once per frame after movement. */

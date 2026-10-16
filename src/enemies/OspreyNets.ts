@@ -311,8 +311,20 @@ export class OspreyNets implements EnemySystem {
     } else groundGrid(net.ground.x, net.ground.z, net.ground.half, net.ground.yaw, out);
   }
 
-  /** Lands a net on the monster: earlier snared nets go, the snare starts (or restarts), and the ground shakes. */
+  /**
+   * Lands a net on the monster: earlier snared nets go, the snare starts (or restarts), and the ground shakes.
+   * A monster already dead gets no snare; the net lies flat on the ground where it fell.
+   */
   private land(net: Net, ctx: WorldContext): void {
+    if (!ctx.monster.alive) {
+      const c = this.domeCentre(ctx);
+      net.toMonster = false;
+      net.ground = { x: c.x, z: c.z, half: domeRadius(ctx.monster.bodyRadius, ctx.monster.width) * 0.7, yaw: 0 };
+      groundGrid(net.ground.x, net.ground.z, net.ground.half, 0, net.pts);
+      net.mode = 'ground';
+      net.t = 0;
+      return;
+    }
     for (const n of this.nets) if (n !== net && n.mode === 'snared') n.mode = 'torn';
     net.mode = 'snared';
     ctx.snareMonster(CONFIG.snare.duration);

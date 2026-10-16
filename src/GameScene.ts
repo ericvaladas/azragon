@@ -256,6 +256,8 @@ export class GameScene {
     };
     this.monster.onMeleeImpact = (p) => this.meleeImpact(p);
     this.monster.onLeapLand = (p) => this.leapLand(p);
+    // Only a ranged attack that goes off (spends its cooldown) loosens the net.
+    this.monster.onRangedSpent = () => this.snare.onAttack();
     this.input = new Input(this.pixel.domElement, {
       tap: this.onTap,
       drag: (dx, dy) => this.rig.drag(dx, dy),
@@ -606,6 +608,7 @@ export class GameScene {
 
   private startDying(): void {
     this.breath.clear();
+    this.enemies.get<OspreyNets>('osprey').netTornFree();
     this.snare.clear();
     this.pendingSnare = 0;
     this.monster.body.arms?.clear();
@@ -1475,7 +1478,6 @@ export class GameScene {
   private fireRanged(target: Target | null): void {
     // Gaze and hurled rocks only hit the ground: an ordered flyer is chased, not shot.
     if (target?.airborne && (this.monster.kind.ranged === 'hurl' || this.monster.kind.ranged === 'gaze')) return;
-    this.snare.onAttack();
     if (this.monster.kind.ranged === 'breath') this.breathAt(target);
     else if (this.monster.kind.ranged === 'hurl') this.hurlAt(target);
     else if (this.monster.kind.ranged === 'gaze') this.gazeAt(target);

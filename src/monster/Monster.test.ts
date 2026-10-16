@@ -29,6 +29,17 @@ function kind(over: Partial<MonsterKind['stats']> = {}): MonsterKind {
 }
 
 describe('Monster', () => {
+  it('reports each ranged attack it spends, and nothing while the ranged attack is only ready', () => {
+    const m = new Monster(new THREE.Scene(), kind({ rangedCooldown: 3 }));
+    let spent = 0;
+    m.onRangedSpent = () => spent++;
+    expect(m.rangedReady()).toBe(true);
+    m.tick(1);
+    expect(spent).toBe(0);
+    m.consumeRanged(1);
+    expect(spent).toBe(1);
+  });
+
   it('takes HP, speed, and cooldowns from its kind', () => {
     const m = new Monster(new THREE.Scene(), kind({ maxHp: 777, moveSpeed: 100, meleeCooldown: 2, rangedCooldown: 3 }));
     expect(m.hp).toBe(777);
