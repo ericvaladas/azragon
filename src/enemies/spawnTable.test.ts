@@ -17,8 +17,8 @@ describe('difficulty', () => {
 
 describe('openKinds', () => {
   it('follows the unlock levels', () => {
-    expect(openKinds(1, none())).toEqual(['tank', 'heli']);
-    expect(openKinds(2, none())).toEqual(['tank', 'jet', 'heli']);
+    expect(openKinds(1, none())).toEqual(['tank', 'heli', 'gustav']);
+    expect(openKinds(2, none())).toEqual(['tank', 'jet', 'heli', 'gustav']);
     expect(openKinds(2, none())).not.toContain('blimp');
     expect(openKinds(3, none())).toContain('blimp');
     expect(openKinds(4, none())).not.toContain('sam');
@@ -60,6 +60,12 @@ describe('openKinds', () => {
     const alive = none();
     alive.osprey = 1;
     expect(openKinds(7, alive)).not.toContain('osprey');
+  });
+  it('opens the Schwerer Gustav at level 1, two at a time', () => {
+    expect(CONFIG.spawns.gustav.cap).toBe(2);
+    const alive = none();
+    alive.gustav = 2;
+    expect(openKinds(1, alive)).not.toContain('gustav');
   });
   it('excludes kinds at their cap', () => {
     const alive = none();

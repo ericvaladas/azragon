@@ -4,8 +4,8 @@ import type { Particles } from '../systems/Particles';
 import type { Vec2 } from '../util/math';
 import type { OpenSite } from '../world/City';
 
-export type EnemyKind = 'tank' | 'jet' | 'blimp' | 'sam' | 'artillery' | 'truck' | 'laser' | 'heli' | 'napalm' | 'osprey';
-export const ENEMY_KINDS: readonly EnemyKind[] = ['tank', 'jet', 'blimp', 'sam', 'artillery', 'truck', 'laser', 'heli', 'napalm', 'osprey'];
+export type EnemyKind = 'tank' | 'jet' | 'blimp' | 'sam' | 'artillery' | 'truck' | 'laser' | 'heli' | 'napalm' | 'osprey' | 'gustav';
+export const ENEMY_KINDS: readonly EnemyKind[] = ['tank', 'jet', 'blimp', 'sam', 'artillery', 'truck', 'laser', 'heli', 'napalm', 'osprey', 'gustav'];
 
 export type Difficulty = { hpMult: number; dmgMult: number };
 
@@ -48,6 +48,8 @@ export interface WorldContext {
   snareMonster(duration: number): void;
   fireShell(from: THREE.Vector3, to: THREE.Vector3, damage: number): void;
   fireRocket(from: THREE.Vector3, to: THREE.Vector3, damage: number): void;
+  /** The Schwerer Gustav's huge shell: always hits, trails smoke. */
+  fireGustavShell(from: THREE.Vector3, to: THREE.Vector3, damage: number): void;
   /** Spray where something hits the ground; does nothing unless the point is water. */
   splash(p: THREE.Vector3, size?: number): void;
   shake(amount: number): void;

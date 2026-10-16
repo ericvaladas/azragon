@@ -13,10 +13,10 @@ function run(dir: SpawnDirector, seconds: number, level: number, alive = zero())
 }
 
 describe('SpawnDirector', () => {
-  it('sends only tanks and helicopters at level 1, however long the run lasts', () => {
+  it('sends only tanks, helicopters and Gustavs at level 1, however long the run lasts', () => {
     const s = run(new SpawnDirector(mulberry32(1)), 300, 1);
     expect(s.length).toBeGreaterThan(0);
-    expect(new Set(s)).toEqual(new Set(['tank', 'heli']));
+    expect(new Set(s)).toEqual(new Set(['tank', 'heli', 'gustav']));
   });
 
   it('sends every kind once the player reaches the last unlock level', () => {

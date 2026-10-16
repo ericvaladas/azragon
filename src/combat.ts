@@ -1,6 +1,6 @@
 import type * as THREE from 'three';
 
-export type TargetKind = 'tank' | 'jet' | 'blimp' | 'sam' | 'missile' | 'artillery' | 'truck' | 'heli' | 'napalm' | 'osprey' | 'building';
+export type TargetKind = 'tank' | 'jet' | 'blimp' | 'sam' | 'missile' | 'artillery' | 'truck' | 'heli' | 'napalm' | 'osprey' | 'gustav' | 'building';
 
 /** Anything the monster can attack. Owners apply damage and report destruction via OnDestroyed. */
 export interface Target {
