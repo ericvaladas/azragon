@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { CONFIG } from '../config';
 import type { Target } from '../combat';
-import { faceted } from '../render/toon';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { faceted, painted } from '../render/toon';
 import { ballistic } from './projectileMath';
 
 /** `wisp`: a Hungry Ghost (homes like a spike). `shard`: a cosmetic Bone Ward shard. `gustav`: the Schwerer Gustav's huge shell. */
@@ -36,6 +37,21 @@ const _p = new THREE.Vector3();
 /** Bone Ward shards (m/s); their flight is capped so they never lag the intercept they show. */
 const SHARD_SPEED = 2400;
 
+/**
+ * The Gustav's shell along +Y in a unit box: a steel body, a copper driving band near its base and a brass nose cone
+ * (the shot is drawn pointing along its flight).
+ */
+function gustavShellGeometry(): THREE.BufferGeometry {
+  const P = CONFIG.palette;
+  const g = mergeGeometries([
+    painted(faceted(new THREE.CylinderGeometry(0.5, 0.5, 0.65, 8).translate(0, -0.175, 0)), P.gustavShell),
+    painted(faceted(new THREE.CylinderGeometry(0.53, 0.53, 0.07, 8).translate(0, -0.38, 0)), P.gustavShellBand),
+    painted(faceted(new THREE.ConeGeometry(0.5, 0.35, 8).translate(0, 0.325, 0)), P.gustavShellNose),
+  ]);
+  if (!g) throw new Error('Projectiles: Gustav shell merge failed');
+  return g;
+}
+
 /** Pooled projectiles drawn with one InstancedMesh per kind. */
 export class Projectiles {
   onHit: (h: Hit) => void = () => {};
@@ -52,13 +68,13 @@ export class Projectiles {
     chunk: [60, 60, 60],
     wisp: [30, 42, 30],
     shard: [18, 64, 18],
-    gustav: [CONFIG.gustav.shellSize, CONFIG.gustav.shellSize, CONFIG.gustav.shellSize],
+    gustav: [CONFIG.gustav.shellDiameter, CONFIG.gustav.shellLength, CONFIG.gustav.shellDiameter],
   };
 
   constructor(scene: THREE.Scene) {
     const P = CONFIG.palette;
     const make = (name: string, geo: THREE.BufferGeometry, color: number, max: number) => {
-      const m = new THREE.InstancedMesh(geo, new THREE.MeshBasicMaterial({ color }), max);
+      const m = new THREE.InstancedMesh(geo, new THREE.MeshBasicMaterial({ color, vertexColors: geo.hasAttribute('color') }), max);
       m.name = name;
       m.count = 0;
       m.frustumCulled = false;
@@ -73,7 +89,7 @@ export class Projectiles {
       chunk: make('shot-chunk', faceted(new THREE.DodecahedronGeometry(0.5, 0)), CONFIG.kraken.colors.chunk, 32),
       wisp: make('shot-wisp', faceted(new THREE.IcosahedronGeometry(0.5, 0)), CONFIG.wendigo.colors.ghost, 64),
       shard: make('shot-shard', faceted(new THREE.ConeGeometry(0.5, 1, 4)), CONFIG.wendigo.colors.boneShard, 48),
-      gustav: make('shot-gustav', faceted(new THREE.IcosahedronGeometry(0.5, 0)), 0xff8a2a, 16),
+      gustav: make('shot-gustav', gustavShellGeometry(), 0xffffff, 16),
     };
   }
 
@@ -118,10 +134,10 @@ export class Projectiles {
     s.dur = CONFIG.tank.shellFlightTime;
   }
 
-  /** The Schwerer Gustav's shell: a shell's flight on its own arc and time; it trails smoke. */
+  /** The Schwerer Gustav's shell: a straight, fast flight at CONFIG.gustav.shellSpeed; it trails smoke. */
   fireGustavShell(from: THREE.Vector3, to: THREE.Vector3, damage: number): void {
     const s = this.alloc('gustav', from, to, damage, null);
-    s.dur = CONFIG.gustav.shellFlightTime;
+    s.dur = Math.max(0.05, from.distanceTo(to) / CONFIG.gustav.shellSpeed);
   }
 
   /** Acid Mortar glob: a high ballistic lob that splashes where it lands. */
@@ -185,7 +201,6 @@ export class Projectiles {
       } else {
         const k = Math.min(1, s.t / s.dur);
         if (s.kind === 'shell') ballistic(s.from, s.aim, CONFIG.tank.shellArc, k, s.pos);
-        else if (s.kind === 'gustav') ballistic(s.from, s.aim, CONFIG.gustav.shellArc, k, s.pos);
         else if (s.kind === 'glob') ballistic(s.from, s.aim, CONFIG.passives.mortar.arc, k, s.pos);
         else if (s.kind === 'chunk') ballistic(s.from, s.aim, CONFIG.kraken.arms.hurl.arc, k, s.pos);
         else s.pos.lerpVectors(s.from, s.aim, k);

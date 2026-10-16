@@ -60,18 +60,25 @@ describe('Projectiles.fireWisp and fireShard', () => {
 });
 
 describe('Projectiles.fireGustavShell', () => {
-  it('flies for the Gustav flight time, trailing smoke, and lands as a gustav hit with its damage', () => {
+  it('flies straight at shellSpeed, trailing smoke, and lands as a gustav hit with its damage', () => {
     const p = new Projectiles(new THREE.Scene());
     const hits: { kind: string; damage: number }[] = [];
-    const trail: string[] = [];
+    const trail: { kind: string; y: number; z: number }[] = [];
     p.onHit = (h) => hits.push({ kind: h.kind, damage: h.damage });
-    p.onTrail = (_at, kind) => trail.push(kind);
-    p.fireGustavShell(new THREE.Vector3(0, 60, 0), new THREE.Vector3(0, 200, 1000), 60);
-    for (let t = 0; t < CONFIG.gustav.shellFlightTime - 0.1; t += 0.05) p.update(0.05);
+    p.onTrail = (at, kind) => trail.push({ kind, y: at.y, z: at.z });
+    const from = new THREE.Vector3(0, 60, 0);
+    const to = new THREE.Vector3(0, 210, 1500);
+    p.fireGustavShell(from, to, 60);
+    const flight = from.distanceTo(to) / CONFIG.gustav.shellSpeed;
+    for (let t = 0; t < flight - 0.1; t += 0.02) p.update(0.02);
     expect(hits).toEqual([]);
     expect(trail.length).toBeGreaterThan(10);
-    expect(new Set(trail)).toEqual(new Set(['gustav']));
-    for (let t = 0; t < 0.3; t += 0.05) p.update(0.05);
+    for (const q of trail) {
+      expect(q.kind).toBe('gustav');
+      // On the straight line from the muzzle to the target: no arc.
+      expect(q.y).toBeCloseTo(60 + (150 * q.z) / 1500, 3);
+    }
+    for (let t = 0; t < 0.2; t += 0.02) p.update(0.02);
     expect(hits).toEqual([{ kind: 'gustav', damage: 60 }]);
   });
 

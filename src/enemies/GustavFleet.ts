@@ -16,6 +16,15 @@ const _c = new THREE.Color();
 const _v = new THREE.Vector3();
 const UP = new THREE.Vector3(0, 1, 0);
 
+/** Recoil travel (0..1) `t` s after a shot: a snap back over the first 0.08 s, then a smooth return by recoilTime. */
+function recoilKick(t: number): number {
+  const snap = 0.08;
+  if (t < 0 || t >= G.recoilTime) return 0;
+  if (t < snap) return t / snap;
+  const u = (t - snap) / (G.recoilTime - snap);
+  return 1 - u * u * (3 - 2 * u);
+}
+
 /** Turns `from` toward `to` by at most `step` rad. */
 const turn = (from: number, to: number, step: number) => from + Math.max(-step, Math.min(step, angleDelta(from, to)));
 
@@ -34,6 +43,8 @@ class Gustav implements Target {
   engaged = false;
   fireCd = 0;
   flashT = 0;
+  /** Seconds since the last shot (drives the turret's recoil). */
+  recoilT: number = G.recoilTime;
 
   constructor(private onDamage: (g: Gustav, amount: number) => void) {}
 
@@ -47,9 +58,10 @@ class Gustav implements Target {
 }
 
 /**
- * Schwerer Gustav land battleships (at most CONFIG.spawns.gustav.cap): each follows the roads toward the monster,
- * flattening the buildings it rolls into, and within range stops, swings its gun round and fires a huge shell
- * straight at the monster on a slow reload. Drawn as two vertex-coloured InstancedMeshes (hull; turret with gun).
+ * Schwerer Gustav land battleships (at most CONFIG.spawns.gustav.cap): each follows the roads toward the monster and,
+ * within range, stops, swings its gun round and fires a huge shell straight at the monster on a slow reload, each shot
+ * kicking the turret back and throwing up a dust cloud. Drawn as two vertex-coloured InstancedMeshes (hull, narrowed to
+ * CONFIG.gustav.width; turret with gun).
  */
 export class GustavFleet implements EnemySystem {
   readonly kind = 'gustav' as const;
@@ -57,6 +69,8 @@ export class GustavFleet implements EnemySystem {
   private units: Gustav[] = [];
   private hull: THREE.InstancedMesh;
   private turret: THREE.InstancedMesh;
+  /** Hull x scale (per size unit) that draws it CONFIG.gustav.width across. */
+  private hullXScale: number;
 
   constructor(scene: THREE.Scene) {
     const mat = toonMat(0xffffff, { vertexColors: true });
@@ -69,7 +83,11 @@ export class GustavFleet implements EnemySystem {
       scene.add(m);
       return m;
     };
-    this.hull = mk(hullGeometry());
+    const hullGeo = hullGeometry();
+    hullGeo.computeBoundingBox();
+    const box = hullGeo.boundingBox!;
+    this.hullXScale = G.width / (G.size * (box.max.x - box.min.x));
+    this.hull = mk(hullGeo);
     this.turret = mk(turretGeometry());
   }
 
@@ -117,13 +135,12 @@ export class GustavFleet implements EnemySystem {
     g.alive = false;
     const ctx = this.ctx;
     if (!ctx) return;
-    // A huge blast: several fireballs over the hull, a dust ring, and the buildings around it come down.
+    // A huge blast: several fireballs along the hull and a dust ring (buildings are left standing).
     for (const k of [-0.3, 0, 0.3]) {
       _v.set(g.position.x + Math.sin(g.heading) * G.size * k, g.position.y, g.position.z + Math.cos(g.heading) * G.size * k);
       ctx.particles.explosion(_v, 2.2);
     }
-    ctx.particles.ring('dust', _v.set(g.position.x, 0, g.position.z), G.deathBlastRadius, 24);
-    ctx.damageBuildings({ x: g.position.x, z: g.position.z }, G.deathBlastRadius, G.deathBlastDamage);
+    ctx.particles.ring('dust', _v.set(g.position.x, 0, g.position.z), G.blowbackRadius * 1.5, 24);
     ctx.shake(0.6);
     ctx.onDestroyed(g, G.exp);
   };
@@ -139,8 +156,8 @@ export class GustavFleet implements EnemySystem {
         continue;
       }
       g.flashT = Math.max(0, g.flashT - dt);
+      g.recoilT += dt;
       const here = { x: g.position.x, z: g.position.z };
-      ctx.damageBuildings(here, G.crushRadius, G.crushDps * dt);
       const aim = Math.atan2(goal.x - here.x, goal.z - here.z);
       g.turretYaw = turn(g.turretYaw, aim, G.aimRate * dt);
       // Once stopped it holds until the monster is clearly out of range, so a monster at the edge can't stall its fire.
@@ -181,22 +198,35 @@ export class GustavFleet implements EnemySystem {
     this.draw();
   }
 
-  /** One shell from the muzzle at the monster's chest, with a big muzzle blast and a shake. */
+  /**
+   * One shell from the muzzle at the monster's chest: a big muzzle blast, the blowback (a dust cloud billowing out
+   * around the Gustav and a blast of smoke behind the breech), a recoil kick and a shake.
+   */
   private fire(g: Gustav, ctx: WorldContext): void {
     const muzzle = gustavMuzzle(g.turretYaw, G.size, new THREE.Vector3()).add(_v.set(g.position.x, 0, g.position.z));
     const target = ctx.monster.position.clone().setY(ctx.monster.position.y + ctx.monster.height * 0.55);
     ctx.fireGustavShell(muzzle, target, G.damage);
-    ctx.particles.emit('fire', muzzle, 10, 1.2);
-    ctx.particles.emit('smoke', muzzle, 8, 1.5);
+    ctx.particles.emit('fire', muzzle, 14, 1.4);
+    ctx.particles.emit('smoke', muzzle, 10, 1.8);
+    const ground = _v.set(g.position.x, 0, g.position.z);
+    ctx.particles.ring('dust', ground, G.blowbackRadius, 32);
+    ctx.particles.emit('billow', ground.setY(10), 6, 1.2);
+    ground.set(g.position.x - Math.sin(g.turretYaw) * G.size * 0.35, G.size * 0.3, g.position.z - Math.cos(g.turretYaw) * G.size * 0.35);
+    ctx.particles.emit('smoke', ground, 12, 2);
+    g.recoilT = 0;
     ctx.shake(G.fireShake);
   }
 
   private draw(): void {
     this.units.forEach((g, i) => {
       _p.set(g.position.x, 0, g.position.z);
-      _s.setScalar(G.size);
+      _s.set(G.size * this.hullXScale, G.size, G.size);
       _m.compose(_p, _q.setFromAxisAngle(UP, g.heading), _s);
       this.hull.setMatrixAt(i, _m);
+      // Recoil: the turret snaps back along its aim, then eases forward again.
+      const kick = recoilKick(g.recoilT) * G.recoil * G.size;
+      _p.set(g.position.x - Math.sin(g.turretYaw) * kick, 0, g.position.z - Math.cos(g.turretYaw) * kick);
+      _s.setScalar(G.size);
       _m.compose(_p, _q.setFromAxisAngle(UP, g.turretYaw), _s);
       this.turret.setMatrixAt(i, _m);
       _c.setHex(g.flashT > 0 ? 0xffd0a0 : 0xffffff);

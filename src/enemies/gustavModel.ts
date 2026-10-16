@@ -6,7 +6,7 @@ import { faceted, painted } from '../render/toon';
 /**
  * Schwerer Gustav land battleship in units of CONFIG.gustav.size (the instance matrix scales it). Space is +Z forward,
  * +Y up, origin on the ground under the turret pivot. Two meshes: the hull (four track units with road wheels and
- * fenders, side skirts, the armoured hull with its sloped bow, rust weathering, exhaust stacks and stowage on the rear
+ * fenders, side skirts, the armoured hull with its sloped bow, worn weathering, exhaust stacks and stowage on the rear
  * deck) yawed to the heading, and the turret (the box-girder gun carriage with bracing, ladders and vents, the crew
  * platform, the breech, a mantlet with a hazard band, and the enormous tapering barrel) yawed to its aim.
  */
@@ -85,9 +85,9 @@ export function hullGeometry(): Part {
   parts.push(box(0.3, 0.08, 0.96, 0, 0.09, 0, P.gustavDark));
   // Upper hull: a flat deck running into a sloped bow, and a short slope down at the stern.
   parts.push(profile([[-0.5, 0.12], [-0.5, 0.19], [-0.46, 0.21], [0.34, 0.21], [0.52, 0.14], [0.5, 0.12]], 0.44, P.gustav));
-  // Rust weathering on the deck.
-  parts.push(box(0.16, 0.006, 0.09, 0.1, 0.212, -0.3, P.gustavRust));
-  parts.push(box(0.1, 0.006, 0.07, -0.12, 0.212, 0.24, P.gustavRust));
+  // Worn patches on the deck.
+  parts.push(box(0.16, 0.006, 0.09, 0.1, 0.212, -0.3, P.gustavWorn));
+  parts.push(box(0.1, 0.006, 0.07, -0.12, 0.212, 0.24, P.gustavWorn));
   // Rear deck: twin exhaust stacks and a stowage bin.
   for (const sx of [-1, 1]) parts.push(cyl(0.025, 0.1, 8, 'y', sx * 0.1, 0.26, -0.42, P.gustavMetal));
   parts.push(box(0.3, 0.03, 0.08, 0, 0.225, -0.34, P.gustavDark));
@@ -97,17 +97,17 @@ export function hullGeometry(): Part {
 /** The turret ring, the box-girder carriage, the crew platform and the gun. */
 export function turretGeometry(): Part {
   const P = CONFIG.palette;
-  const parts: Part[] = [cyl(0.16, 0.03, 12, 'y', 0, GUN.ringY + 0.015, 0, P.gustavDark)];
+  const parts: Part[] = [cyl(0.12, 0.03, 12, 'y', 0, GUN.ringY + 0.015, 0, P.gustavDark)];
   for (const sx of [-1, 1]) {
     const x = sx * 0.11;
     const out = x + sx * 0.018;
-    // A tall girder wall with X-bracing, a ladder and vents on its outer face, and a rust streak.
+    // A tall girder wall with X-bracing, a ladder and vents on its outer face, and a worn streak.
     parts.push(box(0.03, 0.2, 0.4, x, 0.33, -0.02, P.gustav));
     parts.push(beam([out, 0.25, -0.2], [out, 0.41, 0.16], 0.008, 0.02, P.gustavDark));
     parts.push(beam([out, 0.41, -0.2], [out, 0.25, 0.16], 0.008, 0.02, P.gustavDark));
     parts.push(box(0.006, 0.18, 0.03, x + sx * 0.02, 0.32, -0.18, P.gustavMetal));
     for (let k = 0; k < 3; k++) parts.push(box(0.006, 0.015, 0.05, out, 0.39 - k * 0.03, -0.08, P.gustavDark));
-    parts.push(box(0.006, 0.08, 0.02, out, 0.3, 0.1, P.gustavRust));
+    parts.push(box(0.006, 0.08, 0.02, out, 0.3, 0.1, P.gustavWorn));
   }
   // Crew platform behind the breech, with a rail.
   parts.push(box(0.26, 0.02, 0.18, 0, 0.44, -0.12, P.gustavDark));

@@ -35,6 +35,17 @@ All values below are starting values in `CONFIG.gustav`.
   - Destroyed, it explodes in a large multi-burst blast. Standing buildings within `deathBlastRadius` take heavy damage, and it gives `exp` 60.
 - **Hit size:** `radius` is about 0.45 × `size`, so the monster's melee and targeting reach it at its hull's edge.
 
+## Playtest revision (2026-10-16)
+
+After the first look, the owner asked for these changes. They replace the matching items above.
+- **Width:** the hull is narrowed to `width` 42 m, just wider than a 36 m road. Its length stays `size` 160 m, and the turret ring is smaller to match.
+- **Colour:** bronze (`gustav` 0xb08d57), with darker bronze trim and worn bronze weathering. The tracks and the hazard band are unchanged.
+- **Buildings:** it no longer knocks buildings down. There is no flattening while driving and no building damage from its death blast. The `crush*` and `deathBlast*` settings are gone.
+- **The shell:**
+  - **Shape:** shaped like a real shell: a steel body, a copper driving band and a brass nose cone, drawn pointing along its flight, `shellLength` 44 × `shellDiameter` 12 m.
+  - **Flight:** it flies in a straight line, with no arc, at `shellSpeed` 1400 m/s, so about 0.8 s to the monster.
+- **Blowback:** each shot throws a dust cloud out `blowbackRadius` 150 m around the Gustav, billowing dust, and a blast of smoke behind the breech. The turret kicks back by `recoil` × size and eases forward over `recoilTime` 0.7 s. The screen shake rises to 0.45.
+
 ## Visuals
 
 - **Size:** `size` 160 m nose to tail, about 3.3× a tank.

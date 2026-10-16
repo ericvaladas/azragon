@@ -13,6 +13,7 @@ const DT = 0.05;
 function makeCtx(hpMult = 1) {
   const shots: { t: number; damage: number }[] = [];
   const crushes: { r: number; amount: number }[] = [];
+  const rings: { kind: string; x: number; z: number; r: number }[] = [];
   const destroyed: { t: Target; exp: number }[] = [];
   const clock = { t: 0 };
   const monster = { position: new THREE.Vector3(1300, 0, 0), alive: true, airborne: false, height: 385 };
@@ -21,14 +22,14 @@ function makeCtx(hpMult = 1) {
     difficulty: { hpMult, dmgMult: 1 },
     level: 1,
     rng: mulberry32(9),
-    particles: { ring: () => {}, explosion: () => {}, emit: () => {} },
+    particles: { ring: (kind: string, at: THREE.Vector3, r: number) => rings.push({ kind, x: at.x, z: at.z, r }), explosion: () => {}, emit: () => {} },
     roads: { nearest: (p: Vec2) => p, nearestLand: (p: Vec2) => p, path: (_a: Vec2, b: Vec2) => [b] },
     damageBuildings: (_p: Vec2, r: number, amount: number) => crushes.push({ r, amount }),
     fireGustavShell: (_from: THREE.Vector3, _to: THREE.Vector3, damage: number) => shots.push({ t: clock.t, damage }),
     shake: () => {},
     onDestroyed: (t: Target, exp: number) => destroyed.push({ t, exp }),
   } as unknown as WorldContext;
-  return { ctx, shots, crushes, destroyed, monster, clock };
+  return { ctx, shots, crushes, rings, destroyed, monster, clock };
 }
 
 function run(f: GustavFleet, c: ReturnType<typeof makeCtx>, seconds: number): void {
@@ -132,25 +133,48 @@ describe('GustavFleet', () => {
     expect(g.position.x).toBeGreaterThan(G.speed * 2);
   });
 
-  it('flattens buildings within crushRadius as it goes', () => {
+  it('never damages buildings, driving or dying', () => {
     const f = new GustavFleet(new THREE.Scene());
     const c = makeCtx();
     f.spawnAt(0, 0, c.ctx);
+    run(f, c, 30);
+    f.targets()[0]!.applyDamage(1e9);
     run(f, c, 1);
-    expect(c.crushes.length).toBeGreaterThan(0);
-    for (const k of c.crushes) {
-      expect(k.r).toBe(G.crushRadius);
-      expect(k.amount).toBeCloseTo(G.crushDps * DT, 6);
-    }
+    expect(c.crushes).toEqual([]);
   });
 
-  it('a dead Gustav never fires, and blasts the buildings around it', () => {
+  it('each shot throws up a dust cloud around the Gustav', () => {
+    const f = new GustavFleet(new THREE.Scene());
+    const c = makeCtx();
+    f.spawnAt(0, 0, c.ctx);
+    run(f, c, 25);
+    const g = f.targets()[0]!;
+    const clouds = c.rings.filter((r) => r.kind === 'dust' && Math.hypot(r.x - g.position.x, r.z - g.position.z) < 1 && r.r >= G.blowbackRadius);
+    expect(c.shots.length).toBeGreaterThan(0);
+    expect(clouds.length).toBe(c.shots.length);
+  });
+
+  it('is drawn just wider than a road', () => {
+    const scene = new THREE.Scene();
+    const f = new GustavFleet(scene);
+    const c = makeCtx();
+    f.spawnAt(0, 0, c.ctx);
+    expect(G.width).toBeGreaterThan(CONFIG.world.roadWidth);
+    expect(G.width).toBeLessThan(CONFIG.world.roadWidth * 1.3);
+    const hull = scene.children[0] as THREE.InstancedMesh;
+    const m = new THREE.Matrix4();
+    hull.getMatrixAt(0, m);
+    const box = new THREE.Box3().setFromBufferAttribute(hull.geometry.getAttribute('position') as THREE.BufferAttribute).applyMatrix4(m);
+    // Spawned facing the monster along +x, so the hull's width lies along z.
+    expect(box.max.z - box.min.z).toBeCloseTo(G.width, 0);
+  });
+
+  it('a dead Gustav never fires', () => {
     const f = new GustavFleet(new THREE.Scene());
     const c = makeCtx();
     c.monster.position.set(500, 0, 0);
     f.spawnAt(0, 0, c.ctx);
     f.targets()[0]!.applyDamage(1e9);
-    expect(c.crushes.some((k) => k.r === G.deathBlastRadius && k.amount === G.deathBlastDamage)).toBe(true);
     run(f, c, 20);
     expect(c.shots).toEqual([]);
     expect(f.count()).toBe(0);
