@@ -23,7 +23,7 @@ The squad has to read at a glance as something other than a tank or artillery pi
 Each squad runs through these phases in order. The phase durations and distances below are starting values, kept in `CONFIG.osprey`.
 
 1. **Approach.** The squad spawns `spawnDist` (2600 m) from the monster on a random bearing. It flies toward the monster's current position at `cruiseSpeed` (220 m/s) and `cruiseAltitude` (650 m), in a tight square (`tightHalf`, 45 m from the centre to each Osprey). The rotor pods point forward (plane mode). The phase ends when the squad's centre is within `arriveDist` (150 m) of the monster horizontally.
-2. **Position** (`positionTime`, 4 s). The pods swivel up to helicopter mode. The formation widens to `netHalf`, sized to the current monster (`bodyRadius × 1.8`). The squad descends to the drop altitude: the current monster's standing height (`kind.stats.size.height`) plus `dropClearance` (120 m). Throughout this phase the squad's centre follows the monster, at up to `trackSpeed` (400 m/s). This is the window in which the Ospreys are low enough for anti-air attacks to reach them and can be targeted with ranged attacks.
+2. **Position** (`positionTime`, 4 s). The pods swivel up to helicopter mode. The formation widens to `netHalf`, sized to the current monster (`bodyRadius × 1.8`). The squad descends to the drop altitude: the current monster's standing height (`kind.stats.size.height`) plus `dropClearance` (160 m; was 120 m before the cloth revision). Throughout this phase the squad's centre follows the monster, at up to `trackSpeed` (400 m/s). This is the window in which the Ospreys are low enough for anti-air attacks to reach them and can be targeted with ranged attacks.
 3. **Release.** At the end of positioning:
    - **3 or 4 Ospreys alive:** the net drops and snares the monster (see *The net*).
    - **2 or fewer alive:** the drop aborts. This check also runs the moment the second Osprey is destroyed during the approach or positioning, so an abort can happen before release time.
@@ -43,6 +43,22 @@ During the leave phase the Ospreys are still targets. Killing them still pays EX
 - **Tearing free:** when the snare ends, the dome is removed and shreds burst outward, using the existing particle presets.
 - **Aborted drop:** the net falls to the ground below the squad's centre, lies flat for `groundLife` (4 s), then fades out over the last second. It has no effect on the monster.
 - **Monster mid-leap at release:** the net falls toward the leap's landing point, and the snare starts when the monster lands.
+
+## Net physics (revision, 2026-10-15)
+
+After the first playtest, the owner asked for a realistic fall. Two changes followed:
+- **Flying in spread:** the squad now spawns already spread to the net's width and carries the net open the whole way in.
+- **The net is cloth:** it is simulated (`src/enemies/cloth.ts`), not blended to a fixed dome.
+
+How the cloth works:
+- **Structure:** the 9×9 grid of points is joined by ropes to its row, column and diagonal neighbours. Verlet integration runs in 1/60 s substeps, with 8 rope passes per substep. The settings are in `CONFIG.osprey.cloth`.
+- **Carried:** the corners are pinned `cable` m under their Ospreys, and the ropes are 15% longer than the span so the net sags. A lost Osprey's corner simply drops. A carried net does not touch the monster; `dropClearance` is raised to 160 m so it hangs clear.
+- **Released onto the monster:**
+  - The free net is pulled back over the monster (or over a leap's landing point) as it falls.
+  - The snare starts the moment the net touches the monster, or the ground if it misses.
+  - While snared, rope resting on the monster above `catchFrac` × its height catches and moves with it; the rest hangs.
+- **Torn free, death, a newer net, or an aborted drop:** the net is released, falls to the ground through the monster, and fades out over `groundLife`.
+- **What the net lands on:** the monster's top surface is a height map (`src/systems/heightfield.ts`), built by raycasting straight down over the monster's meshes in its own frame. It is built once per run, when the first squad spawns. This replaces the hand-placed spheres considered during design: it fits all four monsters with no tuning. It doesn't follow limb animation.
 
 ## The snare (`src/systems/snare.ts`)
 

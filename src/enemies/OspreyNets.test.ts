@@ -8,11 +8,15 @@ import type { Target } from '../combat';
 
 const O = CONFIG.osprey;
 const DT = 0.05;
+/** Longest a released net may take to reach the monster or the ground. */
+const FALL = 4;
 
 function makeCtx() {
   const destroyed: { t: Target; exp: number }[] = [];
   const snares: number[] = [];
-  const monster = { position: new THREE.Vector3(), alive: true, airborne: false, bodyRadius: 84, width: 180, height: 385, leapTo: null as { x: number; z: number } | null };
+  // A 120 m-wide block, the monster's full height, standing under the monster.
+  const surface = (lx: number, lz: number) => (Math.abs(lx) < 60 && Math.abs(lz) < 60 ? 385 : 0);
+  const monster = { position: new THREE.Vector3(), yaw: 0, surface, alive: true, airborne: false, bodyRadius: 84, width: 180, height: 385, leapTo: null as { x: number; z: number } | null };
   const ctx = {
     monster,
     difficulty: { hpMult: 1, dmgMult: 1 },
@@ -66,7 +70,7 @@ describe('OspreyNets', () => {
     const { nets, ctx, snares } = spawned();
     until(nets, ctx, () => nets.netModes()[0] === 'falling');
     expect(snares).toEqual([]);
-    until(nets, ctx, () => snares.length > 0, O.dropTime + 0.2);
+    until(nets, ctx, () => snares.length > 0, FALL);
     expect(snares).toEqual([CONFIG.snare.duration]);
     expect(nets.netModes()).toEqual(['snared']);
   });
@@ -86,7 +90,7 @@ describe('OspreyNets', () => {
     kill(nets.targets()[1]!);
     kill(nets.targets()[2]!);
     expect(nets.netModes()).toEqual(['falling']);
-    until(nets, ctx, () => nets.netModes()[0] === 'ground', O.dropTime + 0.2);
+    until(nets, ctx, () => nets.netModes()[0] === 'ground', FALL);
     until(nets, ctx, () => nets.netModes().length === 0, O.groundLife + 0.2);
     expect(nets.netModes()).toEqual([]);
     until(nets, ctx, () => nets.count() === 0);
@@ -99,7 +103,7 @@ describe('OspreyNets', () => {
     until(nets, ctx, () => nets.netModes()[0] === 'falling');
     for (const t of alive(nets)) kill(t);
     expect(destroyed).toHaveLength(4);
-    until(nets, ctx, () => snares.length > 0, O.dropTime + 0.2);
+    until(nets, ctx, () => snares.length > 0, FALL);
     expect(snares).toEqual([CONFIG.snare.duration]);
   });
 
@@ -107,7 +111,8 @@ describe('OspreyNets', () => {
     const { nets, ctx, snares } = spawned();
     until(nets, ctx, () => snares.length > 0);
     nets.netTornFree();
-    nets.update(DT, ctx);
+    expect(nets.netModes()).toEqual(['ground']);
+    until(nets, ctx, () => nets.netModes().length === 0, O.groundLife + 0.2);
     expect(nets.netModes()).toEqual([]);
   });
 
@@ -117,8 +122,7 @@ describe('OspreyNets', () => {
     until(nets, ctx, () => nets.count() === 0);
     nets.spawn(ctx);
     until(nets, ctx, () => snares.length > 1);
-    nets.update(DT, ctx);
-    expect(nets.netModes()).toEqual(['snared']);
+    expect(nets.netModes().filter((m) => m === 'snared')).toEqual(['snared']);
   });
 
   it('drapes on the leap landing point while the monster is in the air', () => {
@@ -126,7 +130,7 @@ describe('OspreyNets', () => {
     until(nets, ctx, () => nets.netModes()[0] === 'falling');
     monster.airborne = true;
     monster.leapTo = { x: 500, z: 0 };
-    until(nets, ctx, () => snares.length > 0, O.dropTime + 0.2);
+    until(nets, ctx, () => snares.length > 0, FALL);
     expect(snares).toEqual([CONFIG.snare.duration]);
   });
 
@@ -134,9 +138,22 @@ describe('OspreyNets', () => {
     const { nets, ctx, snares, monster } = spawned();
     until(nets, ctx, () => nets.netModes()[0] === 'falling');
     monster.alive = false;
-    until(nets, ctx, () => nets.netModes()[0] !== 'falling', O.dropTime + 0.2);
+    until(nets, ctx, () => nets.netModes()[0] !== 'falling', FALL);
     expect(nets.netModes()).toEqual(['ground']);
     expect(snares).toEqual([]);
+  });
+
+  it('the snared net hangs on the monster and travels with it', () => {
+    const { nets, ctx, snares, monster } = spawned();
+    until(nets, ctx, () => snares.length > 0);
+    for (let t = 0; t < 1; t += DT) nets.update(DT, ctx);
+    const top = () => Math.max(...nets.netPoints(0).map((p) => p.y));
+    expect(top()).toBeGreaterThan(385);
+    monster.position.x += 300;
+    for (let t = 0; t < 1; t += DT) nets.update(DT, ctx);
+    const xs = nets.netPoints(0).map((p) => p.x);
+    expect(xs.reduce((a, b) => a + b, 0) / xs.length).toBeGreaterThan(200);
+    expect(top()).toBeGreaterThan(385);
   });
 
   it('leaves after the drop and despawns past exitDist', () => {

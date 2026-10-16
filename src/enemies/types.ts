@@ -11,11 +11,14 @@ export type Difficulty = { hpMult: number; dmgMult: number };
 /** Everything an enemy system may read or call during spawn/update. Rebuilt by GameScene each frame. */
 export interface WorldContext {
   /**
-   * The monster: where it is, whether it is alive or mid-leap, its body radius, standing width and height (world m),
-   * and where a leap in progress will land (null when not leaping).
+   * The monster: where it is and which way it faces, whether it is alive or mid-leap, its body radius, standing
+   * width and height (world m), where a leap in progress will land (null when not leaping), and its top surface:
+   * the height above its position at a point (lx, lz) in its own frame (+X left, +Z forward), 0 off its body.
    */
   readonly monster: {
     readonly position: THREE.Vector3;
+    readonly yaw: number;
+    readonly surface: (lx: number, lz: number) => number;
     readonly alive: boolean;
     readonly airborne: boolean;
     readonly bodyRadius: number;

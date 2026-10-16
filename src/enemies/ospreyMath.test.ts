@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { CONFIG } from '../config';
 import {
-  NET_N, NET_SEGMENTS, blendGrid, carriedGrid, domeGrid, domeRadius, dropAltitude, dropOutcome, gridSegments, groundGrid,
-  netCorners, netHalf, newGrid, newSquad, positionDone, slotOffset, squadGone, startLeave, stepSquad, type MonsterInfo,
+  NET_N, NET_SEGMENTS, carriedGrid, domeRadius, dropAltitude, dropOutcome, gridSegments, netHalf, newGrid, newSquad,
+  positionDone, slotOffset, squadGone, startLeave, stepSquad, type MonsterInfo,
 } from './ospreyMath';
 
 const O = CONFIG.osprey;
@@ -96,15 +96,21 @@ describe('formation and net', () => {
     expect(r.z).toBeCloseTo(10, 6);
   });
 
-  it('hangs corners a cable below each Osprey; a lost corner droops between its neighbours', () => {
-    const c = netCorners([{ x: 10, y: 500, z: 10 }, null, { x: -10, y: 500, z: -10 }, { x: 10, y: 500, z: -10 }], 10);
-    expect(c[0]).toEqual({ x: 10, y: 500 - O.cable, z: 10 });
-    expect(c[1]!.x).toBeCloseTo(0, 6);
-    expect(c[1]!.z).toBeCloseTo(0, 6);
-    expect(c[1]!.y).toBeCloseTo(500 - O.cable - 10 * O.droop, 6);
+  it('writes line segments for every row and column', () => {
+    const g = newGrid();
+    g.forEach((p, k) => {
+      p.x = k;
+      p.y = 2 * k;
+      p.z = 3 * k;
+    });
+    expect(NET_SEGMENTS).toBe(2 * NET_N * (NET_N + 1));
+    const buf = new Float32Array(NET_SEGMENTS * 6);
+    gridSegments(g, buf);
+    // First segment: row 0 from point (0,0) to (1,0).
+    expect(Array.from(buf.slice(0, 6))).toEqual([0, 0, 0, 1, 2, 3]);
   });
 
-  it('sizes the drop and the dome from the monster', () => {
+  it('sizes the drop and the burst from the monster', () => {
     expect(dropAltitude(385)).toBe(385 + O.dropClearance);
     expect(netHalf(84)).toBeCloseTo(84 * O.netHalfMult, 6);
     expect(domeRadius(84, 180)).toBeCloseTo(84 * O.domeRadiusMult, 6);
@@ -124,36 +130,4 @@ describe('formation and net', () => {
     expect(mid.x).toBeCloseTo(0, 6);
   });
 
-  it('dome peaks over the centre at the given height and meets the ground at its rim', () => {
-    const g = newGrid();
-    domeGrid(50, 0, -20, 100, 300, g);
-    const top = g[at(NET_N / 2, NET_N / 2)]!;
-    expect(top).toEqual({ x: 50, y: 300, z: -20 });
-    const corner = g[at(0, 0)]!;
-    expect(corner.y).toBeCloseTo(0, 6);
-    expect(Math.hypot(corner.x - 50, corner.z + 20)).toBeCloseTo(100, 6);
-  });
-
-  it('ground grid lies flat at groundY, a square of the given half-width', () => {
-    const g = newGrid();
-    groundGrid(0, 0, 20, 0, g);
-    for (const p of g) expect(p.y).toBe(O.groundY);
-    expect(g[at(0, 0)]).toEqual({ x: 20, y: O.groundY, z: 20 });
-  });
-
-  it('blends grids point by point and writes line segments for every row and column', () => {
-    const a = newGrid();
-    const b = newGrid();
-    for (const p of b) p.y = 10;
-    const out = newGrid();
-    blendGrid(a, b, 0.25, out);
-    expect(out[0]!.y).toBeCloseTo(2.5, 6);
-    expect(NET_SEGMENTS).toBe(2 * NET_N * (NET_N + 1));
-    const buf = new Float32Array(NET_SEGMENTS * 6);
-    groundGrid(0, 0, 20, 0, out);
-    gridSegments(out, buf);
-    // First segment: row 0 from point (0,0) to (1,0).
-    expect([buf[0], buf[1], buf[2]]).toEqual([out[0]!.x, out[0]!.y, out[0]!.z]);
-    expect([buf[3], buf[4], buf[5]]).toEqual([out[1]!.x, out[1]!.y, out[1]!.z]);
-  });
 });

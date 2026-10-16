@@ -35,6 +35,7 @@ import { Helicopters } from './enemies/Helicopters';
 import { NapalmBombers } from './enemies/NapalmBombers';
 import { OspreyNets } from './enemies/OspreyNets';
 import { Snare } from './systems/snare';
+import { buildHeightfield, surfaceAt, type Heightfield } from './systems/heightfield';
 import { SamSilos } from './enemies/SamSilos';
 import { Artillery } from './enemies/Artillery';
 import { LaserTrucks } from './enemies/LaserTrucks';
@@ -83,6 +84,9 @@ type Order = { kind: 'move'; to: Vec2 } | { kind: 'attack'; target: Target } | n
 
 /** A projectile hit below this height (m) is a ground impact and splashes if it lands on water. */
 const GROUND_HIT_Y = 20;
+/** A net's view of the monster: surface samples reach this × its longest standing size either way, on a grid this many cells across. */
+const NET_SURFACE_REACH = 0.7;
+const NET_SURFACE_CELLS = 32;
 
 /** Events that can carry a user gesture for audio. */
 const GESTURES = ['pointerdown', 'pointerup', 'touchend', 'keydown'] as const;
@@ -159,6 +163,18 @@ export class GameScene {
   /** The monster's snare (Osprey nets), and a snare that arrived mid-leap, waiting for the landing (s; 0 = none). */
   private snare = new Snare();
   private pendingSnare = 0;
+  /** The monster's top surface for nets to land on, measured from its meshes the first time a net needs it each run. */
+  private netHF: Heightfield | null = null;
+  private netSurface = (lx: number, lz: number): number => {
+    if (!this.netHF) {
+      const m = this.monster;
+      const size = this.ms.size;
+      m.body.root.updateMatrixWorld(true);
+      const frame = { x: m.position.x, y: m.position.y, z: m.position.z, yaw: m.yaw };
+      this.netHF = buildHeightfield(m.body.root, frame, NET_SURFACE_REACH * Math.max(size.width, size.length), NET_SURFACE_CELLS);
+    }
+    return surfaceAt(this.netHF, lx, lz);
+  };
   /** Ravenous Hunger heat 0..1 (Wendigo); always 0 when the passive isn't taken. */
   private heat = 0;
   /** Wendigo: Shadow Hands (anti-air) and Ravenous Hunger's withering aura. */
@@ -419,6 +435,7 @@ export class GameScene {
     this.abilities.reset();
     this.snare.clear();
     this.pendingSnare = 0;
+    this.netHF = null;
     this.swatCd = 0;
     this.tailCd = 0;
     this.heat = 0;
@@ -1151,6 +1168,8 @@ export class GameScene {
         const m = self.monster;
         return {
           position: m.position,
+          yaw: m.yaw,
+          surface: self.netSurface,
           alive: m.alive,
           airborne: m.airborne,
           bodyRadius: self.ms.bodyRadius,

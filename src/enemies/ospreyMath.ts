@@ -112,20 +112,6 @@ export function slotOffset(slot: number, half: number, yaw: number): Vec2 {
   return { x: lx * c + lz * s, z: -lx * s + lz * c };
 }
 
-/**
- * Net corners in slot order: `cable` m below each living Osprey; a lost slot's corner droops `droop` × half
- * below the midpoint of its neighbours (a squad still carrying the net has at least one neighbour alive).
- */
-export function netCorners(ospreys: readonly (P3 | null)[], half: number): P3[] {
-  const hung = ospreys.map((p) => (p ? { x: p.x, y: p.y - O.cable, z: p.z } : null));
-  return hung.map((c, i) => {
-    if (c) return c;
-    const a = hung[(i + 3) % 4] ?? hung[(i + 1) % 4]!;
-    const b = hung[(i + 1) % 4] ?? a;
-    return { x: (a.x + b.x) / 2, y: Math.min(a.y, b.y) - half * O.droop, z: (a.z + b.z) / 2 };
-  });
-}
-
 /** Cells per side of the net grid; the grid has (NET_N + 1)² points, row-major from corner 0 toward corner 1. */
 export const NET_N = 8;
 /** Line segments in the grid: every row and every column. */
@@ -154,50 +140,6 @@ export function carriedGrid(c: readonly P3[], sag: number, out: P3[]): void {
       p.y = fy + (by - fy) * b - sag * 16 * a * (1 - a) * b * (1 - b);
       p.z = fz + (bz - fz) * b;
     }
-  }
-}
-
-/** The net draped on the monster: the square grid mapped onto a disc, rising from baseY at the rim to `height` over the centre. */
-export function domeGrid(cx: number, baseY: number, cz: number, radius: number, height: number, out: P3[]): void {
-  for (let j = 0; j <= NET_N; j++) {
-    const v = (2 * j) / NET_N - 1;
-    for (let i = 0; i <= NET_N; i++) {
-      const u = (2 * i) / NET_N - 1;
-      const dx = u * Math.sqrt(1 - (v * v) / 2);
-      const dz = v * Math.sqrt(1 - (u * u) / 2);
-      const d = Math.min(1, Math.hypot(dx, dz));
-      const p = out[idx(i, j)]!;
-      p.x = cx + dx * radius;
-      p.y = baseY + height * (1 - d * d);
-      p.z = cz + dz * radius;
-    }
-  }
-}
-
-/** A dropped net lying flat at groundY: the square `half` m from centre to each corner, corners in slot order. */
-export function groundGrid(cx: number, cz: number, half: number, yaw: number, out: P3[]): void {
-  const c = Math.cos(yaw);
-  const s = Math.sin(yaw);
-  for (let j = 0; j <= NET_N; j++) {
-    const lz = half * (1 - (2 * j) / NET_N);
-    for (let i = 0; i <= NET_N; i++) {
-      const lx = half * (1 - (2 * i) / NET_N);
-      const p = out[idx(i, j)]!;
-      p.x = cx + lx * c + lz * s;
-      p.y = O.groundY;
-      p.z = cz - lx * s + lz * c;
-    }
-  }
-}
-
-export function blendGrid(from: readonly P3[], to: readonly P3[], k: number, out: P3[]): void {
-  for (let n = 0; n < out.length; n++) {
-    const a = from[n]!;
-    const b = to[n]!;
-    const p = out[n]!;
-    p.x = a.x + (b.x - a.x) * k;
-    p.y = a.y + (b.y - a.y) * k;
-    p.z = a.z + (b.z - a.z) * k;
   }
 }
 

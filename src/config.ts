@@ -471,25 +471,31 @@ export const CONFIG = {
    * the monster. Within arriveDist they position for positionTime s: the formation centre follows the monster at up
    * to trackSpeed m/s, the squad sinks to the monster's height + dropClearance over the first settleFrac of the
    * phase, and the rotor pods swivel up over tiltTime s. Then, with at least minToDrop alive,
-   * the net falls over dropTime s and snares the monster; otherwise it falls to the ground, lies groundLife s
-   * (fading over the last second) and the squad aborts. Survivors climb back at climbRate m/s, close the square to
+   * the net drops onto the monster; otherwise it drops toward the ground and the squad aborts. Survivors climb back at climbRate m/s, close the square to
    * tightHalf m at tightenRate m/s and fly out, despawning exitDist m from the monster.
-   * Net: corners hang `cable` m below each Osprey; the middle sags sag × half; a lost corner droops droop × half
-   * below its neighbours. Snared, it drapes as a dome of radius max(bodyRadius × domeRadiusMult,
-   * width × domeWidthMult) and the monster's height. `size` is nose-to-tail length (m); rotors spin at rotorSpin rad/s.
+   * Net: a cloth whose corners hang `cable` m below each Osprey; released, it falls onto the monster (snaring it)
+   * or the ground, and a net on the ground fades out over groundLife s. Its burst when torn free spreads
+   * max(bodyRadius × domeRadiusMult, width × domeWidthMult) m. `size` is nose-to-tail length (m); rotors spin at rotorSpin rad/s.
    */
   osprey: {
     hp: 100, exp: 15, size: 80, hitRadius: 80,
     spawnDist: 2600, exitDist: 2600,
     cruiseSpeed: 220, cruiseAltitude: 650, arriveDist: 150,
-    tightHalf: 45, netHalfMult: 1.8, dropClearance: 120,
+    tightHalf: 45, netHalfMult: 1.8, dropClearance: 160,
     positionTime: 4, settleFrac: 0.6, tiltTime: 1.2, trackSpeed: 400,
     climbRate: 120, tightenRate: 60,
     minToDrop: 3,
-    cable: 40, sag: 0.35, droop: 0.9,
-    dropTime: 0.6, groundLife: 4, groundY: 3,
+    cable: 40, groundLife: 4, groundY: 3,
     domeRadiusMult: 2.2, domeWidthMult: 0.55,
     rotorSpin: 14, landShake: 0.4,
+    /**
+     * The net's cloth: gravity (m/s²), velocity kept per substep (damping), rope passes per substep (iterations), rope
+     * length beyond the carried span (slack, a fraction), sliding loss on contact (friction), rest height above a
+     * surface (thickness, m), deepest a point is lifted onto the body (maxPush, m; deeper points are under it, not on
+     * it), the share of the monster's height above which contact catches the rope (catchFrac), the falling net's pull
+     * back over its target (homing, rad/s), and the substep length (s).
+     */
+    cloth: { gravity: 400, damping: 0.985, iterations: 8, slack: 0.15, friction: 0.6, thickness: 8, maxPush: 60, catchFrac: 0.45, homing: 5, substep: 1 / 60 },
   },
   jet: { hp: 60, speed: 286, altitude: 430 * MONSTER_SCALE, turnRate: 0.9, damage: 10, rocketsPerSalvo: 3, salvoMin: 700, salvoMax: 1600, rocketSpeed: 650, exp: 15, size: 70, hitRadius: 90, exitDistance: 2600 },
   director: {

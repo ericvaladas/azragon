@@ -3,9 +3,10 @@ import { CONFIG } from '../config';
 import type { Target } from '../combat';
 import { toonMat } from '../render/toon';
 import type { EnemySystem, WorldContext } from './types';
+import { Cloth, type ClothBody, type ClothEnv } from './cloth';
 import {
-  NET_SEGMENTS, blendGrid, carriedGrid, domeGrid, domeRadius, dropOutcome, gridSegments, groundGrid, netCorners, newGrid,
-  newSquad, positionDone, slotOffset, squadGone, startLeave, stepSquad, type MonsterInfo, type P3, type Squad,
+  NET_N, NET_SEGMENTS, carriedGrid, domeRadius, dropOutcome, gridSegments, newGrid, newSquad, positionDone, slotOffset,
+  squadGone, startLeave, stepSquad, type MonsterInfo, type P3, type Squad,
 } from './ospreyMath';
 import { PODS, ROTOR_HUB, bodyGeometry, podGeometry, rotorDiscGeometry, rotorGeometry } from './ospreyModel';
 
@@ -17,19 +18,21 @@ const BOB = 4;
 const BOB_RATE = 1.7;
 const _v = new THREE.Vector3();
 
-export type NetMode = 'carried' | 'falling' | 'snared' | 'ground' | 'torn';
+export type NetMode = 'carried' | 'falling' | 'snared' | 'ground';
+
+/** Net grid points held by slots 0..3 (front-left, front-right, back-right, back-left), in carriedGrid's corner order. */
+const CORNERS = [0, NET_N, (NET_N + 1) * (NET_N + 1) - 1, NET_N * (NET_N + 1)] as const;
 
 /**
- * A net: carried under its squad, falling (blending from where it was released to where it lands), snared on the
- * monster, lying on the ground after an aborted drop, or torn (removed on the next update).
+ * A net, simulated as cloth: carried (corners pinned under its squad), falling (released; homing over the monster
+ * if it was dropped on it), snared (resting and caught on the monster), or on the ground (fading out).
  */
 type Net = {
   mode: NetMode;
   t: number;
   toMonster: boolean;
-  start: P3[];
+  cloth: Cloth;
   pts: P3[];
-  ground: { x: number; z: number; half: number; yaw: number };
   mesh: THREE.LineSegments<THREE.BufferGeometry, THREE.LineBasicMaterial>;
 };
 
@@ -87,7 +90,9 @@ export class OspreyNets implements EnemySystem {
   private nets: Net[] = [];
   private all: Osprey[] = [];
   private clock = 0;
-  private scratch = newGrid();
+  /** Reused per step: the monster as the cloth sees it, and the cloth's surroundings. */
+  private bodyFrame: ClothBody = { x: 0, y: 0, z: 0, yaw: 0, surface: () => 0 };
+  private env: ClothEnv = { groundY: O.groundY, body: null, grip: false, catchMin: 0, homeTo: null };
   private body = bodyGeometry();
   private podGeo = podGeometry();
   private rotorGeo = rotorGeometry();
@@ -145,22 +150,28 @@ export class OspreyNets implements EnemySystem {
       this.all.push(o);
       this.scene.add(o.group);
     }
-    team.net = this.makeNet();
     this.teams.push(team);
     this.placeTeam(team, 0);
-    this.drawNet(team.net);
+    team.net = this.makeNet(team);
+    // Measure the monster's surface now, while the squad is far off, rather than on the frame the net drops.
+    ctx.monster.surface(0, 0);
   }
 
-  /** Called by GameScene when the snare runs out: the draped net bursts apart. */
+  /** Each net's points (row-major grid). */
+  netPoints(k: number): readonly P3[] {
+    return this.nets[k]?.pts ?? [];
+  }
+
+  /** Called by GameScene when the snare runs out (or the monster dies): the net bursts loose and drops off. */
   netTornFree(): void {
     const ctx = this.ctx;
     for (const n of this.nets) {
       if (n.mode !== 'snared') continue;
-      n.mode = 'torn';
+      this.toGround(n);
       if (!ctx) continue;
-      const c = this.domeCentre(ctx);
-      ctx.particles.emit('debris', _v.set(c.x, ctx.monster.height * 0.6, c.z), 18, 1.6);
-      ctx.particles.ring('dust', _v.set(c.x, 0, c.z), domeRadius(ctx.monster.bodyRadius, ctx.monster.width), 16);
+      const m = ctx.monster.position;
+      ctx.particles.emit('debris', _v.set(m.x, ctx.monster.height * 0.6, m.z), 18, 1.6);
+      ctx.particles.ring('dust', _v.set(m.x, 0, m.z), domeRadius(ctx.monster.bodyRadius, ctx.monster.width), 16);
     }
   }
 
@@ -223,7 +234,6 @@ export class OspreyNets implements EnemySystem {
   /** Flies each living Osprey in its slot, swivels the pods, spins rotors, fades hit flashes, and hangs a carried net. */
   private placeTeam(team: Team, dt: number): void {
     const s = team.squad;
-    const hung: (P3 | null)[] = [];
     for (const o of team.ospreys) {
       if (o.gone) continue;
       o.flashT = Math.max(0, o.flashT - dt);
@@ -232,16 +242,15 @@ export class OspreyNets implements EnemySystem {
     }
     for (const o of team.ospreys) {
       if (!o.isAlive()) {
-        hung.push(null);
+        team.net?.cloth.pin(CORNERS[o.slot]!, null);
         continue;
       }
       const off = slotOffset(o.slot, s.half, s.yaw);
       o.position.set(s.x + off.x, s.y + Math.sin(this.clock * BOB_RATE + o.slot) * BOB, s.z + off.z);
       o.group.rotation.set(0, s.yaw, 0);
       for (const pod of o.pods) pod.rotation.x = -s.tilt;
-      hung.push(o.position);
+      if (team.net?.mode === 'carried') team.net.cloth.pin(CORNERS[o.slot]!, _v.set(o.position.x, o.position.y - O.cable, o.position.z));
     }
-    if (team.net?.mode === 'carried') carriedGrid(netCorners(hung, s.half), s.half * O.sag, team.net.pts);
   }
 
   /** Falls, rolls, trails smoke and blows up on the ground (as the napalm bombers do). True once it has hit. */
@@ -277,95 +286,97 @@ export class OspreyNets implements EnemySystem {
 
   private release(team: Team): void {
     const net = team.net!;
-    this.letGo(net);
+    net.cloth.release();
+    net.mode = 'falling';
     net.toMonster = true;
     team.net = null;
   }
 
   private abort(team: Team): void {
     const net = team.net!;
-    const s = team.squad;
-    this.letGo(net);
+    net.cloth.release();
+    net.mode = 'falling';
     net.toMonster = false;
-    net.ground = { x: s.x, z: s.z, half: s.half, yaw: s.yaw };
     team.net = null;
   }
 
-  private letGo(net: Net): void {
-    net.mode = 'falling';
+  /** Lets go of the monster: the net drops to the ground and fades out over groundLife. */
+  private toGround(net: Net): void {
+    net.cloth.release();
+    net.mode = 'ground';
     net.t = 0;
-    blendGrid(net.pts, net.pts, 0, net.start);
   }
 
-  /** Where a net on the monster drapes: the leap's landing point while it is in the air, else under it. */
-  private domeCentre(ctx: WorldContext): { x: number; z: number } {
+  /** Where a net dropped on the monster homes: the leap's landing point while it is in the air, else the monster. */
+  private target(ctx: WorldContext): { x: number; z: number } {
     const m = ctx.monster;
     return m.airborne && m.leapTo ? m.leapTo : { x: m.position.x, z: m.position.z };
   }
 
-  /** The grid a falling net is headed for: the dome on the monster, or flat on the ground under the squad. */
-  private landingGrid(net: Net, ctx: WorldContext, out: P3[]): void {
-    if (net.toMonster) {
-      const c = this.domeCentre(ctx);
-      domeGrid(c.x, 0, c.z, domeRadius(ctx.monster.bodyRadius, ctx.monster.width), ctx.monster.height, out);
-    } else groundGrid(net.ground.x, net.ground.z, net.ground.half, net.ground.yaw, out);
-  }
-
   /**
-   * Lands a net on the monster: earlier snared nets go, the snare starts (or restarts), and the ground shakes.
-   * A monster already dead gets no snare; the net lies flat on the ground where it fell.
+   * Lands a net on the monster: earlier snared nets drop off, the snare starts (or restarts), and the ground shakes.
+   * A monster already dead gets no snare; the net drops to the ground.
    */
   private land(net: Net, ctx: WorldContext): void {
     if (!ctx.monster.alive) {
-      const c = this.domeCentre(ctx);
-      net.toMonster = false;
-      net.ground = { x: c.x, z: c.z, half: domeRadius(ctx.monster.bodyRadius, ctx.monster.width) * 0.7, yaw: 0 };
-      groundGrid(net.ground.x, net.ground.z, net.ground.half, 0, net.pts);
-      net.mode = 'ground';
-      net.t = 0;
+      this.toGround(net);
       return;
     }
-    for (const n of this.nets) if (n !== net && n.mode === 'snared') n.mode = 'torn';
+    for (const n of this.nets) if (n !== net && n.mode === 'snared') this.toGround(n);
     net.mode = 'snared';
     ctx.snareMonster(CONFIG.snare.duration);
     ctx.shake(O.landShake);
-    const c = this.domeCentre(ctx);
-    ctx.particles.ring('dust', _v.set(c.x, 0, c.z), domeRadius(ctx.monster.bodyRadius, ctx.monster.width), 20);
+    const m = ctx.monster.position;
+    ctx.particles.ring('dust', _v.set(m.x, 0, m.z), domeRadius(ctx.monster.bodyRadius, ctx.monster.width), 20);
   }
 
-  /** Advances one net; false once it should be removed. */
+  /** Advances one net's cloth; false once it should be removed. */
   private updateNet(net: Net, dt: number, ctx: WorldContext): boolean {
-    if (net.mode === 'torn') return false;
+    const m = ctx.monster;
+    const f = this.bodyFrame;
+    f.x = m.position.x;
+    f.y = m.position.y;
+    f.z = m.position.z;
+    f.yaw = m.yaw;
+    f.surface = m.surface;
+    const e = this.env;
+    // Only a released net meets the monster: a carried one hangs clear of it, a ground one is never scooped back up,
+    // and a dead monster's pose no longer matches its surface.
+    e.body = net.mode === 'falling' || net.mode === 'snared' ? (m.alive ? f : null) : null;
+    e.grip = net.mode === 'snared';
+    e.catchMin = m.height * O.cloth.catchFrac;
+    e.homeTo = net.mode === 'falling' && net.toMonster ? this.target(ctx) : null;
+    net.cloth.step(dt, e);
     if (net.mode === 'falling') {
-      net.t += dt;
-      const k = Math.min(1, net.t / O.dropTime);
-      this.landingGrid(net, ctx, this.scratch);
-      blendGrid(net.start, this.scratch, k * k, net.pts);
-      if (k >= 1) {
-        if (net.toMonster) this.land(net, ctx);
-        else {
-          net.mode = 'ground';
-          net.t = 0;
-        }
-      }
-    } else if (net.mode === 'snared') this.landingGrid(net, ctx, net.pts);
-    else if (net.mode === 'ground') {
+      if (net.toMonster && (net.cloth.touchedBody || net.cloth.touchedGround)) this.land(net, ctx);
+      else if (!net.toMonster && net.cloth.touchedGround) this.toGround(net);
+    } else if (net.mode === 'ground') {
       net.t += dt;
       net.mesh.material.opacity = Math.max(0, Math.min(1, O.groundLife - net.t));
       if (net.t >= O.groundLife) return false;
     }
+    net.cloth.write(net.pts);
     this.drawNet(net);
     return true;
   }
 
-  private makeNet(): Net {
+  /** A net laid out flat between the squad's Ospreys, its ropes long enough to sag between them. */
+  private makeNet(team: Team): Net {
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(NET_SEGMENTS * 6), 3));
     const mesh = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color: P.netRope, transparent: true }));
     mesh.frustumCulled = false;
     this.scene.add(mesh);
-    const net: Net = { mode: 'carried', t: 0, toMonster: false, start: newGrid(), pts: newGrid(), ground: { x: 0, z: 0, half: 0, yaw: 0 }, mesh };
+    const s = team.squad;
+    const corners = team.ospreys.map((o) => ({ x: o.position.x, y: o.position.y - O.cable, z: o.position.z }));
+    const pts = newGrid();
+    carriedGrid(corners, 0, pts);
+    const cloth = new Cloth(NET_N + 1, (2 * s.half * (1 + O.cloth.slack)) / NET_N);
+    cloth.layout(pts);
+    for (const o of team.ospreys) cloth.pin(CORNERS[o.slot]!, corners[o.slot]!);
+    const net: Net = { mode: 'carried', t: 0, toMonster: false, cloth, pts, mesh };
     this.nets.push(net);
+    this.drawNet(net);
     return net;
   }
 
