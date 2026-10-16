@@ -20,7 +20,7 @@ export const PRESETS: Record<ParticleKind, Preset> = {
   /** Long-lived streak puffs for artillery shells, so their arc points back to the guns. */
   trail: { color: 0xe9e4da, life: 2.6, size0: 16, size1: 30, speed: 4, up: 4, gravity: 0, drag: 2 },
   /** A chemtrail puff behind a Gustav shell: pale, slow, swelling as it fades. */
-  contrail: { color: 0xf4f2ec, life: 1.8, size0: 14, size1: 46, speed: 3, up: 2, gravity: 0, drag: 2 },
+  contrail: { color: 0xf4f2ec, life: 1.2, size0: 14, size1: 46, speed: 3, up: 2, gravity: 0, drag: 2 },
   acid: { color: P.acid, life: 0.7, size0: 26, size1: 6, speed: 150, up: 90, gravity: 120, drag: 1 },
   /** Wendigo decay: black-green clumps of rot that splatter and fall. */
   rot: { color: W.rot, life: 0.9, size0: 26, size1: 8, speed: 150, up: 100, gravity: 170, drag: 1.2 },

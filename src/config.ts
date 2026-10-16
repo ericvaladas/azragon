@@ -448,7 +448,8 @@ export const CONFIG = {
   tank: { hp: 30, speed: 50, range: 950, damage: 6, fireCooldown: 3.2, shellFlightTime: 1.6, shellArc: 140, exp: 5, size: 48 },
   /**
    * Schwerer Gustav, a gigantic tracked land battleship (`size` m nose to tail, its hull drawn `width` m across, just
-   * wider than a road). It follows the roads toward the monster at `speed` m/s (re-planning every replanEvery s), its
+   * wider than a road). It spawns on a road spawnBeyond..spawnBeyond + spawnSpread m beyond its range from the monster,
+   * so it engages soon after it appears. It follows the roads toward the monster at `speed` m/s (re-planning every replanEvery s), its
    * hull turning at turnRate rad/s; it never damages buildings. Within `range` m it stops (driving on only once the
    * monster is more than disengageMargin m beyond that) and turns its gun at aimRate rad/s; within aimTolerance rad it
    * fires one shell straight at the monster every fireCooldown s (the first firstShotMin..firstShotMax s after it
@@ -457,9 +458,9 @@ export const CONFIG = {
    * fireShake and kicks the turret back `recoil` × size, returning over recoilTime s.
    */
   gustav: {
-    hp: 450, exp: 60, size: 160, width: 42, speed: 40, turnRate: 0.6, replanEvery: 4,
-    range: 1100, disengageMargin: 100, aimRate: 0.5, aimTolerance: 0.05, damage: 60, fireCooldown: 10, firstShotMin: 3, firstShotMax: 6,
-    shellSpeed: 1400, shellLength: 44, shellDiameter: 12, trailSpacing: 12, fireShake: 0.35, recoil: 0.06, recoilTime: 0.7,
+    hp: 450, exp: 60, size: 160, width: 42, speed: 50, turnRate: 0.6, replanEvery: 4,
+    range: 1500, disengageMargin: 100, spawnBeyond: 200, spawnSpread: 200, aimRate: 0.5, aimTolerance: 0.05, damage: 60, fireCooldown: 8, firstShotMin: 3, firstShotMax: 6,
+    shellSpeed: 1700, shellLength: 44, shellDiameter: 12, trailSpacing: 20, fireShake: 0.35, recoil: 0.06, recoilTime: 0.7,
   },
   /**
    * Attack helicopters: spawn spawnMin..spawnMax m out, fly in at up to approachSpeed (closing speed eases off as
@@ -548,7 +549,7 @@ export const CONFIG = {
     heli: { unlockLevel: 1, cost: 4, cap: 4, weight: 3 },
     napalm: { unlockLevel: 4, cost: 6, cap: 2, weight: 2 },
     osprey: { unlockLevel: 7, cost: 8, cap: 1, weight: 2 },
-    gustav: { unlockLevel: 1, cost: 6, cap: 2, weight: 1 },
+    gustav: { unlockLevel: 1, cost: 4, cap: 2, weight: 5 },
   },
   /** Enemy HP and damage multipliers grow with the player's level (not run time). */
   difficulty: { hpPerLevel: 0.12, dmgPerLevel: 0.075 },

@@ -104,10 +104,10 @@ export class GustavFleet implements EnemySystem {
     this.draw();
   }
 
-  /** On the road nearest a random point of the spawn ring; false at the cap. */
+  /** On the road nearest a random point just beyond its firing range (spawnBeyond..+spawnSpread m); false at the cap. */
   spawn(ctx: WorldContext): boolean {
     const a = ctx.rng() * Math.PI * 2;
-    const r = CONFIG.director.spawnRing * (0.8 + ctx.rng() * 0.3);
+    const r = G.range + G.spawnBeyond + ctx.rng() * G.spawnSpread;
     const m = ctx.monster.position;
     const p = ctx.roads.nearest({ x: m.x + Math.cos(a) * r, z: m.z + Math.sin(a) * r });
     return this.spawnAt(p.x, p.z, ctx);

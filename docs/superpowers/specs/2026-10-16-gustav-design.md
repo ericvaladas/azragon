@@ -50,6 +50,10 @@ After the first look, the owner asked for these changes. They replace the matchi
   - **HP:** 450, down from 600.
   - **Chemtrail:** the shell lays a puff every `trailSpacing` 12 m along its path. The puffs are the pale `contrail` particle (1.8 s; 4 s at first, then shortened so the trail clears faster), on their own particle layer of 300 so they never crowd out other dust.
 
+- **Third round of changes (2026-10-16):**
+  - **Spawning:** it spawns on a road `spawnBeyond`..`spawnBeyond + spawnSpread` m (200–400 m) beyond its range, instead of on the shared spawn ring. Its spawn rule is `cost` 4, `weight` 5: in simulation the first one arrives after a median of 10 s at level 1 (90% within 25 s), against 35 s before.
+  - **The owner's own tuning:** `speed` 50, `range` 1500, `fireCooldown` 8, `shellSpeed` 1700, `trailSpacing` 20, contrail life 1.2 s.
+
 ## Visuals
 
 - **Size:** `size` 160 m nose to tail, about 3.3× a tank.

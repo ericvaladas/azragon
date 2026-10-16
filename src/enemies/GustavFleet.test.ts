@@ -9,6 +9,8 @@ import type { Vec2 } from '../util/math';
 
 const G = CONFIG.gustav;
 const DT = 0.05;
+/** Where the monster stands in the driving tests: 400 m beyond the Gustav's range from the origin. */
+const START = G.range + 400;
 
 function makeCtx(hpMult = 1) {
   const shots: { t: number; damage: number }[] = [];
@@ -16,7 +18,7 @@ function makeCtx(hpMult = 1) {
   const rings: { kind: string; x: number; z: number; r: number }[] = [];
   const destroyed: { t: Target; exp: number }[] = [];
   const clock = { t: 0 };
-  const monster = { position: new THREE.Vector3(1300, 0, 0), alive: true, airborne: false, height: 385 };
+  const monster = { position: new THREE.Vector3(START, 0, 0), alive: true, airborne: false, height: 385 };
   const ctx = {
     monster,
     difficulty: { hpMult, dmgMult: 1 },
@@ -57,6 +59,20 @@ describe('GustavFleet', () => {
     expect(c.destroyed).toEqual([{ t: g, exp: G.exp }]);
   });
 
+  it('spawns just outside its firing range, spawnBeyond..spawnBeyond + spawnSpread m past it', () => {
+    const f = new GustavFleet(new THREE.Scene());
+    const c = makeCtx();
+    for (let k = 0; k < 20; k++) {
+      f.clear();
+      f.spawn(c.ctx);
+      const g = f.targets()[0]!;
+      const d = Math.hypot(g.position.x - c.monster.position.x, g.position.z - c.monster.position.z);
+      expect(d).toBeGreaterThanOrEqual(G.range + G.spawnBeyond);
+      expect(d).toBeLessThanOrEqual(G.range + G.spawnBeyond + G.spawnSpread);
+    }
+    expect(G.range + G.spawnBeyond).toBeGreaterThan(G.range);
+  });
+
   it('drives at its speed, stops in range and fires on the cooldown rhythm', () => {
     const f = new GustavFleet(new THREE.Scene());
     const c = makeCtx();
@@ -66,7 +82,7 @@ describe('GustavFleet', () => {
     expect(g.position.x).toBeCloseTo(G.speed * 4, -1);
     expect(c.shots).toEqual([]);
     run(f, c, 36);
-    const stopAt = 1300 - G.range;
+    const stopAt = START - G.range;
     expect(g.position.x).toBeGreaterThan(stopAt - G.speed * DT * 2);
     expect(g.position.x).toBeLessThan(stopAt + G.speed * DT * 2);
     const reach = stopAt / G.speed;
