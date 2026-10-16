@@ -460,7 +460,7 @@ export const CONFIG = {
   gustav: {
     hp: 450, exp: 60, size: 160, width: 42, speed: 50, turnRate: 0.6, replanEvery: 4,
     range: 1500, disengageMargin: 100, spawnBeyond: 200, spawnSpread: 200, aimRate: 0.5, aimTolerance: 0.05, damage: 60, fireCooldown: 8, firstShotMin: 3, firstShotMax: 6,
-    shellSpeed: 1700, shellLength: 44, shellDiameter: 12, trailSpacing: 20, fireShake: 0.35, recoil: 0.06, recoilTime: 0.7,
+    shellSpeed: 1700, shellLength: 44, shellDiameter: 12, trailSpacing: 26, fireShake: 0.35, recoil: 0.06, recoilTime: 0.7,
   },
   /**
    * Attack helicopters: spawn spawnMin..spawnMax m out, fly in at up to approachSpeed (closing speed eases off as

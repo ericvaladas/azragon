@@ -58,11 +58,13 @@ function gustavShellGeometry(): THREE.BufferGeometry {
 export class Projectiles {
   onHit: (h: Hit) => void = () => {};
   /**
-   * Called every TRAIL_EVERY s for each shot in flight except tank shells, globs and shards; for a Gustav shell, every
+   * Called every TRAIL_EVERY s for each shot in flight except tank shells, globs, hurled chunks and shards; for a Gustav shell, every
    * CONFIG.gustav.trailSpacing m, with `hold` the seconds until it lands (so its whole trail can fade together).
    */
   onTrail: (p: THREE.Vector3, kind: ShotKind, hold?: number) => void = () => {};
   private shots: Shot[] = [];
+  /** Whether the monster's spikes trail smoke (its theme; see setTheme). */
+  private spikeTrail = true;
   private free: Shot[] = [];
   private meshes: Record<ShotKind, THREE.InstancedMesh>;
   private sizes: Record<ShotKind, [number, number, number]> = {
@@ -98,8 +100,9 @@ export class Projectiles {
     };
   }
 
-  /** The monster's own shots take its colours (spikes / storm bolts, mortar globs). */
-  setTheme(spike: number, glob: number): void {
+  /** The monster's own shots take its colours (spikes / storm bolts, mortar globs); `spikeTrail` false fires bare spikes. */
+  setTheme(spike: number, glob: number, spikeTrail = true): void {
+    this.spikeTrail = spikeTrail;
     (this.meshes.spike.material as THREE.MeshBasicMaterial).color.setHex(spike);
     (this.meshes.glob.material as THREE.MeshBasicMaterial).color.setHex(glob);
   }
@@ -215,7 +218,8 @@ export class Projectiles {
       }
       if (s.kind === 'gustav') this.chemtrail(s);
       else s.trailT += dt;
-      if (s.kind !== 'shell' && s.kind !== 'glob' && s.kind !== 'shard' && s.kind !== 'gustav' && s.trailT >= TRAIL_EVERY) {
+      const trails = s.kind !== 'shell' && s.kind !== 'glob' && s.kind !== 'chunk' && s.kind !== 'shard' && s.kind !== 'gustav' && (s.kind !== 'spike' || this.spikeTrail);
+      if (trails && s.trailT >= TRAIL_EVERY) {
         s.trailT = 0;
         this.onTrail(s.pos, s.kind);
       }

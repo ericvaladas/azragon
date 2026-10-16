@@ -68,6 +68,63 @@ describe('Particles hold', () => {
   });
 });
 
+describe('smoke fade', () => {
+  /** The layer mesh holding the one live particle, and its per-particle opacity. */
+  const liveLayer = (scene: THREE.Scene) => {
+    const mesh = scene.children.find((m) => (m as THREE.InstancedMesh).count > 0) as THREE.InstancedMesh;
+    return { mesh, alpha: mesh.geometry.getAttribute('instanceOpacity') as THREE.InstancedBufferAttribute | undefined };
+  };
+
+  it('smoke, shell trails and contrails fade out by turning transparent while they keep growing', () => {
+    for (const kind of ['smoke', 'trail', 'contrail'] as const) {
+      const scene = new THREE.Scene();
+      const p = new Particles(scene);
+      p.emit(kind, new THREE.Vector3(), 1, 0);
+      let last = 1;
+      for (let t = 0; t < PRESETS[kind].life - 0.05; t += 0.05) {
+        p.update(0.05);
+        const { alpha } = liveLayer(scene);
+        expect(alpha).toBeDefined();
+        expect(alpha!.getX(0)).toBeLessThanOrEqual(last + 1e-6);
+        last = alpha!.getX(0);
+      }
+      expect(last).toBeLessThan(0.15);
+    }
+  });
+
+  it('a shrinking particle on a fading layer stays fully opaque', () => {
+    const scene = new THREE.Scene();
+    const p = new Particles(scene);
+    p.emit('dust', new THREE.Vector3(), 1, 0);
+    for (let t = 0; t < PRESETS.dust.life - 0.05; t += 0.05) {
+      p.update(0.05);
+      expect(liveLayer(scene).alpha!.getX(0)).toBe(1);
+    }
+  });
+});
+
+describe('smoke growth', () => {
+  it('smoke, shell trails and contrails keep growing until they vanish, never shrinking', () => {
+    for (const kind of ['smoke', 'trail', 'contrail'] as const) {
+      const scene = new THREE.Scene();
+      const p = new Particles(scene);
+      p.emit(kind, new THREE.Vector3(), 1, 0);
+      const live = () => scene.children.find((c) => (c as THREE.InstancedMesh).count > 0) as THREE.InstancedMesh | undefined;
+      const m = new THREE.Matrix4();
+      const s = new THREE.Vector3();
+      let last = 0;
+      for (let t = 0; t < PRESETS[kind].life - 0.05; t += 0.05) {
+        p.update(0.05);
+        live()!.getMatrixAt(0, m);
+        s.setFromMatrixScale(m);
+        expect(s.x).toBeGreaterThanOrEqual(last - 1e-6);
+        last = s.x;
+      }
+      expect(last).toBeGreaterThan(PRESETS[kind].size1 * 0.9);
+    }
+  });
+});
+
 describe('contrail', () => {
   it('is a pale puff that outlasts the shell flight and spreads as it fades', () => {
     const c = PRESETS.contrail;

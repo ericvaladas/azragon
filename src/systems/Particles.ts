@@ -7,8 +7,10 @@ export type ParticleKind = 'dust' | 'debris' | 'fire' | 'smoke' | 'spark' | 'aci
 /**
  * `stretch`: drawn upright and this many times taller than wide, flickering (flame tongues) instead of tumbling.
  * `fadeFrom`: the fraction of its life after which a puff shrinks away (0.75 when absent).
+ * `grows`: smoke that keeps swelling to the end of its life, never shrinking; it is gone at full size unless it also
+ * has `fadeAlpha` (only on a layer built with per-particle opacity), which fades it to transparent from `fadeFrom`.
  */
-type Preset = { color: number; life: number; size0: number; size1: number; speed: number; up: number; gravity: number; drag: number; stretch?: number; fadeFrom?: number };
+type Preset = { color: number; life: number; size0: number; size1: number; speed: number; up: number; gravity: number; drag: number; stretch?: number; fadeFrom?: number; grows?: boolean; fadeAlpha?: boolean };
 
 const P = CONFIG.palette;
 const W = CONFIG.wendigo.colors;
@@ -16,11 +18,11 @@ export const PRESETS: Record<ParticleKind, Preset> = {
   dust: { color: P.dust, life: 1.3, size0: 22, size1: 70, speed: 110, up: 40, gravity: -15, drag: 2.2 },
   debris: { color: P.debris, life: 1.6, size0: 12, size1: 8, speed: 160, up: 260, gravity: 420, drag: 0.3 },
   fire: { color: P.fire, life: 0.55, size0: 34, size1: 4, speed: 70, up: 60, gravity: -40, drag: 1.5 },
-  smoke: { color: P.smoke, life: 1.4, size0: 18, size1: 60, speed: 40, up: 70, gravity: -20, drag: 1.2 },
+  smoke: { color: P.smoke, life: 1.4, size0: 18, size1: 60, speed: 40, up: 70, gravity: -20, drag: 1.2, grows: true, fadeFrom: 0.4, fadeAlpha: true },
   /** Long-lived streak puffs for artillery shells, so their arc points back to the guns. */
-  trail: { color: 0xe9e4da, life: 2.6, size0: 16, size1: 30, speed: 4, up: 4, gravity: 0, drag: 2 },
+  trail: { color: 0xe9e4da, life: 2.6, size0: 16, size1: 30, speed: 4, up: 4, gravity: 0, drag: 2, grows: true, fadeFrom: 0.4, fadeAlpha: true },
   /** A chemtrail puff behind a Gustav shell: pale, slow, swelling as it fades. */
-  contrail: { color: 0xf4f2ec, life: 1.2, size0: 14, size1: 46, speed: 3, up: 2, gravity: 0, drag: 2 },
+  contrail: { color: 0xf4f2ec, life: 1.2, size0: 10, size1: 46, speed: 3, up: 2, gravity: 0, drag: 2, grows: true, fadeFrom: 0.2, fadeAlpha: true },
   acid: { color: P.acid, life: 0.7, size0: 26, size1: 6, speed: 150, up: 90, gravity: 120, drag: 1 },
   /** Wendigo decay: black-green clumps of rot that splatter and fall. */
   rot: { color: W.rot, life: 0.9, size0: 26, size1: 8, speed: 150, up: 100, gravity: 170, drag: 1.2 },
@@ -78,15 +80,32 @@ class Layer {
   private vel: Float32Array;
   private age: Float32Array;
   private kind: ParticleKind[];
+  /** Per-particle opacity (layers built with `alpha` only). */
+  private alpha: THREE.InstancedBufferAttribute | null = null;
 
   constructor(
     scene: THREE.Scene,
     geo: THREE.BufferGeometry,
     opacity: number,
     private max: number,
+    alpha = false,
   ) {
     const transparent = opacity < 1;
     const mat = new THREE.MeshBasicMaterial({ transparent, opacity, depthWrite: !transparent });
+    if (alpha) {
+      // Each particle's opacity comes from an instance attribute, multiplied into the material's.
+      geo = geo.clone();
+      this.alpha = new THREE.InstancedBufferAttribute(new Float32Array(max).fill(1), 1);
+      geo.setAttribute('instanceOpacity', this.alpha);
+      mat.onBeforeCompile = (shader) => {
+        shader.vertexShader = shader.vertexShader
+          .replace('#include <common>', '#include <common>\nattribute float instanceOpacity;\nvarying float vInstanceOpacity;')
+          .replace('#include <begin_vertex>', '#include <begin_vertex>\nvInstanceOpacity = instanceOpacity;');
+        shader.fragmentShader = shader.fragmentShader
+          .replace('#include <common>', '#include <common>\nvarying float vInstanceOpacity;')
+          .replace('vec4 diffuseColor = vec4( diffuse, opacity );', 'vec4 diffuseColor = vec4( diffuse, opacity * vInstanceOpacity );');
+      };
+    }
     this.mesh = new THREE.InstancedMesh(geo, mat, max);
     this.mesh.frustumCulled = false;
     this.mesh.renderOrder = transparent ? 1 : 0;
@@ -147,7 +166,10 @@ class Layer {
       const k = Math.max(0, age) / p.life;
       _s.setScalar(p.size0 + (p.size1 - p.size0) * k);
       const f = p.fadeFrom ?? 0.75;
-      if (k > f) _s.multiplyScalar((1 - k) / (1 - f));
+      const fade = k > f ? (1 - k) / (1 - f) : 1;
+      // On a layer with per-particle opacity, particles that don't fade by it are kept fully opaque.
+      if (this.alpha) this.alpha.setX(i, p.fadeAlpha ? fade : 1);
+      if (!(p.fadeAlpha && this.alpha) && !p.grows) _s.multiplyScalar(fade);
       if (p.stretch) {
         // Flame tongue: upright, tall, its width flickering.
         _s.x *= 0.75 + 0.35 * Math.sin(age * 37 + i);
@@ -163,6 +185,7 @@ class Layer {
     this.mesh.visible = this.n > 0;
     this.mesh.instanceMatrix.needsUpdate = true;
     if (this.mesh.instanceColor) this.mesh.instanceColor.needsUpdate = true;
+    if (this.alpha) this.alpha.needsUpdate = true;
   }
 
   private swapRemove(i: number): void {
@@ -184,12 +207,12 @@ export class Particles {
     const geo = faceted(new THREE.IcosahedronGeometry(0.5, 0));
     this.layers = {
       solid: new Layer(scene, geo, LAYER_OPACITY.solid, LAYER_MAX.solid),
-      dust: new Layer(scene, geo, LAYER_OPACITY.dust, LAYER_MAX.dust),
-      smoke: new Layer(scene, geo, LAYER_OPACITY.smoke, LAYER_MAX.smoke),
+      dust: new Layer(scene, geo, LAYER_OPACITY.dust, LAYER_MAX.dust, true),
+      smoke: new Layer(scene, geo, LAYER_OPACITY.smoke, LAYER_MAX.smoke, true),
       murk: new Layer(scene, geo, LAYER_OPACITY.murk, LAYER_MAX.murk),
       cloud: new Layer(scene, geo, LAYER_OPACITY.cloud, LAYER_MAX.cloud),
       splash: new Layer(scene, geo, LAYER_OPACITY.splash, LAYER_MAX.splash),
-      trail: new Layer(scene, geo, LAYER_OPACITY.trail, LAYER_MAX.trail),
+      trail: new Layer(scene, geo, LAYER_OPACITY.trail, LAYER_MAX.trail, true),
     };
   }
 

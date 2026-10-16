@@ -22,3 +22,9 @@ describe('roster', () => {
     expect(isMonsterId('')).toBe(false);
   });
 });
+
+describe('spike trails', () => {
+  it('only the Insect fires its spikes without a trail', () => {
+    for (const [id, kind] of Object.entries(KINDS)) expect(kind.fx.spikeTrail ?? true).toBe(id !== 'insect');
+  });
+});

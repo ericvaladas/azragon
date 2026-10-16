@@ -43,7 +43,7 @@ export const INSECT: MonsterKind = {
   signatures: ['acid', 'storm', 'chitin', 'frenzy', 'brood', 'spines', 'swat', 'nova', 'mortar'],
   abilityText: {},
   upgradeText: {},
-  fx: { spike: P.stinger, glob: P.acid, pool: P.acid, nova: P.acid, particle: 'acid', intercept: 'spark' },
+  fx: { spike: P.stinger, glob: P.acid, pool: P.acid, nova: P.acid, particle: 'acid', intercept: 'spark', spikeTrail: false },
   leapCrouch: 0.2,
   createBody: () => new InsectBody(),
 };

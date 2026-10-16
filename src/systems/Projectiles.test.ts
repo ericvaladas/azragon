@@ -35,6 +35,38 @@ describe('Projectiles.fireChunk', () => {
   });
 });
 
+describe('Projectiles chunk trail', () => {
+  it('a Kraken hurl chunk flies without a trail', () => {
+    const p = new Projectiles(new THREE.Scene());
+    const trail: string[] = [];
+    p.onTrail = (_at, kind) => trail.push(kind);
+    p.fireChunk(new THREE.Vector3(0, 200, 0), new THREE.Vector3(0, 0, 900), 85);
+    for (let t = 0; t < CONFIG.kraken.arms.hurl.flight + 0.2; t += 0.05) p.update(0.05);
+    expect(trail).toEqual([]);
+  });
+});
+
+describe('Projectiles spike trail', () => {
+  const trails = (p: Projectiles) => {
+    const out: string[] = [];
+    p.onTrail = (_at, kind) => out.push(kind);
+    const target = { kind: 'tank', position: new THREE.Vector3(0, 0, 900), radius: 30, airborne: false, isAlive: () => true, applyDamage: () => {} };
+    p.fireSpike(new THREE.Vector3(0, 100, 0), target as never, 10, 0);
+    for (let t = 0; t < 1; t += 0.05) p.update(0.05);
+    return out;
+  };
+
+  it('spikes trail by default', () => {
+    expect(trails(new Projectiles(new THREE.Scene()))).toContain('spike');
+  });
+
+  it('a theme without spike trails fires bare spikes', () => {
+    const p = new Projectiles(new THREE.Scene());
+    p.setTheme(0x112233, 0x445566, false);
+    expect(trails(p)).toEqual([]);
+  });
+});
+
 describe('Projectiles.fireWisp and fireShard', () => {
   it('a Hungry Ghost wisp homes onto its target and hits it as a wisp', () => {
     const p = new Projectiles(new THREE.Scene());

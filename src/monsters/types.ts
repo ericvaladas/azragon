@@ -52,6 +52,8 @@ export type FxTheme = {
   particle: ParticleKind;
   /** Particles shown where a defensive shot is stopped. */
   intercept: ParticleKind;
+  /** Whether the monster's spikes (ranged shots and storm bolts) trail smoke (default true). */
+  spikeTrail?: boolean;
   /** What the storm passive fires: homing spikes (default) or soft homing wisps. */
   stormShot?: 'spike' | 'wisp';
   /** How the mortar passive strikes: lobbed globs (default) or a black-fire gaze (Evil Eye). */

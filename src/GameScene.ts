@@ -529,7 +529,7 @@ export class GameScene {
   private applyKind(kind: MonsterKind): void {
     this.monster.setKind(kind);
     this.progression.setPool(kind);
-    this.projectiles.setTheme(kind.fx.spike, kind.fx.glob);
+    this.projectiles.setTheme(kind.fx.spike, kind.fx.glob, kind.fx.spikeTrail ?? true);
     this.acid.setColor(kind.fx.pool, kind.fx.poolOpacity, kind.fx.poolLift);
     this.novaWave.setColor(kind.fx.nova);
     // The Roar shockwave: the Wendigo's is a ring of shadow; every other monster keeps the stinger yellow.
