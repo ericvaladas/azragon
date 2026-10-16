@@ -57,8 +57,11 @@ function gustavShellGeometry(): THREE.BufferGeometry {
 /** Pooled projectiles drawn with one InstancedMesh per kind. */
 export class Projectiles {
   onHit: (h: Hit) => void = () => {};
-  /** Called every TRAIL_EVERY s for each shot in flight except tank shells, globs and shards; for a Gustav shell, every CONFIG.gustav.trailSpacing m. */
-  onTrail: (p: THREE.Vector3, kind: ShotKind) => void = () => {};
+  /**
+   * Called every TRAIL_EVERY s for each shot in flight except tank shells, globs and shards; for a Gustav shell, every
+   * CONFIG.gustav.trailSpacing m, with `hold` the seconds until it lands (so its whole trail can fade together).
+   */
+  onTrail: (p: THREE.Vector3, kind: ShotKind, hold?: number) => void = () => {};
   private shots: Shot[] = [];
   private free: Shot[] = [];
   private meshes: Record<ShotKind, THREE.InstancedMesh>;
@@ -231,7 +234,8 @@ export class Projectiles {
     if (step <= 0) return;
     const gap = CONFIG.gustav.trailSpacing;
     let along = gap - s.trailT;
-    for (; along <= step; along += gap) this.onTrail(_puff.lerpVectors(_prev, s.pos, along / step), s.kind);
+    const hold = Math.max(0, s.dur - s.t);
+    for (; along <= step; along += gap) this.onTrail(_puff.lerpVectors(_prev, s.pos, along / step), s.kind, hold);
     s.trailT = step - (along - gap);
   }
 

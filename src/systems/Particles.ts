@@ -111,7 +111,8 @@ class Layer {
     this.mesh.count = 0;
   }
 
-  spawn(kind: ParticleKind, x: number, y: number, z: number, vx: number, vy: number, vz: number): void {
+  /** A particle held `hold` s before it starts to age (it stays at its starting size until then). */
+  spawn(kind: ParticleKind, x: number, y: number, z: number, vx: number, vy: number, vz: number, hold = 0): void {
     if (this.n >= this.max) return;
     const i = this.n++;
     const o = i * 3;
@@ -121,7 +122,7 @@ class Layer {
     this.vel[o] = vx;
     this.vel[o + 1] = vy;
     this.vel[o + 2] = vz;
-    this.age[i] = 0;
+    this.age[i] = -hold;
     this.kind[i] = kind;
     this.mesh.setColorAt(i, _c.setHex(PRESETS[kind].color));
   }
@@ -143,7 +144,7 @@ class Layer {
       this.pos[o] = this.pos[o]! + this.vel[o]! * dt;
       this.pos[o + 1] = Math.max(0, this.pos[o + 1]! + this.vel[o + 1]! * dt);
       this.pos[o + 2] = this.pos[o + 2]! + this.vel[o + 2]! * dt;
-      const k = age / p.life;
+      const k = Math.max(0, age) / p.life;
       _s.setScalar(p.size0 + (p.size1 - p.size0) * k);
       const f = p.fadeFrom ?? 0.75;
       if (k > f) _s.multiplyScalar((1 - k) / (1 - f));
@@ -196,13 +197,14 @@ export class Particles {
     for (const l of Object.values(this.layers)) l.clear();
   }
 
-  emit(kind: ParticleKind, at: THREE.Vector3, count: number, spread = 1): void {
+  /** `hold`: seconds each particle waits before it starts to grow and fade. */
+  emit(kind: ParticleKind, at: THREE.Vector3, count: number, spread = 1, hold = 0): void {
     const p = PRESETS[kind];
     const layer = this.layers[LAYER_OF[kind]];
     for (let k = 0; k < count && !layer.full(); k++) {
       const a = Math.random() * Math.PI * 2;
       const s = p.speed * spread * (0.4 + Math.random() * 0.6);
-      layer.spawn(kind, at.x, at.y, at.z, Math.cos(a) * s, p.up * (0.5 + Math.random()), Math.sin(a) * s);
+      layer.spawn(kind, at.x, at.y, at.z, Math.cos(a) * s, p.up * (0.5 + Math.random()), Math.sin(a) * s, hold);
     }
   }
 

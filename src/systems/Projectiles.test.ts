@@ -93,6 +93,23 @@ describe('Projectiles.fireGustavShell', () => {
     for (let i = 1; i < trail.length; i++) expect(trail[i]! - trail[i - 1]!).toBeCloseTo(S, 3);
   });
 
+  it('holds each chemtrail puff until the shell lands, so the whole trail fades together', () => {
+    const p = new Projectiles(new THREE.Scene());
+    const ends: number[] = [];
+    let now = 0;
+    p.onTrail = (_at, kind, hold) => kind === 'gustav' && ends.push(now + (hold ?? 0));
+    const from = new THREE.Vector3(0, 0, 0);
+    const to = new THREE.Vector3(0, 0, 1500);
+    p.fireGustavShell(from, to, 60);
+    const flight = from.distanceTo(to) / CONFIG.gustav.shellSpeed;
+    for (let t = 0; t < flight + 0.1; t += 1 / 60) {
+      now += 1 / 60;
+      p.update(1 / 60);
+    }
+    expect(ends.length).toBeGreaterThan(10);
+    for (const e of ends) expect(e).toBeCloseTo(flight, 1);
+  });
+
   it('counts as incoming, like a shell', () => {
     const p = new Projectiles(new THREE.Scene());
     p.fireGustavShell(new THREE.Vector3(0, 60, 0), new THREE.Vector3(0, 0, 1000), 60);

@@ -55,6 +55,19 @@ describe('splash layer', () => {
   });
 });
 
+describe('Particles hold', () => {
+  it('a held particle starts ageing only once its hold runs out', () => {
+    const scene = new THREE.Scene();
+    const p = new Particles(scene);
+    const live = () => scene.children.reduce((n, m) => n + (m as THREE.InstancedMesh).count, 0);
+    p.emit('contrail', new THREE.Vector3(), 1, 0, 1);
+    p.update(PRESETS.contrail.life + 0.5);
+    expect(live()).toBe(1);
+    p.update(0.6);
+    expect(live()).toBe(0);
+  });
+});
+
 describe('contrail', () => {
   it('is a pale puff that outlasts the shell flight and spreads as it fades', () => {
     const c = PRESETS.contrail;

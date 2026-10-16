@@ -1742,15 +1742,16 @@ export class GameScene {
   };
 
   /** Shots in flight leave smoke puffs; Hungry Ghosts trail dark smoke and pale motes instead. */
-  private onShotTrail = (p: THREE.Vector3, kind: ShotKind): void => {
+  private onShotTrail = (p: THREE.Vector3, kind: ShotKind, hold = 0): void => {
     if (kind === 'wisp') {
       this.particles.emit('wraith', p, 1, 0.2);
       if (Math.random() < 0.5) this.particles.emit('wisp', p, 1, 0.3);
       return;
     }
     if (kind === 'gustav') {
-      // A chemtrail: a dense line of pale puffs that lingers and leads the eye back to the gun.
-      this.particles.emit('contrail', p, 1, 0.1);
+      // A chemtrail: a dense line of pale puffs held in place until the shell lands, then fading together, so the
+      // whole line stands still and points back to the gun.
+      this.particles.emit('contrail', p, 1, 0.1, hold);
       return;
     }
     this.particles.emit('smoke', p, 1, 0.2);
