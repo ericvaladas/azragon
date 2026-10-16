@@ -98,12 +98,12 @@ export const CONFIG = {
     napalmBomb: 0x22241f,
     napalmFire: 0xff7a1a,
     napalmScorch: 0x1c120b,
-    /** Osprey (body is `ospreyBody`): light navy grey airframe, dark trim, tinted glass, gunmetal rotors; hemp-tan net rope that reads over the monsters' dark hides. */
+    /** Osprey (body is `ospreyBody`): light navy grey airframe, dark trim, tinted glass, gunmetal rotors; safety-orange net rope that reads over the monsters' dark hides. */
     ospreyBody: 0x8f9aa6,
     ospreyDark: 0x3b434d,
     ospreyGlass: 0x7fb4c4,
     ospreyRotor: 0x1d1f22,
-    netRope: 0xd8c79a,
+    netRope: 0xff6a13,
   },
   fog: { near: 2200, far: 4700 },
   camera: {
@@ -481,7 +481,7 @@ export const CONFIG = {
     hp: 100, exp: 15, size: 80, hitRadius: 80,
     spawnDist: 2600, exitDist: 2600,
     cruiseSpeed: 220, cruiseAltitude: 650, arriveDist: 150,
-    tightHalf: 45, netHalfMult: 2.1, dropClearance: 200,
+    tightHalf: 45, netHalfMult: 2.6, dropClearance: 200,
     positionTime: 2.5, settleFrac: 0.6, tiltTime: 1.2, trackSpeed: 400,
     climbRate: 120, tightenRate: 60,
     minToDrop: 3,
