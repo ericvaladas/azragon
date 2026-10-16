@@ -19,7 +19,8 @@ export type ClothEnv = { groundY: number; body: ClothBody | null; grip: boolean;
 
 /**
  * A net as an n×n grid of points joined by ropes (to each neighbour along rows, columns and both diagonals), moved
- * by Verlet integration in fixed substeps. Pinned points sit where they are told; caught points hold their place on
+ * by Verlet integration in fixed substeps. A heavier point feels proportionally less air drag and gives way less when
+ * a rope pulls it, so weighted corners lead the fall and drag the net after them. Pinned points sit where they are told; caught points hold their place on
  * the body's frame; the rest fall, swing, and rest on the body and the ground.
  */
 export class Cloth {
@@ -33,6 +34,10 @@ export class Cloth {
   private caught: Uint8Array;
   /** Caught points' frame-local positions (lx, height above the frame, lz). */
   private local: Float32Array;
+  /** 1 / mass of each point. */
+  private invMass: Float32Array;
+  /** Gravity multiplier of each point (weights pull down harder than rope). */
+  private pull: Float32Array;
   private links: Uint16Array;
   private rest: Float32Array;
 
@@ -47,6 +52,8 @@ export class Cloth {
     this.pins = new Array<P3 | null>(this.count).fill(null);
     this.caught = new Uint8Array(this.count);
     this.local = new Float32Array(this.count * 3);
+    this.invMass = new Float32Array(this.count).fill(1);
+    this.pull = new Float32Array(this.count).fill(1);
     const pairs: number[] = [];
     const lens: number[] = [];
     const at = (i: number, j: number) => i + j * n;
@@ -75,6 +82,12 @@ export class Cloth {
   /** Holds point `k` at `at` (moving it there each step), or lets it go with null. */
   pin(k: number, at: P3 | null): void {
     this.pins[k] = at ? { x: at.x, y: at.y, z: at.z } : null;
+  }
+
+  /** Makes point `k` a weight: `mass` × an ordinary point, pulled down at `pull` × gravity. */
+  setWeight(k: number, mass: number, pull = 1): void {
+    this.invMass[k] = 1 / mass;
+    this.pull[k] = pull;
   }
 
   /** Lets go of every pin and every caught point. */
@@ -160,14 +173,15 @@ export class Cloth {
         }
         continue;
       }
-      const vx = (pos[o]! - prev[o]!) * p.damping;
-      const vy = (pos[o + 1]! - prev[o + 1]!) * p.damping;
-      const vz = (pos[o + 2]! - prev[o + 2]!) * p.damping;
+      const keep = 1 - (1 - p.damping) * this.invMass[k]!;
+      const vx = (pos[o]! - prev[o]!) * keep;
+      const vy = (pos[o + 1]! - prev[o + 1]!) * keep;
+      const vz = (pos[o + 2]! - prev[o + 2]!) * keep;
       prev[o] = pos[o]!;
       prev[o + 1] = pos[o + 1]!;
       prev[o + 2] = pos[o + 2]!;
       pos[o] = pos[o]! + vx + ax * h2;
-      pos[o + 1] = pos[o + 1]! + vy - p.gravity * h2;
+      pos[o + 1] = pos[o + 1]! + vy - p.gravity * this.pull[k]! * h2;
       pos[o + 2] = pos[o + 2]! + vz + az * h2;
     }
     for (let it = 0; it < p.iterations; it++) {
@@ -176,14 +190,14 @@ export class Cloth {
     }
   }
 
-  /** Pulls each rope back toward its rest length; fixed points do not move. */
+  /** Pulls each rope back toward its rest length, moving each end by its share of 1 / mass; fixed points do not move. */
   private tighten(): void {
-    const { pos, links, rest } = this;
+    const { pos, links, rest, invMass } = this;
     for (let l = 0; l < rest.length; l++) {
       const a = links[l * 2]!;
       const b = links[l * 2 + 1]!;
-      const fa = this.fixed(a) ? 0 : 1;
-      const fb = this.fixed(b) ? 0 : 1;
+      const fa = this.fixed(a) ? 0 : invMass[a]!;
+      const fb = this.fixed(b) ? 0 : invMass[b]!;
       if (fa + fb === 0) continue;
       const dx = pos[b * 3]! - pos[a * 3]!;
       const dy = pos[b * 3 + 1]! - pos[a * 3 + 1]!;

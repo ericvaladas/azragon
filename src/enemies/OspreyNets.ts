@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { CONFIG } from '../config';
 import type { Target } from '../combat';
-import { toonMat } from '../render/toon';
+import { faceted, toonMat } from '../render/toon';
 import type { EnemySystem, WorldContext } from './types';
 import { Cloth, type ClothBody, type ClothEnv } from './cloth';
 import {
@@ -34,6 +34,8 @@ type Net = {
   cloth: Cloth;
   pts: P3[];
   mesh: THREE.LineSegments<THREE.BufferGeometry, THREE.LineBasicMaterial>;
+  /** The weights on the corners (CORNERS order), sharing one material that fades with the net. */
+  weights: THREE.Mesh<THREE.BufferGeometry, THREE.MeshToonMaterial>[];
 };
 
 /** A squad: its shared flight, its four Ospreys in slot order, and the net while they still carry it. */
@@ -97,6 +99,7 @@ export class OspreyNets implements EnemySystem {
   private podGeo = podGeometry();
   private rotorGeo = rotorGeometry();
   private discGeo = rotorDiscGeometry();
+  private weightGeo = faceted(new THREE.IcosahedronGeometry(O.cloth.weightSize / 2, 0));
   private rotorMat = toonMat(P.ospreyRotor);
   private discMat = new THREE.MeshBasicMaterial({ color: P.ospreyRotor, transparent: true, opacity: 0.22, depthWrite: false, side: THREE.DoubleSide });
 
@@ -352,7 +355,9 @@ export class OspreyNets implements EnemySystem {
       else if (!net.toMonster && net.cloth.touchedGround) this.toGround(net);
     } else if (net.mode === 'ground') {
       net.t += dt;
-      net.mesh.material.opacity = Math.max(0, Math.min(1, O.groundLife - net.t));
+      const fade = Math.max(0, Math.min(1, O.groundLife - net.t));
+      net.mesh.material.opacity = fade;
+      net.weights[0]!.material.opacity = fade;
       if (net.t >= O.groundLife) return false;
     }
     net.cloth.write(net.pts);
@@ -374,7 +379,16 @@ export class OspreyNets implements EnemySystem {
     const cloth = new Cloth(NET_N + 1, (2 * s.half * (1 + O.cloth.slack)) / NET_N);
     cloth.layout(pts);
     for (const o of team.ospreys) cloth.pin(CORNERS[o.slot]!, corners[o.slot]!);
-    const net: Net = { mode: 'carried', t: 0, toMonster: false, cloth, pts, mesh };
+    for (const k of CORNERS) cloth.setWeight(k, O.cloth.cornerMass, O.cloth.cornerPull);
+    const weightMat = toonMat(P.ospreyDark);
+    weightMat.transparent = true;
+    const weights = CORNERS.map(() => {
+      const w = new THREE.Mesh(this.weightGeo, weightMat);
+      w.castShadow = true;
+      this.scene.add(w);
+      return w;
+    });
+    const net: Net = { mode: 'carried', t: 0, toMonster: false, cloth, pts, mesh, weights };
     this.nets.push(net);
     this.drawNet(net);
     return net;
@@ -384,11 +398,14 @@ export class OspreyNets implements EnemySystem {
     const attr = net.mesh.geometry.getAttribute('position') as THREE.BufferAttribute;
     gridSegments(net.pts, attr.array as Float32Array);
     attr.needsUpdate = true;
+    CORNERS.forEach((k, c) => net.weights[c]!.position.set(net.pts[k]!.x, net.pts[k]!.y, net.pts[k]!.z));
   }
 
   private dropNet(net: Net): void {
     this.scene.remove(net.mesh);
     net.mesh.geometry.dispose();
     net.mesh.material.dispose();
+    for (const w of net.weights) this.scene.remove(w);
+    net.weights[0]!.material.dispose();
   }
 }

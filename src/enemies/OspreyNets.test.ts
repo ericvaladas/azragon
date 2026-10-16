@@ -75,6 +75,31 @@ describe('OspreyNets', () => {
     expect(nets.netModes()).toEqual(['snared']);
   });
 
+  it('the weighted corners lead the net down once it is released', () => {
+    /** How far the corners sit above the net's centre 0.6 s after release, for corners of `mass` pulled at `pull` × gravity. */
+    const leadAfterRelease = (mass: number, pull: number): number => {
+      const cloth = CONFIG.osprey.cloth as { cornerMass: number; cornerPull: number };
+      const saved = { ...cloth };
+      cloth.cornerMass = mass;
+      cloth.cornerPull = pull;
+      try {
+        const { nets, ctx } = spawned();
+        until(nets, ctx, () => nets.netModes()[0] === 'falling');
+        for (let t = 0; t < 0.6; t += DT) nets.update(DT, ctx);
+        const p = nets.netPoints(0);
+        const n = Math.round(Math.sqrt(p.length));
+        const centre = p[(n * n - 1) / 2]!.y;
+        return Math.max(...[0, n - 1, n * n - 1, n * (n - 1)].map((k) => p[k]!.y)) - centre;
+      } finally {
+        cloth.cornerMass = saved.cornerMass;
+        cloth.cornerPull = saved.cornerPull;
+      }
+    };
+    const weighted = leadAfterRelease(O.cloth.cornerMass, O.cloth.cornerPull);
+    expect(weighted).toBeLessThan(0);
+    expect(weighted).toBeLessThan(leadAfterRelease(1, 1) - 30);
+  });
+
   it('still snares with one Osprey shot down', () => {
     const { nets, ctx, snares, destroyed } = spawned();
     kill(nets.targets()[0]!);

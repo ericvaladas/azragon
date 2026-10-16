@@ -42,6 +42,23 @@ describe('Cloth', () => {
     expect(mean(points(cloth), 'y')).toBeLessThan(-0.3 * 0.5 * C.gravity * 0.25);
   });
 
+  it('heavy corners fall faster than the rest of the sheet', () => {
+    const cloth = sheet(10, 0);
+    const corners = [0, N - 1, N * N - 1, N * (N - 1)];
+    for (const k of corners) cloth.setWeight(k, 5);
+    run(cloth, 1, env());
+    const p = points(cloth);
+    const centre = p[(N * N - 1) / 2]!.y;
+    for (const k of corners) expect(p[k]!.y).toBeLessThan(centre - 5);
+  });
+
+  it('a sheet of equal masses falls level', () => {
+    const cloth = sheet(10, 0);
+    run(cloth, 1, env());
+    const p = points(cloth);
+    expect(Math.abs(p[0]!.y - p[(N * N - 1) / 2]!.y)).toBeLessThan(1);
+  });
+
   it('keeps its ropes near their length while hanging from two corners', () => {
     const cloth = sheet(10, 0);
     cloth.pin(0, { x: -40, y: 0, z: -40 });

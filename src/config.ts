@@ -493,9 +493,10 @@ export const CONFIG = {
      * length beyond the carried span (slack, a fraction), sliding loss on contact (friction), rest height above a
      * surface (thickness, m), deepest a point is lifted onto the body (maxPush, m; deeper points are under it, not on
      * it), the share of the monster's height above which contact catches the rope (catchFrac), the falling net's pull
-     * back over its target (homing, rad/s), and the substep length (s).
+     * back over its target (homing, rad/s), the substep length (s), and the corner weights: cornerMass × an
+     * ordinary point, pulled down at cornerPull × gravity so they lead the fall, drawn as balls weightSize m across.
      */
-    cloth: { gravity: 400, damping: 0.985, iterations: 8, slack: 0.15, friction: 0.6, thickness: 8, maxPush: 60, catchFrac: 0.45, homing: 5, substep: 1 / 60 },
+    cloth: { cornerMass: 5, cornerPull: 3, weightSize: 10, gravity: 400, damping: 0.985, iterations: 8, slack: 0.15, friction: 0.6, thickness: 8, maxPush: 60, catchFrac: 0.45, homing: 5, substep: 1 / 60 },
   },
   jet: { hp: 60, speed: 286, altitude: 430 * MONSTER_SCALE, turnRate: 0.9, damage: 10, rocketsPerSalvo: 3, salvoMin: 700, salvoMax: 1600, rocketSpeed: 650, exp: 15, size: 70, hitRadius: 90, exitDistance: 2600 },
   director: {
