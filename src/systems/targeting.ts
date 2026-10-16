@@ -15,7 +15,7 @@ export function nearestWithin<T>(center: P3, radius: number, items: readonly T[]
 }
 
 /** Acid Mortar priority: the threats that are hardest to reach on foot come first. */
-const PRIORITY: Record<string, number> = { artillery: 0, sam: 1, truck: 2, tank: 3 };
+const PRIORITY: Record<string, number> = { artillery: 0, gustav: 0.5, sam: 1, truck: 2, tank: 3 };
 
 type GroundTarget = { kind: string; position: P3; airborne: boolean; isAlive(): boolean };
 

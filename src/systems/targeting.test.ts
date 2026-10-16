@@ -22,6 +22,13 @@ describe('mortarTargets', () => {
     airborne: opts.airborne ?? false,
     isAlive: () => opts.alive ?? true,
   });
+  it('ranks a Schwerer Gustav after artillery and before SAM silos', () => {
+    const art = t('artillery', 1500);
+    const gustav = t('gustav', 1100);
+    const sam = t('sam', 300);
+    expect(mortarTargets(P(0, 0, 0), 1800, [sam, gustav, art], 3)).toEqual([art, gustav, sam]);
+  });
+
   it('prioritises artillery, then SAM silos, then trucks, then tanks; ground only, in range', () => {
     const tank = t('tank', 100);
     const truck = t('truck', 900);

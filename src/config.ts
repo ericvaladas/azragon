@@ -443,7 +443,8 @@ export const CONFIG = {
   /**
    * Schwerer Gustav, a gigantic tracked land battleship (`size` m nose to tail). It follows the roads toward the
    * monster at `speed` m/s (re-planning every replanEvery s), its hull turning at turnRate rad/s, and flattens
-   * standing buildings within crushRadius m at crushDps. Within `range` m it stops and turns its gun at aimRate rad/s;
+   * standing buildings within crushRadius m at crushDps. Within `range` m it stops (driving on only once the monster is
+   * more than disengageMargin m beyond that) and turns its gun at aimRate rad/s;
    * within aimTolerance rad it fires one shell straight at the monster every fireCooldown s (the first
    * firstShotMin..firstShotMax s after it stops) for `damage`. The shell flies shellFlightTime s on an arc peaking
    * shellArc m, is drawn shellSize m across, and trails smoke. Each shot shakes the screen by fireShake. Destroyed,
@@ -451,7 +452,7 @@ export const CONFIG = {
    */
   gustav: {
     hp: 600, exp: 60, size: 160, speed: 25, turnRate: 0.6, replanEvery: 4,
-    range: 1100, aimRate: 0.5, aimTolerance: 0.05, damage: 60, fireCooldown: 10, firstShotMin: 3, firstShotMax: 6,
+    range: 1100, disengageMargin: 100, aimRate: 0.5, aimTolerance: 0.05, damage: 60, fireCooldown: 10, firstShotMin: 3, firstShotMax: 6,
     shellFlightTime: 1.8, shellArc: 160, shellSize: 32, fireShake: 0.35,
     crushRadius: 70, crushDps: 300, deathBlastRadius: 220, deathBlastDamage: 600,
   },

@@ -143,7 +143,8 @@ export class GustavFleet implements EnemySystem {
       ctx.damageBuildings(here, G.crushRadius, G.crushDps * dt);
       const aim = Math.atan2(goal.x - here.x, goal.z - here.z);
       g.turretYaw = turn(g.turretYaw, aim, G.aimRate * dt);
-      if (dist2(here, goal) <= G.range) {
+      // Once stopped it holds until the monster is clearly out of range, so a monster at the edge can't stall its fire.
+      if (dist2(here, goal) <= G.range + (g.engaged ? G.disengageMargin : 0)) {
         if (!g.engaged) {
           g.engaged = true;
           g.fireCd = G.firstShotMin + ctx.rng() * (G.firstShotMax - G.firstShotMin);
@@ -156,7 +157,11 @@ export class GustavFleet implements EnemySystem {
         }
         continue;
       }
-      g.engaged = false;
+      if (g.engaged) {
+        // Driving again: the old route led to where the monster was, so plan afresh.
+        g.engaged = false;
+        g.path = [];
+      }
       g.replanT -= dt;
       if (g.path.length === 0 || g.replanT <= 0) {
         g.path = ctx.roads.path(here, goal);

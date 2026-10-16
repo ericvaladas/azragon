@@ -90,6 +90,36 @@ describe('GustavFleet', () => {
     expect(c.shots.length).toBe(shots);
   });
 
+  it('holds its ground and keeps firing while the monster lingers just past range', () => {
+    const f = new GustavFleet(new THREE.Scene());
+    const c = makeCtx();
+    f.spawnAt(0, 0, c.ctx);
+    run(f, c, 20);
+    const g = f.targets()[0]!;
+    const x0 = g.position.x;
+    const fired = c.shots.length;
+    c.monster.position.set(x0 + G.range + G.disengageMargin / 2, 0, 0);
+    run(f, c, 25);
+    expect(g.position.x).toBe(x0);
+    expect(c.shots.length).toBeGreaterThanOrEqual(fired + 2);
+  });
+
+  it('plans a fresh route to the monster the moment it walks out of range', () => {
+    const f = new GustavFleet(new THREE.Scene());
+    const c = makeCtx();
+    const asked: Vec2[] = [];
+    (c.ctx.roads as { path: (a: Vec2, b: Vec2) => Vec2[] }).path = (_a, b) => {
+      asked.push({ x: b.x, z: b.z });
+      return [{ x: b.x, z: b.z }];
+    };
+    f.spawnAt(0, 0, c.ctx);
+    run(f, c, 10);
+    c.monster.position.set(0, 0, -3000);
+    asked.length = 0;
+    run(f, c, DT);
+    expect(asked).toEqual([{ x: 0, z: -3000 }]);
+  });
+
   it('re-plans toward a moving monster', () => {
     const f = new GustavFleet(new THREE.Scene());
     const c = makeCtx();
