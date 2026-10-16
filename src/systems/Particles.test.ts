@@ -56,9 +56,9 @@ describe('splash layer', () => {
 });
 
 describe('contrail', () => {
-  it('is a pale, long-lived puff that spreads as it fades', () => {
+  it('is a pale puff that outlasts the shell flight and spreads as it fades', () => {
     const c = PRESETS.contrail;
-    expect(c.life).toBeGreaterThanOrEqual(3.5);
+    expect(c.life).toBeGreaterThan(CONFIG.gustav.range / CONFIG.gustav.shellSpeed);
     expect(c.size1).toBeGreaterThan(c.size0 * 2);
     expect(c.gravity).toBe(0);
   });

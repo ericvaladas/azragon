@@ -48,7 +48,7 @@ After the first look, the owner asked for these changes. They replace the matchi
 - **Second round of changes:**
   - **Speed:** 40 m/s, up from 25.
   - **HP:** 450, down from 600.
-  - **Chemtrail:** the shell lays a puff every `trailSpacing` 12 m along its path. The puffs are the pale, long-lived `contrail` particle (4 s), on their own particle layer of 300 so they never crowd out other dust.
+  - **Chemtrail:** the shell lays a puff every `trailSpacing` 12 m along its path. The puffs are the pale `contrail` particle (1.8 s; 4 s at first, then shortened so the trail clears faster), on their own particle layer of 300 so they never crowd out other dust.
 
 ## Visuals
 
