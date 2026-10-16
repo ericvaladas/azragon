@@ -104,6 +104,14 @@ export const CONFIG = {
     ospreyGlass: 0x7fb4c4,
     ospreyRotor: 0x1d1f22,
     netRope: 0xff6a13,
+    /** Schwerer Gustav (hull is `gustav`): dark panzer grey, darker carriage and tracks, gunmetal fittings, rust weathering, yellow-and-black hazard band. */
+    gustav: 0x4d5357,
+    gustavDark: 0x2e3235,
+    gustavTrack: 0x222324,
+    gustavMetal: 0x3a3d3f,
+    gustavRust: 0x7a4a2a,
+    gustavHazard: 0xf2c230,
+    gustavHazardDark: 0x1e1e1e,
   },
   fog: { near: 2200, far: 4700 },
   camera: {
