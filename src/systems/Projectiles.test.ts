@@ -58,3 +58,26 @@ describe('Projectiles.fireWisp and fireShard', () => {
     expect(p.incoming()).toHaveLength(0);
   });
 });
+
+describe('Projectiles.fireGustavShell', () => {
+  it('flies for the Gustav flight time, trailing smoke, and lands as a gustav hit with its damage', () => {
+    const p = new Projectiles(new THREE.Scene());
+    const hits: { kind: string; damage: number }[] = [];
+    const trail: string[] = [];
+    p.onHit = (h) => hits.push({ kind: h.kind, damage: h.damage });
+    p.onTrail = (_at, kind) => trail.push(kind);
+    p.fireGustavShell(new THREE.Vector3(0, 60, 0), new THREE.Vector3(0, 200, 1000), 60);
+    for (let t = 0; t < CONFIG.gustav.shellFlightTime - 0.1; t += 0.05) p.update(0.05);
+    expect(hits).toEqual([]);
+    expect(trail.length).toBeGreaterThan(10);
+    expect(new Set(trail)).toEqual(new Set(['gustav']));
+    for (let t = 0; t < 0.3; t += 0.05) p.update(0.05);
+    expect(hits).toEqual([{ kind: 'gustav', damage: 60 }]);
+  });
+
+  it('counts as incoming, like a shell', () => {
+    const p = new Projectiles(new THREE.Scene());
+    p.fireGustavShell(new THREE.Vector3(0, 60, 0), new THREE.Vector3(0, 0, 1000), 60);
+    expect(p.incoming().map((s) => s.kind)).toEqual(['gustav']);
+  });
+});

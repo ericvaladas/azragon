@@ -4,8 +4,8 @@ import type { Target } from '../combat';
 import { faceted } from '../render/toon';
 import { ballistic } from './projectileMath';
 
-/** `wisp`: a Hungry Ghost (homes like a spike). `shard`: a cosmetic Bone Ward shard. */
-export type ShotKind = 'spike' | 'shell' | 'rocket' | 'glob' | 'chunk' | 'wisp' | 'shard';
+/** `wisp`: a Hungry Ghost (homes like a spike). `shard`: a cosmetic Bone Ward shard. `gustav`: the Schwerer Gustav's huge shell. */
+export type ShotKind = 'spike' | 'shell' | 'rocket' | 'glob' | 'chunk' | 'wisp' | 'shard' | 'gustav';
 /** An enemy shell or rocket in flight, as seen by Spine Shield. */
 export type InFlight = { readonly kind: ShotKind; readonly pos: THREE.Vector3 };
 export type Hit = { kind: ShotKind; point: THREE.Vector3; target: Target | null; damage: number };
@@ -39,7 +39,7 @@ const SHARD_SPEED = 2400;
 /** Pooled projectiles drawn with one InstancedMesh per kind. */
 export class Projectiles {
   onHit: (h: Hit) => void = () => {};
-  /** Called every TRAIL_EVERY s for each shot in flight except shells, globs and shards. */
+  /** Called every TRAIL_EVERY s for each shot in flight except tank shells, globs and shards (the Gustav's shell trails). */
   onTrail: (p: THREE.Vector3, kind: ShotKind) => void = () => {};
   private shots: Shot[] = [];
   private free: Shot[] = [];
@@ -52,6 +52,7 @@ export class Projectiles {
     chunk: [60, 60, 60],
     wisp: [30, 42, 30],
     shard: [18, 64, 18],
+    gustav: [CONFIG.gustav.shellSize, CONFIG.gustav.shellSize, CONFIG.gustav.shellSize],
   };
 
   constructor(scene: THREE.Scene) {
@@ -72,6 +73,7 @@ export class Projectiles {
       chunk: make('shot-chunk', faceted(new THREE.DodecahedronGeometry(0.5, 0)), CONFIG.kraken.colors.chunk, 32),
       wisp: make('shot-wisp', faceted(new THREE.IcosahedronGeometry(0.5, 0)), CONFIG.wendigo.colors.ghost, 64),
       shard: make('shot-shard', faceted(new THREE.ConeGeometry(0.5, 1, 4)), CONFIG.wendigo.colors.boneShard, 48),
+      gustav: make('shot-gustav', faceted(new THREE.IcosahedronGeometry(0.5, 0)), 0xff8a2a, 16),
     };
   }
 
@@ -116,6 +118,12 @@ export class Projectiles {
     s.dur = CONFIG.tank.shellFlightTime;
   }
 
+  /** The Schwerer Gustav's shell: a shell's flight on its own arc and time; it trails smoke. */
+  fireGustavShell(from: THREE.Vector3, to: THREE.Vector3, damage: number): void {
+    const s = this.alloc('gustav', from, to, damage, null);
+    s.dur = CONFIG.gustav.shellFlightTime;
+  }
+
   /** Acid Mortar glob: a high ballistic lob that splashes where it lands. */
   fireGlob(from: THREE.Vector3, to: THREE.Vector3, damage: number): void {
     const s = this.alloc('glob', from, to, damage, null);
@@ -140,9 +148,9 @@ export class Projectiles {
     s.dur = Math.min(0.25, Math.max(0.08, from.distanceTo(to) / SHARD_SPEED));
   }
 
-  /** Enemy shells and rockets in flight. */
+  /** Enemy shells (tank and Gustav) and rockets in flight. */
   incoming(): readonly InFlight[] {
-    return this.shots.filter((s) => s.kind === 'shell' || s.kind === 'rocket');
+    return this.shots.filter((s) => s.kind === 'shell' || s.kind === 'rocket' || s.kind === 'gustav');
   }
 
   /** Destroy an in-flight shot without it hitting anything. Returns false if it was already gone. */
@@ -177,6 +185,7 @@ export class Projectiles {
       } else {
         const k = Math.min(1, s.t / s.dur);
         if (s.kind === 'shell') ballistic(s.from, s.aim, CONFIG.tank.shellArc, k, s.pos);
+        else if (s.kind === 'gustav') ballistic(s.from, s.aim, CONFIG.gustav.shellArc, k, s.pos);
         else if (s.kind === 'glob') ballistic(s.from, s.aim, CONFIG.passives.mortar.arc, k, s.pos);
         else if (s.kind === 'chunk') ballistic(s.from, s.aim, CONFIG.kraken.arms.hurl.arc, k, s.pos);
         else s.pos.lerpVectors(s.from, s.aim, k);
@@ -198,7 +207,7 @@ export class Projectiles {
   }
 
   private draw(): void {
-    const counts: Record<ShotKind, number> = { spike: 0, shell: 0, rocket: 0, glob: 0, chunk: 0, wisp: 0, shard: 0 };
+    const counts: Record<ShotKind, number> = { spike: 0, shell: 0, rocket: 0, glob: 0, chunk: 0, wisp: 0, shard: 0, gustav: 0 };
     for (const s of this.shots) {
       const mesh = this.meshes[s.kind];
       const i = counts[s.kind]++;

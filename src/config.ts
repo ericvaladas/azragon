@@ -433,6 +433,21 @@ export const CONFIG = {
   blimp: { hp: 180, speed: 44, size: 136, spawnDist: 2200, altitude: 520, headHeight: 330, triggerDist: 190, damage: 120, exp: 25 },
   tank: { hp: 30, speed: 50, range: 950, damage: 6, fireCooldown: 3.2, shellFlightTime: 1.6, shellArc: 140, exp: 5, size: 48 },
   /**
+   * Schwerer Gustav, a gigantic tracked land battleship (`size` m nose to tail). It follows the roads toward the
+   * monster at `speed` m/s (re-planning every replanEvery s), its hull turning at turnRate rad/s, and flattens
+   * standing buildings within crushRadius m at crushDps. Within `range` m it stops and turns its gun at aimRate rad/s;
+   * within aimTolerance rad it fires one shell straight at the monster every fireCooldown s (the first
+   * firstShotMin..firstShotMax s after it stops) for `damage`. The shell flies shellFlightTime s on an arc peaking
+   * shellArc m, is drawn shellSize m across, and trails smoke. Each shot shakes the screen by fireShake. Destroyed,
+   * it blasts buildings within deathBlastRadius m for deathBlastDamage.
+   */
+  gustav: {
+    hp: 600, exp: 60, size: 160, speed: 25, turnRate: 0.6, replanEvery: 4,
+    range: 1100, aimRate: 0.5, aimTolerance: 0.05, damage: 60, fireCooldown: 10, firstShotMin: 3, firstShotMax: 6,
+    shellFlightTime: 1.8, shellArc: 160, shellSize: 32, fireShake: 0.35,
+    crushRadius: 70, crushDps: 300, deathBlastRadius: 220, deathBlastDamage: 600,
+  },
+  /**
    * Attack helicopters: spawn spawnMin..spawnMax m out, fly in at up to approachSpeed (closing speed eases off as
    * approachGain × distance-to-orbit, tangential speed fading in over fadeDist), then circle a centre that eases
    * toward the monster (centreFollow /s, at most centreMaxSpeed m/s) at `radius` m and `altitude`, at orbitSpeed. "On orbit" is within settleDist
