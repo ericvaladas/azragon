@@ -54,3 +54,12 @@ describe('splash layer', () => {
     expect(counts(scene)).toEqual([200, 500]);
   });
 });
+
+describe('contrail', () => {
+  it('is a pale, long-lived puff that spreads as it fades', () => {
+    const c = PRESETS.contrail;
+    expect(c.life).toBeGreaterThanOrEqual(3.5);
+    expect(c.size1).toBeGreaterThan(c.size0 * 2);
+    expect(c.gravity).toBe(0);
+  });
+});

@@ -70,7 +70,7 @@ describe('GustavFleet', () => {
     expect(g.position.x).toBeGreaterThan(stopAt - G.speed * DT * 2);
     expect(g.position.x).toBeLessThan(stopAt + G.speed * DT * 2);
     const reach = stopAt / G.speed;
-    expect(c.shots.length).toBe(3);
+    expect(c.shots.length).toBe(Math.floor((40 - c.shots[0]!.t) / G.fireCooldown + 1e-6) + 1);
     expect(c.shots[0]!.t).toBeGreaterThanOrEqual(reach + G.firstShotMin - DT);
     expect(c.shots[0]!.t).toBeLessThanOrEqual(reach + G.firstShotMax + DT * 2);
     for (let i = 1; i < c.shots.length; i++) expect(c.shots[i]!.t - c.shots[i - 1]!.t).toBeCloseTo(G.fireCooldown, 0);
@@ -143,15 +143,14 @@ describe('GustavFleet', () => {
     expect(c.crushes).toEqual([]);
   });
 
-  it('each shot throws up a dust cloud around the Gustav', () => {
+  it('fires without throwing up a dust cloud around itself', () => {
     const f = new GustavFleet(new THREE.Scene());
     const c = makeCtx();
     f.spawnAt(0, 0, c.ctx);
     run(f, c, 25);
     const g = f.targets()[0]!;
-    const clouds = c.rings.filter((r) => r.kind === 'dust' && Math.hypot(r.x - g.position.x, r.z - g.position.z) < 1 && r.r >= G.blowbackRadius);
     expect(c.shots.length).toBeGreaterThan(0);
-    expect(clouds.length).toBe(c.shots.length);
+    expect(c.rings.filter((r) => Math.hypot(r.x - g.position.x, r.z - g.position.z) < 1)).toEqual([]);
   });
 
   it('is drawn just wider than a road', () => {

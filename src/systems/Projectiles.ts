@@ -34,6 +34,8 @@ const _d = new THREE.Vector3();
 const _fwd = new THREE.Vector3(0, 1, 0);
 const _yaxis = new THREE.Vector3(0, 1, 0);
 const _p = new THREE.Vector3();
+const _prev = new THREE.Vector3();
+const _puff = new THREE.Vector3();
 /** Bone Ward shards (m/s); their flight is capped so they never lag the intercept they show. */
 const SHARD_SPEED = 2400;
 
@@ -55,7 +57,7 @@ function gustavShellGeometry(): THREE.BufferGeometry {
 /** Pooled projectiles drawn with one InstancedMesh per kind. */
 export class Projectiles {
   onHit: (h: Hit) => void = () => {};
-  /** Called every TRAIL_EVERY s for each shot in flight except tank shells, globs and shards (the Gustav's shell trails). */
+  /** Called every TRAIL_EVERY s for each shot in flight except tank shells, globs and shards; for a Gustav shell, every CONFIG.gustav.trailSpacing m. */
   onTrail: (p: THREE.Vector3, kind: ShotKind) => void = () => {};
   private shots: Shot[] = [];
   private free: Shot[] = [];
@@ -187,6 +189,7 @@ export class Projectiles {
     for (let i = this.shots.length - 1; i >= 0; i--) {
       const s = this.shots[i]!;
       s.t += dt;
+      _prev.copy(s.pos);
       let done = false;
       if (s.kind === 'spike' || s.kind === 'wisp') {
         if (s.target?.isAlive()) s.aim.copy(s.target.position);
@@ -207,8 +210,9 @@ export class Projectiles {
         s.vel.subVectors(s.aim, s.from);
         done = k >= 1;
       }
-      s.trailT += dt;
-      if (s.kind !== 'shell' && s.kind !== 'glob' && s.kind !== 'shard' && s.trailT >= TRAIL_EVERY) {
+      if (s.kind === 'gustav') this.chemtrail(s);
+      else s.trailT += dt;
+      if (s.kind !== 'shell' && s.kind !== 'glob' && s.kind !== 'shard' && s.kind !== 'gustav' && s.trailT >= TRAIL_EVERY) {
         s.trailT = 0;
         this.onTrail(s.pos, s.kind);
       }
@@ -219,6 +223,16 @@ export class Projectiles {
       }
     }
     this.draw();
+  }
+
+  /** Gustav shells: a puff every CONFIG.gustav.trailSpacing m along this step (`trailT` holds metres since the last). */
+  private chemtrail(s: Shot): void {
+    const step = s.pos.distanceTo(_prev);
+    if (step <= 0) return;
+    const gap = CONFIG.gustav.trailSpacing;
+    let along = gap - s.trailT;
+    for (; along <= step; along += gap) this.onTrail(_puff.lerpVectors(_prev, s.pos, along / step), s.kind);
+    s.trailT = step - (along - gap);
   }
 
   private draw(): void {

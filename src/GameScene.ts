@@ -1749,9 +1749,8 @@ export class GameScene {
       return;
     }
     if (kind === 'gustav') {
-      // A thick, lingering trail that leads the eye back to the gun.
-      this.particles.emit('trail', p, 2, 0.4);
-      this.particles.emit('smoke', p, 1, 0.3);
+      // A chemtrail: a dense line of pale puffs that lingers and leads the eye back to the gun.
+      this.particles.emit('contrail', p, 1, 0.1);
       return;
     }
     this.particles.emit('smoke', p, 1, 0.2);

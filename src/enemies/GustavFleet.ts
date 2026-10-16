@@ -60,7 +60,7 @@ class Gustav implements Target {
 /**
  * Schwerer Gustav land battleships (at most CONFIG.spawns.gustav.cap): each follows the roads toward the monster and,
  * within range, stops, swings its gun round and fires a huge shell straight at the monster on a slow reload, each shot
- * kicking the turret back and throwing up a dust cloud. Drawn as two vertex-coloured InstancedMeshes (hull, narrowed to
+ * kicking the turret back. Drawn as two vertex-coloured InstancedMeshes (hull, narrowed to
  * CONFIG.gustav.width; turret with gun).
  */
 export class GustavFleet implements EnemySystem {
@@ -140,7 +140,7 @@ export class GustavFleet implements EnemySystem {
       _v.set(g.position.x + Math.sin(g.heading) * G.size * k, g.position.y, g.position.z + Math.cos(g.heading) * G.size * k);
       ctx.particles.explosion(_v, 2.2);
     }
-    ctx.particles.ring('dust', _v.set(g.position.x, 0, g.position.z), G.blowbackRadius * 1.5, 24);
+    ctx.particles.ring('dust', _v.set(g.position.x, 0, g.position.z), G.size * 1.4, 24);
     ctx.shake(0.6);
     ctx.onDestroyed(g, G.exp);
   };
@@ -198,21 +198,13 @@ export class GustavFleet implements EnemySystem {
     this.draw();
   }
 
-  /**
-   * One shell from the muzzle at the monster's chest: a big muzzle blast, the blowback (a dust cloud billowing out
-   * around the Gustav and a blast of smoke behind the breech), a recoil kick and a shake.
-   */
+  /** One shell from the muzzle at the monster's chest: a big muzzle blast, a recoil kick and a shake. */
   private fire(g: Gustav, ctx: WorldContext): void {
     const muzzle = gustavMuzzle(g.turretYaw, G.size, new THREE.Vector3()).add(_v.set(g.position.x, 0, g.position.z));
     const target = ctx.monster.position.clone().setY(ctx.monster.position.y + ctx.monster.height * 0.55);
     ctx.fireGustavShell(muzzle, target, G.damage);
     ctx.particles.emit('fire', muzzle, 14, 1.4);
     ctx.particles.emit('smoke', muzzle, 10, 1.8);
-    const ground = _v.set(g.position.x, 0, g.position.z);
-    ctx.particles.ring('dust', ground, G.blowbackRadius, 32);
-    ctx.particles.emit('billow', ground.setY(10), 6, 1.2);
-    ground.set(g.position.x - Math.sin(g.turretYaw) * G.size * 0.35, G.size * 0.3, g.position.z - Math.cos(g.turretYaw) * G.size * 0.35);
-    ctx.particles.emit('smoke', ground, 12, 2);
     g.recoilT = 0;
     ctx.shake(G.fireShake);
   }

@@ -82,6 +82,17 @@ describe('Projectiles.fireGustavShell', () => {
     expect(hits).toEqual([{ kind: 'gustav', damage: 60 }]);
   });
 
+  it('lays a chemtrail: a puff every trailSpacing metres along its path', () => {
+    const p = new Projectiles(new THREE.Scene());
+    const trail: number[] = [];
+    p.onTrail = (at, kind) => kind === 'gustav' && trail.push(at.z);
+    p.fireGustavShell(new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, 1500), 60);
+    for (let t = 0; t < 2; t += 1 / 60) p.update(1 / 60);
+    const S = CONFIG.gustav.trailSpacing;
+    expect(trail.length).toBeGreaterThanOrEqual(Math.floor(1500 / S) - 1);
+    for (let i = 1; i < trail.length; i++) expect(trail[i]! - trail[i - 1]!).toBeCloseTo(S, 3);
+  });
+
   it('counts as incoming, like a shell', () => {
     const p = new Projectiles(new THREE.Scene());
     p.fireGustavShell(new THREE.Vector3(0, 60, 0), new THREE.Vector3(0, 0, 1000), 60);

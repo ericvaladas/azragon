@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { CONFIG } from '../config';
 import { faceted } from '../render/toon';
 
-export type ParticleKind = 'dust' | 'debris' | 'fire' | 'smoke' | 'spark' | 'acid' | 'plasma' | 'trail' | 'ink' | 'rot' | 'shade' | 'mist' | 'bone' | 'wisp' | 'hexfire' | 'hexember' | 'wraith' | 'billow' | 'veil' | 'splash' | 'napalm' | 'ember';
+export type ParticleKind = 'dust' | 'debris' | 'fire' | 'smoke' | 'spark' | 'acid' | 'plasma' | 'trail' | 'ink' | 'rot' | 'shade' | 'mist' | 'bone' | 'wisp' | 'hexfire' | 'hexember' | 'wraith' | 'billow' | 'veil' | 'splash' | 'napalm' | 'ember' | 'contrail';
 
 /**
  * `stretch`: drawn upright and this many times taller than wide, flickering (flame tongues) instead of tumbling.
@@ -19,6 +19,8 @@ export const PRESETS: Record<ParticleKind, Preset> = {
   smoke: { color: P.smoke, life: 1.4, size0: 18, size1: 60, speed: 40, up: 70, gravity: -20, drag: 1.2 },
   /** Long-lived streak puffs for artillery shells, so their arc points back to the guns. */
   trail: { color: 0xe9e4da, life: 2.6, size0: 16, size1: 30, speed: 4, up: 4, gravity: 0, drag: 2 },
+  /** A chemtrail puff behind a Gustav shell: pale, slow, swelling as it lingers. */
+  contrail: { color: 0xf4f2ec, life: 4, size0: 14, size1: 46, speed: 3, up: 2, gravity: 0, drag: 2 },
   acid: { color: P.acid, life: 0.7, size0: 26, size1: 6, speed: 150, up: 90, gravity: 120, drag: 1 },
   /** Wendigo decay: black-green clumps of rot that splatter and fall. */
   rot: { color: W.rot, life: 0.9, size0: 26, size1: 8, speed: 150, up: 100, gravity: 170, drag: 1.2 },
@@ -62,10 +64,11 @@ const HIDDEN = new THREE.Matrix4().makeScale(0, 0, 0);
 /** `murk`: the Wendigo's dark smoke and mist, dense enough to read as dark over light ground. */
 /** `cloud`: the intro's crater cloud: where it is thick it hides what is inside; where thin, a dark shape looms through. */
 /** `splash`: water spray, opaque, in its own small pool so fire, debris and sparks filling `solid` never starve it. */
-const LAYER_OPACITY = { solid: 1, dust: 0.65, smoke: 0.35, murk: 0.85, cloud: 0.6, splash: 1 } as const;
+/** `trail` holds contrails on their own, so a long chemtrail never crowds out footfall and impact dust. */
+const LAYER_OPACITY = { solid: 1, dust: 0.65, smoke: 0.35, murk: 0.85, cloud: 0.6, splash: 1, trail: 0.8 } as const;
 type LayerName = keyof typeof LAYER_OPACITY;
-const LAYER_OF: Record<ParticleKind, LayerName> = { dust: 'dust', smoke: 'smoke', debris: 'solid', fire: 'solid', spark: 'solid', acid: 'solid', plasma: 'solid', trail: 'dust', ink: 'smoke', rot: 'solid', shade: 'murk', mist: 'murk', bone: 'solid', wisp: 'dust', hexfire: 'solid', hexember: 'solid', wraith: 'murk', billow: 'dust', veil: 'cloud', splash: 'splash', napalm: 'solid', ember: 'solid' };
-const LAYER_MAX: Record<LayerName, number> = { solid: 500, dust: 400, smoke: 500, murk: 400, cloud: 160, splash: 200 };
+const LAYER_OF: Record<ParticleKind, LayerName> = { dust: 'dust', smoke: 'smoke', debris: 'solid', fire: 'solid', spark: 'solid', acid: 'solid', plasma: 'solid', trail: 'dust', ink: 'smoke', rot: 'solid', shade: 'murk', mist: 'murk', bone: 'solid', wisp: 'dust', hexfire: 'solid', hexember: 'solid', wraith: 'murk', billow: 'dust', veil: 'cloud', splash: 'splash', napalm: 'solid', ember: 'solid', contrail: 'trail' };
+const LAYER_MAX: Record<LayerName, number> = { solid: 500, dust: 400, smoke: 500, murk: 400, cloud: 160, splash: 200, trail: 300 };
 
 /** One pooled InstancedMesh: swap-remove on death, no per-frame allocation. */
 class Layer {
@@ -185,6 +188,7 @@ export class Particles {
       murk: new Layer(scene, geo, LAYER_OPACITY.murk, LAYER_MAX.murk),
       cloud: new Layer(scene, geo, LAYER_OPACITY.cloud, LAYER_MAX.cloud),
       splash: new Layer(scene, geo, LAYER_OPACITY.splash, LAYER_MAX.splash),
+      trail: new Layer(scene, geo, LAYER_OPACITY.trail, LAYER_MAX.trail),
     };
   }
 

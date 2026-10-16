@@ -453,13 +453,13 @@ export const CONFIG = {
    * monster is more than disengageMargin m beyond that) and turns its gun at aimRate rad/s; within aimTolerance rad it
    * fires one shell straight at the monster every fireCooldown s (the first firstShotMin..firstShotMax s after it
    * stops) for `damage`. The shell flies in a straight line at shellSpeed m/s, is drawn shellLength × shellDiameter m
-   * with a nose cone, and trails smoke. Each shot shakes the screen by fireShake, throws up a dust cloud
-   * blowbackRadius m around the Gustav, and kicks the turret back `recoil` × size, returning over recoilTime s.
+   * with a nose cone, and lays a chemtrail: a contrail puff every trailSpacing m. Each shot shakes the screen by
+   * fireShake and kicks the turret back `recoil` × size, returning over recoilTime s.
    */
   gustav: {
-    hp: 600, exp: 60, size: 160, width: 42, speed: 25, turnRate: 0.6, replanEvery: 4,
+    hp: 450, exp: 60, size: 160, width: 42, speed: 40, turnRate: 0.6, replanEvery: 4,
     range: 1100, disengageMargin: 100, aimRate: 0.5, aimTolerance: 0.05, damage: 60, fireCooldown: 10, firstShotMin: 3, firstShotMax: 6,
-    shellSpeed: 1400, shellLength: 44, shellDiameter: 12, fireShake: 0.45, blowbackRadius: 150, recoil: 0.06, recoilTime: 0.7,
+    shellSpeed: 1400, shellLength: 44, shellDiameter: 12, trailSpacing: 12, fireShake: 0.35, recoil: 0.06, recoilTime: 0.7,
   },
   /**
    * Attack helicopters: spawn spawnMin..spawnMax m out, fly in at up to approachSpeed (closing speed eases off as

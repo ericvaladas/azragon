@@ -44,7 +44,11 @@ After the first look, the owner asked for these changes. They replace the matchi
 - **The shell:**
   - **Shape:** shaped like a real shell: a steel body, a copper driving band and a brass nose cone, drawn pointing along its flight, `shellLength` 44 × `shellDiameter` 12 m.
   - **Flight:** it flies in a straight line, with no arc, at `shellSpeed` 1400 m/s, so about 0.8 s to the monster.
-- **Blowback:** each shot throws a dust cloud out `blowbackRadius` 150 m around the Gustav, billowing dust, and a blast of smoke behind the breech. The turret kicks back by `recoil` × size and eases forward over `recoilTime` 0.7 s. The screen shake rises to 0.45.
+- **Recoil:** each shot kicks the turret back by `recoil` × size, easing forward over `recoilTime` 0.7 s. A blowback dust cloud was tried, then removed at the owner's request.
+- **Second round of changes:**
+  - **Speed:** 40 m/s, up from 25.
+  - **HP:** 450, down from 600.
+  - **Chemtrail:** the shell lays a puff every `trailSpacing` 12 m along its path. The puffs are the pale, long-lived `contrail` particle (4 s), on their own particle layer of 300 so they never crowd out other dust.
 
 ## Visuals
 
