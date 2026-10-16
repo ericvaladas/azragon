@@ -173,6 +173,10 @@ export class OspreyNets implements EnemySystem {
       this.toGround(n);
       if (!ctx) continue;
       const m = ctx.monster.position;
+      // One cut line in each half of the net, each way: it breaks into nine ragged pieces thrown off the monster.
+      const cut = () => [2 + Math.floor(ctx.rng() * 3), NET_N / 2 + 1 + Math.floor(ctx.rng() * 3)];
+      n.cloth.tear(cut(), cut());
+      n.cloth.kick(m.x, m.z, O.cloth.tearOut, O.cloth.tearUp);
       ctx.particles.emit('debris', _v.set(m.x, ctx.monster.height * 0.6, m.z), 18, 1.6);
       ctx.particles.ring('dust', _v.set(m.x, 0, m.z), domeRadius(ctx.monster.bodyRadius, ctx.monster.width), 16);
     }
@@ -396,7 +400,7 @@ export class OspreyNets implements EnemySystem {
 
   private drawNet(net: Net): void {
     const attr = net.mesh.geometry.getAttribute('position') as THREE.BufferAttribute;
-    gridSegments(net.pts, attr.array as Float32Array);
+    gridSegments(net.pts, attr.array as Float32Array, net.cloth.joinedFn);
     attr.needsUpdate = true;
     CORNERS.forEach((k, c) => net.weights[c]!.position.set(net.pts[k]!.x, net.pts[k]!.y, net.pts[k]!.z));
   }

@@ -128,6 +128,28 @@ describe('Cloth', () => {
     expect(mean(p, 'z')).toBeCloseTo(-100, -1);
   });
 
+  it('tearing along cut lines splits the sheet into pieces that fly apart and stay whole', () => {
+    const cloth = sheet(10, 100);
+    cloth.tear([4], [4]);
+    expect(cloth.piece(0)).not.toBe(cloth.piece(N - 1));
+    expect(cloth.piece(0)).toBe(cloth.piece(1 + N));
+    cloth.kick(0, 0, 100, 0);
+    run(cloth, 0.5, env());
+    const p = points(cloth);
+    const gap = (a: number, b: number) => Math.hypot(p[b]!.x - p[a]!.x, p[b]!.y - p[a]!.y, p[b]!.z - p[a]!.z);
+    // Across the cut between columns 3 and 4 the rope is gone; within a piece it holds.
+    expect(gap(3, 4)).toBeGreaterThan(10 * 3);
+    expect(gap(0, 1)).toBeLessThan(10 * 1.15);
+  });
+
+  it('cut ropes no longer count as connections', () => {
+    const cloth = sheet(10, 0);
+    expect(cloth.joined(3, 4)).toBe(true);
+    cloth.tear([4], []);
+    expect(cloth.joined(3, 4)).toBe(false);
+    expect(cloth.joined(2, 3)).toBe(true);
+  });
+
   it('release frees pins and caught rope', () => {
     const cloth = sheet(25, 300);
     cloth.pin(0, { x: -100, y: 300, z: -100 });

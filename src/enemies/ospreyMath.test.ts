@@ -110,6 +110,19 @@ describe('formation and net', () => {
     expect(Array.from(buf.slice(0, 6))).toEqual([0, 0, 0, 1, 2, 3]);
   });
 
+  it('draws a segment between pieces as a point, so torn rope disappears', () => {
+    const g = newGrid();
+    g.forEach((p, k) => {
+      p.x = k;
+      p.y = 0;
+      p.z = 0;
+    });
+    const buf = new Float32Array(NET_SEGMENTS * 6);
+    gridSegments(g, buf, (a, b) => !(a === 0 && b === 1));
+    expect(Array.from(buf.slice(0, 6))).toEqual([0, 0, 0, 0, 0, 0]);
+    expect(Array.from(buf.slice(6, 12))).toEqual([1, 0, 0, 2, 0, 0]);
+  });
+
   it('sizes the drop and the burst from the monster', () => {
     expect(dropAltitude(385)).toBe(385 + O.dropClearance);
     expect(netHalf(84)).toBeCloseTo(84 * O.netHalfMult, 6);

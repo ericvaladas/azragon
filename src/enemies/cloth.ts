@@ -38,6 +38,9 @@ export class Cloth {
   private invMass: Float32Array;
   /** Gravity multiplier of each point (weights pull down harder than rope). */
   private pull: Float32Array;
+  /** Which piece each point belongs to (all 0 until torn), and which ropes have been cut. */
+  private pieceOf: Uint8Array;
+  private cut: Uint8Array;
   private links: Uint16Array;
   private rest: Float32Array;
 
@@ -67,6 +70,8 @@ export class Cloth {
     }
     this.links = Uint16Array.from(pairs);
     this.rest = Float32Array.from(lens);
+    this.pieceOf = new Uint8Array(this.count);
+    this.cut = new Uint8Array(lens.length);
   }
 
   /** Places every point (row-major, as `write` gives them back), at rest. */
@@ -88,6 +93,61 @@ export class Cloth {
   setWeight(k: number, mass: number, pull = 1): void {
     this.invMass[k] = 1 / mass;
     this.pull[k] = pull;
+  }
+
+  /**
+   * Splits the net into pieces along grid lines: a cut at column c separates columns c - 1 and c, a cut at row r
+   * separates rows r - 1 and r. Every rope joining two pieces is cut.
+   */
+  tear(colCuts: readonly number[], rowCuts: readonly number[]): void {
+    const band = (cuts: readonly number[], v: number) => cuts.filter((c) => v >= c).length;
+    for (let j = 0; j < this.n; j++) {
+      for (let i = 0; i < this.n; i++) this.pieceOf[i + j * this.n] = band(colCuts, i) + band(rowCuts, j) * (colCuts.length + 1);
+    }
+    for (let l = 0; l < this.cut.length; l++) this.cut[l] = this.pieceOf[this.links[l * 2]!] === this.pieceOf[this.links[l * 2 + 1]!] ? 0 : 1;
+  }
+
+  piece(k: number): number {
+    return this.pieceOf[k]!;
+  }
+
+  /** Whether neighbouring points `a` and `b` are still joined (in the same piece). */
+  joined(a: number, b: number): boolean {
+    return this.pieceOf[a] === this.pieceOf[b];
+  }
+
+  /** `joined`, bound, for passing to gridSegments without a new closure each frame. */
+  readonly joinedFn = (a: number, b: number): boolean => this.joined(a, b);
+
+  /**
+   * Throws every free point outward at `out` m/s, each piece straight away from (cx, cz) along the line to its own
+   * centre, and upward at `up` m/s.
+   */
+  kick(cx: number, cz: number, out: number, up: number): void {
+    const { pos, prev } = this;
+    const sx = new Float32Array(256);
+    const sz = new Float32Array(256);
+    const sn = new Float32Array(256);
+    for (let k = 0; k < this.count; k++) {
+      const q = this.pieceOf[k]!;
+      sx[q] = sx[q]! + pos[k * 3]!;
+      sz[q] = sz[q]! + pos[k * 3 + 2]!;
+      sn[q] = sn[q]! + 1;
+    }
+    const h = this.p.substep;
+    for (let k = 0; k < this.count; k++) {
+      if (this.fixed(k)) continue;
+      const q = this.pieceOf[k]!;
+      const dx = sx[q]! / sn[q]! - cx;
+      const dz = sz[q]! / sn[q]! - cz;
+      const d = Math.hypot(dx, dz);
+      const o = k * 3;
+      if (d > 1e-6) {
+        prev[o] = pos[o]! - (dx / d) * out * h;
+        prev[o + 2] = pos[o + 2]! - (dz / d) * out * h;
+      }
+      prev[o + 1] = pos[o + 1]! - up * h;
+    }
   }
 
   /** Lets go of every pin and every caught point. */
@@ -194,6 +254,7 @@ export class Cloth {
   private tighten(): void {
     const { pos, links, rest, invMass } = this;
     for (let l = 0; l < rest.length; l++) {
+      if (this.cut[l]) continue;
       const a = links[l * 2]!;
       const b = links[l * 2 + 1]!;
       const fa = this.fixed(a) ? 0 : invMass[a]!;

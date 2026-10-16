@@ -143,24 +143,21 @@ export function carriedGrid(c: readonly P3[], sag: number, out: P3[]): void {
   }
 }
 
-/** Writes the grid as line segments (every row, then every column) into `out` (NET_SEGMENTS × 6 floats). */
-export function gridSegments(pts: readonly P3[], out: Float32Array): void {
+/**
+ * Writes the grid as line segments (every row, then every column) into `out` (NET_SEGMENTS × 6 floats). A segment
+ * whose ends are not `joined` (torn apart) is written as a single point, so it draws nothing.
+ */
+export function gridSegments(pts: readonly P3[], out: Float32Array, joined: (a: number, b: number) => boolean = () => true): void {
   let o = 0;
   const put = (p: P3) => {
     out[o++] = p.x;
     out[o++] = p.y;
     out[o++] = p.z;
   };
-  for (let j = 0; j <= NET_N; j++) {
-    for (let i = 0; i < NET_N; i++) {
-      put(pts[idx(i, j)]!);
-      put(pts[idx(i + 1, j)]!);
-    }
-  }
-  for (let i = 0; i <= NET_N; i++) {
-    for (let j = 0; j < NET_N; j++) {
-      put(pts[idx(i, j)]!);
-      put(pts[idx(i, j + 1)]!);
-    }
-  }
+  const seg = (a: number, b: number) => {
+    put(pts[a]!);
+    put(pts[joined(a, b) ? b : a]!);
+  };
+  for (let j = 0; j <= NET_N; j++) for (let i = 0; i < NET_N; i++) seg(idx(i, j), idx(i + 1, j));
+  for (let i = 0; i <= NET_N; i++) for (let j = 0; j < NET_N; j++) seg(idx(i, j), idx(i, j + 1));
 }

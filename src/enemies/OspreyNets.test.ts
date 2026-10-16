@@ -141,6 +141,22 @@ describe('OspreyNets', () => {
     expect(nets.netModes()).toEqual([]);
   });
 
+  it('breaks into pieces that fly apart when the snare ends', () => {
+    const { nets, ctx, snares } = spawned();
+    until(nets, ctx, () => snares.length > 0);
+    nets.netTornFree();
+    for (let t = 0; t < 1; t += DT) nets.update(DT, ctx);
+    const p = nets.netPoints(0);
+    const n = Math.round(Math.sqrt(p.length));
+    let widest = 0;
+    for (let j = 0; j < n; j++) for (let i = 0; i + 1 < n; i++) {
+      const a = p[i + j * n]!;
+      const b = p[i + 1 + j * n]!;
+      widest = Math.max(widest, Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z));
+    }
+    expect(widest).toBeGreaterThan(150);
+  });
+
   it('a second landing replaces the first snared net', () => {
     const { nets, ctx, snares } = spawned();
     until(nets, ctx, () => snares.length > 0);
