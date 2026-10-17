@@ -134,7 +134,7 @@ describe('Toronto landmarks', () => {
     new THREE.Raycaster(new THREE.Vector3(x, 2000, z), new THREE.Vector3(0, -1, 0)).intersectObject(new THREE.Mesh(g, new THREE.MeshBasicMaterial()))[0];
 
   it('lists the CN Tower, Rogers Centre and City Hall at their sites and sizes', () => {
-    expect(TORONTO.landmarks.map((l) => l.id)).toEqual(['cn-tower', 'rogers-centre', 'city-hall', 'queens-park', 'casa-loma', 'scotiabank-arena']);
+    expect(TORONTO.landmarks.map((l) => l.id)).toEqual(['cn-tower', 'rogers-centre', 'city-hall', 'queens-park', 'casa-loma', 'scotiabank-arena', 'hearn', 'bmo-field', 'princes-gates']);
     expect(at('cn-tower')).toMatchObject({ ...CN_TOWER_SITE, ...CN_TOWER });
     expect(at('rogers-centre')).toMatchObject({ ...ROGERS_CENTRE_SITE, ...ROGERS_CENTRE });
     expect(at('city-hall')).toMatchObject({ ...CITY_HALL_SITE, ...CITY_HALL });

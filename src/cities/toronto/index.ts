@@ -1,6 +1,6 @@
 import type { CityStyle } from '../types';
 import { POCKET_RULES, TORONTO_DISTRICTS } from './districts';
-import { CHERRY_BEACH, PORT_LANDS, SHIP_CHANNEL, CASA_LOMA_SITE, CITY_HALL_SITE, CN_TOWER_SITE, QUEENS_PARK_SITE, SCOTIABANK_ARENA_SITE, DON, ROGERS_CENTRE_SITE, TORONTO_LAKE, blockColors, districtAt, pocketAt } from './layout';
+import { BMO_FIELD_SITE, CHERRY_BEACH, HEARN_SITE, PORT_LANDS, PRINCES_GATES_SITE, SHIP_CHANNEL, CASA_LOMA_SITE, CITY_HALL_SITE, CN_TOWER_SITE, QUEENS_PARK_SITE, SCOTIABANK_ARENA_SITE, DON, ROGERS_CENTRE_SITE, TORONTO_LAKE, blockColors, districtAt, pocketAt } from './layout';
 import { CN_TOWER, cnTowerGeometry } from './cnTower';
 import { ROGERS_CENTRE, rogersCentreGeometry } from './rogersCentre';
 import { CITY_HALL, cityHallGeometry } from './cityHall';
@@ -13,6 +13,9 @@ import { UOFT_HALLS } from './uoft';
 import { DISTILLERY_LOTS } from './distillery';
 import { NATHAN_PHILLIPS } from './square';
 import { TORONTO_LANDFORMS } from './waterfront';
+import { HEARN, hearnGeometry } from './hearn';
+import { BMO_FIELD, bmoFieldGeometry } from './bmoField';
+import { PRINCES_GATES, princesGatesGeometry } from './princesGates';
 
 export const TORONTO: CityStyle = {
   id: 'toronto',
@@ -47,6 +50,9 @@ export const TORONTO: CityStyle = {
     { id: 'queens-park', x: QUEENS_PARK_SITE.x, z: QUEENS_PARK_SITE.z, w: QUEENS_PARK.w, d: QUEENS_PARK.d, h: QUEENS_PARK.h, build: queensParkGeometry },
     { id: 'casa-loma', x: CASA_LOMA_SITE.x, z: CASA_LOMA_SITE.z, w: CASA_LOMA.w, d: CASA_LOMA.d, h: CASA_LOMA.h, build: casaLomaGeometry },
     { id: 'scotiabank-arena', x: SCOTIABANK_ARENA_SITE.x, z: SCOTIABANK_ARENA_SITE.z, w: SCOTIABANK_ARENA.w, d: SCOTIABANK_ARENA.d, h: SCOTIABANK_ARENA.h, build: scotiabankArenaGeometry },
+    { id: 'hearn', x: HEARN_SITE.x, z: HEARN_SITE.z, w: HEARN.w, d: HEARN.d, h: HEARN.h, build: hearnGeometry },
+    { id: 'bmo-field', x: BMO_FIELD_SITE.x, z: BMO_FIELD_SITE.z, w: BMO_FIELD.w, d: BMO_FIELD.d, h: BMO_FIELD.h, build: bmoFieldGeometry },
+    { id: 'princes-gates', x: PRINCES_GATES_SITE.x, z: PRINCES_GATES_SITE.z, w: PRINCES_GATES.w, d: PRINCES_GATES.d, h: PRINCES_GATES.h, build: princesGatesGeometry },
   ],
   specialLots: [...YONGE_DUNDAS_LOTS, ...FINANCIAL_LOTS, ...UOFT_HALLS, ...DISTILLERY_LOTS],
   overlays: [NATHAN_PHILLIPS],

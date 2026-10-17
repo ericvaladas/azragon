@@ -201,8 +201,19 @@ const POCKET_SHAPES: readonly (readonly (readonly [number, number])[])[] = [
 const POCKET_TRIES = 3;
 /** The water, for the Don bank test. */
 const WATERS = { river: DON, bay: TORONTO_LAKE } as const;
+/** The centre of block (ci, cj)'s interior (a function declaration, so the sites below can use it this early). */
+function interiorCentre(ci: number, cj: number): { x: number; z: number } {
+  const r = blockInterior(ci, cj);
+  return { x: (r.x0 + r.x1) / 2, z: (r.z0 + r.z1) / 2 };
+}
+/** The Hearn generating station: the interior centre of Port Lands block (18, 15), south of the Ship Channel. */
+export const HEARN_SITE = interiorCentre(18, 15);
+/** BMO Field: the interior centre of Exhibition Place block (−15, 10). */
+export const BMO_FIELD_SITE = interiorCentre(-15, 10);
+/** The Princes' Gates: the interior centre of Exhibition Place block (−13, 9), its east entrance. */
+export const PRINCES_GATES_SITE = interiorCentre(-13, 9);
 /** The blocks the landmarks stand on. */
-const LANDMARK_BLOCKS = [CN_TOWER_SITE, ROGERS_CENTRE_SITE, CITY_HALL_SITE, QUEENS_PARK_SITE, CASA_LOMA_SITE, SCOTIABANK_ARENA_SITE].map((s) => ({
+const LANDMARK_BLOCKS = [CN_TOWER_SITE, ROGERS_CENTRE_SITE, CITY_HALL_SITE, QUEENS_PARK_SITE, CASA_LOMA_SITE, SCOTIABANK_ARENA_SITE, HEARN_SITE, BMO_FIELD_SITE, PRINCES_GATES_SITE].map((s) => ({
   ci: Math.floor(s.x / CONFIG.world.blockSize),
   cj: Math.floor(s.z / CONFIG.world.blockSize),
 }));
