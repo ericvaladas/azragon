@@ -51,6 +51,7 @@ export class Monster {
   private silhouette = { value: 0 };
   private leapT = -1;
   private dashT = -1;
+  private dashDuration = 1;
   private dashFrom = { x: 0, z: 0 };
   private dashTo = { x: 0, z: 0 };
   private leapFrom = { x: 0, z: 0 };
@@ -213,10 +214,15 @@ export class Monster {
     this.lookAt = null;
   }
 
-  /** Dash: charge in a straight line along the ground to `to`. */
-  startDash(to: Vec2): void {
+  /**
+   * Dash: charge in a straight line along the ground to `to`, at CONFIG.abilities.dash.speedMult × the walk speed
+   * (× `speedMult`, the Move Speed upgrades).
+   */
+  startDash(to: Vec2, speedMult = 1): void {
     this.dashFrom = { x: this.position.x, z: this.position.z };
     this.dashTo = { x: to.x, z: to.z };
+    const speed = this.kind.stats.moveSpeed * CONFIG.abilities.dash.speedMult * speedMult;
+    this.dashDuration = Math.max(1e-3, Math.hypot(to.x - this.dashFrom.x, to.z - this.dashFrom.z) / speed);
     this.dashT = 0;
     this.yaw = yawTo(this.dashFrom, this.dashTo);
     this.meleeT = -1;
@@ -373,7 +379,7 @@ export class Monster {
       }
     }
     if (this.dashT >= 0) {
-      const duration = CONFIG.abilities.dash.duration;
+      const duration = this.dashDuration;
       this.dashT += dt;
       const p = leapPosition(this.dashFrom, this.dashTo, this.dashT, duration, 0);
       const step = Math.hypot(p.x - this.position.x, p.z - this.position.z);

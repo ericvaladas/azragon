@@ -246,14 +246,30 @@ describe('INSECT kind', () => {
     expect(top(L.range / 2)).toBeCloseTo(L.peak / 2, -1);
     expect(top(L.range / 4)).toBeLessThan(L.peak / 3);
   });
-  it('dashes its full range over the one shared dash duration', () => {
+  const dashTime = (m: Monster, to: number, speedMult?: number) => {
+    m.startDash({ x: 0, z: to }, speedMult);
+    let t = 0;
+    while (m.dashing && t < 10) { m.tick(0.001); t += 0.001; }
+    return t;
+  };
+  it('dashes at dashMult × its walk speed, the whole way', () => {
     const D = CONFIG.abilities.dash;
     const m = new Monster(new THREE.Scene(), kind());
-    m.startDash({ x: 0, z: D.range });
-    let t = 0;
-    while (m.dashing && t < 5) { m.tick(0.01); t += 0.01; }
-    expect(t).toBeCloseTo(D.duration, 1);
+    const t = dashTime(m, D.range);
+    expect(t).toBeCloseTo(D.range / (m.kind.stats.moveSpeed * D.speedMult), 2);
     expect(m.position.z).toBeCloseTo(D.range);
+  });
+  it('dashes faster with the Move Speed upgrade, and a slower walker dashes slower', () => {
+    const D = CONFIG.abilities.dash;
+    const base = dashTime(new Monster(new THREE.Scene(), kind()), D.range);
+    expect(dashTime(new Monster(new THREE.Scene(), kind()), D.range, 1.15)).toBeCloseTo(base / 1.15, 2);
+    const slow = { ...kind(), stats: { ...kind().stats, moveSpeed: kind().stats.moveSpeed / 2 } };
+    expect(dashTime(new Monster(new THREE.Scene(), slow), D.range)).toBeCloseTo(base * 2, 2);
+  });
+  it('keeps its dash speed on a dash cut short (by the shore): half the distance in half the time', () => {
+    const D = CONFIG.abilities.dash;
+    const full = dashTime(new Monster(new THREE.Scene(), kind()), D.range);
+    expect(dashTime(new Monster(new THREE.Scene(), kind()), D.range / 2)).toBeCloseTo(full / 2, 2);
   });
   it('tells its body where it is in the leap', () => {
     const body = stubBody();

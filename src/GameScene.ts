@@ -837,7 +837,7 @@ export class GameScene {
     if (m.busy || !this.abilities.trigger('dash')) return;
     const to = dashTarget({ x: m.position.x, z: m.position.z }, m.yaw, CONFIG.abilities.dash.range);
     m.crouch = false;
-    m.startDash(to);
+    m.startDash(to, this.progression.stats.moveSpeedMult);
     this.order = null;
     this.markers.setTarget(null);
     this.markers.setAim(null, 0);
