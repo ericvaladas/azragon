@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { TORONTO } from '.';
 import { coastDistance } from '../coast';
-import { ISLANDS, SPIT_ARM, SPIT_CAUSEWAY, SPIT_LOBES, TORONTO_LANDFORMS } from './waterfront';
+import { ISLANDS, ONTARIO_PLACE_EAST, ONTARIO_PLACE_WEST, SPIT_ARM, SPIT_CAUSEWAY, SPIT_LOBES, TORONTO_LANDFORMS } from './waterfront';
 import { allocateTrees, inPolygon, onDetail, onGrass, onLand, prepareLandform } from '../../world/landforms';
 import { isWater, PITCH } from '../../world/roads';
 import { MAX_LANDFORM_TREES } from '../../world/LandformRenderer';
@@ -12,7 +12,7 @@ const prep = (s: typeof ISLANDS) => all[TORONTO_LANDFORMS.indexOf(s)]!;
 describe('Toronto waterfront landforms', () => {
   it('lists the islands and the spit (causeway, lobes, arm) on Toronto', () => {
     expect(TORONTO.landforms).toBe(TORONTO_LANDFORMS);
-    expect(TORONTO_LANDFORMS).toEqual([ISLANDS, SPIT_CAUSEWAY, SPIT_LOBES, SPIT_ARM]);
+    expect(TORONTO_LANDFORMS).toEqual([ISLANDS, SPIT_CAUSEWAY, SPIT_LOBES, SPIT_ARM, ONTARIO_PLACE_WEST, ONTARIO_PLACE_EAST]);
   });
 
   it('puts the islands about 2.5 km offshore and the spit tip about 4 km out', () => {
@@ -23,14 +23,13 @@ describe('Toronto waterfront landforms', () => {
     expect(Math.max(...sz)).toBeGreaterThan(6300);
   });
 
-  it('keeps the islands, lobes and arm out in the lake; the causeway reaches the shore at Leslie St', () => {
-    for (const s of [ISLANDS, SPIT_LOBES, SPIT_ARM]) {
+  it('keeps every landform out in the lake; the causeway leaves the Port Lands\' southeast corner', () => {
+    for (const s of [ISLANDS, SPIT_LOBES, SPIT_ARM, ONTARIO_PLACE_WEST, ONTARIO_PLACE_EAST]) {
       for (const p of prep(s).outline) expect(coastDistance(TORONTO.bay!, p.x, p.z), `${s.name} ${p.x},${p.z}`).toBeLessThan(0);
     }
-    const cz = prep(SPIT_CAUSEWAY).outline.map((p) => p.z);
-    // Its rounded end meets the mainland's block edge (z 2200) without crossing onto the land.
-    expect(Math.min(...cz)).toBeLessThanOrEqual(2210);
-    expect(Math.min(...cz)).toBeGreaterThanOrEqual(2200);
+    // The causeway now leaves the Port Lands' southeast corner, out in the lake.
+    for (const p of prep(SPIT_CAUSEWAY).outline) expect(coastDistance(TORONTO.bay!, p.x, p.z)).toBeLessThan(0);
+    expect(Math.min(...prep(SPIT_CAUSEWAY).outline.map((p) => p.z))).toBeGreaterThan(3400);
   });
 
   it('keeps the islands clear of the spit', () => {
@@ -51,7 +50,7 @@ describe('Toronto waterfront landforms', () => {
       for (const d of p.details) {
         if (d.kind === 'box' && d.water) continue;
         const corners =
-          d.kind === 'tower'
+          d.kind === 'tower' || d.kind === 'dome'
             ? [{ x: d.x + d.r, z: d.z }, { x: d.x - d.r, z: d.z }, { x: d.x, z: d.z + d.r }, { x: d.x, z: d.z - d.r }]
             : [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([sx, sz]) => {
                 const lx = (sx! * d.w) / 2;
@@ -67,7 +66,8 @@ describe('Toronto waterfront landforms', () => {
   it('has the airport, two lighthouses, a pier, a ferry dock and 25 cottages', () => {
     const d = all.flatMap((p) => p.details);
     expect(d.filter((x) => x.kind === 'tower')).toHaveLength(2);
-    expect(d.filter((x) => x.kind === 'box' && x.water)).toHaveLength(2);
+    expect(d.filter((x) => x.kind === 'dome')).toHaveLength(1);
+    expect(d.filter((x) => x.kind === 'box' && x.water)).toHaveLength(8);
     expect(ISLANDS.details.filter((x) => x.kind === 'box' && x.w === 10 && x.d === 8)).toHaveLength(25);
   });
 

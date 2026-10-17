@@ -141,11 +141,13 @@ export type OutlinePt = Pt & { beach?: number };
 /**
  * A hand-placed solid on a landform. A box is `w` wide, `d` deep along its yaw (rad about +Y), `h` tall, standing
  * `y` m above the land. A tower is a tapering cylinder of base radius `r`, with a `cap` coloured lantern on top.
- * `water`: built out over the water (a pier or a dock), so it may leave the land.
+ * `water`: built out over the water (a pier or a dock), so it may leave the land. A dome is a faceted sphere of radius
+ * `r` sunk a quarter into the ground.
  */
 export type LandformDetail =
   | { kind: 'box'; x: number; z: number; w: number; d: number; h: number; yaw: number; color: number; y?: number; water?: boolean }
-  | { kind: 'tower'; x: number; z: number; r: number; h: number; color: number; cap: number };
+  | { kind: 'tower'; x: number; z: number; r: number; h: number; color: number; cap: number }
+  | { kind: 'dome'; x: number; z: number; r: number; color: number };
 /**
  * Scenery land drawn over the water: a sand outline (smoothed into curves unless `sharp`) with a grass interior
  * `beach` m in from the edge, `holes` (lagoons) cut through both, trees on the grass (one per `treeEvery` m², none at

@@ -34,6 +34,7 @@ function flat(outline: readonly Pt[], holes: readonly (readonly Pt[])[], y: numb
 
 /** A detail's solid, vertex-coloured, standing on the grass. */
 function detailGeometry(d: LandformDetail): THREE.BufferGeometry {
+  if (d.kind === 'dome') return painted(faceted(new THREE.IcosahedronGeometry(d.r, 1)), d.color).translate(d.x, LANDFORM_Y.grass + d.r * 0.5, d.z);
   if (d.kind === 'tower') {
     const body = painted(faceted(new THREE.CylinderGeometry(d.r * 0.7, d.r, d.h, 8).translate(0, d.h / 2, 0)), d.color);
     const cap = painted(faceted(new THREE.CylinderGeometry(d.r * 0.9, d.r * 0.9, d.r * 1.4, 8).translate(0, d.h + d.r * 0.7, 0)), d.cap);

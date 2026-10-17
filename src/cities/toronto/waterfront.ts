@@ -83,20 +83,20 @@ export const ISLANDS: LandformSpec = {
   ],
 };
 
-/** The causeway's root: its rounded end meets the sea wall at the mainland's block edge (z 2200). */
-const LESLIE_SHORE = { x: 4699, z: 2260 };
-const CAUSEWAY_KNEE = { x: 4699, z: 3168 };
 const CAUSEWAY_END = { x: 3727, z: 4788 };
 
-/** The spit's causeway: down Leslie St from the shore, then diagonally southwest to the lobes, a pale path along it. */
+/** The causeway's root: just off the Port Lands' southeast corner. */
+const CAUSEWAY_ROOT = { x: 4699, z: 3460 };
+
+/** The spit's causeway: from the Port Lands' southeast corner diagonally southwest to the lobes, a pale path along it. */
 export const SPIT_CAUSEWAY: LandformSpec = {
   name: 'Tommy Thompson Park causeway',
-  outline: ribbon([LESLIE_SHORE, CAUSEWAY_KNEE, CAUSEWAY_END], 110),
+  outline: ribbon([CAUSEWAY_ROOT, CAUSEWAY_END], 110),
   sharp: true,
   holes: [],
   beach: 20,
   treeEvery: 6000,
-  details: [strip({ x: 4699, z: 2280 }, CAUSEWAY_KNEE, 12, 0.3, P.landPath), strip(CAUSEWAY_KNEE, { x: 3760, z: 4730 }, 12, 0.3, P.landPath)],
+  details: [strip({ x: 4680, z: 3500 }, { x: 3760, z: 4730 }, 12, 0.3, P.landPath)],
 };
 
 /** The spit's lobes, wrapping the Outer Harbour, with their two lagoons and the lighthouse at the southern tip. */
@@ -123,4 +123,29 @@ export const SPIT_ARM: LandformSpec = {
   details: [],
 };
 
-export const TORONTO_LANDFORMS: readonly LandformSpec[] = [ISLANDS, SPIT_CAUSEWAY, SPIT_LOBES, SPIT_ARM];
+const POD = 0x2a3440;
+
+/** Ontario Place's west islet, carrying the Cinesphere. */
+export const ONTARIO_PLACE_WEST: LandformSpec = {
+  name: 'Ontario Place west islet',
+  outline: [{ x: -3350, z: 2520 }, { x: -3150, z: 2475 }, { x: -2955, z: 2540 }, { x: -2960, z: 2700 }, { x: -3150, z: 2750 }, { x: -3330, z: 2680 }],
+  holes: [],
+  beach: 15,
+  treeEvery: 4000,
+  details: [{ kind: 'dome', x: -3150, z: 2610, r: 20, color: P.lighthouseWhite }],
+};
+
+/** Ontario Place's east islet, with the three pods raised on stilts out over its south shore. */
+export const ONTARIO_PLACE_EAST: LandformSpec = {
+  name: 'Ontario Place east islet',
+  outline: [{ x: -2900, z: 2515 }, { x: -2700, z: 2485 }, { x: -2565, z: 2540 }, { x: -2580, z: 2660 }, { x: -2750, z: 2700 }, { x: -2880, z: 2640 }],
+  holes: [],
+  beach: 15,
+  treeEvery: 4000,
+  details: [-2790, -2730, -2670].flatMap((x): LandformDetail[] => [
+    { kind: 'box', x, z: 2715, w: 30, d: 30, h: 15, yaw: 0, color: POD, y: 15, water: true },
+    { kind: 'box', x, z: 2715, w: 3, d: 3, h: 15, yaw: 0, color: P.landPath, water: true },
+  ]),
+};
+
+export const TORONTO_LANDFORMS: readonly LandformSpec[] = [ISLANDS, SPIT_CAUSEWAY, SPIT_LOBES, SPIT_ARM, ONTARIO_PLACE_WEST, ONTARIO_PLACE_EAST];

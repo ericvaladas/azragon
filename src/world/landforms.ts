@@ -146,7 +146,7 @@ export function onGrass(p: PreparedLandform, x: number, z: number): boolean {
 export function onDetail(d: LandformDetail, x: number, z: number, margin = 0): boolean {
   const dx = x - d.x;
   const dz = z - d.z;
-  if (d.kind === 'tower') return Math.hypot(dx, dz) <= d.r + margin;
+  if (d.kind === 'tower' || d.kind === 'dome') return Math.hypot(dx, dz) <= d.r + margin;
   const c = Math.cos(d.yaw);
   const s = Math.sin(d.yaw);
   const lx = dx * c - dz * s;
