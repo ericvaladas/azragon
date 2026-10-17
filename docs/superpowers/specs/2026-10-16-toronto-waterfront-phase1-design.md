@@ -26,7 +26,7 @@ This is Phase 1 of two. Phase 2, a separate spec, adds the waterfront districts 
 The outlines below come from the v3 mockup, traced from the owner's map at about 5.4 game metres per screenshot pixel. Scale was set from the game's Rogers Centre (x −700) and Scotiabank Arena (x 109). They are drawn as polygons and smoothed into curves.
 
 **Toronto Islands crescent** (outer outline, clockwise from the airport's northwest corner):
-(−2483, 2360) (−1457, 2360) (−1106, 2520) (−1187, 2844) (−1133, 3168) (−485, 3762) (55, 4194) (703, 3978) (1297, 3708) (1459, 3654) (1648, 3978) (1621, 4194) (1135, 4437) (379, 4653) (−701, 4815) (−1673, 4788) (−2105, 4572) (−2375, 3708) (−2618, 2898).
+(−2483, 2490) (−1457, 2490) (−1106, 2520) (−1187, 2844) (−1133, 3168) (−485, 3762) (55, 4194) (703, 3978) (1297, 3708) (1459, 3654) (1648, 3978) (1621, 4194) (1135, 4437) (379, 4653) (−701, 4815) (−1673, 4788) (−2105, 4572) (−2375, 3708) (−2618, 2898).
 
 Its holes are the island's inner water:
 - **Blockhouse Bay:** an ellipse centred (−250, 4300), radii 380 × 150, turned 38° along the crescent's inner shore. The traced (−215, 3720) lay partly in the Inner Harbour.
@@ -34,7 +34,7 @@ Its holes are the island's inner water:
 - **Centre lagoon channel:** a ribbon along (−1500, 3500) → (−1300, 3700) → (−1000, 3900) → (−800, 4150), 70 m wide.
 
 **Tommy Thompson Park:**
-- **Causeway:** a ribbon 110 m wide along (4699, 2300) → (4699, 3168) → (3727, 4788).
+- **Causeway:** a ribbon 110 m wide along (4699, 2260) → (4699, 3168) → (3727, 4788). Its rounded root meets the mainland's block edge (z 2200) at the sea wall.
   - Its first leg runs south down Leslie St from today's shoreline, because in Phase 1 the Port Lands don't exist yet. Without it, the spit would float about 900 m offshore.
   - Phase 2 builds the Port Lands over that leg and trims the causeway to start at their shore, (4699, 3168).
 - **Lobes:** a polygon through (3727, 4788) (3600, 5200) (3300, 5700) (2809, 6408) (2323, 5868) (1675, 6030) (1243, 6084) (1135, 5868) (1513, 5328) (2107, 4788) (2485, 4680) (3025, 4788).
@@ -42,6 +42,10 @@ Its holes are the island's inner water:
 - **Lagoon holes:** ellipses at (2647, 5220), radii 330 × 190, and (2000, 5700), radii 260 × 150.
 
 A ribbon is a polyline thickened to a given width with rounded ends. It is built as a polygon, so ribbons and polygons are drawn the same way.
+
+**Corrections made in review (2026-10-16):**
+- **The islands' north edge** is at z 2490, not the traced 2360. The mainland's wavering shore blocks reach z 2400 between x −3200 and −1500, so a narrow Western Gap is kept. The airport's runway (centre z 2700), apron (z 2900) and terminal (z 2850) move south with it.
+- **The airport's ground** is a tree-free clearing.
 
 ## Content
 
@@ -67,7 +71,7 @@ A ribbon is a polyline thickened to a given width with rounded ends. It is built
   - the crescent's default rim is 40 m, widened as above;
   - the spit's rim is 20 m (10 m on the narrow arm).
 
-**Tree density:** about 1 tree per 1,500 m² of grass on the islands and lobes, and 1 per 6,000 m² on the causeway, capped at 1,200 trees in total.
+**Tree density:** about 1 tree per 1,500 m² of grass on the islands and lobes, and 1 per 6,000 m² on the causeway. Every landform scatters its full set, then the total is thinned evenly to the 1,200 cap, so no landform loses its trees to another.
 
 **Colours** (new `CONFIG.palette` entries):
 - sand `landSand`;

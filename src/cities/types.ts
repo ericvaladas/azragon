@@ -143,7 +143,7 @@ export type LandformDetail =
 /**
  * Scenery land drawn over the water: a sand outline (smoothed into curves unless `sharp`) with a grass interior
  * `beach` m in from the edge, `holes` (lagoons) cut through both, trees on the grass (one per `treeEvery` m², none at
- * 0), and hand-placed `details`. It plays no part in gameplay.
+ * 0) except inside `clearings` (open ground such as an airport), and hand-placed `details`. It plays no part in gameplay.
  */
 export type LandformSpec = {
   name: string;
@@ -152,6 +152,7 @@ export type LandformSpec = {
   holes: readonly (readonly Pt[])[];
   beach: number;
   treeEvery: number;
+  clearings?: readonly (readonly Pt[])[];
   details: readonly LandformDetail[];
 };
 export type CityStyle = {

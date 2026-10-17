@@ -2,7 +2,9 @@ import { describe, it, expect } from 'vitest';
 import { TORONTO } from '.';
 import { coastDistance } from '../coast';
 import { ISLANDS, SPIT_ARM, SPIT_CAUSEWAY, SPIT_LOBES, TORONTO_LANDFORMS } from './waterfront';
-import { inPolygon, onDetail, onGrass, onLand, prepareLandform } from '../../world/landforms';
+import { allocateTrees, inPolygon, onDetail, onGrass, onLand, prepareLandform } from '../../world/landforms';
+import { isWater, PITCH } from '../../world/roads';
+import { MAX_LANDFORM_TREES } from '../../world/LandformRenderer';
 
 const all = TORONTO_LANDFORMS.map(prepareLandform);
 const prep = (s: typeof ISLANDS) => all[TORONTO_LANDFORMS.indexOf(s)]!;
@@ -26,7 +28,9 @@ describe('Toronto waterfront landforms', () => {
       for (const p of prep(s).outline) expect(coastDistance(TORONTO.bay!, p.x, p.z), `${s.name} ${p.x},${p.z}`).toBeLessThan(0);
     }
     const cz = prep(SPIT_CAUSEWAY).outline.map((p) => p.z);
-    expect(Math.min(...cz)).toBeLessThanOrEqual(2200);
+    // Its rounded end meets the mainland's block edge (z 2200) without crossing onto the land.
+    expect(Math.min(...cz)).toBeLessThanOrEqual(2210);
+    expect(Math.min(...cz)).toBeGreaterThanOrEqual(2200);
   });
 
   it('keeps the islands clear of the spit', () => {
@@ -66,4 +70,28 @@ describe('Toronto waterfront landforms', () => {
     expect(d.filter((x) => x.kind === 'box' && x.water)).toHaveLength(2);
     expect(ISLANDS.details.filter((x) => x.kind === 'box' && x.w === 10 && x.d === 8)).toHaveLength(25);
   });
+
+  it('lays every landform over water blocks, never over the mainland', () => {
+    for (const p of all) {
+      for (const q of p.outline) expect(isWater(TORONTO, Math.floor(q.x / PITCH), Math.floor(q.z / PITCH)), `${p.spec.name} ${q.x},${q.z}`).toBe(true);
+    }
+  });
+
+  it("spreads the tree budget over every landform: the islands' south shore and cottages, the lobes and the causeway all get trees", () => {
+    const trees = allocateTrees(all, 911, MAX_LANDFORM_TREES);
+    expect(trees.flat().length).toBeLessThanOrEqual(MAX_LANDFORM_TREES);
+    TORONTO_LANDFORMS.forEach((s, i) => {
+      if (s.treeEvery > 0) expect(trees[i]!.length, s.name).toBeGreaterThan(0);
+    });
+    const island = trees[TORONTO_LANDFORMS.indexOf(ISLANDS)]!;
+    expect(island.filter((t) => t.z > 4300).length).toBeGreaterThan(40);
+    expect(island.filter((t) => t.x > 600 && t.z > 3950).length).toBeGreaterThan(10);
+    expect(trees[TORONTO_LANDFORMS.indexOf(SPIT_LOBES)]!.length).toBeGreaterThan(100);
+  });
+
+  it("keeps trees off the airport's ground", () => {
+    const island = allocateTrees(all, 911, MAX_LANDFORM_TREES)[TORONTO_LANDFORMS.indexOf(ISLANDS)]!;
+    for (const t of island) expect(t.x < -1350 && t.z < 3050, `${t.x},${t.z}`).toBe(false);
+  });
 });
+

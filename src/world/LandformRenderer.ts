@@ -3,13 +3,13 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { CONFIG } from '../config';
 import type { LandformDetail, LandformSpec, Pt } from '../cities/types';
 import { faceted, painted, toonMat } from '../render/toon';
-import { prepareLandform, scatterTrees } from './landforms';
+import { allocateTrees, prepareLandform } from './landforms';
 
 /** At most this many landform trees, shared across every landform in order. */
 export const MAX_LANDFORM_TREES = 1200;
 /** Heights of the land layers above the ground plane (the water lies at 0.1): sand, then grass over it. */
 export const LANDFORM_Y = { sand: 0.6, grass: 0.7 } as const;
-/** Tree seeds per landform: CONFIG.world.seed + this + its index. */
+/** Tree seeds: CONFIG.world.seed + this (+ each landform's index). */
 const SEED = 911;
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
@@ -74,12 +74,7 @@ export class Landforms {
     sand.name = 'landform-sand';
     grass.name = 'landform-grass';
     sand.receiveShadow = grass.receiveShadow = true;
-    let left = MAX_LANDFORM_TREES;
-    const trees = prepared.flatMap((p, i) => {
-      const t = scatterTrees(p, CONFIG.world.seed + SEED + i, left);
-      left -= t.length;
-      return t;
-    });
+    const trees = allocateTrees(prepared, CONFIG.world.seed + SEED, MAX_LANDFORM_TREES).flat();
     const treeMesh = new THREE.InstancedMesh(this.treeGeo, this.treeMat, Math.max(1, trees.length));
     treeMesh.name = 'landform-trees';
     trees.forEach((t, i) => treeMesh.setMatrixAt(i, _m.compose(_p.set(t.x, LANDFORM_Y.grass, t.z), _q.identity(), _s.setScalar(t.s))));

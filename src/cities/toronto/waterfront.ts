@@ -16,8 +16,8 @@ function strip(a: Pt, b: Pt, width: number, h: number, color: number, y = 0): La
 }
 
 /** The airport runway's ends: 1,050 m along the island's long axis, turned 14° from east. */
-const RUNWAY_A = { x: -1850 - 509, z: 2580 - 127 };
-const RUNWAY_B = { x: -1850 + 509, z: 2580 + 127 };
+const RUNWAY_A = { x: -1850 - 509, z: 2700 - 127 };
+const RUNWAY_B = { x: -1850 + 509, z: 2700 + 127 };
 
 /** Ten white centre-line dashes along the runway. */
 const RUNWAY_DASHES: LandformDetail[] = Array.from({ length: 10 }, (_, k) => {
@@ -46,7 +46,8 @@ const COTTAGE_DETAILS: LandformDetail[] = (() => {
 
 /** The Toronto Islands crescent, from the airport's northwest corner clockwise. Beaches: 60 m on Hanlan's lake shore, 50 m on Centre's south shore. */
 const ISLAND_OUTLINE: OutlinePt[] = [
-  { x: -2483, z: 2360 }, { x: -1457, z: 2360 }, { x: -1106, z: 2520 }, { x: -1187, z: 2844 }, { x: -1133, z: 3168 },
+  // The north edge keeps a narrow Western Gap off the mainland, whose shore blocks reach z 2400 here.
+  { x: -2483, z: 2490 }, { x: -1457, z: 2490 }, { x: -1106, z: 2520 }, { x: -1187, z: 2844 }, { x: -1133, z: 3168 },
   { x: -485, z: 3762 }, { x: 55, z: 4194 }, { x: 703, z: 3978 }, { x: 1297, z: 3708 }, { x: 1459, z: 3654 },
   { x: 1648, z: 3978 }, { x: 1621, z: 4194 },
   { x: 1135, z: 4437, beach: 50 }, { x: 379, z: 4653, beach: 50 }, { x: -701, z: 4815, beach: 50 }, { x: -1673, z: 4788, beach: 50 },
@@ -64,12 +65,14 @@ export const ISLANDS: LandformSpec = {
   ],
   beach: 40,
   treeEvery: 1500,
+  // The airport's open ground: no trees.
+  clearings: [[{ x: -2800, z: 2300 }, { x: -1350, z: 2300 }, { x: -1350, z: 3050 }, { x: -2800, z: 3050 }]],
   details: [
     // Billy Bishop airport: the apron, the runway and its dashes, the terminal.
-    { kind: 'box', x: -1900, z: 2760, w: 500, d: 260, h: 0.2, yaw: 0, color: P.landPath },
+    { kind: 'box', x: -1900, z: 2900, w: 500, d: 260, h: 0.2, yaw: 0, color: P.landPath },
     strip(RUNWAY_A, RUNWAY_B, 70, 0.3, P.landRunway),
     ...RUNWAY_DASHES,
-    { kind: 'box', x: -1950, z: 2700, w: 120, d: 60, h: 18, yaw: 0, color: P.landTerminal, y: 0.2 },
+    { kind: 'box', x: -1950, z: 2850, w: 120, d: 60, h: 18, yaw: 0, color: P.landTerminal, y: 0.2 },
     // Gibraltar Point lighthouse, near the southwest corner.
     { kind: 'tower', x: -1950, z: 4560, r: 5, h: 25, color: P.lighthouseWhite, cap: P.lighthouseWhite },
     // Centre Island's pier, running south from the beach into the lake.
@@ -80,7 +83,8 @@ export const ISLANDS: LandformSpec = {
   ],
 };
 
-const LESLIE_SHORE = { x: 4699, z: 2150 };
+/** The causeway's root: its rounded end meets the sea wall at the mainland's block edge (z 2200). */
+const LESLIE_SHORE = { x: 4699, z: 2260 };
 const CAUSEWAY_KNEE = { x: 4699, z: 3168 };
 const CAUSEWAY_END = { x: 3727, z: 4788 };
 
@@ -92,7 +96,7 @@ export const SPIT_CAUSEWAY: LandformSpec = {
   holes: [],
   beach: 20,
   treeEvery: 6000,
-  details: [strip({ x: 4699, z: 2250 }, CAUSEWAY_KNEE, 12, 0.3, P.landPath), strip(CAUSEWAY_KNEE, { x: 3760, z: 4730 }, 12, 0.3, P.landPath)],
+  details: [strip({ x: 4699, z: 2280 }, CAUSEWAY_KNEE, 12, 0.3, P.landPath), strip(CAUSEWAY_KNEE, { x: 3760, z: 4730 }, 12, 0.3, P.landPath)],
 };
 
 /** The spit's lobes, wrapping the Outer Harbour, with their two lagoons and the lighthouse at the southern tip. */

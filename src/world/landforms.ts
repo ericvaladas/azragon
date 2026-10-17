@@ -154,9 +154,13 @@ export function onDetail(d: LandformDetail, x: number, z: number, margin = 0): b
   return Math.abs(lx) <= d.w / 2 + margin && Math.abs(lz) <= d.d / 2 + margin;
 }
 
-/** Grass with room for a tree: clear of every detail by DETAIL_MARGIN. */
+/** Grass with room for a tree: outside every clearing, and clear of every detail by DETAIL_MARGIN. */
 export function treeSpot(p: PreparedLandform, x: number, z: number): boolean {
-  return onGrass(p, x, z) && !p.details.some((d) => onDetail(d, x, z, DETAIL_MARGIN));
+  return (
+    onGrass(p, x, z) &&
+    !(p.spec.clearings ?? []).some((c) => inPolygon(c, x, z)) &&
+    !p.details.some((d) => onDetail(d, x, z, DETAIL_MARGIN))
+  );
 }
 
 /** Trees on a jittered grid of one cell per spec.treeEvery m², kept where treeSpot allows, at most `max`. */
@@ -177,4 +181,23 @@ export function scatterTrees(p: PreparedLandform, seed: number, max: number): Tr
     }
   }
   return out;
+}
+
+/**
+ * Every landform's trees (each scattered in full from `seed` + its index), thinned evenly across all of them to at
+ * most `max` in total, so no landform loses its trees to an earlier one.
+ */
+export function allocateTrees(prepared: readonly PreparedLandform[], seed: number, max: number): TreeSpec[][] {
+  const full = prepared.map((p, i) => scatterTrees(p, seed + i, Infinity));
+  const total = full.reduce((n, t) => n + t.length, 0);
+  if (total <= max) return full;
+  // Keep the trees whose running index crosses a whole multiple of total / max: an even pick through every list.
+  let k = 0;
+  return full.map((list) =>
+    list.filter(() => {
+      const keep = Math.floor(((k + 1) * max) / total) > Math.floor((k * max) / total);
+      k++;
+      return keep;
+    }),
+  );
 }
