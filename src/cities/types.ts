@@ -128,6 +128,32 @@ export type GlyphSet = 'kanji' | 'latin';
 /** Gantry crane paint: the bold bands (main and band alternate) and the grey machinery. */
 export type CraneColors = { main: number; band: number; machinery: number };
 
+/** A ground point (game metres, +x east, +z south). */
+export type Pt = { x: number; z: number };
+/** An outline corner; `beach` overrides the landform's beach width (m) there. */
+export type OutlinePt = Pt & { beach?: number };
+/**
+ * A hand-placed solid on a landform. A box is `w` wide, `d` deep along its yaw (rad about +Y), `h` tall, standing
+ * `y` m above the land. A tower is a tapering cylinder of base radius `r`, with a `cap` coloured lantern on top.
+ * `water`: built out over the water (a pier or a dock), so it may leave the land.
+ */
+export type LandformDetail =
+  | { kind: 'box'; x: number; z: number; w: number; d: number; h: number; yaw: number; color: number; y?: number; water?: boolean }
+  | { kind: 'tower'; x: number; z: number; r: number; h: number; color: number; cap: number };
+/**
+ * Scenery land drawn over the water: a sand outline (smoothed into curves unless `sharp`) with a grass interior
+ * `beach` m in from the edge, `holes` (lagoons) cut through both, trees on the grass (one per `treeEvery` m², none at
+ * 0), and hand-placed `details`. It plays no part in gameplay.
+ */
+export type LandformSpec = {
+  name: string;
+  outline: readonly OutlinePt[];
+  sharp?: boolean;
+  holes: readonly (readonly Pt[])[];
+  beach: number;
+  treeEvery: number;
+  details: readonly LandformDetail[];
+};
 export type CityStyle = {
   id: string;
   name: string;
@@ -160,6 +186,8 @@ export type CityStyle = {
   river?: RiverSpec;
   bay?: BaySpec;
   island?: IslandSpec;
+  /** Scenery landforms drawn over the water (islands, spits); absent means none. */
+  landforms?: readonly LandformSpec[];
   /**
    * Rules for the island's built cells (districtAt reports them as office, its centre cell as park): no streets, so
    * no signs and no street trees.
