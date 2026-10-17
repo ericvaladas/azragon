@@ -1,6 +1,6 @@
 import type { CityStyle } from '../types';
 import { POCKET_RULES, TORONTO_DISTRICTS } from './districts';
-import { CASA_LOMA_SITE, CITY_HALL_SITE, CN_TOWER_SITE, QUEENS_PARK_SITE, SCOTIABANK_ARENA_SITE, DON, ROGERS_CENTRE_SITE, TORONTO_ISLANDS, TORONTO_LAKE, blockColors, districtAt, pocketAt } from './layout';
+import { CASA_LOMA_SITE, CITY_HALL_SITE, CN_TOWER_SITE, QUEENS_PARK_SITE, SCOTIABANK_ARENA_SITE, DON, ROGERS_CENTRE_SITE, TORONTO_LAKE, blockColors, districtAt, pocketAt } from './layout';
 import { CN_TOWER, cnTowerGeometry } from './cnTower';
 import { ROGERS_CENTRE, rogersCentreGeometry } from './rogersCentre';
 import { CITY_HALL, cityHallGeometry } from './cityHall';
@@ -50,7 +50,6 @@ export const TORONTO: CityStyle = {
   overlays: [NATHAN_PHILLIPS],
   river: DON,
   bay: TORONTO_LAKE,
-  island: TORONTO_ISLANDS,
   // A very regular grid: fewer removed streets than Tokyo (neon and port per Ruling R8).
   roadRemoval: { highrise: 0.1, neon: 0.1, office: 0.15, residential: 0.15, park: 0.4, port: 0.15 },
   keepNodes: [],

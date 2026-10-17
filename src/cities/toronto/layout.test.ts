@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { CONFIG } from '../../config';
 import { DISTRICTS, type DistrictId } from '../types';
 import { coastDistance } from '../coast';
-import { AREAS, CORE_RADIUS, DON, FINANCIAL, PORT_DEPTH, TORONTO_ISLANDS, TORONTO_LAKE, WATERFRONT, YONGE_CORRIDOR, YONGE_DUNDAS, YONGE_NODES, blockInterior, districtAt, lotCentre, pocketAt } from './layout';
+import { AREAS, CORE_RADIUS, DON, FINANCIAL, PORT_DEPTH, TORONTO_LAKE, WATERFRONT, YONGE_CORRIDOR, YONGE_DUNDAS, YONGE_NODES, blockInterior, districtAt, lotCentre, pocketAt } from './layout';
 import { TORONTO } from './index';
 import { AVENUE_WIDTH, PITCH, blockDistrict, isBay, isIsland, isRiver, isRiverBank, isWater, lineWidth, segmentAt } from '../../world/roads';
 import { inBay } from '../../world/shore';
@@ -39,19 +39,12 @@ describe('Toronto layout', () => {
     }
   });
 
-  it('keeps the islands offshore: a long east–west group of park cells with open lake all round, unwalkable', () => {
-    const cells: [number, number][] = [];
-    for (let i = -20; i <= 20; i++) for (let j = 0; j <= 30; j++) if (isIsland(TORONTO, i, j)) cells.push([i, j]);
-    expect(cells.length).toBeGreaterThan(20);
-    const c = TORONTO_ISLANDS.center;
-    expect(isIsland(TORONTO, Math.floor(c.x / PITCH), Math.floor(c.z / PITCH))).toBe(true);
-    const is = cells.map(([i]) => i), js = cells.map(([, j]) => j);
-    expect(Math.max(...is) - Math.min(...is)).toBeGreaterThan(3 * (Math.max(...js) - Math.min(...js)));
-    for (const [i, j] of cells) {
-      expect(districtAt(centre(i), centre(j))).toBe('park');
-      expect(inBay(TORONTO, centre(i), centre(j))).toBe(true);
-      for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
-        expect(isIsland(TORONTO, i + di, j + dj) || isBay(TORONTO, i + di, j + dj), `${i + di},${j + dj} beside the islands`).toBe(true);
+  it('has no block-shaped island: the lake south of downtown is open water (the islands are drawn landforms)', () => {
+    expect(TORONTO.island).toBeUndefined();
+    for (let i = -12; i <= 8; i++) {
+      for (let j = 12; j <= 20; j++) {
+        expect(isIsland(TORONTO, i, j), `${i},${j}`).toBe(false);
+        if (inBay(TORONTO, centre(i), centre(j))) expect(isBay(TORONTO, i, j), `${i},${j}`).toBe(true);
       }
     }
   });

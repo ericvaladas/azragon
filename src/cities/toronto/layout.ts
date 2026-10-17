@@ -1,8 +1,8 @@
 import { CONFIG } from '../../config';
 import { hash2, valueNoise } from '../noise';
 import { coastDistance } from '../coast';
-import type { BaySpec, DistrictId, IslandSpec, RiverSpec } from '../types';
-import { AVENUE_WIDTH, PITCH, isIsland, isRiverBank, isWater, lineWidth } from '../../world/roads';
+import type { BaySpec, DistrictId, RiverSpec } from '../types';
+import { AVENUE_WIDTH, PITCH, isRiverBank, isWater, lineWidth } from '../../world/roads';
 import { AVENUE_PAVEMENT } from '../../world/chunks';
 
 /**
@@ -24,8 +24,6 @@ export const CASA_LOMA_SITE = { x: -1700, z: -2300 } as const;
 export const SCOTIABANK_ARENA_SITE = { x: 109, z: 1891 } as const;
 /** Lake Ontario: everything south of a gently wavering line near z = 2250 (land ends at z = 2200 almost everywhere). */
 export const TORONTO_LAKE: BaySpec = { dir: { x: 0, z: 1 }, offset: 2250, amp: 60, wavelength: 1500 };
-/** The Toronto Islands: long and low, east–west, one lake row offshore. */
-export const TORONTO_ISLANDS: IslandSpec = { center: { x: -300, z: 2900 }, halfAlong: 250, halfAcross: 900 };
 /** The Don: north–south, east of downtown, its banks a green ravine. */
 export const DON: RiverSpec = { axis: 'z', c0: 1500, amp: 150, wavelength: 1100, halfWidth: 130, bankPark: 1 };
 /** The lakeshore band: land within this many metres of the coastline. */
@@ -152,7 +150,6 @@ function midtown(x: number, z: number): DistrictId {
  */
 function baseDistrictAt(x: number, z: number): DistrictId {
   const cell = CONFIG.world.blockSize;
-  if (isIsland({ bay: TORONTO_LAKE, island: TORONTO_ISLANDS }, Math.floor(x / cell), Math.floor(z / cell))) return 'park';
   const area = areaAt(x, z);
   if (area) return area.district;
   const r = Math.hypot(x, z);
@@ -184,8 +181,8 @@ const POCKET_SHAPES: readonly (readonly (readonly [number, number])[])[] = [
 ];
 /** Anchors tried per grid cell before it is left without a pocket. */
 const POCKET_TRIES = 3;
-/** The water and islands, for the Don bank test. */
-const WATERS = { river: DON, bay: TORONTO_LAKE, island: TORONTO_ISLANDS } as const;
+/** The water, for the Don bank test. */
+const WATERS = { river: DON, bay: TORONTO_LAKE } as const;
 /** The blocks the landmarks stand on. */
 const LANDMARK_BLOCKS = [CN_TOWER_SITE, ROGERS_CENTRE_SITE, CITY_HALL_SITE, QUEENS_PARK_SITE, CASA_LOMA_SITE, SCOTIABANK_ARENA_SITE].map((s) => ({
   ci: Math.floor(s.x / CONFIG.world.blockSize),
