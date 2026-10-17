@@ -8,6 +8,7 @@ import { blastTopples, chunksInRadius, DestroyedLog, generateChunk, nodeSize, pl
 import { isIsland, isWater, PITCH, type Segment } from './roads';
 import { canvasCityTextures, patchFacadeShader, patchRoadShader, SCREEN_FRAME_PX, SCREEN_FRAMES, SIGN_ATLAS_PX, SIGN_RECTS, signLod, type CityTextures } from './pixelTextures';
 import { rubbleGeometry } from './rubble';
+import { Landforms } from './LandformRenderer';
 import { craneColors, craneGeometry } from './crane';
 import { faceted, toonMat } from '../render/toon';
 import { applyAtmosphere, windowGlowColor, type AtmosphereTargets } from '../render/atmosphere';
@@ -231,6 +232,8 @@ export class City {
   readonly buildingMesh: THREE.InstancedMesh;
   private rubbleMesh: THREE.InstancedMesh;
   private treeMesh: THREE.InstancedMesh;
+  /** Scenery landforms drawn over the water (Toronto's islands and spit). */
+  private landforms: Landforms;
   private parkMesh: THREE.InstancedMesh;
   /** Road segments: one textured quad each. */
   private roadMesh: THREE.InstancedMesh;
@@ -344,6 +347,7 @@ export class City {
     const cone = faceted(new THREE.ConeGeometry(0.5, 1.6, 5)).translate(0, 0.8, 0);
     this.treeMat = toonMat(this._style.colors.tree);
     this.treeMesh = new THREE.InstancedMesh(cone, this.treeMat, world.maxTrees);
+    this.landforms = new Landforms(scene, cone, this.treeMat);
     // Trees receive light but cast no shadow: tens of thousands of cones in the shadow pass cost more than they show.
     this.treeMesh.castShadow = false;
     this.parkMesh = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), layered(toonMat(0xffffff), 1), world.maxParks);
@@ -437,6 +441,7 @@ export class City {
     this.landmarkMat = toonMat(0xffffff, { vertexColors: true });
 
     this.buildOverlays();
+    this.landforms.build(this._style.landforms ?? []);
     this.stream(new THREE.Vector3(), Infinity);
     this.updateCounts();
   }
@@ -599,6 +604,7 @@ export class City {
     if (this.atmosphere) applyAtmosphere(this._style.atmosphere, this.atmosphere);
     else windowGlowColor(this._style.atmosphere, this.windowGlow);
     this.buildOverlays();
+    this.landforms.build(this._style.landforms ?? []);
     this.crater.visible = false;
     for (const key of [...this.loadedKeys]) this.unloadChunk(key);
     this.collapsing = [];

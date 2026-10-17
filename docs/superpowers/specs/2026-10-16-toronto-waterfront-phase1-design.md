@@ -91,7 +91,7 @@ Trees reuse the city's tree geometry and colours. Everything is lit by the scene
   - `onLand(spec, x, z)`: inside the outline and in no hole;
   - `onGrass(spec, x, z)`: inside the inset outline, in no hole, and on no detail's footprint;
   - `scatterTrees(spec, seed, density, max)`: seeded positions on grass.
-- **`src/world/Landforms.ts`:** the renderer, owned by `City` and rebuilt on construction and every `reset(style)`.
+- **`src/world/LandformRenderer.ts`:** the renderer, owned by `City` and rebuilt on construction and every `reset(style)`.
   - **Sand layer:** a `ShapeGeometry` of each smoothed outline, with its holes as `Path`s.
   - **Grass layer:** the inset outline, with the same holes.
   - **Height and depth:** both lie flat a little above the water. They use the city's ground-layer polygon offsets (sand under grass), so nothing flickers.
@@ -117,7 +117,7 @@ Vitest, colocated:
   - the causeway joins today's shoreline at Leslie St;
   - every hole lies inside its landform;
   - every detail sits on grass.
-- **`Landforms.test.ts`:**
+- **`LandformRenderer.test.ts`:**
   - Toronto builds its sand, grass, tree and detail meshes; Tokyo builds none;
   - a style switch and reset twice leave the same mesh count;
   - the layers sit above the water's height.

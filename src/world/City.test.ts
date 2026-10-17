@@ -802,3 +802,17 @@ describe('City (Toronto)', () => {
     expect(asked).toEqual(['kanji', 'latin', 'kanji']);
   });
 });
+
+describe('City landforms', () => {
+  const landforms = (scene: THREE.Scene) => scene.children.filter((c) => c.name.startsWith('landform-')).map((c) => c.name).sort();
+
+  it('draws Toronto\'s landforms and none for Tokyo, one set however often it resets or switches', () => {
+    const { scene, city } = make(TORONTO);
+    expect(landforms(scene)).toEqual(['landform-details', 'landform-grass', 'landform-sand', 'landform-trees']);
+    city.reset(TOKYO);
+    expect(landforms(scene)).toEqual([]);
+    city.reset(TORONTO);
+    city.reset(TORONTO);
+    expect(landforms(scene)).toHaveLength(4);
+  });
+});
