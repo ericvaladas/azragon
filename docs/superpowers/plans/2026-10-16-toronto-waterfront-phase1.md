@@ -743,7 +743,7 @@ describe('Landforms', () => {
     const { lf } = make();
     lf.build(TORONTO_LANDFORMS);
     const grass = lf.meshes().find((o) => o.name === 'landform-grass') as THREE.Mesh;
-    const ray = new THREE.Raycaster(new THREE.Vector3(-215, 100, 3720), new THREE.Vector3(0, -1, 0));
+    const ray = new THREE.Raycaster(new THREE.Vector3(-250, 100, 4300), new THREE.Vector3(0, -1, 0));
     expect(ray.intersectObject(grass)).toHaveLength(0);
     ray.set(new THREE.Vector3(-900, 100, 4500), new THREE.Vector3(0, -1, 0));
     expect(ray.intersectObject(grass).length).toBeGreaterThan(0);

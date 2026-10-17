@@ -29,7 +29,7 @@ The outlines below come from the v3 mockup, traced from the owner's map at about
 (−2483, 2360) (−1457, 2360) (−1106, 2520) (−1187, 2844) (−1133, 3168) (−485, 3762) (55, 4194) (703, 3978) (1297, 3708) (1459, 3654) (1648, 3978) (1621, 4194) (1135, 4437) (379, 4653) (−701, 4815) (−1673, 4788) (−2105, 4572) (−2375, 3708) (−2618, 2898).
 
 Its holes are the island's inner water:
-- **Blockhouse Bay:** an ellipse centred (−215, 3720), radii 420 × 190, turned 30°.
+- **Blockhouse Bay:** an ellipse centred (−250, 4300), radii 380 × 150, turned 38° along the crescent's inner shore. The traced (−215, 3720) lay partly in the Inner Harbour.
 - **Hanlan's lagoon channel:** a ribbon along (−1950, 3200) → (−1800, 3500) → (−1800, 3900) → (−1650, 4300), 80 m wide.
 - **Centre lagoon channel:** a ribbon along (−1500, 3500) → (−1300, 3700) → (−1000, 3900) → (−800, 4150), 70 m wide.
 

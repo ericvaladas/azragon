@@ -12,6 +12,7 @@ import { YONGE_DUNDAS_LOTS } from './yongeDundas';
 import { UOFT_HALLS } from './uoft';
 import { DISTILLERY_LOTS } from './distillery';
 import { NATHAN_PHILLIPS } from './square';
+import { TORONTO_LANDFORMS } from './waterfront';
 
 export const TORONTO: CityStyle = {
   id: 'toronto',
@@ -50,6 +51,7 @@ export const TORONTO: CityStyle = {
   overlays: [NATHAN_PHILLIPS],
   river: DON,
   bay: TORONTO_LAKE,
+  landforms: TORONTO_LANDFORMS,
   // A very regular grid: fewer removed streets than Tokyo (neon and port per Ruling R8).
   roadRemoval: { highrise: 0.1, neon: 0.1, office: 0.15, residential: 0.15, park: 0.4, port: 0.15 },
   keepNodes: [],
