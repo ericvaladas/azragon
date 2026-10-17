@@ -1,6 +1,6 @@
 import type { CityStyle } from '../types';
 import { POCKET_RULES, TORONTO_DISTRICTS } from './districts';
-import { CASA_LOMA_SITE, CITY_HALL_SITE, CN_TOWER_SITE, QUEENS_PARK_SITE, SCOTIABANK_ARENA_SITE, DON, ROGERS_CENTRE_SITE, TORONTO_LAKE, blockColors, districtAt, pocketAt } from './layout';
+import { CHERRY_BEACH, PORT_LANDS, SHIP_CHANNEL, CASA_LOMA_SITE, CITY_HALL_SITE, CN_TOWER_SITE, QUEENS_PARK_SITE, SCOTIABANK_ARENA_SITE, DON, ROGERS_CENTRE_SITE, TORONTO_LAKE, blockColors, districtAt, pocketAt } from './layout';
 import { CN_TOWER, cnTowerGeometry } from './cnTower';
 import { ROGERS_CENTRE, rogersCentreGeometry } from './rogersCentre';
 import { CITY_HALL, cityHallGeometry } from './cityHall';
@@ -29,6 +29,7 @@ export const TORONTO: CityStyle = {
     roof: 0xa89c94,
     tree: 0x3f7a2f,
     quay: 0xb3aa9a,
+    beach: 0xe3d3a1,
     water: 0x3d8fa8,
   },
   // Warm white, amber, cyan, magenta, mint: no reds (they belong to threats).
@@ -51,9 +52,12 @@ export const TORONTO: CityStyle = {
   overlays: [NATHAN_PHILLIPS],
   river: DON,
   bay: TORONTO_LAKE,
+  landAreas: PORT_LANDS,
+  waterAreas: [SHIP_CHANNEL],
+  beaches: [CHERRY_BEACH],
   landforms: TORONTO_LANDFORMS,
   // A very regular grid: fewer removed streets than Tokyo (neon and port per Ruling R8).
-  roadRemoval: { highrise: 0.1, neon: 0.1, office: 0.15, residential: 0.15, park: 0.4, port: 0.15 },
+  roadRemoval: { highrise: 0.1, neon: 0.1, office: 0.15, residential: 0.15, park: 0.4, port: 0.15, industrial: 0.15 },
   keepNodes: [],
   // A warm evening: the sun low in the west-north-west (−X, a little −Z, where Toronto's summer sun sets), so
   // shadows fall long to the east and the faces turned toward the start camera catch its light. The fog is the

@@ -2,7 +2,7 @@ import { CONFIG } from '../config';
 import { mulberry32, pick, range } from '../util/rng';
 import type { BuildingSpec, CityStyle, DistrictRules, LandmarkSpec, SignDef, YardRules } from '../cities/types';
 import { hash2 } from '../cities/noise';
-import { AVENUE_WIDTH, PITCH, isBay, blockDistrict, isIsland, isWater, lineWidth, segmentAt, type Axis, type Segment } from './roads';
+import { AVENUE_WIDTH, PITCH, isBay, blockDistrict, isIsland, isWater, lineWidth, segmentAt, type Axis, type Segment, inCellRect } from './roads';
 
 export type { BuildingSpec } from '../cities/types';
 export type TreeSpec = { x: number; z: number; s: number };
@@ -80,6 +80,8 @@ export type ChunkContent = {
   parks: ParkSpec[];
   quays: ParkSpec[];
   lawns: ParkSpec[];
+  /** Beach blocks, by centre: sand pads under their trees. */
+  beaches: ParkSpec[];
   cranes: CraneSpec[];
   landmarks: LandmarkSpec[];
   roads: Segment[];
@@ -300,6 +302,7 @@ export function generateChunk(style: CityStyle, seed: number, cx: number, cz: nu
   const parks: ParkSpec[] = [];
   const quays: ParkSpec[] = [];
   const lawns: ParkSpec[] = [];
+  const beaches: ParkSpec[] = [];
   const cranes: CraneSpec[] = [];
   const landmarks: LandmarkSpec[] = [];
   const water: WaterSpec[] = [];
@@ -364,10 +367,14 @@ export function generateChunk(style: CityStyle, seed: number, cx: number, cz: nu
       for (const s of blockSpecials) specials.push({ ...s, signs: s.signs.map((g) => ({ ...g })) });
       if (district === 'park') {
         // A special lot in a park (a college hall on its lawn) stands among the trees: none grows inside it.
-        parks.push({ x: bx, z: bz });
+        const beach = style.beaches?.some((r) => inCellRect(r, bi, bj)) ?? false;
+        (beach ? beaches : parks).push({ x: bx, z: bz });
         const count = Math.round(range(rng, style.parkTrees[0], style.parkTrees[1]));
         for (let t = 0; t < count; t++) {
-          const tree = { x: ix + range(rng, -iw / 2, iw / 2), z: iz + range(rng, -id / 2, id / 2), s: range(rng, 14, 26) };
+          // A beach's trees stand on its inland (north, −z) half; the sand runs to the water.
+          const tx = ix + range(rng, -iw / 2, iw / 2);
+          const tz = beach ? iz + range(rng, -id / 2, 0) : iz + range(rng, -id / 2, id / 2);
+          const tree = { x: tx, z: tz, s: range(rng, 14, 26) };
           if (!blockSpecials.some((s) => overlaps(s, { ...tree, w: 0, d: 0 }, 6))) trees.push(tree);
         }
         continue;
@@ -508,7 +515,7 @@ export function generateChunk(style: CityStyle, seed: number, cx: number, cz: nu
   };
   const keptAvenue = thin(avenueTrees, TREES_PER_CHUNK);
   const keptTrees = [...keptAvenue, ...thin(trees, TREES_PER_CHUNK - keptAvenue.length)];
-  return { buildings: out, trees: keptTrees, parks, quays, lawns, cranes, landmarks, roads, nodes, water, seaWall };
+  return { buildings: out, trees: keptTrees, parks, quays, lawns, beaches, cranes, landmarks, roads, nodes, water, seaWall };
 }
 
 /** Chunks to load (within loadRadius, nearest first) and to unload (beyond unloadRadius). */

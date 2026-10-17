@@ -1,6 +1,6 @@
 import type * as THREE from 'three';
 
-export type DistrictId = 'highrise' | 'neon' | 'office' | 'residential' | 'park' | 'port';
+export type DistrictId = 'highrise' | 'neon' | 'office' | 'residential' | 'park' | 'port' | 'industrial';
 export const DISTRICTS: readonly DistrictId[] = ['highrise', 'neon', 'office', 'residential', 'park', 'port'];
 
 /** Facade atlas cells (see pixelTextures.facadeAtlas): left to right. */
@@ -175,6 +175,8 @@ export type CityStyle = {
     tree: number;
     /** Port quay paving, drawn as a pad over each port cell. */
     quay: number;
+    /** Sand pads of beach blocks (absent: the park colour). */
+    beach?: number;
     /** River and bay water. */
     water: number;
     /** Lawn under every residential block (a full-block pad), when set; unset means no lawns. */
@@ -195,6 +197,8 @@ export type CityStyle = {
   island?: IslandSpec;
   landAreas?: readonly CellRect[];
   waterAreas?: readonly CellRect[];
+  /** Park blocks that are beaches: sand pads instead of grass, their trees only in the inland (north, −z) half. */
+  beaches?: readonly CellRect[];
   /** Scenery landforms drawn over the water (islands, spits); absent means none. */
   landforms?: readonly LandformSpec[];
   /**

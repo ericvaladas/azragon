@@ -1,7 +1,7 @@
 import { CONFIG } from '../../config';
 import { hash2, valueNoise } from '../noise';
 import { coastDistance } from '../coast';
-import type { BaySpec, DistrictId, RiverSpec } from '../types';
+import type { BaySpec, CellRect, DistrictId, RiverSpec } from '../types';
 import { AVENUE_WIDTH, PITCH, isRiverBank, isWater, lineWidth } from '../../world/roads';
 import { AVENUE_PAVEMENT } from '../../world/chunks';
 
@@ -24,6 +24,16 @@ export const CASA_LOMA_SITE = { x: -1700, z: -2300 } as const;
 export const SCOTIABANK_ARENA_SITE = { x: 109, z: 1891 } as const;
 /** Lake Ontario: everything south of a gently wavering line near z = 2250 (land ends at z = 2200 almost everywhere). */
 export const TORONTO_LAKE: BaySpec = { dir: { x: 0, z: 1 }, offset: 2250, amp: 60, wavelength: 1500 };
+/** The Port Lands: a peninsula south into the lake east of the Don, stepped narrower toward its southern tip. */
+export const PORT_LANDS: readonly CellRect[] = [
+  { ci0: 8, ci1: 23, cj0: 11, cj1: 16 },
+  { ci0: 8, ci1: 20, cj0: 17, cj1: 17 },
+  { ci0: 9, ci1: 17, cj0: 18, cj1: 19 },
+];
+/** The Ship Channel: one block wide across the Port Lands, open to the harbour at its west end. */
+export const SHIP_CHANNEL: CellRect = { ci0: 8, ci1: 22, cj0: 14, cj1: 14 };
+/** Cherry Beach: the Port Lands' southwest shore. */
+export const CHERRY_BEACH: CellRect = { ci0: 9, ci1: 11, cj0: 19, cj1: 19 };
 /** The Don: north–south, east of downtown, its banks a green ravine. */
 export const DON: RiverSpec = { axis: 'z', c0: 1500, amp: 150, wavelength: 1100, halfWidth: 130, bankPark: 1 };
 /** The lakeshore band: land within this many metres of the coastline. */
@@ -69,6 +79,14 @@ export type Area = { name: string; district: DistrictId; colors?: readonly numbe
  * ahead of everything but the islands (High Park reaches down over the lakeshore band to the water).
  */
 export const AREAS: readonly Area[] = [
+  // Cherry Beach: sand and trees on the Port Lands' southwest shore.
+  { name: 'Cherry Beach', district: 'park', ...CHERRY_BEACH },
+  // The Port Lands: low industry on the peninsula.
+  ...PORT_LANDS.map((r, k) => ({ name: k === 0 ? 'Port Lands' : `Port Lands ${k + 1}`, district: 'industrial' as const, ...r })),
+  // Harbourfront and Queens Quay: waterfront condos along the shore row west of Yonge.
+  { name: 'Harbourfront', district: 'port', ci0: -9, ci1: -1, cj0: 10, cj1: 10 },
+  // Exhibition Place: grounds around BMO Field and the Princes' Gates.
+  { name: 'Exhibition Place', district: 'park', ci0: -18, ci1: -13, cj0: 9, cj1: 10 },
   // Yorkville: towers just west of the Bloor-Yonge node.
   { name: 'Yorkville', district: 'highrise', ci0: -4, ci1: -3, cj0: -7, cj1: -6 },
   // University Avenue: the blocks either side of the x = −1000 avenue, from Queen's Park south to the Financial row.

@@ -33,6 +33,12 @@ export const TORONTO_DISTRICTS: Record<DistrictId, DistrictRules> = {
     lots: 0, fill: 0, minPerBlock: 0, height: [0, 0], heightCurve: 1, footprint: [0, 0],
     facades: [FACADE.office], colors: [0xffffff], signs: 0, billboard: 0, trees: 0,
   },
+  // The Port Lands: low brick sheds and wide warehouses in brick, rust, concrete and pale corrugated green.
+  industrial: {
+    lots: 2, fill: 0.9, minPerBlock: 2, height: [10, 30], heightCurve: 1.6, footprint: [0.7, 0.95],
+    facades: [FACADE.office, FACADE.office, FACADE.shop], colors: [0xa8553e, 0x8a5a44, 0x9a9690, 0xb5b0a6, 0x8fae98],
+    signs: 0, billboard: 0, trees: 1,
+  },
   // The waterfront: pale glass and teal condo towers on quay paving; no yard, so no containers or cranes.
   port: {
     lots: 2, fill: 0.7, minPerBlock: 1, height: [60, 120], heightCurve: 1.2, footprint: [0.6, 0.85],

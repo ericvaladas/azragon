@@ -2,9 +2,9 @@ import { describe, it, expect } from 'vitest';
 import { CONFIG } from '../../config';
 import { DISTRICTS, type DistrictId } from '../types';
 import { coastDistance } from '../coast';
-import { AREAS, CORE_RADIUS, DON, FINANCIAL, PORT_DEPTH, TORONTO_LAKE, WATERFRONT, YONGE_CORRIDOR, YONGE_DUNDAS, YONGE_NODES, blockInterior, districtAt, lotCentre, pocketAt } from './layout';
+import { AREAS, CORE_RADIUS, DON, FINANCIAL, PORT_DEPTH, TORONTO_LAKE, WATERFRONT, YONGE_CORRIDOR, YONGE_DUNDAS, YONGE_NODES, blockInterior, districtAt, lotCentre, pocketAt, PORT_LANDS, SHIP_CHANNEL, areaAt } from './layout';
 import { TORONTO } from './index';
-import { AVENUE_WIDTH, PITCH, blockDistrict, isBay, isIsland, isRiver, isRiverBank, isWater, lineWidth, segmentAt } from '../../world/roads';
+import { AVENUE_WIDTH, PITCH, blockDistrict, isBay, isIsland, isRiver, isRiverBank, isWater, lineWidth, segmentAt, inCellRect } from '../../world/roads';
 import { inBay } from '../../world/shore';
 
 const mod = (n: number, m: number) => ((n % m) + m) % m;
@@ -32,10 +32,11 @@ describe('Toronto layout', () => {
     for (const [x, z] of [[-500, 1300], [-100, 1700], [-700, 1500], [-300, 1900]] as const) expect(districtAt(x, z), `${x},${z}`).not.toBe('highrise');
   });
 
-  it('lays the lake ahead (+Z): land up to z = 2200, open lake beyond, none behind the crash', () => {
+  it('lays the lake ahead (+Z): land up to z = 2200, open lake beyond (apart from the Port Lands), none behind the crash', () => {
+    const portLand = (i: number, j: number) => PORT_LANDS.some((r) => inCellRect(r, i, j)) && !inCellRect(SHIP_CHANNEL, i, j);
     for (let i = -20; i <= 20; i++) {
       for (let j = -20; j <= 10; j++) expect(isBay(TORONTO, i, j), `${i},${j}`).toBe(false);
-      for (const j of [12, 16, 20, 40]) if (!isIsland(TORONTO, i, j)) expect(isBay(TORONTO, i, j), `${i},${j}`).toBe(true);
+      for (const j of [12, 16, 20, 40]) if (!isIsland(TORONTO, i, j)) expect(isBay(TORONTO, i, j), `${i},${j}`).toBe(!portLand(i, j));
     }
   });
 
@@ -99,6 +100,8 @@ describe('Toronto layout', () => {
     for (let i = -10; i <= 12; i++) for (let j = 8; j <= 11; j++) {
       if (isWater(TORONTO, i, j) || isIsland(TORONTO, i, j)) continue;
       const x = centre(i), z = centre(j);
+      // Named areas (Harbourfront, the Port Lands) set their own districts.
+      if (areaAt(x, z)) continue;
       const coast = coastDistance(TORONTO_LAKE, x, z);
       const want = coast >= 0 && coast <= PORT_DEPTH && x >= WATERFRONT.x0 && x <= WATERFRONT.x1;
       expect(districtAt(x, z) === 'port', `${x},${z}`).toBe(want);
@@ -170,6 +173,8 @@ describe('Toronto layout', () => {
     for (let i = -20; i < 20; i++) for (let j = -20; j < 11; j++) {
       const x = centre(i), z = centre(j);
       if (Math.hypot(x, z) > CORE_RADIUS || isWater(TORONTO, i, j) || isIsland(TORONTO, i, j)) continue;
+      // Named areas' parks (Exhibition Place, U of T…) are not parkettes.
+      if (areaAt(x, z)) continue;
       const d = districtAt(x, z);
       expect(districtAt(x, z)).toBe(d);
       if (d === 'residential') homes++;
@@ -187,7 +192,7 @@ describe('Toronto layout', () => {
   });
 
   it('beyond the core: mostly residential and office, with high-rise, park and port, and never neon', () => {
-    const n: Record<DistrictId, number> = { highrise: 0, neon: 0, office: 0, residential: 0, park: 0, port: 0 };
+    const n: Record<DistrictId, number> = { highrise: 0, neon: 0, office: 0, residential: 0, park: 0, port: 0, industrial: 0 };
     let total = 0;
     for (let i = 0; i < 120; i++) for (let j = 0; j < 120; j++) {
       const x = -24000 + i * 400, z = -24000 + j * 400;

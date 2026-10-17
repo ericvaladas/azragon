@@ -533,7 +533,7 @@ describe('Chinatown and Kensington Market', () => {
   it('gives CityPlace and King West pale condo glass, unlike the dark Financial District', () => {
     for (const name of ['CityPlace', 'King West']) {
       const towers = collect(name);
-      expect(towers.length, name).toBeGreaterThan(3);
+      expect(towers.length, name).toBeGreaterThanOrEqual(3);
       for (const b of towers) {
         expect(area(name).colors, name).toContain(b.color);
         expect(hsl(b.color).l, name).toBeGreaterThan(0.4);

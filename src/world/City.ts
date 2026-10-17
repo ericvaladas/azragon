@@ -858,6 +858,7 @@ export class City {
       ...content.parks.map((p) => ({ ...p, color: colors.park })),
       ...content.quays.map((q) => ({ ...q, color: colors.quay })),
       ...content.lawns.map((l) => ({ ...l, color: colors.lawn ?? colors.park })),
+      ...content.beaches.map((b) => ({ ...b, color: colors.beach ?? colors.park })),
     ];
     for (const p of pads) {
       const slot = this.freeParks.pop();

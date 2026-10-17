@@ -32,6 +32,12 @@ export const TOKYO_DISTRICTS: Record<DistrictId, DistrictRules> = {
     facades: [FACADE.office], colors: [0xffffff], signs: 0, billboard: 0, trees: 0,
   },
   // The harbour: container blocks (red, blue, orange, green, teal) and pale warehouses; no signs, no trees.
+  // Unused in Tokyo (every city defines every district).
+  industrial: {
+    lots: 2, fill: 0.9, minPerBlock: 2, height: [10, 30], heightCurve: 1.6, footprint: [0.7, 0.95],
+    facades: [FACADE.office, FACADE.office, FACADE.shop], colors: [0xa8553e, 0x8a5a44, 0x9a9690, 0xb5b0a6, 0x8fae98],
+    signs: 0, billboard: 0, trees: 1,
+  },
   port: {
     lots: 2, fill: 0.85, minPerBlock: 1, height: [5.2, 10.4], heightCurve: 1, footprint: [1, 1],
     facades: [FACADE.container], colors: CONTAINER_COLORS, signs: 0, billboard: 0, trees: 0,

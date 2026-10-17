@@ -43,7 +43,7 @@ describe('Tokyo layout', () => {
     for (const [x, z] of [[123, 456], [-9000, 12000], [40000, -3000]] as const) expect(districtAt(x, z)).toBe(districtAt(x, z));
   });
   it('beyond the core: every district appears, mostly residential or office, neon a minority', () => {
-    const n: Record<DistrictId, number> = { highrise: 0, neon: 0, office: 0, residential: 0, park: 0, port: 0 };
+    const n: Record<DistrictId, number> = { highrise: 0, neon: 0, office: 0, residential: 0, park: 0, port: 0, industrial: 0 };
     let total = 0;
     for (let i = 0; i < 120; i++) for (let j = 0; j < 120; j++) {
       const x = CORE_RADIUS + 1000 + i * 400;

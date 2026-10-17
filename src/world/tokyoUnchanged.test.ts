@@ -13,11 +13,12 @@ const fnv = (s: string) => {
 };
 
 describe('Tokyo chunks', () => {
-  it('generate exactly the content recorded before Toronto\'s corridor and lawns (chunks x −5..5, z −8..4), with no lawns', () => {
+  it('generate exactly the content recorded before Toronto\'s corridor and lawns (chunks x −5..5, z −8..4), with no lawns or beaches', () => {
     let all = '';
     for (let cx = -5; cx <= 5; cx++) for (let cz = -8; cz <= 4; cz++) {
-      const { lawns, ...rest } = generateChunk(TOKYO, 1337, cx, cz);
+      const { lawns, beaches, ...rest } = generateChunk(TOKYO, 1337, cx, cz);
       expect(lawns, `${cx},${cz}`).toEqual([]);
+      expect(beaches, `${cx},${cz}`).toEqual([]);
       all += fnv(JSON.stringify(rest));
     }
     expect(fnv(all)).toBe('9a170801');

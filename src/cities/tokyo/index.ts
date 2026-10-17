@@ -40,7 +40,7 @@ export const TOKYO: CityStyle = {
   island: TOKYO_ISLAND,
   islandRules: TOKYO_ISLAND_RULES,
   // The port matches office and residential (what the coast was before it), so the network there keeps its streets.
-  roadRemoval: { highrise: 0.15, neon: 0.15, office: 0.3, residential: 0.3, park: 0.5, port: 0.3 },
+  roadRemoval: { highrise: 0.15, neon: 0.15, office: 0.3, residential: 0.3, park: 0.5, port: 0.3, industrial: 0.15 },
   keepNodes: [SHIBUYA_CROSSING],
   // Today's midday, exactly: the palette and fog in CONFIG, the light intensities and sun direction Lighting used.
   atmosphere: {
