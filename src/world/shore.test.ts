@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { TOKYO } from '../cities/tokyo';
-import { isRiver, isBay } from './roads';
+import { isRiver, isBay, isWater } from './roads';
 import type { CityStyle } from '../cities/types';
 
 import { blockedAt, inBay, landingSpot, shoreStep, shoreStopped, slideAlongShore } from './shore';
@@ -196,5 +196,27 @@ describe('shore with a north–south river', () => {
       expect(blockedAt(NS, ci * 200 + 100, cj * 200 + 100, 100)).toBe(false);
     }
     expect(rivers).toBeGreaterThan(20);
+  });
+});
+
+describe('shoreline land and water areas', () => {
+  const lake = { dir: { x: 0, z: 1 }, offset: 2250, amp: 0, wavelength: 1000 };
+  const style = { bay: lake, landAreas: [{ ci0: 5, ci1: 8, cj0: 11, cj1: 14 }], waterAreas: [{ ci0: 5, ci1: 8, cj0: 13, cj1: 13 }, { ci0: 0, ci1: 0, cj0: 3, cj1: 3 }] };
+
+  it('a land area is land beyond the coastline; around it the lake is unchanged', () => {
+    expect(isBay(style, 6, 12)).toBe(false);
+    expect(isBay(style, 9, 12)).toBe(true);
+    expect(isBay(style, 6, 15)).toBe(true);
+  });
+
+  it('a water area is water, inside a land area and inland', () => {
+    expect(isBay(style, 6, 13)).toBe(true);
+    expect(isBay(style, 0, 3)).toBe(true);
+    expect(isBay(style, 1, 3)).toBe(false);
+    expect(isWater(style, 6, 13)).toBe(true);
+  });
+
+  it('a style without areas is unchanged', () => {
+    for (let i = -10; i <= 10; i++) for (let j = 5; j <= 15; j++) expect(isBay({ bay: lake }, i, j)).toBe((j + 0.5) * 200 > 2250);
   });
 });

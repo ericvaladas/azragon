@@ -100,8 +100,14 @@ export type BaySpec = { dir: { x: number; z: number }; offset: number; amp: numb
 
 /** A rounded-rectangle island: half extents along the bay's dir and perp axes from center. Never reached by road. */
 export type IslandSpec = { center: { x: number; z: number }; halfAlong: number; halfAcross: number };
-/** Shape of the coast and island only (what the water tests read). */
-export type Shoreline = { bay?: BaySpec; island?: IslandSpec };
+/** Blocks ci0..ci1 × cj0..cj1 (inclusive). */
+export type CellRect = { ci0: number; ci1: number; cj0: number; cj1: number };
+/**
+ * Shape of the coast only (what the water tests read): the coastline, an island, and blocks overriding the coastline:
+ * `landAreas` are land though seaward of it (a peninsula), `waterAreas` are water though inland (a channel). Water
+ * areas win over land areas.
+ */
+export type Shoreline = { bay?: BaySpec; island?: IslandSpec; landAreas?: readonly CellRect[]; waterAreas?: readonly CellRect[] };
 
 /**
  * A city's time of day. Colours are hex (sRGB). `sunDir` points from the ground toward the sun (normalised when
@@ -187,6 +193,8 @@ export type CityStyle = {
   river?: RiverSpec;
   bay?: BaySpec;
   island?: IslandSpec;
+  landAreas?: readonly CellRect[];
+  waterAreas?: readonly CellRect[];
   /** Scenery landforms drawn over the water (islands, spits); absent means none. */
   landforms?: readonly LandformSpec[];
   /**

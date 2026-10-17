@@ -1,6 +1,6 @@
 import { CONFIG } from '../config';
 import { hash2 } from '../cities/noise';
-import type { CityStyle, DistrictId, RiverSpec, Shoreline } from '../cities/types';
+import type { CityStyle, DistrictId, RiverSpec, Shoreline, CellRect } from '../cities/types';
 import type { Vec2 } from '../util/math';
 
 /** The water a city lays: its river, bay and island. */
@@ -53,8 +53,18 @@ export function isIsland(style: Shoreline, ci: number, cj: number): boolean {
   return Math.hypot(qu, qv) <= ISLAND_CORNER;
 }
 
-/** True when the centre of cell (ci, cj) lies seaward of the coastline; island cells are never bay. */
+/** Whether block (ci, cj) lies in r. */
+export function inCellRect(r: CellRect, ci: number, cj: number): boolean {
+  return ci >= r.ci0 && ci <= r.ci1 && cj >= r.cj0 && cj <= r.cj1;
+}
+
+/**
+ * True when block (ci, cj) is bay: in a water area; else not in a land area, its centre seaward of the coastline,
+ * and not an island.
+ */
 export function isBay(style: Shoreline, ci: number, cj: number): boolean {
+  if (style.waterAreas?.some((r) => inCellRect(r, ci, cj))) return true;
+  if (style.landAreas?.some((r) => inCellRect(r, ci, cj))) return false;
   const bay = style.bay;
   if (!bay) return false;
   const { x, z } = cellCentre(ci, cj);
