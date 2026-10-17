@@ -1,7 +1,8 @@
 import { CONFIG } from '../../config';
 import { hash2, valueNoise } from '../noise';
 import { coastDistance } from '../coast';
-import type { BaySpec, CellRect, DistrictId, RiverSpec } from '../types';
+import type { BaySpec, CellRect, DistrictId, DistrictRules, RiverSpec } from '../types';
+import { COTTAGE_RULES, MAIN_STREET_RULES, MIDRISE_RULES, OLD_TOWN_RULES, VICTORIAN_RULES } from './districts';
 import { AVENUE_WIDTH, PITCH, isRiverBank, isWater, lineWidth } from '../../world/roads';
 import { AVENUE_PAVEMENT } from '../../world/chunks';
 
@@ -64,12 +65,19 @@ export const CONDO_COLORS = [0xcfe3e6, 0x9fd0cf, 0x7fb8c4, 0xe2ecec, 0x8cc4c9, 0
 export const UNIVERSITY_COLORS = [0x7c94ac, 0x7d8e9c, 0xb8ada0, 0x7088a0, 0xa8b4bc] as const;
 /** Kensington Market's painted houses: pink, teal, yellow, purple, orange, sky blue. */
 export const KENSINGTON_COLORS = [0xe86aa0, 0x3fb8a8, 0xf2c94c, 0x9a4fd0, 0xf08a5d, 0x6cc4e8] as const;
+/** Little Italy: terracotta, cream, green and ochre shopfronts. */
+export const LITTLE_ITALY_COLORS = [0xc86a43, 0xe8dcc0, 0x5f8a4a, 0xd9a441] as const;
+/** Leslieville: brick and pastel shopfronts. */
+export const LESLIEVILLE_COLORS = [0xa8553a, 0xd9a3a0, 0xa9c4d4, 0xe8d9a8, 0x8fae98] as const;
+/** Greektown on the Danforth: white, Aegean blue and pale stone. */
+export const GREEKTOWN_COLORS = [0xf2f0ea, 0x2f6fb5, 0xd8d2c0, 0x4f8fc9] as const;
 
 /**
  * A named area: the blocks ci0..ci1 × cj0..cj1 (inclusive), or the blocks whose centre lies in the ellipse of radii
- * rx × rz about (x, z). `colors`, when set, replaces the district's facade tints on the area's random buildings.
+ * rx × rz about (x, z). `colors`, when set, replaces the district's facade tints on the area's random buildings;
+ * `rules`, when set, replaces the district's building rules on them.
  */
-export type Area = { name: string; district: DistrictId; colors?: readonly number[] } & (
+export type Area = { name: string; district: DistrictId; colors?: readonly number[]; rules?: DistrictRules } & (
   | { ci0: number; ci1: number; cj0: number; cj1: number }
   | { x: number; z: number; rx: number; rz: number }
 );
@@ -109,6 +117,26 @@ export const AREAS: readonly Area[] = [
   { name: 'Casa Loma', district: 'park', ci0: -9, ci1: -9, cj0: -12, cj1: -12 },
   // The Distillery District: brick warehouses (hand-placed lots) on paved lanes.
   { name: 'Distillery District', district: 'office', ci0: 4, ci1: 5, cj0: 8, cj1: 8 },
+  // St. Lawrence / Old Town: low brick east of Yonge, south of King, beside the Distillery.
+  { name: 'St. Lawrence / Old Town', district: 'office', rules: OLD_TOWN_RULES, ci0: 1, ci1: 3, cj0: 7, cj1: 8 },
+  // The Entertainment District: condo towers round King and John.
+  { name: 'Entertainment District', district: 'highrise', colors: CONDO_COLORS, ci0: -8, ci1: -7, cj0: 6, cj1: 7 },
+  // The Annex: big Victorian houses north of Bloor, west of Spadina.
+  { name: 'The Annex', district: 'residential', rules: VICTORIAN_RULES, ci0: -13, ci1: -10, cj0: -11, cj1: -7 },
+  // Trinity Bellwoods: the park at Queen and Strachan.
+  { name: 'Trinity Bellwoods', district: 'park', ci0: -16, ci1: -15, cj0: 4, cj1: 5 },
+  // Little Italy: low shops with signs along College.
+  { name: 'Little Italy', district: 'neon', rules: MAIN_STREET_RULES, colors: LITTLE_ITALY_COLORS, ci0: -17, ci1: -14, cj0: -1, cj1: 0 },
+  // Cabbagetown: small Victorian rows west of the Don.
+  { name: 'Cabbagetown', district: 'residential', rules: COTTAGE_RULES, ci0: 5, ci1: 6, cj0: -2, cj1: 1 },
+  // Regent Park: new mid-rise condos.
+  { name: 'Regent Park', district: 'highrise', rules: MIDRISE_RULES, ci0: 5, ci1: 6, cj0: 2, cj1: 3 },
+  // Riverside: low brick shops along Queen East past the Don, a few signs.
+  { name: 'Riverside', district: 'neon', rules: { ...MAIN_STREET_RULES, signs: 0.5 }, colors: [0xa8553a, 0x8a3b2b, 0xe8dcc0], ci0: 9, ci1: 12, cj0: 5, cj1: 5 },
+  // Leslieville: shops and cafés along Queen East.
+  { name: 'Leslieville', district: 'neon', rules: MAIN_STREET_RULES, colors: LESLIEVILLE_COLORS, ci0: 13, ci1: 19, cj0: 5, cj1: 5 },
+  // Greektown: the Danforth's white and blue shops.
+  { name: 'Greektown', district: 'neon', rules: MAIN_STREET_RULES, colors: GREEKTOWN_COLORS, ci0: 9, ci1: 19, cj0: -6, cj1: -6 },
 ];
 
 /** The area holding the block that contains (x, z), if any. */

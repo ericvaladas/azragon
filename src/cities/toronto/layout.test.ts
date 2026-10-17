@@ -20,9 +20,9 @@ describe('Toronto layout', () => {
     expect(YONGE_DUNDAS).toEqual({ x: -100, z: 900 });
     expect(districtAt(-100, 900)).toBe('neon');
     for (const [x, z] of [[100, 900], [-300, 900], [-100, 700], [-100, 1100]] as const) expect(districtAt(x, z)).not.toBe('neon');
-    // Chinatown (on Spadina, x −2000..−1600) aside.
+    // Named neon areas (Chinatown, the main streets) aside.
     let neon = 0;
-    for (let i = -20; i < 20; i++) for (let j = -20; j < 20; j++) if (districtAt(centre(i), centre(j)) === 'neon' && (centre(i) < -2000 || centre(i) > -1600)) neon++;
+    for (let i = -20; i < 20; i++) for (let j = -20; j < 20; j++) if (districtAt(centre(i), centre(j)) === 'neon' && !areaAt(centre(i), centre(j))) neon++;
     expect(neon).toBe(1);
   });
 

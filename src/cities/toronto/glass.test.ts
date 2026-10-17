@@ -41,7 +41,7 @@ describe('Toronto has no black-looking buildings', () => {
   it('keeps every district, area, pocket and hand-placed lot colour out of the near-black', () => {
     const colours: [string, number][] = [];
     for (const [d, r] of Object.entries(TORONTO_DISTRICTS)) for (const c of r.colors) colours.push([d, c]);
-    for (const a of AREAS) for (const c of a.colors ?? []) colours.push([a.name, c]);
+    for (const a of AREAS) for (const c of [...(a.colors ?? []), ...(a.rules?.colors ?? [])]) colours.push([a.name, c]);
     for (const c of POCKET_RULES.colors) colours.push(['pocket', c]);
     for (const s of TORONTO.specialLots) colours.push([`lot ${s.x},${s.z}`, s.color]);
     for (const [name, c] of colours) expect(ok(c), `${name} #${c.toString(16)} L ${luminance(c).toFixed(3)}`).toBe(true);

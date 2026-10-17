@@ -1,6 +1,6 @@
 import type { CityStyle } from '../types';
 import { POCKET_RULES, TORONTO_DISTRICTS } from './districts';
-import { BMO_FIELD_SITE, CHERRY_BEACH, HEARN_SITE, PORT_LANDS, PRINCES_GATES_SITE, SHIP_CHANNEL, CASA_LOMA_SITE, CITY_HALL_SITE, CN_TOWER_SITE, QUEENS_PARK_SITE, SCOTIABANK_ARENA_SITE, DON, ROGERS_CENTRE_SITE, TORONTO_LAKE, blockColors, districtAt, pocketAt } from './layout';
+import { BMO_FIELD_SITE, CHERRY_BEACH, HEARN_SITE, PORT_LANDS, PRINCES_GATES_SITE, SHIP_CHANNEL, CASA_LOMA_SITE, CITY_HALL_SITE, CN_TOWER_SITE, QUEENS_PARK_SITE, SCOTIABANK_ARENA_SITE, DON, ROGERS_CENTRE_SITE, TORONTO_LAKE, areaAt, blockColors, districtAt, pocketAt } from './layout';
 import { CN_TOWER, cnTowerGeometry } from './cnTower';
 import { ROGERS_CENTRE, rogersCentreGeometry } from './rogersCentre';
 import { CITY_HALL, cityHallGeometry } from './cityHall';
@@ -40,7 +40,8 @@ export const TORONTO: CityStyle = {
   districtAt,
   blockColors,
   // The tower pockets build condo towers by their own rules.
-  blockRules: (x, z) => (pocketAt(x, z) ? POCKET_RULES : undefined),
+  // A named area's own rules, else a tower pocket's (areas never hold pockets).
+  blockRules: (x, z) => areaAt(x, z)?.rules ?? (pocketAt(x, z) ? POCKET_RULES : undefined),
   districts: TORONTO_DISTRICTS,
   parkTrees: [20, 28],
   landmarks: [

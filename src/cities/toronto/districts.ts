@@ -56,3 +56,35 @@ export const POCKET_RULES: DistrictRules = {
   facades: [FACADE.glass, FACADE.balcony, FACADE.glass], colors: [0xcfe3e6, 0x9fd0cf, 0x7fb8c4, 0xe2ecec, 0x8cc4c9, 0xd8cdb4, 0xb7d3dc],
   signs: 0, billboard: 0, trees: 4,
 };
+/** St. Lawrence / Old Town: low 1800s red and buff brick, shopfronts below. */
+export const OLD_TOWN_RULES: DistrictRules = {
+  lots: 2, fill: 0.9, minPerBlock: 2, height: [15, 30], heightCurve: 1.2, footprint: [0.75, 0.95],
+  facades: [FACADE.shop, FACADE.office], colors: [0xa8553a, 0x9c4430, 0xc9a77a, 0xb98a5e, 0x8a3b2b],
+  signs: 0.2, billboard: 0, trees: 2,
+};
+
+/** The Annex: big Victorian houses in dark red brick with cream trim. */
+export const VICTORIAN_RULES: DistrictRules = {
+  lots: 3, fill: 0.75, minPerBlock: 4, height: [14, 24], heightCurve: 1.2, footprint: [0.7, 0.85],
+  facades: [FACADE.balcony], colors: [0x7a2e24, 0x8a3828, 0x8f4636, 0xe2d3b2, 0x9a4030],
+  signs: 0, billboard: 0, trees: 6,
+};
+
+/** Cabbagetown: smaller Victorian rows in red brick and cream. */
+export const COTTAGE_RULES: DistrictRules = {
+  ...VICTORIAN_RULES, lots: 4, height: [10, 18], footprint: [0.65, 0.8], colors: [0xb84d35, 0xa04632, 0xe2d3b2, 0xd9c8a0, 0x8e3a2c],
+};
+
+/** Main streets (Little Italy, Riverside, Leslieville, the Danforth): low shops shoulder to shoulder, about a sign each. */
+export const MAIN_STREET_RULES: DistrictRules = {
+  lots: 4, fill: 0.85, minPerBlock: 8, height: [10, 20], heightCurve: 1.2, footprint: [0.78, 0.92],
+  facades: [FACADE.shop, FACADE.shop, FACADE.office], colors: [0xb05a3c, 0xe8dcc0, 0x8a3b2b],
+  signs: 1, billboard: 0, trees: 2,
+};
+
+/** Regent Park: new mid-rise condos in pale glass and brick. */
+export const MIDRISE_RULES: DistrictRules = {
+  lots: 2, fill: 0.8, minPerBlock: 2, height: [30, 90], heightCurve: 1.3, footprint: [0.6, 0.85],
+  facades: [FACADE.glass, FACADE.balcony], colors: [0xcfe3e6, 0xb7d3dc, 0xa8553a, 0xe2ecec, 0x9a9690],
+  signs: 0, billboard: 0, trees: 4,
+};
