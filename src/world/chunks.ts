@@ -296,6 +296,8 @@ export function generateChunk(style: CityStyle, seed: number, cx: number, cz: nu
   const rng = mulberry32(chunkSeed(seed, cx, cz));
   const pitch = w.blockSize;
   const buildings: BuildingSpec[] = [];
+  /** Indices into `buildings` of dense blocks' buildings. */
+  const dense = new Set<number>();
   const specials: BuildingSpec[] = [];
   const trees: TreeSpec[] = [];
   const avenueTrees: TreeSpec[] = [];
@@ -415,6 +417,7 @@ export function generateChunk(style: CityStyle, seed: number, cx: number, cz: nu
         const central = Math.abs(r.lx - midX) <= 200 && Math.abs(r.lz - midZ) <= 200;
         const signs = makeSigns(rules, style, bw, bd, h, central && !billboardPlaced, rng);
         if (signs.some((s) => s.kind === 'billboard')) billboardPlaced = true;
+        if (rules.dense) dense.add(buildings.length);
         buildings.push({ x: r.lx, z: r.lz, w: bw, d: bd, h, facade, color, signs });
       }
       if (!craterSite && !island && district !== 'port') {
@@ -490,7 +493,8 @@ export function generateChunk(style: CityStyle, seed: number, cx: number, cz: nu
   const room = Math.max(0, buildingsPerChunk(style) - specials.length);
   let kept = buildings;
   if (buildings.length > room) {
-    const order = buildings.map((_, k) => ({ k, r: rng() })).sort((a, b) => a.r - b.r).slice(0, room).map((o) => o.k).sort((a, b) => a - b);
+    // Dense blocks' buildings sort ahead of every other's (rng() < 1), so they are thinned last.
+    const order = buildings.map((_, k) => ({ k, r: rng() - (dense.has(k) ? 1 : 0) })).sort((a, b) => a.r - b.r).slice(0, room).map((o) => o.k).sort((a, b) => a - b);
     kept = order.map((k) => buildings[k]!);
   }
   const out = [...specials, ...kept];

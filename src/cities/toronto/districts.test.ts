@@ -3,7 +3,7 @@ import { CONFIG } from '../../config';
 import { TORONTO } from '.';
 import { AREAS, areaAt, districtAt } from './layout';
 import { COTTAGE_RULES, MAIN_STREET_RULES, MIDRISE_RULES, OLD_TOWN_RULES, POCKET_RULES, VICTORIAN_RULES } from './districts';
-import { isWater, PITCH } from '../../world/roads';
+import { blockDistrict, isWater, PITCH } from '../../world/roads';
 import { generateChunk } from '../../world/chunks';
 
 const centre = (c: number) => (c + 0.5) * PITCH;
@@ -76,6 +76,31 @@ describe('Toronto districts', () => {
         }
       }
       expect(n, name).toBeGreaterThan(0);
+    }
+  });
+
+  it('keeps the main streets built up after the chunk cap: at least 5 shops and 45% of each block covered', () => {
+    for (const name of ['Little Italy', 'Riverside', 'Leslieville', 'Greektown']) {
+      const per = new Map<string, { n: number; area: number }>();
+      const seen = new Set<string>();
+      for (const [i, j] of blocks(name)) {
+        const key = `${Math.floor(i / 4)},${Math.floor(j / 4)}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        for (const b of generateChunk(TORONTO, CONFIG.world.seed, Math.floor(i / 4), Math.floor(j / 4)).buildings) {
+          const k = `${Math.floor(b.x / PITCH)},${Math.floor(b.z / PITCH)}`;
+          const p = per.get(k) ?? { n: 0, area: 0 };
+          p.n++;
+          p.area += b.w * b.d;
+          per.set(k, p);
+        }
+      }
+      for (const [i, j] of blocks(name)) {
+        if (blockDistrict(TORONTO, centre(i), centre(j)) !== 'neon') continue; // a Don bank park
+        const p = per.get(`${i},${j}`) ?? { n: 0, area: 0 };
+        expect(p.n, `${name} ${i},${j}`).toBeGreaterThanOrEqual(5);
+        expect(p.area / (164 * 164), `${name} ${i},${j}`).toBeGreaterThanOrEqual(0.45);
+      }
     }
   });
 });

@@ -75,11 +75,14 @@ export const COTTAGE_RULES: DistrictRules = {
   ...VICTORIAN_RULES, lots: 4, height: [10, 18], footprint: [0.65, 0.8], colors: [0xb84d35, 0xa04632, 0xe2d3b2, 0xd9c8a0, 0x8e3a2c],
 };
 
-/** Main streets (Little Italy, Riverside, Leslieville, the Danforth): low shops shoulder to shoulder, about a sign each. */
+/**
+ * Main streets (Little Italy, Riverside, Leslieville, the Danforth): low shops shoulder to shoulder, about a sign each.
+ * Dense: the chunk cap thins the blocks around them first.
+ */
 export const MAIN_STREET_RULES: DistrictRules = {
-  lots: 4, fill: 0.85, minPerBlock: 8, height: [10, 20], heightCurve: 1.2, footprint: [0.78, 0.92],
+  lots: 3, fill: 0.95, minPerBlock: 8, height: [10, 20], heightCurve: 1.2, footprint: [0.88, 0.97],
   facades: [FACADE.shop, FACADE.shop, FACADE.office], colors: [0xb05a3c, 0xe8dcc0, 0x8a3b2b],
-  signs: 1, billboard: 0, trees: 2,
+  signs: 1, billboard: 0, trees: 2, dense: true,
 };
 
 /** Regent Park: new mid-rise condos in pale glass and brick. */

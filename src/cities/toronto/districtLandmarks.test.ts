@@ -38,6 +38,23 @@ describe('district landmarks', () => {
       expect(b.max.y, id).toBeCloseTo(l.h, 0);
       expect(b.max.x - b.min.x, id).toBeLessThanOrEqual(l.w + 1);
       expect(b.max.z - b.min.z, id).toBeLessThanOrEqual(l.d + 1);
+      // Its hitbox (w × d about the site) holds no strip of empty air.
+      expect(b.max.x - b.min.x, id).toBeGreaterThanOrEqual(l.w - 1);
+      expect(b.max.z - b.min.z, id).toBeGreaterThanOrEqual(l.d - 1);
+      expect(Math.abs(b.max.x + b.min.x) / 2, id).toBeLessThan(1);
+      expect(Math.abs(b.max.z + b.min.z) / 2, id).toBeLessThan(1);
+    }
+  });
+
+  it('keeps the market roof behind its stone east end, so the two never share a face', () => {
+    const g = lm('st-lawrence-market').build();
+    const pos = g.getAttribute('position') as THREE.BufferAttribute;
+    const col = g.getAttribute('color') as THREE.BufferAttribute;
+    // The roof's brown (0x5a3a30) never reaches x 70, the stone end's face.
+    const roof = new THREE.Color(0x5a3a30);
+    for (let k = 0; k < pos.count; k++) {
+      const c = new THREE.Color(col.getX(k), col.getY(k), col.getZ(k));
+      if (Math.abs(c.r - roof.r) + Math.abs(c.g - roof.g) + Math.abs(c.b - roof.b) < 0.05) expect(pos.getX(k)).toBeLessThan(69);
     }
   });
 });

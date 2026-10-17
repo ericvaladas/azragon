@@ -50,6 +50,8 @@ export type DistrictRules = {
   trees: number;
   /** Present for a container yard: lots hold container blocks and warehouses instead of `footprint` buildings. */
   yard?: YardRules;
+  /** Thinned last when the chunk cap thins random buildings (a main street's continuous shopfronts). */
+  dense?: boolean;
 };
 
 export type SignKind = 'vertical' | 'billboard' | 'screen';
