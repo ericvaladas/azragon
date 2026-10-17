@@ -1,6 +1,6 @@
 import type { CityStyle } from '../types';
 import { POCKET_RULES, TORONTO_DISTRICTS } from './districts';
-import { BMO_FIELD_SITE, CHERRY_BEACH, HEARN_SITE, PORT_LANDS, PRINCES_GATES_SITE, SHIP_CHANNEL, CASA_LOMA_SITE, CITY_HALL_SITE, CN_TOWER_SITE, QUEENS_PARK_SITE, SCOTIABANK_ARENA_SITE, DON, ROGERS_CENTRE_SITE, TORONTO_LAKE, areaAt, blockColors, districtAt, pocketAt } from './layout';
+import { BMO_FIELD_SITE, CHERRY_BEACH, GOODERHAM_SITE, ROY_THOMSON_HALL_SITE, ST_LAWRENCE_MARKET_SITE, HEARN_SITE, PORT_LANDS, PRINCES_GATES_SITE, SHIP_CHANNEL, CASA_LOMA_SITE, CITY_HALL_SITE, CN_TOWER_SITE, QUEENS_PARK_SITE, SCOTIABANK_ARENA_SITE, DON, ROGERS_CENTRE_SITE, TORONTO_LAKE, areaAt, blockColors, districtAt, pocketAt } from './layout';
 import { CN_TOWER, cnTowerGeometry } from './cnTower';
 import { ROGERS_CENTRE, rogersCentreGeometry } from './rogersCentre';
 import { CITY_HALL, cityHallGeometry } from './cityHall';
@@ -16,6 +16,9 @@ import { TORONTO_LANDFORMS } from './waterfront';
 import { HEARN, hearnGeometry } from './hearn';
 import { BMO_FIELD, bmoFieldGeometry } from './bmoField';
 import { PRINCES_GATES, princesGatesGeometry } from './princesGates';
+import { ST_LAWRENCE_MARKET, stLawrenceMarketGeometry } from './stLawrenceMarket';
+import { GOODERHAM, gooderhamGeometry } from './gooderham';
+import { ROY_THOMSON_HALL, royThomsonHallGeometry } from './royThomsonHall';
 
 export const TORONTO: CityStyle = {
   id: 'toronto',
@@ -54,6 +57,9 @@ export const TORONTO: CityStyle = {
     { id: 'hearn', x: HEARN_SITE.x, z: HEARN_SITE.z, w: HEARN.w, d: HEARN.d, h: HEARN.h, build: hearnGeometry },
     { id: 'bmo-field', x: BMO_FIELD_SITE.x, z: BMO_FIELD_SITE.z, w: BMO_FIELD.w, d: BMO_FIELD.d, h: BMO_FIELD.h, build: bmoFieldGeometry },
     { id: 'princes-gates', x: PRINCES_GATES_SITE.x, z: PRINCES_GATES_SITE.z, w: PRINCES_GATES.w, d: PRINCES_GATES.d, h: PRINCES_GATES.h, build: princesGatesGeometry },
+    { id: 'st-lawrence-market', x: ST_LAWRENCE_MARKET_SITE.x, z: ST_LAWRENCE_MARKET_SITE.z, w: ST_LAWRENCE_MARKET.w, d: ST_LAWRENCE_MARKET.d, h: ST_LAWRENCE_MARKET.h, build: stLawrenceMarketGeometry },
+    { id: 'gooderham', x: GOODERHAM_SITE.x, z: GOODERHAM_SITE.z, w: GOODERHAM.w, d: GOODERHAM.d, h: GOODERHAM.h, build: gooderhamGeometry },
+    { id: 'roy-thomson-hall', x: ROY_THOMSON_HALL_SITE.x, z: ROY_THOMSON_HALL_SITE.z, w: ROY_THOMSON_HALL.w, d: ROY_THOMSON_HALL.d, h: ROY_THOMSON_HALL.h, build: royThomsonHallGeometry },
   ],
   specialLots: [...YONGE_DUNDAS_LOTS, ...FINANCIAL_LOTS, ...UOFT_HALLS, ...DISTILLERY_LOTS],
   overlays: [NATHAN_PHILLIPS],

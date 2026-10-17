@@ -240,8 +240,14 @@ export const HEARN_SITE = interiorCentre(18, 15);
 export const BMO_FIELD_SITE = interiorCentre(-15, 10);
 /** The Princes' Gates: the interior centre of Exhibition Place block (−13, 9), its east entrance. */
 export const PRINCES_GATES_SITE = interiorCentre(-13, 9);
+/** St. Lawrence Market: the interior centre of Old Town block (2, 8). */
+export const ST_LAWRENCE_MARKET_SITE = interiorCentre(2, 8);
+/** The Gooderham (Flatiron) Building: the interior centre of Old Town block (1, 8). */
+export const GOODERHAM_SITE = interiorCentre(1, 8);
+/** Roy Thomson Hall: the interior centre of block (−6, 7), beside the Entertainment District. */
+export const ROY_THOMSON_HALL_SITE = interiorCentre(-6, 7);
 /** The blocks the landmarks stand on. */
-const LANDMARK_BLOCKS = [CN_TOWER_SITE, ROGERS_CENTRE_SITE, CITY_HALL_SITE, QUEENS_PARK_SITE, CASA_LOMA_SITE, SCOTIABANK_ARENA_SITE, HEARN_SITE, BMO_FIELD_SITE, PRINCES_GATES_SITE].map((s) => ({
+const LANDMARK_BLOCKS = [CN_TOWER_SITE, ROGERS_CENTRE_SITE, CITY_HALL_SITE, QUEENS_PARK_SITE, CASA_LOMA_SITE, SCOTIABANK_ARENA_SITE, HEARN_SITE, BMO_FIELD_SITE, PRINCES_GATES_SITE, ST_LAWRENCE_MARKET_SITE, GOODERHAM_SITE, ROY_THOMSON_HALL_SITE].map((s) => ({
   ci: Math.floor(s.x / CONFIG.world.blockSize),
   cj: Math.floor(s.z / CONFIG.world.blockSize),
 }));
