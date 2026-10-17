@@ -71,6 +71,8 @@ export const LITTLE_ITALY_COLORS = [0xc86a43, 0xe8dcc0, 0x5f8a4a, 0xd9a441] as c
 export const LESLIEVILLE_COLORS = [0xa8553a, 0xd9a3a0, 0xa9c4d4, 0xe8d9a8, 0x8fae98] as const;
 /** Greektown on the Danforth: white, Aegean blue and pale stone. */
 export const GREEKTOWN_COLORS = [0xf2f0ea, 0x2f6fb5, 0xd8d2c0, 0x4f8fc9] as const;
+/** Koreatown on Bloor: cream, grey stone, red brick and pale green shopfronts. */
+export const KOREATOWN_COLORS = [0xe8dcc0, 0xb8b2a6, 0xa8553a, 0x9fc4a8] as const;
 
 /**
  * A named area: the blocks ci0..ci1 × cj0..cj1 (inclusive), or the blocks whose centre lies in the ellipse of radii
@@ -137,6 +139,10 @@ export const AREAS: readonly Area[] = [
   { name: 'Leslieville', district: 'neon', rules: MAIN_STREET_RULES, colors: LESLIEVILLE_COLORS, ci0: 13, ci1: 19, cj0: 5, cj1: 5 },
   // Greektown: the Danforth's white and blue shops.
   { name: 'Greektown', district: 'neon', rules: MAIN_STREET_RULES, colors: GREEKTOWN_COLORS, ci0: 9, ci1: 19, cj0: -6, cj1: -6 },
+  // Koreatown: shops and signs along Bloor (z −1200), from Bathurst (the Annex's west edge) west to Christie.
+  { name: 'Koreatown', district: 'neon', rules: MAIN_STREET_RULES, colors: KOREATOWN_COLORS, ci0: -17, ci1: -14, cj0: -7, cj1: -6 },
+  // Christie Pits: the park north of Bloor, west of Christie.
+  { name: 'Christie Pits', district: 'park', ci0: -19, ci1: -18, cj0: -8, cj1: -7 },
 ];
 
 /** The area holding the block that contains (x, z), if any. */
@@ -246,8 +252,12 @@ export const ST_LAWRENCE_MARKET_SITE = interiorCentre(2, 8);
 export const GOODERHAM_SITE = interiorCentre(1, 8);
 /** Roy Thomson Hall: the interior centre of block (−6, 7), beside the Entertainment District. */
 export const ROY_THOMSON_HALL_SITE = interiorCentre(-6, 7);
+/** The Royal Ontario Museum: the interior centre of block (−6, −6), south of Bloor at Avenue Rd. */
+export const ROM_SITE = interiorCentre(-6, -6);
+/** Varsity Stadium: the interior centre of block (−7, −6), beside the ROM to the west. */
+export const VARSITY_STADIUM_SITE = interiorCentre(-7, -6);
 /** The blocks the landmarks stand on. */
-const LANDMARK_BLOCKS = [CN_TOWER_SITE, ROGERS_CENTRE_SITE, CITY_HALL_SITE, QUEENS_PARK_SITE, CASA_LOMA_SITE, SCOTIABANK_ARENA_SITE, HEARN_SITE, BMO_FIELD_SITE, PRINCES_GATES_SITE, ST_LAWRENCE_MARKET_SITE, GOODERHAM_SITE, ROY_THOMSON_HALL_SITE].map((s) => ({
+const LANDMARK_BLOCKS = [CN_TOWER_SITE, ROGERS_CENTRE_SITE, CITY_HALL_SITE, QUEENS_PARK_SITE, CASA_LOMA_SITE, SCOTIABANK_ARENA_SITE, HEARN_SITE, BMO_FIELD_SITE, PRINCES_GATES_SITE, ST_LAWRENCE_MARKET_SITE, GOODERHAM_SITE, ROY_THOMSON_HALL_SITE, ROM_SITE, VARSITY_STADIUM_SITE].map((s) => ({
   ci: Math.floor(s.x / CONFIG.world.blockSize),
   cj: Math.floor(s.z / CONFIG.world.blockSize),
 }));

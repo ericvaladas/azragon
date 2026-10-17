@@ -18,6 +18,8 @@ const NEW = [
   ['Riverside', 'neon', undefined],
   ['Leslieville', 'neon', MAIN_STREET_RULES],
   ['Greektown', 'neon', MAIN_STREET_RULES],
+  ['Koreatown', 'neon', MAIN_STREET_RULES],
+  ['Christie Pits', 'park', undefined],
 ] as const;
 const area = (name: string) => {
   const a = AREAS.find((x) => x.name === name);
@@ -80,7 +82,7 @@ describe('Toronto districts', () => {
   });
 
   it('keeps the main streets built up after the chunk cap: at least 5 shops and 45% of each block covered', () => {
-    for (const name of ['Little Italy', 'Riverside', 'Leslieville', 'Greektown']) {
+    for (const name of ['Little Italy', 'Riverside', 'Leslieville', 'Greektown', 'Koreatown']) {
       const per = new Map<string, { n: number; area: number }>();
       const seen = new Set<string>();
       for (const [i, j] of blocks(name)) {

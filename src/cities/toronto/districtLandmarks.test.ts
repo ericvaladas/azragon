@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import { TORONTO } from '.';
-import { GOODERHAM_SITE, ROY_THOMSON_HALL_SITE, ST_LAWRENCE_MARKET_SITE, blockInterior } from './layout';
+import { GOODERHAM_SITE, ROM_SITE, ROY_THOMSON_HALL_SITE, ST_LAWRENCE_MARKET_SITE, VARSITY_STADIUM_SITE, blockInterior } from './layout';
 import { isWater, PITCH } from '../../world/roads';
 
-const ids = ['st-lawrence-market', 'gooderham', 'roy-thomson-hall'] as const;
+const ids = ['st-lawrence-market', 'gooderham', 'roy-thomson-hall', 'rom', 'varsity-stadium'] as const;
 const lm = (id: string) => TORONTO.landmarks.find((l) => l.id === id)!;
 
 describe('district landmarks', () => {
@@ -12,6 +12,8 @@ describe('district landmarks', () => {
     expect(lm('st-lawrence-market')).toMatchObject(ST_LAWRENCE_MARKET_SITE);
     expect(lm('gooderham')).toMatchObject(GOODERHAM_SITE);
     expect(lm('roy-thomson-hall')).toMatchObject(ROY_THOMSON_HALL_SITE);
+    expect(lm('rom')).toMatchObject(ROM_SITE);
+    expect(lm('varsity-stadium')).toMatchObject(VARSITY_STADIUM_SITE);
   });
 
   it('stands each inside its block\'s interior, on land', () => {
@@ -56,5 +58,21 @@ describe('district landmarks', () => {
       const c = new THREE.Color(col.getX(k), col.getY(k), col.getZ(k));
       if (Math.abs(c.r - roof.r) + Math.abs(c.g - roof.g) + Math.abs(c.b - roof.b) < 0.05) expect(pos.getX(k)).toBeLessThan(69);
     }
+  });
+
+  it('puts the ROM and Varsity Stadium side by side on the south side of Bloor (z −1200), the ROM to the east', () => {
+    for (const s of [ROM_SITE, VARSITY_STADIUM_SITE]) {
+      expect(s.z).toBeGreaterThan(-1200);
+      expect(s.z).toBeLessThan(-1000);
+    }
+    expect(Math.floor(ROM_SITE.x / PITCH) - Math.floor(VARSITY_STADIUM_SITE.x / PITCH)).toBe(1);
+  });
+
+  it("leans the ROM's Crystal north out over Bloor: its tallest point stands in the model's north (−z) half", () => {
+    const pos = lm('rom').build().getAttribute('position') as THREE.BufferAttribute;
+    let top = 0;
+    let topZ = 0;
+    for (let k = 0; k < pos.count; k++) if (pos.getY(k) > top) { top = pos.getY(k); topZ = pos.getZ(k); }
+    expect(topZ).toBeLessThan(0);
   });
 });
