@@ -24,10 +24,10 @@ const FIST_R = 85;
 /** Hand size: the fingers' spread and reach about the palm (1 = the original long-fingered hand). */
 const HAND = 0.68;
 /** Torso-space shoulder and hip on the left (+X); the right mirrors x. */
-const SHOULDER = new THREE.Vector3(200, 480, 80);
+const SHOULDER = new THREE.Vector3(165, 480, 80);
 const HIP = new THREE.Vector3(110, 330, -130);
 /** Root-space rest spots (left side) of a planted hand (its palm) and hoof, and how high each lifts mid-swing. */
-const FIST_AT = new THREE.Vector3(250, FIST_R, 230);
+const FIST_AT = new THREE.Vector3(215, FIST_R, 230);
 const FOOT_AT = new THREE.Vector3(150, 0, -130);
 /** The hock (heel) of the digitigrade hind leg, relative to its hoof: the leg's IK ends here; the cannon bone runs down to the hoof. */
 const HOCK = new THREE.Vector3(0, 130, -45);
@@ -37,7 +37,7 @@ const FOOT_LIFT = 70;
  * Slam: where the hand rises (left side) before it drops, out wide of the antlers. Backhand: where it cocks across
  * the chest, and its sweep radius.
  */
-const SLAM_RAISE = new THREE.Vector3(330, 560, 190);
+const SLAM_RAISE = new THREE.Vector3(295, 560, 190);
 const BACKHAND_COCK = new THREE.Vector3(-60, 280, 320);
 const BACKHAND_R = 450;
 const ARM_REACH = UPPER + FORE - 30;
@@ -576,12 +576,12 @@ export class WendigoBody implements MonsterBody {
     // Shoulders: the joints the arms hang from, grown out of the trunk by a scapula and deltoid mass over the top,
     // a pectoral below and a sinew cord under that; the mane drapes over the join.
     for (const sx of [1, -1]) {
-      const sh: V3 = [sx * (SHOULDER.x - 10), SHOULDER.y + 4, SHOULDER.z];
-      piece(torso, NUB, C.skinDark, sh, [62, 58, 62]);
-      piece(torso, NUB, C.skinDark, [sx * 78, 548, 70], [84, 62, 84], [0.3, 0.5, 0]);
-      piece(torso, NUB, C.skinDark, [sx * 132, 526, 76], [90, 66, 86], [0.2, 1.1, 0.3]);
-      piece(torso, NUB, C.skinDark, [sx * 140, 470, 112], [76, 58, 72], [0.4, 0.8, 0]);
-      piece(torso, NUB, C.skinDark, [sx * 92, 478, 150], [70, 56, 70], [0.1, 0.3, 0.5]);
+      const sh: V3 = [sx * (SHOULDER.x - 22), SHOULDER.y + 4, SHOULDER.z];
+      piece(torso, NUB, C.skinDark, sh, [50, 56, 58]);
+      piece(torso, NUB, C.skinDark, [sx * 74, 548, 70], [80, 62, 80], [0.3, 0.5, 0]);
+      piece(torso, NUB, C.skinDark, [sx * 115, 526, 76], [80, 66, 86], [0.2, 1.1, 0.3]);
+      piece(torso, NUB, C.skinDark, [sx * 120, 470, 112], [68, 58, 72], [0.4, 0.8, 0]);
+      piece(torso, NUB, C.skinDark, [sx * 85, 478, 150], [64, 56, 70], [0.1, 0.3, 0.5]);
       strut(torso, TUBE, C.sinew, [sx * 64, 440, 140], [sx * (SHOULDER.x - 12), SHOULDER.y - 24, SHOULDER.z + 4], 8);
       for (let k = 0; k < 18; k++) {
         const u = (k % 9) / 8;
@@ -698,7 +698,7 @@ export class WendigoBody implements MonsterBody {
       }
     }
     for (const sx of [1, -1]) {
-      const c = new THREE.Vector3(sx * (SHOULDER.x - 24), SHOULDER.y + 26, SHOULDER.z - 4);
+      const c = new THREE.Vector3(sx * (SHOULDER.x - 36), SHOULDER.y + 26, SHOULDER.z - 4);
       for (let k = 0; k < 22; k++) {
         const a = (k / 22) * Math.PI * 2;
         n.set(sx * (0.55 + 0.45 * Math.cos(a)), 0.5 + 0.5 * Math.sin(a), 0.5 * Math.sin(a * 2 + 1)).normalize();
@@ -815,7 +815,7 @@ export class WendigoBody implements MonsterBody {
       piece(p, SHAPES.limb, C.skin, [0, 0, 0], [30, UPPER - 20, 30]);
       piece(p, NUB, C.skinDark, [0, -L + 70, -4], [44, 110, 40]);
       // The deltoid cap over the joint, so the arm stays rooted in the shoulder however it swings.
-      piece(p, NUB, C.skinDark, [0, -L + 18, 0], [62, 78, 58]);
+      piece(p, NUB, C.skinDark, [0, -L + 18, 0], [48, 74, 48]);
       piece(p, box, C.sinew, [0, 6, -16], [10, UPPER * 0.66, 8]);
       // A bony elbow under the skin.
       piece(p, BALL, C.skinLight, [0, L - 4, 2], [38, 36, 38]);
