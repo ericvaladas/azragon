@@ -152,8 +152,18 @@ export const CONFIG = {
     wheelSensitivity: 0.8,
     shakeMaxOffset: 22,
     shakeDecay: 1.6,
+    /** While a walking key is held, the camera swings round behind the monster at this rate (1/s; higher is snappier). */
+    behindLambda: 3,
   },
-  input: { tapMaxMovePx: 10, tapMaxMs: 300, pickRadiusPx: 28, /** Wheel units per pixel of pinch. */ pinchSensitivity: 3.5 },
+  input: {
+    tapMaxMovePx: 10,
+    tapMaxMs: 300,
+    pickRadiusPx: 28,
+    /** Wheel units per pixel of pinch. */
+    pinchSensitivity: 3.5,
+    /** Keys are ignored this long (ms) after each level-up offer appears, as taps are (`cards-guard` in style.css). */
+    offerGuardMs: 250,
+  },
   world: {
     seed: 1337,
     /** City blocks per chunk side; chunks stream in around the monster. */
@@ -206,6 +216,8 @@ export const CONFIG = {
     regenPerSec: 4,
     moveSpeed: 130,
     turnRate: 2.4,
+    /** Backing up (S held) runs at this fraction of the walk speed. */
+    reverseSpeed: 0.5,
     arriveRadius: 25 * MONSTER_SCALE,
     bodyRadius: 170 * MONSTER_SCALE,
     contactDps: 60,

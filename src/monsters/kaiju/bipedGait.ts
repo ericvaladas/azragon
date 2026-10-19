@@ -1,3 +1,5 @@
+import { phaseLanded } from '../../monster/gait';
+
 /** Two legs half a cycle apart: leg 0 is the left (+X), leg 1 the right. */
 function phase(cycle: number, leg: number): number {
   const p = cycle + leg * 0.5;
@@ -18,9 +20,7 @@ export function bipedFoot(cycle: number, leg: number): { lift: number; stride: n
   return { lift: 0, stride: 1 - 2 * t };
 }
 
-/** True when the leg's swing ended between prev and cur (the foot touched down). */
+/** True when the leg's swing ended between prev and cur (the foot touched down), walking either way. */
 export function bipedLanded(prev: number, cur: number, leg: number): boolean {
-  if (cur <= prev) return false;
-  const off = leg * 0.5;
-  return Math.floor(prev + off - 0.5) !== Math.floor(cur + off - 0.5);
+  return phaseLanded(prev, cur, leg * 0.5, 0.5);
 }

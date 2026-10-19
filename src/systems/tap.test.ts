@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { abilityKey, classifyGesture, pickEnemy, canTap, pinchToWheel, isSkipKey, menuKey, isEscKey } from './tap';
+import { abilityKey, classifyGesture, driveAxes, driveKey, pickEnemy, canTap, pinchToWheel, isSkipKey, menuKey, isEscKey, numberKey } from './tap';
 import { CONFIG } from '../config';
 
 describe('classifyGesture', () => {
@@ -144,6 +144,24 @@ describe('menuKey', () => {
   });
 });
 
+describe('numberKey', () => {
+  const k = (code: string, mods: Partial<{ repeat: boolean; metaKey: boolean; ctrlKey: boolean; altKey: boolean }> = {}) => ({
+    code, repeat: false, metaKey: false, ctrlKey: false, altKey: false, ...mods,
+  });
+  it('gives the 0-based index of 1–9 on the number row and keypad', () => {
+    expect(numberKey(k('Digit1'))).toBe(0);
+    expect(numberKey(k('Digit3'))).toBe(2);
+    expect(numberKey(k('Numpad2'))).toBe(1);
+    expect(numberKey(k('Digit9'))).toBe(8);
+  });
+  it('ignores 0, other keys, repeats, and shortcuts', () => {
+    expect(numberKey(k('Digit0'))).toBeNull();
+    expect(numberKey(k('KeyW'))).toBeNull();
+    expect(numberKey(k('Digit1', { repeat: true }))).toBeNull();
+    expect(numberKey(k('Digit1', { metaKey: true }))).toBeNull();
+  });
+});
+
 describe('isEscKey', () => {
   const k = (key: string, over: Partial<{ repeat: boolean; metaKey: boolean; ctrlKey: boolean; altKey: boolean }> = {}) => ({ key, repeat: false, metaKey: false, ctrlKey: false, altKey: false, ...over });
   it('is Escape alone, not held down or with a modifier', () => {
@@ -151,5 +169,26 @@ describe('isEscKey', () => {
     expect(isEscKey(k('Escape', { repeat: true }))).toBe(false);
     expect(isEscKey(k('Escape', { metaKey: true }))).toBe(false);
     expect(isEscKey(k('Enter'))).toBe(false);
+  });
+});
+
+describe('driveKey', () => {
+  it('maps WASD and the arrow keys by position', () => {
+    expect(['KeyW', 'KeyS', 'KeyA', 'KeyD'].map(driveKey)).toEqual(['forward', 'back', 'left', 'right']);
+    expect(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].map(driveKey)).toEqual(['forward', 'back', 'left', 'right']);
+    expect(driveKey('KeyE')).toBeNull();
+  });
+});
+
+describe('driveAxes', () => {
+  it('W walks forward, S backward; A turns left (+yaw), D right', () => {
+    expect(driveAxes(new Set(['forward']))).toEqual({ throttle: 1, turn: 0 });
+    expect(driveAxes(new Set(['back']))).toEqual({ throttle: -1, turn: 0 });
+    expect(driveAxes(new Set(['left']))).toEqual({ throttle: 0, turn: 1 });
+    expect(driveAxes(new Set(['forward', 'right']))).toEqual({ throttle: 1, turn: -1 });
+  });
+  it('opposite keys cancel', () => {
+    expect(driveAxes(new Set(['forward', 'back', 'left', 'right']))).toEqual({ throttle: 0, turn: 0 });
+    expect(driveAxes(new Set())).toEqual({ throttle: 0, turn: 0 });
   });
 });

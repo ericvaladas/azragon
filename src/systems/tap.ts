@@ -44,6 +44,25 @@ export function abilityKey(e: { code: string; repeat: boolean; metaKey: boolean;
   return null;
 }
 
+export type DriveKey = 'forward' | 'back' | 'left' | 'right';
+
+/** Walking keys, by position (so AZERTY and Dvorak keep the WASD shape): W/↑ forward, S/↓ back, A/← and D/→ turn. */
+export function driveKey(code: string): DriveKey | null {
+  if (code === 'KeyW' || code === 'ArrowUp') return 'forward';
+  if (code === 'KeyS' || code === 'ArrowDown') return 'back';
+  if (code === 'KeyA' || code === 'ArrowLeft') return 'left';
+  if (code === 'KeyD' || code === 'ArrowRight') return 'right';
+  return null;
+}
+
+/** Held walking keys as axes: throttle +1 forward / −1 back, turn +1 left (yaw grows toward +X, the left) / −1 right. */
+export function driveAxes(held: ReadonlySet<DriveKey>): { throttle: number; turn: number } {
+  return {
+    throttle: (held.has('forward') ? 1 : 0) - (held.has('back') ? 1 : 0),
+    turn: (held.has('left') ? 1 : 0) - (held.has('right') ? 1 : 0),
+  };
+}
+
 /** Wheel-equivalent zoom for a pinch: fingers moving apart zoom in (negative), together zoom out. */
 export function pinchToWheel(prevDist: number, curDist: number): number {
   return (prevDist - curDist) * CONFIG.input.pinchSensitivity;
@@ -61,6 +80,13 @@ export function isSkipKey(e: { key: string; repeat: boolean; metaKey: boolean; c
 /** The pause-menu key: Escape on its own (not held down, no modifier). */
 export function isEscKey(e: { key: string; repeat: boolean; metaKey: boolean; ctrlKey: boolean; altKey: boolean }): boolean {
   return e.key === 'Escape' && !e.repeat && !e.metaKey && !e.ctrlKey && !e.altKey;
+}
+
+/** A numbered choice (the level-up cards): 1–9 on the number row or keypad gives its 0-based index; no repeats or shortcuts. */
+export function numberKey(e: { code: string; repeat: boolean; metaKey: boolean; ctrlKey: boolean; altKey: boolean }): number | null {
+  if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return null;
+  const m = /^(?:Digit|Numpad)([1-9])$/.exec(e.code);
+  return m ? Number(m[1]) - 1 : null;
 }
 
 /** Select-screen keys: browse with arrows (or A/D), confirm with Enter/Space; no repeats or shortcuts. */

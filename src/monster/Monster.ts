@@ -281,6 +281,28 @@ export class Monster {
     return false;
   }
 
+  /**
+   * Direct (WASD) walking for `dt` s: turn at the turn rate (+1 left, −1 right), and walk along the facing at the
+   * walk speed × `speedMult` (+1 forward) or back up at CONFIG.monster.reverseSpeed of it (−1), the gait playing
+   * backward.
+   */
+  drive(throttle: number, turn: number, dt: number, speedMult: number): void {
+    const s = this.kind.stats;
+    const dyaw = turn * s.turnRate * dt;
+    this.yaw += dyaw;
+    const step = throttle * s.moveSpeed * speedMult * dt * (throttle < 0 ? CONFIG.monster.reverseSpeed : 1);
+    this.position.x += Math.sin(this.yaw) * step;
+    this.position.z += Math.cos(this.yaw) * step;
+    if (step !== 0) {
+      this.cycle += step / (s.strideLength * CONFIG.monster.scale);
+      this.motion = 1;
+    } else if (dyaw !== 0) {
+      // Turning on the spot shuffles the feet, as faceToward does.
+      this.cycle += (Math.abs(dyaw) * 160) / s.strideLength;
+      this.motion = Math.max(this.motion, Math.min(1, Math.abs(dyaw) * 40));
+    }
+  }
+
   flash(): void {
     this.flashT = 0.12;
   }

@@ -265,6 +265,8 @@ body {
 }
 .card:active { transform: scale(0.95); }
 .card:hover { border-color: var(--color-primary); }
+/* The keyboard's pick: lit, lifted slightly; Space/Enter takes it. */
+.card.card-highlight { border-color: var(--color-primary); box-shadow: 0 0 12px var(--color-primary); transform: scale(1.03); }
 .card-title { font-weight: 700; color: var(--color-primary); }
 .card-desc { font-size: 12px; color: var(--color-text-muted); }
 @keyframes card-in {

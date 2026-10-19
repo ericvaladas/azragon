@@ -31,6 +31,8 @@ export type GameEventMap = {
   expGain: number;
   /** `all`: every available choice is listed (Konami-code levels), not the usual few. */
   levelUpOffer: { seq: number; level: number; offers: UpgradeOffer[]; all: boolean };
+  /** The level-up card highlighted from the keyboard (index into the offer), or -1 for none. */
+  cardHighlight: number;
   gameOver: RunStats;
   threats: ThreatArrow[];
   abilities: AbilityView[];

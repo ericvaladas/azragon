@@ -34,4 +34,13 @@ describe('armPlanted', () => {
     expect(new Set(when.map((w) => w.toFixed(2))).size).toBe(4);
     expect(armPlanted(0.4, 0.4, 3)).toBe(false);
   });
+  it('crawling backward, still plants each front arm once per cycle, at the end of its pull', () => {
+    for (const i of [2, 3, 4, 5]) {
+      let n = 0;
+      for (let k = 0; k < 100; k++) if (armPlanted(1.005 - k * 0.01, 0.995 - k * 0.01, i)) n++;
+      expect(n).toBe(1);
+    }
+    expect(armPlanted(0.51, 0.49, 5)).toBe(true);
+    expect(armPlanted(0.51, 0.49, 0)).toBe(false);
+  });
 });

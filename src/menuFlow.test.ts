@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { flowNext } from './menuFlow';
+import { flowNext, stepCard } from './menuFlow';
 
 describe('flowNext', () => {
   it('walks title → select → intro → playing, and game over → intro or select', () => {
@@ -23,5 +23,20 @@ describe('flowNext', () => {
     expect(flowNext('dying', 'changeMonster')).toBeNull();
     expect(flowNext('paused', 'start')).toBeNull();
     expect(flowNext('levelup', 'introDone')).toBeNull();
+  });
+});
+
+describe('stepCard', () => {
+  it('from no highlight, right picks the first card and left the last', () => {
+    expect(stepCard(-1, 1, 3)).toBe(0);
+    expect(stepCard(-1, -1, 3)).toBe(2);
+  });
+  it('moves one card at a time and stops at the ends', () => {
+    expect(stepCard(0, 1, 3)).toBe(1);
+    expect(stepCard(2, 1, 3)).toBe(2);
+    expect(stepCard(0, -1, 3)).toBe(0);
+  });
+  it('has nothing to highlight without cards', () => {
+    expect(stepCard(-1, 1, 0)).toBe(-1);
   });
 });

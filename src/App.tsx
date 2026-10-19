@@ -51,6 +51,7 @@ function App() {
   const [skipHint, setSkipHint] = useState(false);
   const [hud, setHud] = useState<HudSnapshot>(EMPTY_HUD);
   const [offer, setOffer] = useState<{ seq: number; level: number; offers: UpgradeOffer[]; all: boolean } | null>(null);
+  const [cardHighlight, setCardHighlight] = useState(-1);
   const [stats, setStats] = useState<RunStats | null>(null);
   const [threats, setThreats] = useState<ThreatArrow[]>([]);
   const [abilities, setAbilities] = useState<AbilityView[]>([]);
@@ -68,6 +69,7 @@ function App() {
     game.events.on('musicVolume', setMusicVolume);
     game.events.on('hud', setHud);
     game.events.on('levelUpOffer', setOffer);
+    game.events.on('cardHighlight', setCardHighlight);
     game.events.on('gameOver', setStats);
     game.events.on('threats', setThreats);
     game.events.on('abilities', setAbilities);
@@ -126,7 +128,7 @@ function App() {
         {hud.levelingUp && <div className="level-up-banner">Level Up!</div>}
         {state === 'playing' && <AbilityButtons views={abilities} onPress={press} />}
         {state === 'levelup' && offer && (
-          <LevelUpCards key={offer.seq} level={offer.level} offers={offer.offers} all={offer.all} onPick={(id) => pick(id, offer.seq)} />
+          <LevelUpCards key={offer.seq} level={offer.level} offers={offer.offers} all={offer.all} highlight={cardHighlight} onPick={(id) => pick(id, offer.seq)} />
         )}
         {showPauseButton(state, TOUCH) && <PauseButton onPress={openMenu} onSelect={state === 'select'} />}
         {state === 'paused' && <PauseMenu musicOn={musicOn} volume={musicVolume} onResume={resume} onToggleMusic={toggleMusic} onVolume={changeVolume} onExit={exitGame} />}

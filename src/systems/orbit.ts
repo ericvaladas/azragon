@@ -1,4 +1,5 @@
 import { CONFIG } from '../config';
+import { angleDelta } from '../util/math';
 
 export type OrbitState = { yaw: number; pitch: number; distance: number };
 
@@ -12,6 +13,11 @@ export function applyDrag(s: OrbitState, dxPx: number, dyPx: number): OrbitState
     yaw: s.yaw - dxPx * c.dragSensitivity,
     pitch: clamp(s.pitch + dyPx * c.dragSensitivity, c.minPitch, c.maxPitch),
   };
+}
+
+/** Swing the orbit toward `yaw` (behind a monster facing it) the short way round, by exponential decay at `lambda`/s. */
+export function swingBehind(s: OrbitState, yaw: number, lambda: number, dt: number): OrbitState {
+  return { ...s, yaw: s.yaw + angleDelta(s.yaw, yaw) * (1 - Math.exp(-lambda * dt)) };
 }
 
 export function applyZoom(s: OrbitState, wheelDeltaY: number): OrbitState {

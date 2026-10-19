@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { CONFIG } from '../config';
 import { damp } from '../util/math';
-import { applyDrag, applyZoom, cameraPose, fovForAspect, type OrbitState } from './orbit';
+import { applyDrag, applyZoom, cameraPose, fovForAspect, swingBehind, type OrbitState } from './orbit';
 
 const FOLLOW_LAMBDA = 6;
 
@@ -34,6 +34,11 @@ export class CameraRig {
 
   zoom(deltaY: number): void {
     this.orbit = applyZoom(this.orbit, deltaY);
+  }
+
+  /** Swing round behind a monster facing `yaw` (called each frame it is walked with the keys). */
+  swingBehind(yaw: number, dt: number): void {
+    this.orbit = swingBehind(this.orbit, yaw, CONFIG.camera.behindLambda, dt);
   }
 
   /** Trauma in 0..1; shake magnitude is trauma². */

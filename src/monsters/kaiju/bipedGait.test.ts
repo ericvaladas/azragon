@@ -26,4 +26,11 @@ describe('biped gait', () => {
     for (let c = 0; c < 1; c += 0.01) if (bipedLanded(c, c + 0.01, 0)) n++;
     expect(n).toBe(1);
   });
+  it('walking backward, lands each foot once per cycle as it comes down out of its reversed swing', () => {
+    expect(bipedLanded(0.01, -0.01, 0)).toBe(true);
+    expect(bipedLanded(0.51, 0.49, 1)).toBe(true);
+    let n = 0;
+    for (let k = 0; k < 100; k++) if (bipedLanded(1.005 - k * 0.01, 0.995 - k * 0.01, 0)) n++;
+    expect(n).toBe(1);
+  });
 });

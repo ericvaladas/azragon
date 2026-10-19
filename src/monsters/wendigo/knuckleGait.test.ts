@@ -22,9 +22,18 @@ describe('knuckle-walk gait', () => {
     expect(((at(1) - at(0) + 1) % 1)).toBeCloseTo(0.25, 2);
   });
 
-  it('never reports a plant when the cycle did not advance', () => {
+  it('never reports a plant when the cycle stands still', () => {
     expect(limbPlanted(0.39, 0.39, 0)).toBe(false);
+  });
+
+  it('walking backward, plants each limb once per cycle as it comes down out of its reversed swing', () => {
     expect(limbPlanted(0.41, 0.39, 0)).toBe(false);
+    expect(limbPlanted(0.01, -0.01, 0)).toBe(true);
+    for (let i = 0; i < 4; i++) {
+      let n = 0;
+      for (let k = 0; k < 1000; k++) if (limbPlanted(1.0005 - k * 0.001, 0.9995 - k * 0.001, i)) n++;
+      expect(n).toBe(1);
+    }
   });
 
   it('lifts only while swinging, landing at the front of its stride', () => {

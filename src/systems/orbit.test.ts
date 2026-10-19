@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { applyDrag, applyZoom, cameraPose, fovForAspect, type OrbitState } from './orbit';
+import { applyDrag, applyZoom, cameraPose, fovForAspect, type OrbitState, swingBehind } from './orbit';
 import { CONFIG } from '../config';
 
 const C = CONFIG.camera;
@@ -49,5 +49,23 @@ describe('fovForAspect', () => {
     expect(v).toBeLessThan(60);
     const h = (2 * Math.atan(Math.tan((v * Math.PI) / 360) * 1.6) * 180) / Math.PI;
     expect(h).toBeCloseTo(82, 3);
+  });
+});
+
+describe('swingBehind', () => {
+  const base = { yaw: 0, pitch: 0.7, distance: 1000 };
+  it('closes on the monster yaw over time, leaving pitch and distance alone', () => {
+    const a = swingBehind(base, 1, 3, 0.1);
+    expect(a.yaw).toBeGreaterThan(0);
+    expect(a.yaw).toBeLessThan(1);
+    expect(a.pitch).toBe(0.7);
+    expect(a.distance).toBe(1000);
+    let s = base;
+    for (let i = 0; i < 100; i++) s = swingBehind(s, 1, 3, 0.1);
+    expect(s.yaw).toBeCloseTo(1, 5);
+  });
+  it('goes the short way round', () => {
+    const s = swingBehind({ ...base, yaw: 3 }, -3, 3, 0.1);
+    expect(s.yaw).toBeGreaterThan(3);
   });
 });

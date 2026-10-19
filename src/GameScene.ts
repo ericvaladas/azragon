@@ -75,7 +75,7 @@ import { burnIntensity, GAZE, gazing } from './monsters/wendigo/gaze';
 import { KINDS, ROSTER_ORDER, isMonsterId, rosterEntries } from './monsters/roster';
 import { loadPick, savePick, type PickStore } from './monsters/pick';
 import type { MonsterKind } from './monsters/types';
-import { flowNext } from './menuFlow';
+import { flowNext, stepCard } from './menuFlow';
 import { Splasher } from './systems/splash';
 import { rosterFrameHeight, selectPose, titlePose } from './systems/menuCamera';
 
@@ -117,6 +117,10 @@ export class GameScene {
   private input: Input;
   private markers: Markers;
   private order: Order = null;
+  /** The level-up offer on screen: its upgrade ids in card order, when it appeared (performance.now ms), and the keyboard highlight (-1 none). */
+  private offerIds: string[] = [];
+  private offerAt = 0;
+  private cardSel = -1;
   private raycaster = new THREE.Raycaster();
   private ndc = new THREE.Vector2();
   private groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
@@ -286,10 +290,18 @@ export class GameScene {
       wheel: (dy) => this.rig.zoom(dy),
       hover: this.onHover,
       menuKey: (k) => {
+        if (this.state === 'levelup') return this.cardKey(k);
         if (this.state !== 'select') return false;
         if (k === 'confirm') this.playSelected();
         else this.selectStep(k === 'left' ? -1 : 1);
         return true;
+      },
+      numberKey: (i) => {
+        if (this.state !== 'levelup') return false;
+        if (this.offerFresh()) return true;
+        const id = this.offerIds[i];
+        if (id) this.chooseUpgrade(id, this.progression.offerSeq);
+        return id !== undefined;
       },
       skipKey: () => {
         if (this.state === 'title') {
@@ -595,7 +607,32 @@ export class GameScene {
   private emitOffer(): void {
     const all = this.cheatLevels > 0;
     const offers = this.progression.offer(all);
+    this.offerIds = offers.map((o) => o.id);
+    this.offerAt = performance.now();
+    this.cardSel = -1;
     this.events.emit('levelUpOffer', { seq: this.progression.offerSeq, level: this.progression.choosingLevel, offers, all });
+    this.events.emit('cardHighlight', -1);
+  }
+
+  /** The current offer has only just appeared: keys are ignored, as taps are, so a press meant for play can't pick. */
+  private offerFresh(): boolean {
+    return performance.now() - this.offerAt < CONFIG.input.offerGuardMs;
+  }
+
+  /**
+   * Level-up cards from the keyboard: left/right moves the highlight (none at first, so a stray Space can't pick),
+   * confirm takes the highlighted card.
+   */
+  private cardKey(k: 'left' | 'right' | 'confirm'): boolean {
+    if (this.offerFresh()) return true;
+    if (k === 'confirm') {
+      const id = this.offerIds[this.cardSel];
+      if (id) this.chooseUpgrade(id, this.progression.offerSeq);
+      return true;
+    }
+    this.cardSel = stepCard(this.cardSel, k === 'left' ? -1 : 1, this.offerIds.length);
+    this.events.emit('cardHighlight', this.cardSel);
+    return true;
   }
 
     private emitThreats(): void {
@@ -816,6 +853,14 @@ export class GameScene {
     }
     if (id === 'dash') {
       this.dash();
+      return;
+    }
+    // Walking forward (W held), Leap needs no aim: it jumps its full range straight ahead.
+    if (this.input.drive().throttle > 0) {
+      const m = this.monster;
+      if (m.busy) return;
+      const to = dashTarget({ x: m.position.x, z: m.position.z }, m.yaw, CONFIG.abilities.leap.range);
+      this.leapTo(new THREE.Vector3(to.x, 0, to.z));
       return;
     }
     const aiming = this.abilities.toggleAim(id);
@@ -1446,6 +1491,16 @@ export class GameScene {
     const m = this.monster;
     const s = this.progression.stats;
     const pos = { x: m.position.x, z: m.position.z };
+    // Walking keys (WASD / arrows) take over from any tap order, and keep the camera behind the monster.
+    const drive = this.input.drive();
+    const driving = drive.throttle !== 0 || drive.turn !== 0;
+    if (driving) {
+      if (this.order) {
+        this.order = null;
+        this.markers.setTarget(null);
+      }
+      this.rig.swingBehind(m.yaw, dt);
+    }
     if (!m.busy) {
       // A breather only picks targets its neck can reach, so the body never has to turn away from its path.
       const reach = this.ms.meleeRange * 0.8;
@@ -1478,13 +1533,14 @@ export class GameScene {
         this.order = null;
         this.markers.setTarget(null);
       }
-      if (d.moveTo) m.moveToward(d.moveTo, dt, s.moveSpeedMult * this.snare.speedMult);
+      if (driving) m.drive(drive.throttle, drive.turn, dt, s.moveSpeedMult * this.snare.speedMult);
+      else if (d.moveTo) m.moveToward(d.moveTo, dt, s.moveSpeedMult * this.snare.speedMult);
       else if (d.face) m.faceToward(d.face, dt);
       // An arc melee only strikes forward: turn to a target outside the arc first.
       const shape = m.kind.melee;
       const outsideArc =
         d.attack === 'melee' && d.meleeAt !== null && shape.kind === 'arc' && !inArc(pos, m.yaw, Infinity, shape.halfAngle, d.meleeAt);
-      if (outsideArc && !d.moveTo && !d.face && d.meleeAt) m.faceToward(d.meleeAt, dt);
+      if (outsideArc && !driving && !d.moveTo && !d.face && d.meleeAt) m.faceToward(d.meleeAt, dt);
       if (d.attack === 'melee' && d.meleeAt && !outsideArc) {
         this.snare.onAttack();
         const plan = strikePlan(pos, m.yaw, d.meleeAt, this.ms.meleeRange);

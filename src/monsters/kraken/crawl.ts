@@ -1,3 +1,5 @@
+import { phaseLanded } from '../../monster/gait';
+
 /** Eight tentacles around the mantle. */
 export const ARM_COUNT = 8;
 
@@ -31,9 +33,12 @@ export function armRole(i: number, cycle: number, moving: boolean): ArmRole {
   return crawlPhase(i, cycle) < 0.5 ? 'pull' : 'reach';
 }
 
-/** True when front arm i planted (began a pull) between crawl positions prev and cur. */
+/**
+ * True when front arm i planted between crawl positions prev and cur: crawling forward it plants as its pull begins
+ * (phase 0); crawling backward the cycle plays in reverse, so it plants as its pull ends (phase 0.5).
+ */
 export function armPlanted(prev: number, cur: number, i: number): boolean {
-  if (!isFrontArm(i) || cur <= prev) return false;
-  const o = FRONT_OFFSET[i]!;
-  return Math.floor(prev + o) !== Math.floor(cur + o);
+  if (!isFrontArm(i)) return false;
+  // The reach (the lifted half) runs from phase 0.5 to 1: offset by half a cycle, it is a swing of 0.5.
+  return phaseLanded(prev, cur, FRONT_OFFSET[i]! + 0.5, 0.5);
 }

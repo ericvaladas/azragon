@@ -20,9 +20,18 @@ export function footState(cycle: number, leg: number): { lift: number; stride: n
   return { lift: 0, stride: 1 - 2 * t };
 }
 
-/** True when a leg's swing ended between prev and cur (the foot touched down). */
+/**
+ * True when a limb at phase offset `off`, lifted for the first `swing` of each cycle, touched down between cycle
+ * positions prev and cur. Walking forward (cur > prev) it lands at the end of its swing (phase `swing`); walking
+ * backward the gait plays in reverse, so it lands at the start of its swing (phase 0).
+ */
+export function phaseLanded(prev: number, cur: number, off: number, swing: number): boolean {
+  if (cur === prev) return false;
+  const at = cur > prev ? swing : 0;
+  return Math.floor(prev + off - at) !== Math.floor(cur + off - at);
+}
+
+/** True when a leg's swing ended between prev and cur (the foot touched down), walking either way. */
 export function didLand(prev: number, cur: number, leg: number): boolean {
-  if (cur <= prev) return false;
-  const off = TRIPOD_A.includes(leg) ? 0 : 0.5;
-  return Math.floor(prev + off - 0.5) !== Math.floor(cur + off - 0.5);
+  return phaseLanded(prev, cur, TRIPOD_A.includes(leg) ? 0 : 0.5, 0.5);
 }

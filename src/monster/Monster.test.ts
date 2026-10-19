@@ -294,5 +294,34 @@ describe('INSECT kind', () => {
     m2.animate(0.016, 0);
     expect(body2.last!.melee!.kind).toBeUndefined();
   });
-});
 
+  describe('drive (WASD walking)', () => {
+    it('walks forward along its facing at its walk speed (× speedMult)', () => {
+      const m = new Monster(new THREE.Scene(), kind({ moveSpeed: 100 }));
+      m.drive(1, 0, 1, 1.5);
+      expect(m.position.z).toBeCloseTo(150);
+      expect(m.position.x).toBeCloseTo(0);
+    });
+    it('backs up at CONFIG.monster.reverseSpeed of its walk speed, still facing forward', () => {
+      const m = new Monster(new THREE.Scene(), kind({ moveSpeed: 100 }));
+      m.drive(-1, 0, 1, 1);
+      expect(m.position.z).toBeCloseTo(-100 * CONFIG.monster.reverseSpeed);
+      expect(m.yaw).toBe(0);
+    });
+    it('turns left (+yaw, toward +X) and right at its turn rate, standing or walking', () => {
+      const m = new Monster(new THREE.Scene(), kind({ turnRate: 2 }));
+      m.drive(0, 1, 0.5, 1);
+      expect(m.yaw).toBeCloseTo(1);
+      expect(m.position.length()).toBe(0);
+      m.drive(0, -1, 0.25, 1);
+      expect(m.yaw).toBeCloseTo(0.5);
+    });
+    it('plays the gait backward while backing up', () => {
+      const body = stubBody();
+      const m = new Monster(new THREE.Scene(), { ...kind(), createBody: () => body });
+      m.drive(-1, 0, 0.2, 1);
+      m.animate(0.2, 0);
+      expect(body.last!.cycle).toBeLessThan(body.last!.prevCycle);
+    });
+  });
+});

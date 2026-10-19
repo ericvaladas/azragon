@@ -1,5 +1,5 @@
 import { KonamiTracker } from './konami';
-import { abilityKey, canTap, classifyGesture, isSkipKey, menuKey, pinchToWheel, isEscKey } from './tap';
+import { abilityKey, canTap, classifyGesture, driveAxes, driveKey, isSkipKey, menuKey, numberKey, pinchToWheel, isEscKey, type DriveKey } from './tap';
 
 export type InputHandlers = {
   tap(x: number, y: number): void;
@@ -10,8 +10,10 @@ export type InputHandlers = {
   key(id: 'leap' | 'dash' | 'roar'): boolean | void;
   /** A plain key press; return true when it skipped the intro (then it isn't also an ability key). */
   skipKey(): boolean;
-  /** Select-screen browse/confirm key; return true when the menu used it. */
+  /** Browse/confirm key (select screen, level-up cards); return true when the menu used it. */
   menuKey(k: 'left' | 'right' | 'confirm'): boolean;
+  /** Number key 1–9 as a 0-based index (level-up cards); return true when it picked a card. */
+  numberKey(i: number): boolean;
   /** Escape pressed; return true when it opened or closed the pause menu. */
   escape(): boolean;
   /** The Konami code was just completed. */
@@ -37,6 +39,8 @@ export class Input {
   private pinching = false;
   private pinchDist = 0;
   private konami = new KonamiTracker();
+  /** Walking keys held down (WASD / arrows). */
+  private held = new Set<DriveKey>();
 
   constructor(
     private el: HTMLElement,
@@ -49,6 +53,13 @@ export class Input {
     el.addEventListener('wheel', this.onWheel, { passive: false });
     el.addEventListener('contextmenu', this.onContextMenu);
     window.addEventListener('keydown', this.onKey);
+    window.addEventListener('keyup', this.onKeyUp);
+    window.addEventListener('blur', this.onBlur);
+  }
+
+  /** The held walking keys as axes: throttle +1 forward / −1 back, turn +1 left / −1 right. */
+  drive(): { throttle: number; turn: number } {
+    return driveAxes(this.held);
   }
 
   private local(e: PointerEvent): [number, number] {
@@ -134,6 +145,8 @@ export class Input {
   private onContextMenu = (e: Event) => e.preventDefault();
 
   private onKey = (e: KeyboardEvent) => {
+    const dk = driveKey(e.code);
+    if (dk && !e.metaKey && !e.ctrlKey && !e.altKey) this.held.add(dk);
     if (!e.metaKey && !e.ctrlKey && !e.altKey && this.konami.push(e)) this.h.konami();
     if (isEscKey(e) && this.h.escape()) {
       e.preventDefault();
@@ -141,6 +154,11 @@ export class Input {
     }
     const mk = menuKey(e);
     if (mk && this.h.menuKey(mk)) {
+      e.preventDefault();
+      return;
+    }
+    const nk = numberKey(e);
+    if (nk !== null && this.h.numberKey(nk)) {
       e.preventDefault();
       return;
     }
@@ -153,6 +171,14 @@ export class Input {
     if (this.h.key(id)) e.preventDefault();
   };
 
+  private onKeyUp = (e: KeyboardEvent) => {
+    const dk = driveKey(e.code);
+    if (dk) this.held.delete(dk);
+  };
+
+  /** Key-ups are lost while the window is unfocused, so leaving it lets go of every key. */
+  private onBlur = () => this.held.clear();
+
   dispose(): void {
     this.el.removeEventListener('pointerdown', this.onDown);
     this.el.removeEventListener('pointermove', this.onMove);
@@ -161,5 +187,7 @@ export class Input {
     this.el.removeEventListener('wheel', this.onWheel);
     this.el.removeEventListener('contextmenu', this.onContextMenu);
     window.removeEventListener('keydown', this.onKey);
+    window.removeEventListener('keyup', this.onKeyUp);
+    window.removeEventListener('blur', this.onBlur);
   }
 }

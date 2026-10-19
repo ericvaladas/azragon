@@ -1,3 +1,5 @@
+import { phaseLanded } from '../../monster/gait';
+
 /** Four limbs in planting order: left fist, right foot, right fist, left foot (side 0 = left/+X). */
 export const LIMBS: readonly { kind: 'fist' | 'foot'; side: 0 | 1 }[] = [
   { kind: 'fist', side: 0 },
@@ -31,9 +33,7 @@ export function limbSwing(cycle: number, i: number): { lift: number; stride: num
   return { lift: 0, stride: 1 - 2 * t };
 }
 
-/** True when limb i's swing ended between prev and cur (it touched down). */
+/** True when limb i's swing ended between prev and cur (it touched down), walking either way. */
 export function limbPlanted(prev: number, cur: number, i: number): boolean {
-  if (cur <= prev) return false;
-  const off = OFFSET[i]!;
-  return Math.floor(prev + off - SWING) !== Math.floor(cur + off - SWING);
+  return phaseLanded(prev, cur, OFFSET[i]!, SWING);
 }
