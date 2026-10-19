@@ -192,7 +192,7 @@ export const CONFIG = {
     blockSize: 200,
     roadWidth: 36,
     /** Crater around the origin (the pod's impact site; the decal is half a block wider), sized to the cocoon. */
-    clearRadius: 650,
+    clearRadius: 500,
     groundExtent: 30000,
     buildingHpPerMetre: 1.5,
     /** EXP per building HP, rounded per building (min 1); 0.0365 is ~30% below the original 0.05 on average. */

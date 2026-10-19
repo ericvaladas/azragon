@@ -102,13 +102,13 @@ describe('City (Tokyo)', () => {
   });
 
   // A kept lot and a landmark well inside the crater radius, where every other building falls.
-  const NEAR: CityStyle = { ...TOKYO, landmarks: [{ ...tmg, x: 500, z: 700 }], specialLots: [{ ...TOKYO.specialLots[0]!, x: 500, z: 500 }] };
+  const NEAR: CityStyle = { ...TOKYO, landmarks: [{ ...tmg, x: 300, z: 700 }], specialLots: [{ ...TOKYO.specialLots[0]!, x: 300, z: 300 }] };
   const nearTargets = (city: City) => {
     let lot: Target | null = null;
     let landmark: Target | null = null;
-    city.forEachStandingInRadius({ x: 500, z: 600 }, 120, (b) => {
-      if (b.position.x === 500 && b.position.z === 500) lot = b;
-      if (b.position.x === 500 && b.position.z === 700) landmark = b;
+    city.forEachStandingInRadius({ x: 300, z: 500 }, 220, (b) => {
+      if (b.position.x === 300 && b.position.z === 300) lot = b;
+      if (b.position.x === 300 && b.position.z === 700) landmark = b;
     });
     return { lot: lot as Target | null, landmark: landmark as Target | null };
   };
@@ -117,7 +117,7 @@ describe('City (Tokyo)', () => {
     const { city } = make(NEAR);
     const { lot } = nearTargets(city);
     expect(lot).not.toBeNull();
-    expect(Math.hypot(500, 500) + lot!.radius).toBeLessThan(CRATER_RADIUS);
+    expect(Math.hypot(300, 300) + lot!.radius).toBeLessThan(CRATER_RADIUS);
     city.blast({ x: 0, z: 0 }, CRATER_RADIUS, true, CRATER_RADIUS * CONFIG.intro.impact.outer);
     expect(lot!.isAlive()).toBe(true);
   });
@@ -129,7 +129,7 @@ describe('City (Tokyo)', () => {
     expect(landmark).not.toBeNull();
     // A random building next to them does fall, so the blast really reaches this spot.
     let neighbour: Target | null = null;
-    city.forEachStandingInRadius({ x: 300, z: 500 }, 100, (b) => { if (!(b.position.x === 500 && b.position.z === 500)) neighbour = b; });
+    city.forEachStandingInRadius({ x: 100, z: 300 }, 100, (b) => { if (!(b.position.x === 300 && b.position.z === 300)) neighbour = b; });
     expect(neighbour).not.toBeNull();
     const outer = CRATER_RADIUS * CONFIG.intro.impact.outer;
     city.blast({ x: 0, z: 0 }, CRATER_RADIUS, false, outer, CONFIG.intro.impact.shockSpeed);
@@ -145,11 +145,11 @@ describe('City (Tokyo)', () => {
     const q = new THREE.Quaternion();
     const s = new THREE.Vector3();
     m.decompose(pos, q, s);
-    expect(pos.x).toBe(500);
+    expect(pos.x).toBe(300);
     expect(pos.y).toBeCloseTo(0);
-    expect(pos.z).toBe(500);
+    expect(pos.z).toBe(300);
     expect(s.y).toBeCloseTo((lot as unknown as { spec: { h: number } }).spec.h);
-    const mesh = scene.children.find((o) => (o as THREE.Mesh).isMesh && o.position.x === 500 && o.position.z === 700)!;
+    const mesh = scene.children.find((o) => (o as THREE.Mesh).isMesh && o.position.x === 300 && o.position.z === 700)!;
     expect(mesh.visible).toBe(true);
     expect(mesh.position.y).toBeCloseTo(0);
     expect(mesh.quaternion.angleTo(new THREE.Quaternion())).toBe(0);

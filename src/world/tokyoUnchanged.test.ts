@@ -21,6 +21,6 @@ describe('Tokyo chunks', () => {
       expect(beaches, `${cx},${cz}`).toEqual([]);
       all += fnv(JSON.stringify(rest));
     }
-    expect(fnv(all)).toBe('9a170801');
+    expect(fnv(all)).toBe('9c947663');
   });
 });
