@@ -274,8 +274,13 @@ export class GameScene {
     this.monster.onRangedSpent = () => this.snare.onAttack();
     this.input = new Input(this.pixel.domElement, {
       tap: this.onTap,
-      drag: (dx, dy) => this.rig.drag(dx, dy),
-      wheel: (dy) => this.rig.zoom(dy),
+      // The camera is the ultimate's while it runs.
+      drag: (dx, dy) => {
+        if (!this.ultimateActive) this.rig.drag(dx, dy);
+      },
+      wheel: (dy) => {
+        if (!this.ultimateActive) this.rig.zoom(dy);
+      },
       hover: this.onHover,
       menuKey: (k) => {
         if (this.state === 'levelup') return this.cardKey(k);

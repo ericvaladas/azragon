@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { applyDrag, applyZoom, cameraPose, fovForAspect, type OrbitState, swingBehind } from './orbit';
+import { applyDrag, applyZoom, blendOrbit, cameraPose, fovForAspect, type OrbitState, swingBehind } from './orbit';
 import { CONFIG } from '../config';
 
 const C = CONFIG.camera;
@@ -67,5 +67,17 @@ describe('swingBehind', () => {
   it('goes the short way round', () => {
     const s = swingBehind({ ...base, yaw: 3 }, -3, 3, 0.1);
     expect(s.yaw).toBeGreaterThan(3);
+  });
+});
+
+describe('blendOrbit', () => {
+  it("blend 0 keeps the player's orbit, 1 is the pull-back, yaw untouched", () => {
+    const player: OrbitState = { yaw: 1.2, pitch: 0.5, distance: 900 };
+    const pull = { pitch: 1.05, distance: 2000 };
+    expect(blendOrbit(player, pull, 0)).toEqual(player);
+    expect(blendOrbit(player, pull, 1)).toEqual({ yaw: 1.2, ...pull });
+    const mid = blendOrbit(player, pull, 0.5);
+    expect(mid.yaw).toBe(1.2);
+    expect(mid.distance).toBeCloseTo(1450);
   });
 });

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { CONFIG } from '../config';
 import { damp } from '../util/math';
-import { applyDrag, applyZoom, cameraPose, fovForAspect, swingBehind, type OrbitState } from './orbit';
+import { applyDrag, applyZoom, blendOrbit, cameraPose, fovForAspect, swingBehind, type OrbitState } from './orbit';
 
 const FOLLOW_LAMBDA = 6;
 
@@ -10,6 +10,9 @@ export class CameraRig {
   private trauma = 0;
   private follow = new THREE.Vector3();
   private time = 0;
+  /** Cinematic pull-back: how far (0..1) toward `pullTo`; the player's own orbit is never overwritten. */
+  private pullK = 0;
+  private pullTo = { pitch: 0, distance: 0 };
 
   constructor(readonly camera: THREE.PerspectiveCamera) {
     camera.near = CONFIG.camera.near;
@@ -19,6 +22,7 @@ export class CameraRig {
   reset(): void {
     this.orbit = { yaw: CONFIG.camera.defaultYaw, pitch: CONFIG.camera.defaultPitch, distance: CONFIG.camera.defaultDistance };
     this.trauma = 0;
+    this.pullK = 0;
     this.follow.set(0, 0, 0);
   }
 
@@ -41,6 +45,13 @@ export class CameraRig {
     this.orbit = swingBehind(this.orbit, yaw, CONFIG.camera.behindLambda, dt);
   }
 
+  /** Pull the camera back toward `pitch` and `distance` by k (0 is exactly the player's orbit). */
+  pull(k: number, pitch: number, distance: number): void {
+    this.pullK = k;
+    this.pullTo.pitch = pitch;
+    this.pullTo.distance = distance;
+  }
+
   /** Trauma in 0..1; shake magnitude is trauma². */
   addTrauma(amount: number): void {
     this.trauma = Math.min(1, this.trauma + amount);
@@ -51,7 +62,7 @@ export class CameraRig {
     this.follow.x = damp(this.follow.x, target.x, FOLLOW_LAMBDA, dt);
     this.follow.y = damp(this.follow.y, target.y, FOLLOW_LAMBDA, dt);
     this.follow.z = damp(this.follow.z, target.z, FOLLOW_LAMBDA, dt);
-    const { pos, look } = cameraPose(this.orbit, this.follow);
+    const { pos, look } = cameraPose(this.pullK > 0 ? blendOrbit(this.orbit, this.pullTo, this.pullK) : this.orbit, this.follow);
     const s = this.trauma * this.trauma * CONFIG.camera.shakeMaxOffset;
     const t = this.time * 40;
     this.camera.position.set(pos[0] + Math.sin(t * 1.1) * s, pos[1] + Math.sin(t * 1.7 + 1) * s, pos[2] + Math.sin(t * 1.3 + 2) * s);
