@@ -3,9 +3,7 @@ import * as THREE from 'three';
 import { CONFIG } from '../../config';
 import type { Target } from '../../combat';
 import type { Vec2 } from '../../util/math';
-import type { Particles } from '../../systems/Particles';
 import { Devour, type DevourHost } from './DevourSequence';
-import { DEVOUR_HAND_T } from './handMath';
 
 const U = CONFIG.wendigo.ultimate;
 const last = (a: number[]) => a[a.length - 1];
@@ -33,7 +31,6 @@ function rig(enemies: Target[], buildings: Target[] = [], rand: () => number = (
   const log = { taken: [] as Target[], bosses: [] as [Target, number][], sky: [] as number[], camera: [] as number[], buildingT: [] as [number, number][] };
   let now = 0;
   const host: DevourHost = {
-    particles: { emit: () => {}, ring: () => {} } as unknown as Particles,
     enemies: () => enemies,
     take: (t) => {
       log.taken.push(t);
@@ -76,7 +73,7 @@ describe('Devour', () => {
     const take = log.taken;
     d.start(new THREE.Vector3(), 1);
     // Nothing is taken before the hands start to rise.
-    run(T.grasp - DEVOUR_HAND_T.impact * U.handSlow - 0.02);
+    run(T.circleTo - 0.02);
     expect(take).toEqual([]);
     for (let i = 0; i < 300 && take.length < 2; i++) {
       run(at() + 1 / 60);

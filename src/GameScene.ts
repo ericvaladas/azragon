@@ -241,14 +241,12 @@ export class GameScene {
     this.hands = new ShadowHands(this.scene);
     const U = CONFIG.wendigo.ultimate;
     this.devour = new Devour(this.scene, this.camera, {
-      particles: this.particles,
       enemies: () => this.enemyTargets(),
+      // Taken quietly: its hand's fist (and the husk in it) shows the take.
       take: (t) => {
         this.quietKill = true;
         t.applyDamage(1e9);
         this.quietKill = false;
-        this.particles.emit('shade', t.position, 10, 1.2);
-        this.particles.emit('mist', t.position, 6, 1);
       },
       hurtBoss: (t, dmg) => t.applyDamage(dmg),
       buildingsWithin: (c, r) => {
@@ -771,7 +769,7 @@ export class GameScene {
         }
         if (this.snare.update(dt)) this.enemies.get<OspreyNets>('osprey').netTornFree();
         const mp = this.monster.position;
-        if (this.runaway.update(dt, { x: mp.x, z: mp.z }) && this.runaway.dir && this.waveGate.open(this.runTime)) {
+        if (this.runaway.update(dt, { x: mp.x, z: mp.z }) && this.runaway.dir && !this.ultimateActive && this.waveGate.open(this.runTime)) {
           // The monster has started running away: drop a wave of tanks on the roads ahead of it.
           const R = CONFIG.runaway;
           const at = waveCenter({ x: mp.x, z: mp.z }, this.runaway.dir);
@@ -818,7 +816,8 @@ export class GameScene {
           });
         }
       }
-      this.enemies.update(dt, this.ctx, this.state === 'playing');
+      // No new enemies arrive while an ultimate runs (the director's budget waits too, so none pile up for after).
+      this.enemies.update(dt, this.ctx, this.state === 'playing' && !this.ultimateActive);
       this.projectiles.update(dt);
       this.updateGazes(dt);
       this.city.update(dt, this.monster.position);

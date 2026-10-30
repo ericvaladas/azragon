@@ -1,14 +1,14 @@
 import { CONFIG } from '../../config';
 import type { Target } from '../../combat';
-import type { Atmosphere } from '../../cities/types';
+import type { AtmosphereTint } from '../../render/atmosphere';
 import type { Vec2 } from '../../util/math';
 
 const U = CONFIG.wendigo.ultimate;
 const T = U.t;
 const C = CONFIG.wendigo.colors;
 
-/** Devour's blood sky: a near-black red zenith over a blood-red horizon, red fog, dimmed red light from a low sun. */
-export const BLOOD_ATMOSPHERE: Atmosphere = {
+/** Devour's blood sky: a near-black red zenith over a blood-red horizon, red fog, dimmed red light; the sun stays where the city has it. */
+export const BLOOD_ATMOSPHERE: AtmosphereTint = {
   skyZenith: C.bloodZenith,
   skyHorizon: C.bloodHorizon,
   fog: C.bloodFog,
@@ -17,7 +17,6 @@ export const BLOOD_ATMOSPHERE: Atmosphere = {
   hemiIntensity: U.hemiIntensity,
   sun: C.bloodSun,
   sunIntensity: U.sunIntensity,
-  sunDir: { x: 0.4, y: 0.35, z: -0.85 },
   windowGlow: { color: C.bloodSun, strength: 0.15 },
 };
 

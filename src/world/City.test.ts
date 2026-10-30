@@ -715,6 +715,17 @@ describe('City atmosphere', () => {
     expect(snap(city, t)).toEqual(tokyo);
   });
 
+  it("keeps the style's own sun direction when the atmosphere blended toward has none", () => {
+    const { city } = make();
+    const t = targets();
+    city.attachAtmosphere(t);
+    const dir = snap(city, t).dir;
+    const { sunDir: _drop, ...noSun } = DUSK.atmosphere;
+    city.blendAtmosphere(noSun, 1);
+    expect(snap(city, t).dir).toEqual(dir);
+    expect(snap(city, t).zenith).toBe(0x4b4a8c);
+  });
+
   it('blends toward another atmosphere and back: 1 is the target, 0 restores the style exactly', () => {
     const { city } = make();
     const t = targets();

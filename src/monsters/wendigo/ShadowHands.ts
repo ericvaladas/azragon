@@ -3,12 +3,10 @@ import { CONFIG } from '../../config';
 import type { Target } from '../../combat';
 import type { Particles } from '../../systems/Particles';
 import { faceted, toonMat } from '../../render/toon';
-import { ARM_BEND, armJointsTo, dragPoint, fingerPoints, fistPoint, HAND_DIM, HAND_T, handBase, handFrame, handPhase, thumbPoints, underBase, type HandTiming } from './handMath';
+import { ARM_BEND, armJointsTo, dragPoint, fingerPoints, fistPoint, HAND_DIM, HAND_T, handBase, handFrame, handPhase, thumbPoints } from './handMath';
 
-/** Hands alive at once by default (Anti-Air grabs up to three flyers per strike; strikes can overlap). */
+/** Hands alive at once (Shadow Hands+ grabs up to four flyers per strike; strikes can overlap). */
 const MAX = 10;
-/** A husk is this many times its victim's radius across. */
-const HUSK = 1.5;
 /** Bones in each arm (knobbed joints between them). */
 const SEGS = 7;
 /** Per hand: arm bones, joint knobs, palm, four fingers of 3 phalanges and 3 knuckles, a 3-bone thumb with 2 knuckles. */
@@ -39,9 +37,6 @@ type Hand = {
   /** Where the fist closed (world); the wreck is dragged down from here. */
   held: THREE.Vector3;
   t: number;
-  /** How many times slower than the timeline this hand rises and drags (`speed`: its reach over the speed); 1 otherwise. */
-  riseK: number;
-  dragK: number;
   /** Decided once at impact: the flyer survived, so the fist (still shut) sinks back on empty air and leaves it be. */
   survived: boolean;
   decided: boolean;
@@ -104,36 +99,8 @@ export class ShadowHands {
   private core: THREE.InstancedMesh;
   private halo: THREE.InstancedMesh;
   private pools: THREE.InstancedMesh;
-  /** Dark husks held in the fists (`husks` hands only). */
-  private husks: THREE.InstancedMesh;
-  private max: number;
-  private holdsHusks: boolean;
-  /** Size multiplier on the arms, hands and pools (1 for the anti-air hands); the hand scale it gives. */
-  private size: number;
-  private hs: number;
-  private T: HandTiming;
-  private under: number | null;
-  private speed: number | null;
-  private onImpact: (t: Target) => void;
 
-  /**
-   * `max` hands at once; with `husks` (Devour), a taken victim is gone from its own system, so each fist closes on a
-   * dark husk of its size and drags that under instead of moving the wreck itself. `timing` replaces the anti-air
-   * timeline (Devour's pulls at once); `onImpact` hears each hand close on its target, just before it decides whether
-   * it holds a wreck. `under` (m) raises each arm from right under its target, that far out, instead of from a pool
-   * out beyond it. `speed` (m per second of the hands' clock) has each hand rise and drag at that constant speed, so a
-   * longer reach takes longer (with a `steady` timing). `size` scales the arms, hands and pools (Devour's are seen from much further back).
-   */
-  constructor(scene: THREE.Scene, opts: { max?: number; husks?: boolean; size?: number; timing?: HandTiming; onImpact?: (t: Target) => void; under?: number; speed?: number } = {}) {
-    this.max = opts.max ?? MAX;
-    this.size = opts.size ?? 1;
-    this.T = opts.timing ?? HAND_T;
-    this.under = opts.under ?? null;
-    this.speed = opts.speed ?? null;
-    this.onImpact = opts.onImpact ?? (() => {});
-    this.hs = HS * this.size;
-    this.holdsHusks = opts.husks ?? false;
-    const n = this.max;
+  constructor(scene: THREE.Scene) {
     // Bones taper toward their far end, so each one reads as a separate bone and each finger ends in a point.
     const bone = faceted(new THREE.CylinderGeometry(0.55, 1, 1, 5));
     // Ghostly: the bones themselves are see-through (the city reads through the arm); they still write depth, so the
@@ -141,17 +108,16 @@ export class ShadowHands {
     const coreMat = toonMat(0xffffff);
     coreMat.transparent = true;
     coreMat.opacity = CORE_OPACITY;
-    this.core = new THREE.InstancedMesh(bone, coreMat, n * CORE_PER);
+    this.core = new THREE.InstancedMesh(bone, coreMat, MAX * CORE_PER);
     this.halo = new THREE.InstancedMesh(
       bone,
       new THREE.MeshBasicMaterial({ color: CONFIG.wendigo.colors.handSmoke, transparent: true, opacity: HALO_OPACITY, depthWrite: false, side: THREE.BackSide }),
-      n * HALO_PER,
+      MAX * HALO_PER,
     );
     this.halo.renderOrder = 1;
-    this.pools = new THREE.InstancedMesh(raggedDisc(), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.88, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }), n * 2);
+    this.pools = new THREE.InstancedMesh(raggedDisc(), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.88, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }), MAX * 2);
     this.pools.renderOrder = 2;
-    this.husks = new THREE.InstancedMesh(faceted(new THREE.BoxGeometry(1, 0.6, 1.4)), toonMat(CONFIG.wendigo.colors.husk), n);
-    for (const m of [this.core, this.halo, this.pools, this.husks]) {
+    for (const m of [this.core, this.halo, this.pools]) {
       m.frustumCulled = false;
       m.count = 0;
       m.visible = false;
@@ -165,27 +131,17 @@ export class ShadowHands {
     return this.hands.length;
   }
 
-  /** Some hand has yet to finish dragging its prize under (waiting to rise counts). */
-  dragging(): boolean {
-    return this.hands.some((h) => h.t < this.T.drag);
-  }
-
-  /** A hand rises for `target` (followed live until the impact), `delay` s from now; the arm comes out of the ground beyond it. */
-  grab(target: Target, monster: THREE.Vector3, delay = 0): void {
-    if (this.hands.length >= this.max) return;
+  /** A hand rises for `target` (followed live until the impact); the arm comes out of the ground beyond it. */
+  grab(target: Target, monster: THREE.Vector3): void {
+    if (this.hands.length >= MAX) return;
     const h = this.spare.pop() ?? {
-      target, base: new THREE.Vector3(), held: new THREE.Vector3(), t: 0, riseK: 1, dragK: 1, survived: false, decided: false, seed: 0, twist: 0,
+      target, base: new THREE.Vector3(), held: new THREE.Vector3(), t: 0, survived: false, decided: false, seed: 0, twist: 0,
       joints: Array.from({ length: SEGS + 1 }, () => new THREE.Vector3()),
     };
     h.target = target;
-    if (this.under === null) handBase(target.position, monster, Math.random(), h.base);
-    else underBase(target.position, monster, Math.random(), this.under, h.base);
+    handBase(target.position, monster, Math.random(), h.base);
     h.held.copy(target.position);
-    h.t = -delay;
-    // At a constant `speed`, the rise and the drag each take the reach (pool to target) over the speed.
-    const reach = h.base.distanceTo(target.position);
-    h.riseK = this.speed === null ? 1 : reach / this.speed / this.T.impact;
-    h.dragK = this.speed === null ? 1 : reach / this.speed / (this.T.drag - this.T.hold);
+    h.t = 0;
     h.survived = false;
     h.decided = false;
     h.seed = Math.random() * 100;
@@ -196,7 +152,7 @@ export class ShadowHands {
   clear(): void {
     this.spare.push(...this.hands);
     this.hands = [];
-    for (const m of [this.core, this.halo, this.pools, this.husks]) {
+    for (const m of [this.core, this.halo, this.pools]) {
       m.count = 0;
       m.visible = false;
     }
@@ -206,29 +162,22 @@ export class ShadowHands {
     let nc = 0;
     let nh = 0;
     let np = 0;
-    let nk = 0;
     for (let i = this.hands.length - 1; i >= 0; i--) {
       const h = this.hands[i]!;
-      // Rising (after any delay, before it closes) runs riseK times slower, dragging dragK times.
-      const k = h.t >= 0 && h.t < this.T.impact ? h.riseK : h.t >= this.T.hold && h.t < this.T.drag ? h.dragK : 1;
-      h.t += dt / k;
-      // Not risen yet.
-      if (h.t < 0) continue;
-      const T = this.T;
-      if (h.t >= T.total) {
+      h.t += dt;
+      if (h.t >= HAND_T.total) {
         this.spare.push(h);
         this.hands.splice(i, 1);
         continue;
       }
       // At the impact (the anti-air damage has just landed) the fist either holds a wreck or, shut on empty air, leaves a
       // survivor to fly on.
-      if (!h.decided && h.t >= T.impact) {
+      if (!h.decided && h.t >= HAND_T.impact) {
         h.decided = true;
-        this.onImpact(h.target);
         h.survived = h.target.isAlive();
         h.held.copy(h.target.position);
       }
-      const ph = handPhase(h.t, h.survived, T);
+      const ph = handPhase(h.t, h.survived);
       const fade = ph.fade;
       const life = 1 - fade;
 
@@ -239,23 +188,18 @@ export class ShadowHands {
       else {
         // From where the fist closed: a survivor is left to fly on, the fist sinking shut on empty air.
         dragPoint(h.base, h.held, ph.drag, _a);
-        if (h.t < T.hold) _a.x += Math.sin(h.t * 65) * 3;
-        // The wreck goes down with the hand (purely visual: the flyer is already destroyed); or, holding husks, a
-        // dark husk of the victim's size does, the victim itself left alone.
-        if (!h.survived && this.holdsHusks) {
-          const r = h.target.radius * HUSK * life;
-          _q.setFromAxisAngle(_up, h.seed);
-          this.husks.setMatrixAt(nk++, _m.compose(_a, _q, _scale.set(r, r, r)));
-        } else if (!h.survived && !h.target.isAlive() && ph.drag < 1) h.target.position.copy(_a);
+        if (h.t < HAND_T.hold) _a.x += Math.sin(h.t * 65) * 3;
+        // The wreck goes down with the hand (purely visual: the flyer is already destroyed).
+        if (!h.survived && !h.target.isAlive() && ph.drag < 1) h.target.position.copy(_a);
       }
 
       // Hand frame: F along the hand toward the fingertips, S across the knuckles, N out of the palm. Overhand: it
       // rolls palm-down as it comes over the flyer, then tips on over to point down as it drags the wreck into the
       // ground; the wrist sits above the prize (−N). The wrist is rigid: the forearm runs straight into the hand.
-      handFrame(h.base, h.decided ? h.held : h.target.position, h.decided ? 1 : ph.rise, _f, _s, _n, ph.drag, T.pitch);
+      handFrame(h.base, h.decided ? h.held : h.target.position, h.decided ? 1 : ph.rise, _f, _s, _n, ph.drag);
       const bend = ARM_BEND + 0.015 * Math.sin(h.t * 5 + h.seed);
       const twist = 0.3 * h.twist + 0.015 * Math.sin(h.t * 3.7 + h.seed);
-      _w.copy(_a).addScaledVector(_f, -HOLD_FWD * this.hs).addScaledVector(_n, -HOLD_IN * this.hs);
+      _w.copy(_a).addScaledVector(_f, -HOLD_FWD * HS).addScaledVector(_n, -HOLD_IN * HS);
 
       // Arm: a long, nearly straight, trembling chain of tapering bones with knobbed joints, leaning in from its pool
       // and bending a little at the elbow to arrive along the hand (the elbow keeps still so the wrist stays straight).
@@ -268,7 +212,7 @@ export class ShadowHands {
       }
       for (let k = 0; k < SEGS; k++) {
         const u = k / SEGS;
-        const r = (ARM_R0 + (ARM_R1 - ARM_R0) * u) * this.size * life;
+        const r = (ARM_R0 + (ARM_R1 - ARM_R0) * u) * life;
         _col.copy(ARM_ROOT).lerp(ARM_TIP, u);
         this.bone(nc++, J[k]!, J[k + 1]!, r, _col);
         this.bone(nh++, J[k]!, J[k + 1]!, r * 1.9, null, this.halo);
@@ -281,10 +225,10 @@ export class ShadowHands {
       }
 
       // Palm: a flat slab from the wrist along F, knuckles across S.
-      _p.copy(_w).addScaledVector(_f, PALM.len * this.hs * 0.5);
+      _p.copy(_w).addScaledVector(_f, PALM.len * HS * 0.5);
       _m.makeBasis(_s, _f, _n).setPosition(_p);
       _q.setFromRotationMatrix(_m);
-      _scale.set((PALM.width / 2) * this.hs * life, PALM.len * this.hs, (PALM.thick / 2) * this.hs * life);
+      _scale.set((PALM.width / 2) * HS * life, PALM.len * HS, (PALM.thick / 2) * HS * life);
       this.core.setMatrixAt(nc, _m.compose(_p, _q, _scale));
       this.core.setColorAt(nc++, ARM_TIP);
       _scale.x *= 1.35;
@@ -307,12 +251,12 @@ export class ShadowHands {
       nc += 5;
 
       // Shadow pool: two ragged discs turning against each other.
-      const pr = (70 + 5 * Math.sin(h.t * 6 + h.seed)) * this.size * ph.pool;
+      const pr = (70 + 5 * Math.sin(h.t * 6 + h.seed)) * ph.pool;
       this.disc(np++, h.base, pr, h.t * 0.9 + h.seed, 3, POOL_OUTER);
       this.disc(np++, h.base, pr * 0.62, -h.t * 1.05, 4, POOL_INNER);
 
       // Smoke: a column boiling up as the arm rises, wisps off the bones, and a burst as it all dissolves.
-      if (h.t < T.emerge && Math.random() < 0.5) particles.emit('shade', _p.copy(h.base).setY(10), 1, 0.5);
+      if (h.t < HAND_T.emerge && Math.random() < 0.5) particles.emit('shade', _p.copy(h.base).setY(10), 1, 0.5);
       if (Math.random() < dt * 14) particles.emit('shade', J[2 + Math.floor(Math.random() * (SEGS - 2))]!, 1, 0.2);
       if (Math.random() < dt * 5) particles.emit('shade', _p.copy(h.base).setY(6).add(_e.set(Math.random() - 0.5, 0, Math.random() - 0.5).multiplyScalar(pr * 1.6)), 1, 0.4);
       if (fade > 0 && Math.random() < dt * 40) particles.emit('shade', J[Math.floor(Math.random() * (SEGS + 1))]!, 1, 0.5);
@@ -320,7 +264,6 @@ export class ShadowHands {
     this.finish(this.core, nc);
     this.finish(this.halo, nh);
     this.finish(this.pools, np);
-    this.finish(this.husks, nk);
   }
 
   /**
@@ -331,15 +274,15 @@ export class ShadowHands {
   private digit(i: number, P: THREE.Vector3[], knobs: number, ls: number, life: number, grip: number): void {
     for (let k = 3; k >= 0; k--) {
       _e.copy(P[k]!).sub(P[0]!).multiplyScalar(ls).add(P[0]!);
-      _D[k]!.copy(_w).addScaledVector(_s, _e.x * this.hs).addScaledVector(_f, _e.y * this.hs).addScaledVector(_n, _e.z * this.hs);
+      _D[k]!.copy(_w).addScaledVector(_s, _e.x * HS).addScaledVector(_f, _e.y * HS).addScaledVector(_n, _e.z * HS);
     }
-    for (let j = 0; j < 3; j++) this.bone(i++, _D[j]!, _D[j + 1]!, FINGER_R[j]! * this.hs * life, j === 2 ? CLAW : FINGER);
+    for (let j = 0; j < 3; j++) this.bone(i++, _D[j]!, _D[j + 1]!, FINGER_R[j]! * HS * life, j === 2 ? CLAW : FINGER);
     for (let j = 0; j < knobs; j++) {
       // A knuckle over the joint, along the bone it starts, standing out more as the fist clenches.
       const k = knobs === 3 ? j : j + 1;
-      _e.subVectors(_D[k + 1]!, _D[k]!).setLength(FINGER_R[Math.min(2, k)]! * this.hs * KNUCKLE * 1.2);
+      _e.subVectors(_D[k + 1]!, _D[k]!).setLength(FINGER_R[Math.min(2, k)]! * HS * KNUCKLE * 1.2);
       _p.copy(_D[k]!).addScaledVector(_e, -0.5);
-      this.bone(i++, _p, _c.copy(_p).add(_e), FINGER_R[Math.min(2, k)]! * this.hs * life * (KNUCKLE + 0.15 * grip), KNOB);
+      this.bone(i++, _p, _c.copy(_p).add(_e), FINGER_R[Math.min(2, k)]! * HS * life * (KNUCKLE + 0.15 * grip), KNOB);
     }
   }
 
@@ -368,7 +311,7 @@ export class ShadowHands {
   }
 
   dispose(): void {
-    for (const m of [this.core, this.halo, this.pools, this.husks]) {
+    for (const m of [this.core, this.halo, this.pools]) {
       m.removeFromParent();
       m.geometry.dispose();
       (m.material as THREE.Material).dispose();

@@ -11,7 +11,7 @@ import { rubbleGeometry } from './rubble';
 import { Landforms } from './LandformRenderer';
 import { craneColors, craneGeometry } from './crane';
 import { faceted, toonMat } from '../render/toon';
-import { applyAtmosphere, lerpAtmosphere, windowGlowColor, type AtmosphereTargets } from '../render/atmosphere';
+import { applyAtmosphere, lerpAtmosphere, windowGlowColor, type AtmosphereTargets, type AtmosphereTint } from '../render/atmosphere';
 
 type BuildingState = 'standing' | 'collapsing' | 'rubble';
 
@@ -537,8 +537,8 @@ export class City {
     applyAtmosphere(this._style.atmosphere, this.atmosphere);
   }
 
-  /** Blend the attached sky, fog and lights from the style's atmosphere toward `to` by k (0 is the style's own, exactly). */
-  blendAtmosphere(to: Atmosphere, k: number): void {
+  /** Blend the attached sky, fog and lights from the style's atmosphere toward `to` by k (0 is the style's own, exactly; without a sun direction, `to` keeps the style's). */
+  blendAtmosphere(to: AtmosphereTint, k: number): void {
     if (!this.atmosphere) return;
     if (k <= 0) {
       applyAtmosphere(this._style.atmosphere, this.atmosphere);

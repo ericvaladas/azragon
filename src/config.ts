@@ -375,19 +375,23 @@ export const CONFIG = {
     gaze: { splash: 120, delay: 1.4, poolRadius: 110, poolLife: 3 },
     /**
      * Devour (the ultimate): a black circle of `radius` m at the press point; world time slows to timeScale; up to
-     * maxFigures shadow hands (handSize × the anti-air hands' size, their clock slowed handSlow ×) start rising up to
-     * handStagger s apart from handUnder m out under their victims, and rise and drag at handSpeed, each taking its
-     * victim as it closes; the effect holds until the last is down. Anyone else inside at the grasp beat (past the
-     * hand cap, or come in since) is taken in a burst of shadow; a boss takes bossDamage × the damage
+     * maxFigures hands (DevourHands) start up to handStagger s apart, each rising out of the ground under its victim;
+     * the effect holds until the last is back under. Anyone else inside at the grasp beat (past the hand cap, or come
+     * in since) is taken in a burst of shadow; a boss takes bossDamage × the damage
      * multiplier. The camera pulls back to cameraDistanceMult × its default distance, keeping its angle. Lightning strikes
      * every boltEvery[0]..[1] s within boltSpread × radius. `t`: the beats in real seconds (see devourPhase); the camera
      * takes cameraIn s to pull back and cameraOut s to return from outroFrom, finishing after control comes back at `end`.
      * The blood sky: its lights' intensities (the colours are bloodZenith…bloodSun below).
      */
     ultimate: {
-      radius: 900, timeScale: 0.25, maxFigures: 24, handSlow: 2.5, handSize: 1, handStagger: 0.9, handUnder: 60,
-      /** Every hand rises to its victim and drags it down at this constant speed (m/s, real time). */
-      handSpeed: 150,
+      radius: 900, timeScale: 0.25, maxFigures: 24, handStagger: 0.9,
+      /**
+       * A hand: its scale (the anti-air hands are 2), how fast it rises (m/s, real time), how long it takes to reach a
+       * flyer (s, however high), how long it brakes to a stop at the top of its rise (s), how long it takes to close into a fist (s), how fast it sinks back (m/s), how
+       * long it takes to sink back from a flyer (s, however high), and how high its wrist is at the lowest grasp (m),
+       * so the whole hand is above the ground.
+       */
+      hand: { scale: 2.2, riseSpeed: 180, airRiseTime: 0.45, easeTime: 0.6, closeTime: 1.6, sinkSpeed: 100, airSinkTime: 1.2, wristClear: 15 },
       bossDamage: 2000,
       cameraDistanceMult: 2.2,
       boltEvery: [0.4, 0.9], boltSpread: 1.3,
@@ -438,7 +442,6 @@ export const CONFIG = {
       /** The dark husk a Devour hand drags under in place of its victim. */
       husk: 0x120a10,
       circle: 0x050204,
-      circleGlow: 0x5a0a0e,
       boltCore: 0xfff2f0,
       boltEdge: 0xff2a2a,
     },

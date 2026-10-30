@@ -15,7 +15,7 @@ export type AtmosphereTargets = {
 };
 
 /** Fog near and far under `a`: its own, else CONFIG.fog's. */
-export function fogDistances(a: Atmosphere): { near: number; far: number } {
+export function fogDistances(a: Pick<Atmosphere, 'fogNear' | 'fogFar'>): { near: number; far: number } {
   return { near: a.fogNear ?? CONFIG.fog.near, far: a.fogFar ?? CONFIG.fog.far };
 }
 
@@ -46,8 +46,11 @@ const _cb = new THREE.Color();
 const mixHex = (a: number, b: number, k: number): number => _ca.setHex(a).lerp(_cb.setHex(b), k).getHex();
 const mix = (a: number, b: number, k: number): number => a * (1 - k) + b * k;
 
+/** An atmosphere to blend toward; without a sun direction, the blend keeps the one it starts from. */
+export type AtmosphereTint = Omit<Atmosphere, 'sunDir'> & { sunDir?: Atmosphere['sunDir'] };
+
 /** `a` blended toward `b` by k (0..1, clamped) into `out`: colours in linear RGB, numbers and the sun direction linearly, fog distances filled in. */
-export function lerpAtmosphere(a: Atmosphere, b: Atmosphere, k: number, out: Atmosphere): Atmosphere {
+export function lerpAtmosphere(a: Atmosphere, b: AtmosphereTint, k: number, out: Atmosphere): Atmosphere {
   const t = Math.min(1, Math.max(0, k));
   const fa = fogDistances(a);
   const fb = fogDistances(b);
@@ -61,9 +64,10 @@ export function lerpAtmosphere(a: Atmosphere, b: Atmosphere, k: number, out: Atm
   out.hemiIntensity = mix(a.hemiIntensity, b.hemiIntensity, t);
   out.sun = mixHex(a.sun, b.sun, t);
   out.sunIntensity = mix(a.sunIntensity, b.sunIntensity, t);
-  out.sunDir.x = mix(a.sunDir.x, b.sunDir.x, t);
-  out.sunDir.y = mix(a.sunDir.y, b.sunDir.y, t);
-  out.sunDir.z = mix(a.sunDir.z, b.sunDir.z, t);
+  const sun = b.sunDir ?? a.sunDir;
+  out.sunDir.x = mix(a.sunDir.x, sun.x, t);
+  out.sunDir.y = mix(a.sunDir.y, sun.y, t);
+  out.sunDir.z = mix(a.sunDir.z, sun.z, t);
   out.windowGlow.color = mixHex(a.windowGlow.color, b.windowGlow.color, t);
   out.windowGlow.strength = mix(a.windowGlow.strength, b.windowGlow.strength, t);
   return out;

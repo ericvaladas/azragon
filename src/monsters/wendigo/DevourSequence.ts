@@ -3,9 +3,7 @@ import { CONFIG } from '../../config';
 import type { Target } from '../../combat';
 import type { Vec2 } from '../../util/math';
 import { Lightning } from '../../systems/Lightning';
-import type { Particles } from '../../systems/Particles';
-import { ShadowHands } from './ShadowHands';
-import { DEVOUR_HAND_T } from './handMath';
+import { DevourHands } from './DevourHands';
 import { devourPhase, devourVictims } from './devour';
 
 const U = CONFIG.wendigo.ultimate;
@@ -28,8 +26,6 @@ export type DevourHost = {
   shake(amount: number): void;
   /** A lightning flash on the scene light, 0..1. */
   flash(k: number): void;
-  /** The particle system (the hands boil smoke). */
-  particles: Particles;
   /** Particles: shadow taking a victim (`take`) or a lightning strike's dust and embers (`bolt`). */
   burst(at: THREE.Vector3, kind: 'take' | 'bolt'): void;
 };
@@ -40,42 +36,32 @@ type Pending = { t: number; target: Target };
  * When the hands start to rise (as the circle finishes opening); each starts up to handStagger s later than that, so
  * they come in at their own times, and closes on its victim after its reach at handSpeed.
  */
-const HANDS_AT = T.grasp - DEVOUR_HAND_T.impact * U.handSlow;
+const HANDS_AT = T.circleTo;
 
 const _v = new THREE.Vector3();
 /** Seconds the black circle takes to fade once the last hand is under (or, with no hands, from the outro). */
 const CIRCLE_FADE = 1;
 
-/** Flat ragged disc (radius ~1): a near-black body fading to a deep-red glow toward the rim. */
+/** Flat disc (radius ~1) with a barely uneven edge, one even colour to it: a hole in the ground, with no rim. */
 function circleGeometry(): THREE.BufferGeometry {
-  const n = 40;
+  const n = 96;
   const pos: number[] = [];
-  const col: number[] = [];
-  const inner = new THREE.Color(C.circle);
-  const rim = new THREE.Color(C.circleGlow);
   const at = (a: number, r: number) => [Math.cos(a) * r, 0, Math.sin(a) * r];
-  const ragged = (i: number) => 0.92 + 0.08 * Math.sin(i * 2.3) * Math.sin(i * 0.7 + 1);
+  const ragged = (i: number) => 0.985 + 0.015 * Math.sin(i * 0.9) * Math.sin(i * 0.37 + 1);
   for (let i = 0; i < n; i++) {
     const a0 = (i / n) * Math.PI * 2;
     const a1 = ((i + 1) / n) * Math.PI * 2;
-    const o0 = ragged(i);
-    const o1 = ragged((i + 1) % n);
-    pos.push(0, 0, 0, ...at(a1, o1 * 0.8), ...at(a0, o0 * 0.8));
-    col.push(...inner.toArray(), ...inner.toArray(), ...inner.toArray());
-    pos.push(...at(a0, o0 * 0.8), ...at(a1, o1 * 0.8), ...at(a1, o1));
-    pos.push(...at(a0, o0 * 0.8), ...at(a1, o1), ...at(a0, o0));
-    col.push(...inner.toArray(), ...inner.toArray(), ...rim.toArray(), ...inner.toArray(), ...rim.toArray(), ...rim.toArray());
+    pos.push(0, 0, 0, ...at(a1, ragged((i + 1) % n)), ...at(a0, ragged(i)));
   }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
   return g;
 }
 
 /**
  * Devour, the Wendigo's ultimate, on its real-time timeline (devourPhase): the world slows, the camera pulls back,
- * the sky bleeds red and lightning strikes around; a black circle opens; slow shadow hands rise for every enemy in
- * it, close on them at the grasp beat (each is taken; a boss is hurt instead) and drag their husks under; the buildings
+ * the sky bleeds red and lightning strikes around; a black circle opens; a hand rises out of the ground under every
+ * enemy in it, closes into a fist round it (it is taken; a boss is hurt instead) and sinks back with it; the buildings
  * in the circle collapse as it opens, nearest first; then everything drains away, the circle last, once every hand
  * is under.
  */
@@ -99,7 +85,7 @@ export class Devour {
   /** The circle's strength 0..1: opening with the phase, held while any hand is still dragging, then fading. */
   private circleK = 0;
   private lightning: Lightning;
-  private hands: ShadowHands;
+  private hands: DevourHands;
 
   constructor(
     scene: THREE.Scene,
@@ -109,7 +95,7 @@ export class Devour {
   ) {
     this.circle = new THREE.Mesh(
       circleGeometry(),
-      new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -6, polygonOffsetUnits: -6 }),
+      new THREE.MeshBasicMaterial({ color: C.circle, transparent: true, opacity: 0, depthWrite: false, fog: false, polygonOffset: true, polygonOffsetFactor: -6, polygonOffsetUnits: -6 }),
     );
     this.circle.renderOrder = 3;
     this.circle.visible = false;
@@ -117,21 +103,12 @@ export class Devour {
     // Dust, embers and a jolt land with each return stroke, not as its leader sets off.
     this.lightning = new Lightning(scene, camera, { core: C.boltCore, edge: C.boltEdge, scorch: C.circle }, rand, (at) => {
       this.host.burst(at, 'bolt');
-      this.host.shake(0.12);
+      this.host.shake(0.04);
     });
     // Each victim is taken the moment its own hand closes on it.
-    this.hands = new ShadowHands(scene, {
-      max: U.maxFigures,
-      husks: true,
-      size: U.handSize,
-      timing: DEVOUR_HAND_T,
-      under: U.handUnder,
-      // Every hand rises and drags at the same speed (handSpeed m/s real; the hands' clock runs handSlow × slower).
-      speed: U.handSpeed * U.handSlow,
-      // Each victim is taken as its own hand closes.
-      onImpact: (t) => {
-        if (this.active && t.isAlive()) this.host.take(t);
-      },
+    // Each victim is taken as its own hand reaches it.
+    this.hands = new DevourHands(scene, (t) => {
+      if (this.active && t.isAlive()) this.host.take(t);
     });
   }
 
@@ -159,7 +136,7 @@ export class Devour {
       this.t += realDt;
       const k = devourPhase(this.t).camera;
       this.host.camera(k);
-      this.hands.update(realDt / U.handSlow, this.host.particles);
+      this.hands.update(realDt);
       this.drawCircle(realDt);
       if (k <= 0 && this.hands.count === 0 && this.circleK <= 0) this.returning = false;
       return false;
@@ -188,8 +165,7 @@ export class Devour {
       // A shadow hand rises for each victim (the nearest maxFigures), slowly, out of a pool beyond it.
       this.spawned = true;
       this.figured = devourVictims(c, U.radius, this.host.enemies(), U.maxFigures).held;
-      // Delays are on the hands' slowed clock.
-      for (const t of this.figured) this.hands.grab(t, this.center, (this.rand() * U.handStagger) / U.handSlow);
+      for (const t of this.figured) this.hands.grab(t, this.center, this.rand() * U.handStagger);
     }
     if (!this.grasped && this.t >= T.grasp) {
       this.grasped = true;
@@ -205,7 +181,7 @@ export class Devour {
       for (const b of now.bosses) this.host.hurtBoss(b, U.bossDamage * this.damageMult);
       this.host.shake(0.6);
     }
-    if (this.spawned) this.hands.update(realDt / U.handSlow, this.host.particles);
+    if (this.spawned) this.hands.update(realDt);
     this.drawCircle(realDt);
     // The buildings come down as the circle opens, nearest first, spreading out with it.
     if (!this.collapsing && this.t >= T.circleFrom) {
@@ -240,8 +216,8 @@ export class Devour {
     if (this.active && this.t < T.outroFrom) this.circleK = devourPhase(this.t).circle;
     else if (!this.hands.dragging()) this.circleK = Math.max(0, this.circleK - realDt / CIRCLE_FADE);
     this.circle.visible = this.circleK > 0;
+    // Not quite opaque, so the hands rising out of it still read.
     (this.circle.material as THREE.MeshBasicMaterial).opacity = 0.92 * this.circleK;
-    this.circle.rotation.y += realDt * 0.15;
   }
 
   /** Stop at once, restoring the sky, camera and time (restart, exit, death). */

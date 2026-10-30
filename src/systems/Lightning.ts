@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { BOLT_LIFE, LEADER, boltPath, segmentBrightness, strikeFlash, strokeHeat } from './lightningMath';
+import { LEADER, boltLife, boltPath, segmentBrightness, strikeFlash, strokeHeat, strokeTimes } from './lightningMath';
 
 /** Bolts alive at once; a new strike takes the oldest slot. */
 const MAX_BOLTS = 4;
@@ -23,7 +23,8 @@ const SCORCHES = 8;
 const SCORCH_R = 70;
 const SCORCH_LIFE = 2;
 
-type Bolt = { age: number; on: boolean; struck: boolean; ground: THREE.Vector3 };
+/** A bolt in flight: its age, whether its first stroke has landed, where it strikes, and its stroke times (strokeTimes). */
+type Bolt = { age: number; on: boolean; struck: boolean; ground: THREE.Vector3; strokes: number[] };
 
 const _from = new THREE.Vector3();
 const _right = new THREE.Vector3();
@@ -36,13 +37,14 @@ const _hot = new THREE.Color();
 const WHITE = new THREE.Color(0xffffff);
 
 /**
- * Lightning as slow-motion footage shows it: a faint stepped leader creeps down from the sky in jerks, branching as
- * it goes; when it touches the ground the return stroke blazes the main channel white (lighting the scene and
- * scorching the ground) while the branches die, then the channel flickers once and fades (segmentBrightness).
- * Drawn as camera-facing ribbons, a white core inside a red edge, additive. Three draw calls; everything is pooled.
+ * Lightning as slow-motion footage shows it: faint branch crawlers creep down from the sky in jerks; when the leader
+ * touches the ground the main channel appears at once, white-hot (lighting the scene and scorching the ground), while
+ * the branches die, then fades; once or twice more it re-strikes down the same channel, blazing back to full
+ * (strokeTimes, segmentBrightness). Drawn as camera-facing ribbons, a white core inside an edge of the given colour
+ * (the colours are the caller's, so each ultimate can have its own), additive. Three draw calls; everything is pooled.
  */
 export class Lightning {
-  private bolts: Bolt[] = Array.from({ length: MAX_BOLTS }, () => ({ age: 0, on: false, struck: false, ground: new THREE.Vector3() }));
+  private bolts: Bolt[] = Array.from({ length: MAX_BOLTS }, () => ({ age: 0, on: false, struck: false, ground: new THREE.Vector3(), strokes: [] as number[] }));
   private next = 0;
   private core: THREE.Mesh;
   private edge: THREE.Mesh;
@@ -89,7 +91,7 @@ export class Lightning {
     return mesh;
   }
 
-  /** A strike begins over `ground`: its leader starts down now and the return stroke lands LEADER s later. */
+  /** A strike begins over `ground`: its leader starts down now, its first stroke lands LEADER s later, and it re-strikes once or twice. */
   strike(ground: THREE.Vector3): void {
     const i = this.next;
     this.next = (this.next + 1) % MAX_BOLTS;
@@ -97,6 +99,7 @@ export class Lightning {
     bolt.age = 0;
     bolt.on = true;
     bolt.struck = false;
+    strokeTimes(this.rand, bolt.strokes);
     bolt.ground.copy(ground);
     // Ribbons face the camera across its right vector at the moment of the strike (a strike lasts well under a second).
     _right.setFromMatrixColumn(this.camera.matrixWorld, 0).setY(0).normalize();
@@ -153,20 +156,20 @@ export class Lightning {
         this.scorchAge[s] = 0;
         this.onStroke(bolt.ground);
       }
-      if (bolt.age >= LEADER + BOLT_LIFE) bolt.on = false;
+      if (bolt.age >= boltLife(bolt.strokes)) bolt.on = false;
       else any = true;
-      flash = Math.max(flash, strikeFlash(bolt.age));
+      flash = Math.max(flash, strikeFlash(bolt.age, bolt.strokes));
     }
     for (const [mesh, hex] of [[this.core, this.colors.core], [this.edge, this.colors.edge]] as const) {
       const col = mesh.geometry.getAttribute('color') as THREE.BufferAttribute;
       for (let b = 0; b < MAX_BOLTS; b++) {
         const bolt = this.bolts[b]!;
         // The main channel burns white-hot through the stroke, edge and all, cooling back to its colour as it fades.
-        _hot.setHex(hex).lerp(WHITE, bolt.on ? strokeHeat(bolt.age) : 0);
+        _hot.setHex(hex).lerp(WHITE, bolt.on ? strokeHeat(bolt.age, bolt.strokes) : 0);
         for (let s = 0; s < SEGS_PER_BOLT; s++) {
           const slot = b * SEGS_PER_BOLT + s;
           const main = this.main[slot] === 1;
-          const k = bolt.on ? segmentBrightness(bolt.age, this.depth[slot]!, main) : 0;
+          const k = bolt.on ? segmentBrightness(bolt.age, this.depth[slot]!, main, bolt.strokes) : 0;
           if (main) _c.copy(_hot);
           else _c.setHex(hex);
           _c.multiplyScalar(k);
