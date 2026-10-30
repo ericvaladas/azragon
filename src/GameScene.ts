@@ -48,6 +48,7 @@ import type { CityStyle } from './cities/types';
 import { Progression, expToNext } from './systems/Progression';
 import { regen } from './monster/vitals';
 import { DebugOverlay } from './systems/DebugOverlay';
+import type { Ultimate, UltimateId } from './systems/ultimate';
 import { Abilities, cameraFollowsWalk, ultimateBlocked, untouchable, type AbilityView, type ActiveId } from './systems/abilities';
 import { Shockwave } from './systems/Shockwave';
 import { LevelUpMoment, levelUpNow } from './systems/levelUpMoment';
@@ -200,8 +201,8 @@ export class GameScene {
   private fistTarget: Target | null = null;
   /** An ultimate's sequence is running. */
   private ultimateActive = false;
-  /** The Wendigo's ultimate. */
-  private devour!: Devour;
+  /** Each kind's ultimate, by id; the current kind's is `ultimate()`. */
+  private ultimates: Partial<Record<UltimateId, Ultimate>> = {};
   /** Set while Devour takes a victim: its death skips the usual explosion. */
   private quietKill = false;
   private shieldFx: ShieldFx;
@@ -240,7 +241,7 @@ export class GameScene {
     this.breath = new BreathBeam(this.scene);
     this.hands = new ShadowHands(this.scene);
     const U = CONFIG.wendigo.ultimate;
-    this.devour = new Devour(this.scene, this.camera, {
+    this.ultimates.devour = new Devour(this.scene, this.camera, {
       enemies: () => this.enemyTargets(),
       // Taken quietly: its hand's fist (and the husk in it) shows the take.
       take: (t) => {
@@ -749,7 +750,8 @@ export class GameScene {
     const raw = this.clock.getDelta();
     const realDt = clampDelta(raw);
     // World time runs in slow motion during the level-up moment or an ultimate (which wins); both run on real time.
-    const dt = realDt * (this.devour.active ? this.devour.timeScale() : this.moment.timeScale());
+    const ult = this.ultimate();
+    const dt = realDt * (ult?.active ? ult.timeScale() : this.moment.timeScale());
     this.splasher.newFrame();
     const frozen = this.state === 'levelup' || this.state === 'paused' || this.state === 'loading';
 
@@ -830,7 +832,10 @@ export class GameScene {
       this.shieldFx.update(dt, this.monster.position, this.passives.bubbleActive());
       this.inkFx.update(dt);
       if (this.moment.update(realDt) && this.state === 'playing' && this.progression.pendingLevels > 0) this.enterLevelUp();
-      if (this.devour.update(realDt)) {
+      // Every ultimate is advanced (an idle one does nothing): one may still be easing its camera home.
+      let ended = false;
+      for (const u of Object.values(this.ultimates)) if (u.update(realDt)) ended = true;
+      if (ended) {
         this.ultimateActive = false;
         // Levels earned during the ultimate waited for its end.
         if (levelUpNow(this.progression.pendingLevels, this.state === 'playing', false)) this.startLevelUpMoment();
@@ -891,7 +896,7 @@ export class GameScene {
   /** Nothing keeps the ultimate from going off now (its cooldown aside). */
   private canUltimate(): boolean {
     const m = this.monster;
-    return !ultimateBlocked({
+    return this.ultimate() !== null && !ultimateBlocked({
       playing: this.state === 'playing',
       alive: m.alive,
       airborne: m.airborne,
@@ -902,20 +907,32 @@ export class GameScene {
     });
   }
 
-  /** The monster's ultimate goes off (the Wendigo's Devour; the only one so far). */
+  /** The current kind's ultimate, or null when it has none (or it isn't built yet). */
+  private ultimate(): Ultimate | null {
+    const id = this.monster.kind.ultimate?.id;
+    return (id && this.ultimates[id]) || null;
+  }
+
+  /** The monster's ultimate goes off. */
   private startUltimate(): void {
+    const u = this.ultimate();
+    if (!u) return;
     this.ultimateActive = true;
     this.order = null;
     this.markers.setTarget(null);
     this.abilities.cancelAim();
-    this.devour.start(this.monster.position, this.dmgMult());
-    // The Wendigo rears up and holds its howl for the whole sequence (in world time, which runs slowed).
-    this.monster.startRoar(devourWorldLength());
+    u.start(this.monster.position, this.dmgMult());
+    switch (this.monster.kind.ultimate?.id) {
+      case 'devour':
+        // The Wendigo rears up and holds its howl for the whole sequence (in world time, which runs slowed).
+        this.monster.startRoar(devourWorldLength());
+        break;
+    }
   }
 
-  /** Stop a running ultimate at once (restart, exit, death, a monster change). */
+  /** Stop a running ultimate at once (restart, exit, death, a monster change); every one, as the kind may just have changed. */
   private cancelUltimate(): void {
-    this.devour.cancel();
+    for (const u of Object.values(this.ultimates)) u.cancel();
     this.ultimateActive = false;
   }
 
@@ -1966,7 +1983,7 @@ export class GameScene {
     this.input.dispose();
     this.debug?.dispose();
     this.intro.dispose();
-    this.devour.dispose();
+    for (const u of Object.values(this.ultimates)) u.dispose();
     cancelAnimationFrame(this.animationFrameId);
     this.resizeObserver.disconnect();
     this.pixel.dispose();

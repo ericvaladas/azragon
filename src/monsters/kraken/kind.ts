@@ -18,6 +18,7 @@ export const KRAKEN: MonsterKind = {
   ranged: 'hurl',
   antiAir: 'lash',
   tailSweep: false,
+  ultimate: { id: 'inkStorm', label: 'Ink Storm' },
   /** Ink Cloud fires about a third as often as Spine Shield. */
   interceptRate: 1 / 3,
   signatures: ['storm', 'chitin', 'spines', 'swat', 'nova', 'mortar'],

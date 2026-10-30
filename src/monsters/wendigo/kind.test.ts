@@ -36,6 +36,10 @@ describe('WENDIGO kind (the Wendigo)', () => {
     for (const t of texts) expect(t).not.toMatch(/magma|lava|(?<!black )fire|vent|ember|molten|heat|burn/i);
   });
 
+  it("the Wendigo's ultimate is Devour", () => {
+    expect(WENDIGO.ultimate).toEqual({ id: 'devour', label: 'Devour' });
+  });
+
   it('swings its backhand on its own slower, heavier timeline; slams keep the kind\'s', () => {
     const S = CONFIG.wendigo.stats.meleeTiming;
     const B = CONFIG.wendigo.fist.backhandTiming;

@@ -3,6 +3,7 @@ import type { ParticleKind } from '../systems/Particles';
 import type { PoolSpec } from '../systems/Progression';
 import type { TentacleArms } from './kraken/TentacleArms';
 import type { SwatTiming } from '../monster/tailSwat';
+import type { UltimateId } from '../systems/ultimate';
 
 /** Playable creatures (widened as each one is built). */
 export type MonsterId = 'insect' | 'kaiju' | 'kraken' | 'wendigo';
@@ -144,7 +145,7 @@ export type MonsterKind = PoolSpec & {
   /** Has the auto Tail Sweep melee (CONFIG.kaiju.tail). */
   tailSweep: boolean;
   /** This kind's ultimate (Q), named on its button; absent until the kind has one. */
-  ultimate?: { label: string };
+  ultimate?: { id: UltimateId; label: string };
   fx: FxTheme;
   createBody(): MonsterBody;
 };

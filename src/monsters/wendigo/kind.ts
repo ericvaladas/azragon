@@ -22,7 +22,7 @@ export const WENDIGO: MonsterKind = {
   swatTiming: WENDIGO_SWAT,
   leapCrouch: 0.2,
   tailSweep: false,
-  ultimate: { label: 'Devour' },
+  ultimate: { id: 'devour', label: 'Devour' },
   signatures: ['storm', 'chitin', 'spines', 'swat', 'nova', 'mortar'],
   abilityText: {
     storm: { desc: (r) => (r === 1 ? 'Ghosts rise off it and hunt every 8s' : '+2 ghosts, they hunt more often') },

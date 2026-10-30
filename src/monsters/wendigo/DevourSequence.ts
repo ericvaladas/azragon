@@ -5,6 +5,7 @@ import type { Vec2 } from '../../util/math';
 import { Lightning } from '../../systems/Lightning';
 import { DevourHands } from './DevourHands';
 import { devourPhase, devourVictims } from './devour';
+import type { Ultimate } from '../../systems/ultimate';
 
 const U = CONFIG.wendigo.ultimate;
 const T = U.t;
@@ -65,7 +66,7 @@ function circleGeometry(): THREE.BufferGeometry {
  * in the circle collapse as it opens, nearest first; then everything drains away, the circle last, once every hand
  * is under.
  */
-export class Devour {
+export class Devour implements Ultimate {
   active = false;
   private t = 0;
   /** After the sequence ends, the camera still eases home on the same clock. */

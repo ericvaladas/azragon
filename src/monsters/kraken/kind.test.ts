@@ -18,4 +18,7 @@ describe('KRAKEN kind', () => {
     expect(KRAKEN.fx.particle).toBe('ink');
     expect(KRAKEN.fx.intercept).toBe('ink');
   });
+  it("the Kraken's ultimate is Ink Storm", () => {
+    expect(KRAKEN.ultimate).toEqual({ id: 'inkStorm', label: 'Ink Storm' });
+  });
 });
