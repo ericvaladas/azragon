@@ -10,6 +10,9 @@ type MeleeTiming = MonsterStats['meleeTiming'];
 
 const FACE_BEFORE_WALK = 1.0; // radians of yaw error allowed while walking
 
+/** Feet that touch down while the monster is held do nothing. */
+const noLanding = (): void => {};
+
 /**
  * The player's monster: the logic every creature shares (movement, HP, cooldowns, attack timelines,
  * Leap/Dash/Roar poses). The creature itself — model, gait, stats — comes from its MonsterKind.
@@ -52,6 +55,8 @@ export class Monster {
   /** Shared by every material of the body: how black it is drawn (see setSilhouette). */
   private silhouette = { value: 0 };
   private leapT = -1;
+  /** Held at this height by an ultimate (null when free). */
+  private heldY: number | null = null;
   private dashT = -1;
   private dashDuration = 1;
   private dashFrom = { x: 0, z: 0 };
@@ -152,6 +157,7 @@ export class Monster {
 
   /** Off the ground: leaping, once past any crouch before liftoff. */
   get airborne(): boolean {
+    if (this.heldY !== null) return this.heldY > 0;
     return this.leapT >= (this.kind.leapCrouch ?? 0) * CONFIG.abilities.leap.duration;
   }
 
@@ -160,9 +166,22 @@ export class Monster {
     return this.leapT >= 0 ? this.leapTo : null;
   }
 
-  /** Leaping, roaring or dashing: the brain must not move or attack. */
+  /** Leaping, roaring, dashing or held: the brain must not move or attack. */
   get busy(): boolean {
-    return this.leapT >= 0 || this.roarT >= 0 || this.dashT >= 0;
+    return this.leapT >= 0 || this.roarT >= 0 || this.dashT >= 0 || this.heldY !== null;
+  }
+
+  /**
+   * An ultimate holds the monster at `height` (m) above where it stands: busy, airborne while above the ground, its
+   * feet never landing; `null` sets it down on the ground and back to normal control.
+   */
+  hold(height: number | null): void {
+    if (height === null && this.heldY !== null) {
+      this.position.y = 0;
+      this.pose.dip = 60;
+    }
+    this.heldY = height;
+    if (height !== null) this.position.y = height;
   }
 
   /** Stops a dash where the monster stands; the body settles out of the charge pose normally. */
@@ -206,6 +225,7 @@ export class Monster {
     this.meleeCd = this.rangedCd = 0;
     this.meleeT = -1;
     this.leapT = -1;
+    this.heldY = null;
     this.roarT = -1;
     this.swatT = -1;
     this.swatTarget = null;
@@ -388,12 +408,13 @@ export class Monster {
     f.heat = this.heat;
     f.flash = this.flashT > 0;
     f.glow = this.glow;
-    this.body.animate(f, this.onFootLand);
+    this.body.animate(f, this.heldY === null ? this.onFootLand : noLanding);
   }
 
   /** Cooldowns, the melee timeline, and leap/dash/roar/anti-air timing. */
   tick(dt: number): void {
     const L = CONFIG.abilities.leap;
+    if (this.heldY !== null) this.position.y = this.heldY;
     if (this.leapT >= 0) {
       this.leapT += dt;
       const c = this.kind.leapCrouch ?? 0;

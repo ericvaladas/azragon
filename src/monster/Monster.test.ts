@@ -146,6 +146,34 @@ describe('Monster frame flags', () => {
   });
 });
 
+describe('Monster.hold', () => {
+  it('a held monster stays where it is put, busy and airborne off the ground, then lands', () => {
+    const k = kind();
+    const m = new Monster(new THREE.Scene(), { ...k, createBody: () => ({ ...stubBody(), animate: (_f, land) => land(new THREE.Vector3()) }) });
+    let landed = 0;
+    m.onFootLand = () => landed++;
+    m.position.set(100, 0, 200);
+    m.hold(0);
+    m.tick(0.016);
+    expect(m.busy).toBe(true);
+    expect(m.airborne).toBe(false);
+    m.hold(450);
+    m.tick(0.016);
+    m.animate(0.016, 0);
+    expect(m.position.toArray()).toEqual([100, 450, 200]);
+    expect(m.busy).toBe(true);
+    expect(m.airborne).toBe(true);
+    expect(landed).toBe(0);
+    m.hold(null);
+    m.tick(0.016);
+    m.animate(0.016, 0);
+    expect(m.position.y).toBe(0);
+    expect(m.busy).toBe(false);
+    expect(m.airborne).toBe(false);
+    expect(landed).toBe(1);
+  });
+});
+
 describe('INSECT kind', () => {
   it('keeps the Insect Titan\'s milestone-3 numbers', () => {
     const M = CONFIG.monster;
