@@ -34,7 +34,7 @@ export const UPGRADES: Record<UpgradeId, { title: string; desc: string; apply(s:
   moveSpeed: { title: 'Move Speed', desc: '+15% move speed', apply: (s) => ({ ...s, moveSpeedMult: s.moveSpeedMult * 1.15 }) },
 };
 
-export type AbilityId = 'dash' | 'roar' | 'storm' | 'chitin' | 'brood' | 'overload' | 'spines' | 'swat' | 'nova' | 'mortar' | 'bubble' | 'reflect' | 'meltdown' | 'grip' | 'core';
+export type AbilityId = 'dash' | 'roar' | 'storm' | 'chitin' | 'overload' | 'spines' | 'swat' | 'nova' | 'mortar' | 'bubble' | 'reflect' | 'core';
 export const MAX_RANK = 3;
 const ROMAN = ['', 'I', 'II', 'III'];
 
@@ -50,7 +50,7 @@ export const SHARED_ABILITIES: readonly AbilityId[] = ['dash', 'roar', 'bubble',
 
 /** Until a monster is set: the Insect Titan's pool (its signatures, default names). */
 const DEFAULT_POOL: PoolSpec = {
-  signatures: ['storm', 'chitin', 'brood', 'spines', 'swat', 'nova', 'mortar'],
+  signatures: ['storm', 'chitin', 'spines', 'swat', 'nova', 'mortar'],
   abilityText: {},
   upgradeText: {},
 };
@@ -60,20 +60,17 @@ export const ABILITIES: Record<AbilityId, { title: string; desc(rank: number): s
   roar: { title: 'Roar', desc: (r) => (r === 1 ? 'Button: shockwave, downs flyers (R)' : 'Roar recharges faster') },
   storm: { title: 'Homing Barrage', desc: (r) => (r === 1 ? 'Homing spike barrage every 8s' : '+2 spikes, fires faster') },
   chitin: { title: 'Deflect', desc: () => '+15% chance to deflect hits' },
-  brood: { title: 'Drone Swarm', desc: (r) => (r === 1 ? 'Drones hunt aircraft every 10s' : '+2 drones') },
   spines: { title: 'Missile Defense', desc: (r) => (r === 1 ? 'Auto-shoot incoming shells and missiles' : 'Faster, wider spine defense') },
   swat: { title: 'Anti-Air', desc: (r) => (r === 1 ? 'Tail swats nearby flyers' : 'Swats faster, harder, more at once') },
   nova: { title: 'Area Pulse', desc: (r) => (r === 1 ? 'Acid shockwave pulse every 7s' : 'Bigger, stronger, more frequent pulses') },
   mortar: { title: 'Auto Mortar', desc: (r) => (r === 1 ? 'Lobs acid at artillery, SAMs, trucks' : 'More globs, bigger splash') },
   bubble: { title: 'Shield Bubble', desc: (r) => (r === 1 ? 'Button: 3s invincibility (T)' : 'Longer bubble, recharges faster') },
-  grip: { title: 'Grab and Crush', desc: (r) => (r === 1 ? 'Planted arms crush an enemy beside them' : 'Wider, harder grip') },
   core: { title: 'Haste When Hurt', desc: (r) => (r === 1 ? 'Faster cooldowns when hurt' : 'Even faster cooldowns when hurt') },
-  meltdown: { title: 'Low HP Boost', desc: (r) => (r === 1 ? 'Below 30% HP: +50% damage, ranged recharges 2x' : 'Kicks in at higher HP') },
   reflect: { title: 'Reflect Shield', desc: (r) => (r === 1 ? 'Auto: bounce projectiles back at enemies' : 'Longer reflect, shorter cooldown') },
   overload: { title: 'Laser Absorb', desc: (r) => (r === 1 ? 'Absorb a laser hit and fire it back' : 'Recharges faster') },
 };
 
-const emptyRanks = (): Record<AbilityId, number> => ({ dash: 0, roar: 0, storm: 0, chitin: 0, brood: 0, overload: 0, spines: 0, swat: 0, nova: 0, mortar: 0, bubble: 0, reflect: 0, meltdown: 0, grip: 0, core: 0 });
+const emptyRanks = (): Record<AbilityId, number> => ({ dash: 0, roar: 0, storm: 0, chitin: 0, overload: 0, spines: 0, swat: 0, nova: 0, mortar: 0, bubble: 0, reflect: 0, core: 0 });
 
 export function expToNext(level: number): number {
   const P = CONFIG.progression;

@@ -2,13 +2,10 @@ import { CONFIG } from '../config';
 import type { AbilityId } from './Progression';
 
 const P = CONFIG.passives;
-const MELTDOWN_OFF = { active: false, damage: 1, cooldown: 1 } as const;
-const MELTDOWN_ON = { active: true, damage: P.meltdown.damageMult, cooldown: P.meltdown.cooldownMult } as const;
 
-/** Rank-derived passive values plus the Spike Storm and Brood Swarm timers. */
+/** Rank-derived passive values plus the interval timers (Homing Barrage, Area Pulse, Auto Mortar). */
 export class Passives {
   private stormT = 0;
-  private broodT = 0;
   private novaT = 0;
   private mortarT = 0;
   private interceptBank = 0;
@@ -43,11 +40,6 @@ export class Passives {
     return { radius: P.nova.radius[r]!, damage: P.nova.damage[r]! };
   }
 
-  /** Sucker Grip (Kraken): radius and damage of the crush on each plant, or null if not taken. */
-  grip(): { radius: number; damage: number } | null {
-    const r = this.ranks().grip;
-    return r > 0 ? { radius: P.grip.radius[r]!, damage: P.grip.damage[r]! } : null;
-  }
 
   /** Haste When Hurt: extra cooldown recovery at full heat (1 + haste times as fast), or null if not taken. */
   core(): { haste: number } | null {
@@ -67,11 +59,6 @@ export class Passives {
     return this.bubbleT > 0;
   }
 
-  /** Meltdown (Kaiju): below the rank's HP fraction (and still alive), damage up and the ranged attack recharges faster. */
-  meltdown(hpFrac: number): { active: boolean; damage: number; cooldown: number } {
-    const r = this.ranks().meltdown;
-    return r > 0 && hpFrac > 0 && hpFrac < P.meltdown.threshold[r]! ? MELTDOWN_ON : MELTDOWN_OFF;
-  }
 
   reflectActive(): boolean {
     return this.reflectT > 0;
@@ -98,15 +85,14 @@ export class Passives {
   }
 
   /**
-   * Advance timers. Returns this frame's storm spikes, brood drones, nova pulses (0/1), mortar globs,
+   * Advance timers. Returns this frame's storm spikes, nova pulses (0/1), mortar globs,
    * and the Spine Shield shots available (banked up to one second's worth, at least one shot; spend what you use). `interceptScale` scales the rate for the monster kind.
    * `cdRate` (Haste When Hurt) speeds the interval timers and cooldowns; shield durations still run on `dt`.
    */
-  update(dt: number, interceptScale = 1, cdRate = 1): { storm: number; brood: number; nova: number; mortar: number; intercepts: number } {
+  update(dt: number, interceptScale = 1, cdRate = 1): { storm: number; nova: number; mortar: number; intercepts: number } {
     const r = this.ranks();
     const cdDt = dt * cdRate;
     let storm = 0;
-    let brood = 0;
     let nova = 0;
     let mortar = 0;
     if (r.nova > 0) {
@@ -140,19 +126,11 @@ export class Passives {
         storm = P.storm.spikes + (r.storm - 1) * P.storm.extraSpikes;
       }
     }
-    if (r.brood > 0) {
-      this.broodT += cdDt;
-      if (this.broodT >= P.brood.interval) {
-        this.broodT -= P.brood.interval;
-        brood = P.brood.drones + (r.brood - 1) * P.brood.extraDrones;
-      }
-    }
-    return { storm, brood, nova, mortar, intercepts };
+    return { storm, nova, mortar, intercepts };
   }
 
   reset(): void {
     this.stormT = 0;
-    this.broodT = 0;
     this.novaT = 0;
     this.mortarT = 0;
     this.interceptBank = 0;

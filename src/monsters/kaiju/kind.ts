@@ -20,14 +20,13 @@ export const KAIJU: MonsterKind = {
   antiAir: 'bite',
   leapCrouch: 0.2,
   tailSweep: true,
-  signatures: ['storm', 'chitin', 'spines', 'swat', 'nova', 'mortar', 'meltdown'],
+  signatures: ['storm', 'chitin', 'spines', 'swat', 'nova', 'mortar'],
   abilityText: {
     storm: { desc: (r) => (r === 1 ? 'Plates fire homing plasma every 8s' : '+2 bolts, fires faster') },
     chitin: { desc: () => '+15% chance to deflect hits' },
     spines: { desc: (r) => (r === 1 ? 'Plates zap incoming shells and missiles' : 'Faster, wider zapping') },
     swat: { desc: (r) => (r === 1 ? 'Snap Bite: snatches nearby flyers' : 'Bites faster, harder, more at once') },
     nova: { desc: (r) => (r === 1 ? 'Heat shockwave pulse every 7s' : 'Bigger, stronger, more frequent pulses') },
-    meltdown: { desc: (r) => (r === 1 ? 'Below 30% HP: +50% damage, breath recharges 2x' : 'Kicks in at higher HP') },
     mortar: { desc: (r) => (r === 1 ? 'Lobs plasma at artillery, SAMs, trucks' : 'More globs, bigger splash') },
   },
   upgradeText: {

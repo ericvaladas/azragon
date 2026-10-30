@@ -19,8 +19,7 @@ describe('WENDIGO kind (the Wendigo)', () => {
     expect(WENDIGO.tailSweep).toBe(false);
     expect(WENDIGO.moves.map((m) => m.label)).toEqual(['Rending Claws', 'Dread Gaze']);
   });
-  it('has its own signatures — never Brood Swarm, Meltdown or Sucker Grip', () => {
-    for (const id of ['brood', 'meltdown', 'grip'] as const) expect(WENDIGO.signatures).not.toContain(id);
+  it('has the shared signatures under the plain names, with its own descriptions', () => {
     for (const id of WENDIGO.signatures) expect(WENDIGO.abilityText[id]?.title).toBeUndefined();
     expect(WENDIGO.abilityText.mortar?.desc(1)).toMatch(/black fire/);
     expect(WENDIGO.fx.particle).toBe('rot');

@@ -4,14 +4,14 @@ import type { AbilityId } from './Progression';
 import { CONFIG } from '../config';
 
 const P = CONFIG.passives;
-const ranks = (r: Partial<Record<AbilityId, number>>) => () => ({ dash: 0, roar: 0, storm: 0, chitin: 0, brood: 0, overload: 0, spines: 0, swat: 0, nova: 0, mortar: 0, bubble: 0, reflect: 0, meltdown: 0, grip: 0, core: 0, ...r });
+const ranks = (r: Partial<Record<AbilityId, number>>) => () => ({ dash: 0, roar: 0, storm: 0, chitin: 0, overload: 0, spines: 0, swat: 0, nova: 0, mortar: 0, bubble: 0, reflect: 0, core: 0, ...r });
 
 describe('Passives', () => {
   it('has no effect at rank 0', () => {
     const p = new Passives(ranks({}));
     expect(p.tryOverload()).toBe(false);
     expect(p.deflectChance()).toBe(0);
-    expect(p.update(100)).toEqual({ storm: 0, brood: 0, nova: 0, mortar: 0, intercepts: 0 });
+    expect(p.update(100)).toEqual({ storm: 0, nova: 0, mortar: 0, intercepts: 0 });
   });
 
   it('scales simple passives by rank', () => {
@@ -30,11 +30,6 @@ describe('Passives', () => {
     expect(p.update(interval - 0.1).storm).toBe(0);
     expect(p.update(0.2).storm).toBe(P.storm.spikes + P.storm.extraSpikes);
     expect(p.update(interval - 0.3).storm).toBe(0);
-  });
-
-  it('releases Brood Swarm drones on its interval', () => {
-    const p = new Passives(ranks({ brood: 1 }));
-    expect(p.update(P.brood.interval + 0.01).brood).toBe(P.brood.drones);
   });
 
   it('reset restarts timers', () => {
@@ -135,28 +130,6 @@ describe('Passives', () => {
     expect(p.tryOverload()).toBe(false);
     p.update(0.2);
     expect(p.tryOverload()).toBe(true);
-  });
-});
-
-describe('meltdown', () => {
-  it('kicks in below the rank\'s HP threshold only', () => {
-    const r1 = new Passives(ranks({ meltdown: 1 }));
-    expect(r1.meltdown(0.29)).toEqual({ active: true, damage: CONFIG.passives.meltdown.damageMult, cooldown: CONFIG.passives.meltdown.cooldownMult });
-    expect(r1.meltdown(0.31).active).toBe(false);
-    expect(r1.meltdown(0).active).toBe(false);
-    expect(new Passives(ranks({})).meltdown(0.1)).toEqual({ active: false, damage: 1, cooldown: 1 });
-    expect(new Passives(ranks({ meltdown: 3 })).meltdown(0.45).active).toBe(true);
-  });
-});
-
-describe('grip', () => {
-  it('Sucker Grip: off at rank 0, then a growing radius and damage per rank', () => {
-    expect(new Passives(ranks({})).grip()).toBeNull();
-    const g1 = new Passives(ranks({ grip: 1 })).grip()!;
-    const g3 = new Passives(ranks({ grip: 3 })).grip()!;
-    expect(g1).toEqual({ radius: CONFIG.passives.grip.radius[1], damage: CONFIG.passives.grip.damage[1] });
-    expect(g3.radius).toBeGreaterThan(g1.radius);
-    expect(g3.damage).toBeGreaterThan(g1.damage);
   });
 });
 

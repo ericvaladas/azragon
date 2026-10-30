@@ -39,7 +39,7 @@ export const INSECT: MonsterKind = {
   ranged: 'spikes',
   antiAir: 'tail',
   tailSweep: false,
-  signatures: ['storm', 'chitin', 'brood', 'spines', 'swat', 'nova', 'mortar'],
+  signatures: ['storm', 'chitin', 'spines', 'swat', 'nova', 'mortar'],
   abilityText: {},
   upgradeText: {},
   fx: { spike: P.stinger, glob: P.acid, pool: P.acid, nova: P.acid, particle: 'acid', intercept: 'spark', spikeTrail: false },

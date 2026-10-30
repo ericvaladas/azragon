@@ -420,7 +420,6 @@ export const CONFIG = {
     acid: { dps: 30 },
     storm: { interval: 8, intervalStep: 1, spikes: 4, extraSpikes: 2 },
     chitin: { perRank: 0.15 },
-    brood: { interval: 10, drones: 3, extraDrones: 2, life: 8, speed: 450, damage: 40, hitCooldown: 0.5 },
     /** Overload: absorb the next beam/orbital hit and fire it back (truck destroyed; orbital = energy blast). */
     overload: { cooldown: [0, 20, 15, 11], blastRadius: 450, blastDamage: 250, reflectDamage: 400 },
     /** Arrays are indexed by rank (0 = not taken). */
@@ -430,10 +429,6 @@ export const CONFIG = {
     mortar: { interval: [0, 4, 3.5, 3], globs: [0, 2, 3, 4], splash: [0, 90, 110, 130], damage: 90, range: 1800, flightTime: 1.2, arc: 300 },
     bubble: { duration: [0, 3, 3.5, 4], cooldown: [0, 25, 21, 17] },
     reflect: { duration: [0, 4, 5, 6], cooldown: [0, 20, 17, 14], radius: 380, damage: 60 },
-    /** Meltdown (Kaiju): below threshold[rank] of max HP, damage × damageMult and ranged cooldown × cooldownMult. */
-    meltdown: { threshold: [0, 0.3, 0.4, 0.5], damageMult: 1.5, cooldownMult: 0.5 },
-    /** Sucker Grip (Kraken): each plant crushes the nearest ground enemy within radius[rank] of the tip. */
-    grip: { radius: [0, 140, 180, 220], damage: [0, 90, 140, 200] },
     /**
      * Haste When Hurt: heat 0..1 rises by (damage taken / max HP) × gain and cools by `cool` per second.
      * Every cooldown recovers (1 + heat × haste[rank]) times as fast.

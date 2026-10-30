@@ -61,7 +61,6 @@ import { FRONT_LEFT, footTargets, strikePlan } from './monster/strike';
 import { mortarTargets, nearestWithin } from './systems/targeting';
 import { Passives } from './systems/Passives';
 import { AcidPools } from './systems/AcidPools';
-import { BroodDrones } from './systems/BroodDrones';
 import { decide, nearestInRange, type BrainOrder, type BrainTarget } from './monster/brain';
 import { assignStrikes } from './monsters/kraken/strikes';
 import type { ArmStrike } from './monsters/kraken/TentacleArms';
@@ -200,7 +199,6 @@ export class GameScene {
   private shieldFx: ShieldFx;
   private passives: Passives;
   private acid: AcidPools;
-  private brood: BroodDrones;
   private intro: IntroCinematic;
   private selIndex = 0;
   private menuT = 0;
@@ -230,7 +228,6 @@ export class GameScene {
     this.inkFx = new InkFx(this.scene);
     this.passives = new Passives(() => this.progression.ranks);
     this.acid = new AcidPools(this.scene);
-    this.brood = new BroodDrones(this.scene);
     this.projectiles = new Projectiles(this.scene);
     this.breath = new BreathBeam(this.scene);
     this.hands = new ShadowHands(this.scene);
@@ -268,14 +265,6 @@ export class GameScene {
       }
       this.rig.addTrauma(0.06);
       this.footCrush(p);
-      const grip = this.passives.grip();
-      if (grip && this.state === 'playing') {
-        const victim = nearestInRange({ x: p.x, z: p.z }, this.enemyTargets().filter((t) => !t.airborne), grip.radius);
-        if (victim) {
-          victim.applyDamage(grip.damage * this.dmgMult());
-          this.particles.emit('ink', victim.position, 8, 0.8);
-        }
-      }
     };
     this.monster.onMeleeImpact = (p) => this.meleeImpact(p);
     this.monster.onLeapLand = (p) => this.leapLand(p);
@@ -467,7 +456,6 @@ export class GameScene {
     this.monster.glow = 0;
     this.passives.reset();
     this.acid.clear();
-    this.brood.clear();
     this.markers.setAim(null, 0);
     this.dyingT = 0;
     this.spikeAim = null;
@@ -551,10 +539,9 @@ export class GameScene {
     this.breath.clear();
   }
 
-  /** All of the monster's damage: upgrades × the creature's own multiplier × Meltdown. */
+  /** All of the monster's damage: upgrades × the creature's own multiplier. */
   private dmgMult(): number {
-    const m = this.monster;
-    return this.progression.stats.damageMult * m.kind.stats.damageMult * this.passives.meltdown(m.hp / m.maxHp).damage;
+    return this.progression.stats.damageMult * this.monster.kind.stats.damageMult;
   }
 
   /** How many times as fast every cooldown recovers: Haste When Hurt heat; 1 without it. */
@@ -563,10 +550,9 @@ export class GameScene {
     return core ? coreCooldownRate(this.heat, core.haste) : 1;
   }
 
-  /** Ranged recharge: upgrades × Meltdown. */
+  /** Ranged recharge: upgrades. */
   private rangedCdMult(): number {
-    const m = this.monster;
-    return this.progression.stats.cooldownMult * this.passives.meltdown(m.hp / m.maxHp).cooldown;
+    return this.progression.stats.cooldownMult;
   }
 
   private startIntro(): void {
@@ -742,7 +728,6 @@ export class GameScene {
         }
         const fire = this.passives.update(dt, this.monster.kind.interceptRate ?? 1, cdRate);
         if (fire.storm > 0) this.spikeStorm(fire.storm);
-        if (fire.brood > 0) this.brood.spawn(fire.brood, this.monster.launchOrigin(new THREE.Vector3()));
         if (fire.nova > 0) this.venomNova();
         if (fire.mortar > 0) this.acidMortar(fire.mortar);
         if (fire.intercepts > 0) this.passives.spendIntercepts(this.spineShield(fire.intercepts));
@@ -766,8 +751,7 @@ export class GameScene {
         this.monster.lookAt = this.breath.busy ? this.breath.aimPoint : (this.gazeLook() ?? aim);
         const headOnTarget = this.monster.aimError() < CONFIG.kaiju.neck.aimTolerance;
         this.breath.update(dt, this.monster.rangedOrigin(this.jaws), this.monster.position, this.ms.rangedRange, headOnTarget, this.onBreathFire);
-        const melting = this.passives.meltdown(this.monster.hp / this.monster.maxHp).active;
-        this.monster.charge = Math.max(this.breath.charge, melting ? 0.5 : 0);
+        this.monster.charge = this.breath.charge;
         if (this.monster.hp <= 0 && this.monster.alive) this.startDying();
       }
       if (this.state === 'dying') {
@@ -804,7 +788,6 @@ export class GameScene {
           this.particles.emit(Math.random() < 0.2 ? 'hexember' : Math.random() < 0.15 ? 'shade' : 'hexfire', this.tmpV, 1, 0.25);
         }
       }
-      this.brood.update(dt, this.enemyTargets(), dm);
       this.markers.update(dt);
 
       this.hudT -= dt;

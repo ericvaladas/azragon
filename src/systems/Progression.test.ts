@@ -162,7 +162,7 @@ describe('Progression pools', () => {
     const p = new Progression(mulberry32(13));
     p.setPool(pool);
     p.addExp(1e6);
-    expect(p.choose('brood')).toBe(false);
+    expect(p.choose('chitin')).toBe(false);
     expect(p.choose('nova')).toBe(true);
   });
 });
@@ -171,7 +171,7 @@ describe('Progression.offer(all)', () => {
   it('lists every upgrade and every pool ability below max rank, in a fixed order', () => {
     const p = new Progression(mulberry32(3));
     const ids = p.offer(true).map((o) => o.id);
-    const pool = (Object.keys(ABILITIES) as AbilityId[]).filter((id) => id !== 'meltdown' && id !== 'grip');
+    const pool = Object.keys(ABILITIES) as AbilityId[];
     expect(ids).toEqual([...Object.keys(UPGRADES), ...pool]);
     expect(p.offer(true).map((o) => o.id)).toEqual(ids);
   });
