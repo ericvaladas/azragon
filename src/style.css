@@ -308,9 +308,12 @@ body {
   right: calc(var(--safe-right) + 14px);
   bottom: calc(var(--safe-bottom) + 18px);
   display: flex;
+  flex-direction: column;
+  align-items: flex-end;
   gap: 12px;
   pointer-events: auto;
 }
+.ability-row { display: flex; gap: 12px; }
 .ability-btn {
   position: relative;
   width: 64px;
@@ -332,6 +335,9 @@ body {
 .ability-btn:active { transform: scale(0.92); }
 .ability-btn.ready { border-color: var(--color-primary); }
 .ability-btn.aiming { background: var(--color-primary); color: #0d1110; }
+/* The ultimate: bigger than the rest, a heavier accent border, and a glow only while it is ready. */
+.ability-btn.ultimate { width: 76px; height: 76px; border-width: 3px; }
+.ability-btn.ultimate.ready { box-shadow: 0 0 14px var(--color-primary); }
 .ability-btn.locked { opacity: 0.45; filter: grayscale(0.6); }
 .ability-label { font-size: 12px; font-weight: 700; letter-spacing: 0.08em; margin-right: -0.08em; text-transform: uppercase; line-height: 1; }
 .ability-key { position: absolute; left: 0; right: 0; top: 4px; font-size: 8px; opacity: 0.7; letter-spacing: 0.08em; }

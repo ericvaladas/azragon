@@ -48,7 +48,7 @@ import type { CityStyle } from './cities/types';
 import { Progression, expToNext } from './systems/Progression';
 import { regen } from './monster/vitals';
 import { DebugOverlay } from './systems/DebugOverlay';
-import { Abilities, type AbilityView, type ActiveId } from './systems/abilities';
+import { Abilities, ultimateBlocked, type AbilityView, type ActiveId } from './systems/abilities';
 import { Shockwave } from './systems/Shockwave';
 import { LevelUpMoment } from './systems/levelUpMoment';
 import { LevelUpAura } from './systems/LevelUpAura';
@@ -196,6 +196,8 @@ export class GameScene {
   private fistSide = 1;
   /** The Rending Claws strike's target, kept so a slam at a low flyer follows it to the impact. */
   private fistTarget: Target | null = null;
+  /** An ultimate's sequence is running. */
+  private ultimateActive = false;
   private shieldFx: ShieldFx;
   private passives: Passives;
   private acid: AcidPools;
@@ -437,6 +439,7 @@ export class GameScene {
     this.runTime = 0;
     this.openingDone = false;
     this.abilities.reset();
+    this.abilities.setRank('ultimate', this.monster.kind.ultimate ? 1 : 0);
     this.snare.clear();
     this.pendingSnare = 0;
     this.netHF = null;
@@ -537,6 +540,7 @@ export class GameScene {
     // The Roar shockwave: the Wendigo's is a ring of shadow; every other monster keeps the stinger yellow.
     this.shockwave.setColor(kind.id === 'wendigo' ? CONFIG.wendigo.colors.shade : CONFIG.palette.stinger);
     this.breath.clear();
+    this.abilities.setRank('ultimate', kind.ultimate ? 1 : 0);
   }
 
   /** All of the monster's damage: upgrades × the creature's own multiplier. */
@@ -713,7 +717,7 @@ export class GameScene {
         const cdRate = this.cdRate();
         const cdDt = dt * cdRate;
         this.monster.cooldownRate = cdRate;
-        this.abilities.tick(cdDt);
+        this.abilities.tick(cdDt, dt);
         if (this.pendingSnare > 0 && !this.monster.airborne) {
           this.startSnare(this.pendingSnare);
           this.pendingSnare = 0;
@@ -825,15 +829,40 @@ export class GameScene {
   };
 
 
-  /** The ability buttons: Leap and Dash show not ready while snared. */
+  /** The ability buttons: Leap and Dash show not ready while snared; the ultimate carries its monster's name. */
   private abilityView(): AbilityView[] {
-    const view = this.abilities.view();
+    const label = this.monster.kind.ultimate?.label;
+    const view = this.abilities.view().map((v) => (v.id === 'ultimate' ? { ...v, label, ready: v.ready && this.canUltimate() } : v));
     if (!this.snare.blocksMobility) return view;
     return view.map((v) => (v.id === 'leap' || v.id === 'dash' ? { ...v, ready: false, aiming: false } : v));
   }
 
+  /** Nothing keeps the ultimate from going off now (its cooldown aside). */
+  private canUltimate(): boolean {
+    const m = this.monster;
+    return !ultimateBlocked({
+      playing: this.state === 'playing',
+      alive: m.alive,
+      airborne: m.airborne,
+      dashing: m.dashing,
+      snared: this.snare.blocksMobility,
+      leveling: this.moment.active,
+      running: this.ultimateActive,
+    });
+  }
+
+  /** The monster's ultimate goes off (the Wendigo's Devour). */
+  private startUltimate(): void {
+    this.monster.startRoar();
+    this.rig.addTrauma(0.5);
+  }
+
   pressAbility(id: ActiveId): void {
     if (this.state !== 'playing' || !this.monster.alive) return;
+    if (id === 'ultimate') {
+      if (this.canUltimate() && this.abilities.trigger('ultimate')) this.startUltimate();
+      return;
+    }
     if ((id === 'leap' || id === 'dash') && this.snare.blocksMobility) return;
     if (id === 'roar') {
       if (this.abilities.trigger('roar')) this.roar();

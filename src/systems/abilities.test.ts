@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { Abilities } from './abilities';
+import { Abilities, ultimateBlocked } from './abilities';
 import { CONFIG } from '../config';
 
 const A = CONFIG.abilities;
@@ -93,5 +93,32 @@ describe('Abilities', () => {
     expect(a.ready('bubble')).toBe(false);
     a.tick(0.2);
     expect(a.ready('bubble')).toBe(true);
+  });
+
+  it('ultimate: owned only once ranked, recharges on plain time, ignoring the cooldown rate', () => {
+    const a = new Abilities();
+    expect(a.unlocked('ultimate')).toBe(false);
+    a.setRank('ultimate', 1);
+    expect(a.ready('ultimate')).toBe(CONFIG.ultimate.startReady);
+    a.tick(0, CONFIG.ultimate.cooldown);
+    expect(a.trigger('ultimate')).toBe(true);
+    a.tick(1000, CONFIG.ultimate.cooldown - 1);
+    expect(a.ready('ultimate')).toBe(false);
+    a.tick(0, 1.1);
+    expect(a.ready('ultimate')).toBe(true);
+  });
+
+  it('views list the ultimate last', () => {
+    const a = new Abilities();
+    a.setRank('ultimate', 1);
+    a.setRank('dash', 1);
+    expect(a.view().map((v) => v.id)).toEqual(['leap', 'dash', 'ultimate']);
+  });
+
+  it('ultimate guards: free only while playing, alive and doing nothing that blocks it', () => {
+    const ok = { playing: true, alive: true, airborne: false, dashing: false, snared: false, leveling: false, running: false };
+    expect(ultimateBlocked(ok)).toBe(false);
+    for (const k of ['airborne', 'dashing', 'snared', 'leveling', 'running'] as const) expect(ultimateBlocked({ ...ok, [k]: true })).toBe(true);
+    for (const k of ['playing', 'alive'] as const) expect(ultimateBlocked({ ...ok, [k]: false })).toBe(true);
   });
 });

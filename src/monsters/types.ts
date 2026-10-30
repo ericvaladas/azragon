@@ -141,6 +141,8 @@ export type MonsterKind = PoolSpec & {
   swatTiming?: SwatTiming;
   /** Has the auto Tail Sweep melee (CONFIG.kaiju.tail). */
   tailSweep: boolean;
+  /** This kind's ultimate (Q), named on its button; absent until the kind has one. */
+  ultimate?: { label: string };
   fx: FxTheme;
   createBody(): MonsterBody;
 };

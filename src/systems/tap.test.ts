@@ -74,6 +74,7 @@ describe('abilityKey', () => {
     expect(k('KeyR')).toBe('roar');
     expect(k('KeyE')).toBe('dash');
     expect(k('KeyT')).toBe('bubble');
+    expect(k('KeyQ')).toBe('ultimate');
   });
   it('leaves browser shortcuts alone (Cmd/Ctrl/Alt+R reload, etc.)', () => {
     expect(k('KeyR', { metaKey: true })).toBeNull();
@@ -82,7 +83,7 @@ describe('abilityKey', () => {
   });
   it('ignores key repeat and other keys', () => {
     expect(k('Space', { repeat: true })).toBeNull();
-    expect(k('KeyQ')).toBeNull();
+    expect(k('KeyX')).toBeNull();
   });
 });
 

@@ -443,6 +443,11 @@ export const CONFIG = {
    * It lasts `duration` s; each attack takes `perAttack` s off, but never ends it sooner than `minDuration` s after it started.
    */
   snare: { duration: 6, perAttack: 1, minDuration: 2, speedMult: 0.3 },
+  /**
+   * The ultimate (Q): its cooldown in seconds of plain game time (no upgrade or Haste When Hurt shortens it), and
+   * whether a run starts with it ready (true while the ultimates are being built; false starts it on its full cooldown).
+   */
+  ultimate: { cooldown: 100, startReady: true },
   abilities: {
     /** Cooldown multiplier by rank (Dash/Roar ranks come from level-up picks; Leap is always rank 1). */
     rankCooldown: [1, 1, 0.8, 0.65],

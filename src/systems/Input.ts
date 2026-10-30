@@ -1,3 +1,4 @@
+import type { ActiveId } from './abilities';
 import { KonamiTracker } from './konami';
 import { abilityKey, canTap, classifyGesture, driveAxes, driveKey, isSkipKey, menuKey, numberKey, pinchToWheel, isEscKey, type DriveKey } from './tap';
 
@@ -7,7 +8,7 @@ export type InputHandlers = {
   hover(x: number, y: number): void;
   wheel(deltaY: number): void;
   /** Ability key pressed; return true when the game used it (then the browser default is suppressed). */
-  key(id: 'leap' | 'dash' | 'roar' | 'bubble'): boolean | void;
+  key(id: ActiveId): boolean | void;
   /** A plain key press; return true when it skipped the intro (then it isn't also an ability key). */
   skipKey(): boolean;
   /** Browse/confirm key (select screen, level-up cards); return true when the menu used it. */
