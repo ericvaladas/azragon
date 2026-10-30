@@ -10,6 +10,8 @@ export interface Target {
   /** Horizontal radius used for range checks. */
   readonly radius: number;
   readonly airborne: boolean;
+  /** A boss: ultimates hurt it instead of taking it outright. */
+  readonly boss?: boolean;
   isAlive(): boolean;
   applyDamage(amount: number): void;
 }

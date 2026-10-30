@@ -373,6 +373,20 @@ export const CONFIG = {
      * it leaves a patch of black fire (radius m, life s).
      */
     gaze: { splash: 120, delay: 1.4, poolRadius: 110, poolLife: 3 },
+    /**
+     * Devour (the ultimate): a black circle of `radius` m at the press point; world time slows to timeScale; up to
+     * maxFigures demonic figures (the rest are taken in a burst of shadow); a boss takes bossDamage × the damage
+     * multiplier. The camera pulls back to cameraDistanceMult × its default distance at cameraPitch. Lightning strikes
+     * every boltEvery[0]..[1] s within boltSpread × radius. `t`: the beats in real seconds (see devourPhase).
+     * The blood sky: its lights' intensities (the colours are bloodZenith…bloodSun below).
+     */
+    ultimate: {
+      radius: 900, timeScale: 0.25, maxFigures: 24, bossDamage: 2000,
+      cameraDistanceMult: 2.2, cameraPitch: 1.05,
+      boltEvery: [0.15, 0.35], boltSpread: 1.3,
+      t: { easeIn: 0.2, sky: 0.6, cameraIn: 0.8, boltsFrom: 0.3, boltsTo: 3.8, circleFrom: 0.5, circleTo: 1.3, emergeFrom: 1.2, grasp: 1.9, dragFrom: 2.4, dragTo: 3.4, outroFrom: 3.4, end: 4.4 },
+      hemiIntensity: 0.55, sunIntensity: 0.9,
+    },
     colors: {
       /** Tight, starved olive-grey skin (base, ridge highlight over the ribs and bones, shadowed underside) and the black sinew. */
       skin: 0x4c5142,
@@ -407,6 +421,20 @@ export const CONFIG = {
       boneShard: 0xdcd4c0,
       ghost: 0xd6d3dc,
       handSmoke: 0x2b1d33,
+      /** Devour's blood sky (zenith, horizon, fog, the two lights) and its figures, circle and lightning. */
+      bloodZenith: 0x2a0306,
+      bloodHorizon: 0x8a0e10,
+      bloodFog: 0x3a0a0c,
+      bloodHemiSky: 0xb0303a,
+      bloodHemiGround: 0x1a0406,
+      bloodSun: 0xff5a40,
+      demon: 0x0a0609,
+      demonRim: 0x5a1a2e,
+      demonEye: 0xff3020,
+      circle: 0x050204,
+      circleGlow: 0x5a0a0e,
+      boltCore: 0xfff2f0,
+      boltEdge: 0xff2a2a,
     },
   },
   /** Artillery batteries: `guns` guns gunSpacing m apart, placed distMin..distMax m from the monster; a battery fires a salvo every salvoEvery s while the monster is within `range` m of it. */
