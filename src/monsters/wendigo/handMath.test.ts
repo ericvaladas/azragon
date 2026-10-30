@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { SWAT_TIMES } from '../../monster/tailSwat';
-import { ARM_BEND, armJointsTo, BECKON_T, dragPoint, beckonLift, beckonPull, beckonResume, fingerPoints, fistPoint, HAND_DIM, jointCurl, thumbPoints, HAND_T, handBase, handFrame, handPhase, WENDIGO_SWAT } from './handMath';
+import { ARM_BEND, armJointsTo, BECKON_T, dragPoint, beckonLift, beckonPull, beckonResume, fingerPoints, fistPoint, HAND_DIM, jointCurl, thumbPoints, HAND_T, DEVOUR_HAND_T, handBase, underBase, handFrame, handPhase, WENDIGO_SWAT } from './handMath';
 
 describe('handPhase', () => {
   it("reaches the flyer exactly at the Wendigo's anti-air impact, fist closed", () => {
@@ -281,5 +281,58 @@ describe('rigid wrist', () => {
     expect(N.y).toBeLessThan(-0.85);
     handFrame(base, held, 1, F, S, N, 0);
     expect(N.y).toBeLessThan(-0.6);
+  });
+});
+
+describe('handPhase on the Devour timing', () => {
+  it('rises and pulls at a constant speed: pulling the moment it closes (no crush pause, no yank), under by the drag end', () => {
+    const T = DEVOUR_HAND_T;
+    expect(T.hold).toBe(T.impact);
+    expect(handPhase(T.impact, false, T).drag).toBe(0);
+    expect(handPhase(T.impact + 0.05, false, T).drag).toBeGreaterThan(0);
+    // Constant speed: linear in time, up and down.
+    expect(handPhase((T.impact + T.drag) / 2, false, T).drag).toBeCloseTo(0.5, 6);
+    expect(handPhase(T.impact / 2, false, T).rise).toBeCloseTo(0.5, 6);
+    expect(handPhase(T.drag, false, T).drag).toBe(1);
+    // The anti-air hands keep their crush pause and yank.
+    expect(handPhase(HAND_T.impact + 0.05).drag).toBe(0);
+  });
+});
+
+describe('underBase', () => {
+  it('puts the pool right under the victim: on the ground, within `offset` of its ground point, on its far side', () => {
+    const monster = new THREE.Vector3(0, 0, 0);
+    for (const v of [new THREE.Vector3(500, 10, 0), new THREE.Vector3(-300, 400, 200)]) {
+      for (const r of [0, 0.5, 1]) {
+        const b = underBase(v, monster, r, 60, new THREE.Vector3());
+        expect(b.y).toBe(0);
+        expect(Math.hypot(b.x - v.x, b.z - v.z)).toBeCloseTo(60, 6);
+        // Never on the monster's side of the victim.
+        expect(Math.hypot(b.x, b.z)).toBeGreaterThan(Math.hypot(v.x, v.z) - 60 * Math.cos(1.2));
+      }
+    }
+  });
+});
+
+describe('Devour hands rise in a neutral pose', () => {
+  it('keeps a relaxed half-curl while rising (never splayed open), then closes from it into a fist', () => {
+    const T = DEVOUR_HAND_T;
+    for (const t of [0.01, T.emerge, (T.emerge + T.impact) / 2, T.impact - 0.07]) expect(handPhase(t, false, T).grip).toBeCloseTo(T.relaxed!, 6);
+    expect(handPhase(T.impact + T.close, false, T).grip).toBeGreaterThan(0.95);
+    // The anti-air hand still spreads wide for its lunge.
+    expect(handPhase((HAND_T.emerge + HAND_T.impact) / 2 - 0.03).grip).toBe(0);
+  });
+
+  it('holds the hand in line with the arm, tipped a little toward the target, instead of flattening palm-down', () => {
+    const F = new THREE.Vector3();
+    const S = new THREE.Vector3();
+    const N = new THREE.Vector3();
+    const base = new THREE.Vector3(0, 0, 0);
+    const target = new THREE.Vector3(0, 10, 60);
+    for (const rise of [0.2, 0.6, 1]) {
+      handFrame(base, target, rise, F, S, N, 0, DEVOUR_HAND_T.pitch);
+      expect(F.y).toBeCloseTo(Math.sin(-DEVOUR_HAND_T.pitch!), 6);
+      expect(F.y).toBeGreaterThan(0.7);
+    }
   });
 });

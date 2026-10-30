@@ -40,16 +40,12 @@ export type DevourPhase = {
   time: number;
   /** Blood sky blend 0..1. */
   sky: number;
-  /** Camera pull-back 0..1. */
+  /** Camera pull-back 0..1 (still easing home for a while after `done`). */
   camera: number;
   /** Black circle opacity 0..1. */
   circle: number;
   /** Lightning is striking. */
   bolts: boolean;
-  /** Figures rising, 0..1 (1 at the grasp). */
-  emerge: number;
-  /** Figures sinking with their victims, 0..1. */
-  drag: number;
   done: boolean;
 };
 
@@ -59,11 +55,9 @@ export function devourPhase(t: number): DevourPhase {
   return {
     time: 1 - (1 - U.timeScale) * slow,
     sky: Math.min(smooth(t / T.sky), outro(t)),
-    camera: Math.min(easeInOutCubic(t / T.cameraIn), easeInOutCubic(outro(t))),
+    camera: Math.min(easeInOutCubic(t / T.cameraIn), easeInOutCubic(1 - ramp(t, T.outroFrom, T.outroFrom + T.cameraOut))),
     circle: Math.min(smooth(ramp(t, T.circleFrom, T.circleTo)), outro(t)),
     bolts: t >= T.boltsFrom && t < T.boltsTo,
-    emerge: ramp(t, T.emergeFrom, T.grasp),
-    drag: ramp(t, T.dragFrom, T.dragTo),
     done: t >= T.end,
   };
 }

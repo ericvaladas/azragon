@@ -13,13 +13,38 @@ export const WENDIGO_SWAT = swatTiming(0.16, 0.13, 0.11, 0.31);
  * crushes until HOLD, drags the wreck down to the pool by DRAG, then dissolves into smoke by TOTAL. Its fingers take
  * CLOSE s to shut, starting just before IMPACT.
  */
-export const HAND_T = (() => {
+export const HAND_T: HandTiming = (() => {
   const emerge = WENDIGO_SWAT.windup;
   const impact = WENDIGO_SWAT.impact;
   const hold = impact + 0.19;
   const drag = hold + 0.8;
-  return { emerge, impact, hold, drag, total: drag + 0.6, close: 0.16 };
+  return { emerge, impact, hold, drag, total: drag + 0.6, close: 0.16, steady: false, relaxed: null, pitch: null };
 })();
+
+/**
+ * A grab's timeline and manner (see HAND_T). `steady`: the hand rises and drags at a constant speed (linear in time)
+ * instead of lunging and yanking.
+ * `relaxed`: the grip held while rising (a neutral half-curl), closing from it, instead of clawing out of the pool and
+ * spreading wide for the lunge. `pitch`: a fixed hand pitch (rad, see handFrame) keeping the hand in line with an arm
+ * that comes straight up, instead of tipping palm-down over the target.
+ */
+export type HandTiming = {
+  emerge: number;
+  impact: number;
+  hold: number;
+  drag: number;
+  total: number;
+  close: number;
+  steady: boolean;
+  relaxed: number | null;
+  pitch: number | null;
+};
+
+/**
+ * Devour's hands (on their own clock, which Devour slows): they rise and close as the anti-air hands do, then pull
+ * their victims down at once, with no crushing pause, steadily over 1.2 s, and dissolve.
+ */
+export const DEVOUR_HAND_T: HandTiming = { ...HAND_T, hold: HAND_T.impact, drag: HAND_T.impact + 1.2, total: HAND_T.impact + 1.8, steady: true, relaxed: 0.35, pitch: -1.0 };
 
 /**
  * The Wendigo's beckoning claw over a whole Shadow Hands grab (s, on its own clock, not the swat's): it lifts slowly
@@ -161,23 +186,27 @@ const smooth = (x: number) => x * x * (3 - 2 * x);
  * Pose weights at `t` seconds into a grab. Once shut the fist never opens again, to the end; when the flyer survived
  * (`survived`) it stays clenched on empty air, without the squeeze.
  */
-export function handPhase(t: number, survived = false): HandPhase {
-  const T = HAND_T;
-  // Out of the pool slowly (a quarter of the way), then a fast lunge that decelerates onto the flyer.
+export function handPhase(t: number, survived = false, T: HandTiming = HAND_T): HandPhase {
+  // Out of the pool slowly (a quarter of the way), then a fast lunge that decelerates onto the flyer; or, steady,
+  // straight up at a constant speed.
   let rise: number;
-  if (t < T.emerge) rise = 0.25 * smooth(clamp01(t / T.emerge));
+  if (T.steady) rise = clamp01(t / T.impact);
+  else if (t < T.emerge) rise = 0.25 * smooth(clamp01(t / T.emerge));
   else {
     const u = clamp01((t - T.emerge) / (T.impact - T.emerge));
     rise = 0.25 + 0.75 * (1 - (1 - u) * (1 - u));
   }
-  // Clawed as it surfaces, spread wide during the lunge, closing hard as it arrives.
+  // Clawed as it surfaces, spread wide during the lunge, closing hard as it arrives; or, relaxed, a neutral half-curl
+  // the whole way up, closing from it.
   let grip: number;
-  if (t < T.emerge) grip = 0.35 * (1 - t / T.emerge);
+  const closing = smooth(clamp01((t - (T.impact - 0.06)) / T.close));
+  if (T.relaxed !== null) grip = T.relaxed + (1 - T.relaxed) * closing;
+  else if (t < T.emerge) grip = 0.35 * (1 - t / T.emerge);
   else if (t < T.impact - 0.06) grip = 0;
-  else grip = smooth(clamp01((t - (T.impact - 0.06)) / T.close));
-  // The drag accelerates (ease-in): a slow first pull, then a yank into the ground.
+  else grip = closing;
+  // The drag accelerates (ease-in): a slow first pull, then a yank into the ground; or, steady, a constant-speed pull.
   const d = clamp01((t - T.hold) / (T.drag - T.hold));
-  const drag = d * d * d;
+  const drag = T.steady ? d : d * d * d;
   const fade = smooth(clamp01((t - T.drag) / (T.total - T.drag)));
   const pool = smooth(clamp01(t / T.emerge)) * (1 - fade);
   const squeeze = survived ? 0 : smooth(clamp01((t - T.impact - 0.06) / 0.12)) * (1 - smooth(clamp01((t - T.drag) / 0.25)));
@@ -229,6 +258,28 @@ export function fistPoint(base: THREE.Vector3, target: THREE.Vector3, rise: numb
 const PLUNGE = 170;
 
 /**
+ * Ground point (y = 0) right under a victim at `victim` for Devour's hands: `offset` m from its ground point, on its
+ * far side from the monster at `monster`, turned up to ±1.2 rad off that line by `rand` (0..1), so the arm comes up
+ * from beneath it, leaning in a little (never quite vertical, so the hand still has a direction to reach from).
+ */
+export function underBase(victim: THREE.Vector3, monster: THREE.Vector3, rand: number, offset: number, out: THREE.Vector3): THREE.Vector3 {
+  let dx = victim.x - monster.x;
+  let dz = victim.z - monster.z;
+  const len = Math.hypot(dx, dz);
+  if (len < 1e-3) {
+    dx = 1;
+    dz = 0;
+  } else {
+    dx /= len;
+    dz /= len;
+  }
+  const a = (rand * 2 - 1) * 1.2;
+  const c = Math.cos(a);
+  const s = Math.sin(a);
+  return out.set(victim.x + (dx * c - dz * s) * offset, 0, victim.z + (dx * s + dz * c) * offset);
+}
+
+/**
  * Where the fist holding its prize is `drag` (0..1, handPhase) of the way through dragging it down: from where it
  * closed (`held`) down into the ground PLUNGE out from the pool at `base`, toward the flyer, so the arm arches up out
  * of its pool, over, and down into the ground with it.
@@ -253,13 +304,14 @@ export const ARM_BEND = 0.05;
  * about level and the palm faces down: an overhand grip, the fingers curling down around the prize. As it drags the
  * prize down (`down`) it tips on over, fingers pointing down toward the ground.
  */
-export function handFrame(base: THREE.Vector3, target: THREE.Vector3, rise: number, F: THREE.Vector3, S: THREE.Vector3, N: THREE.Vector3, down = 0): void {
+export function handFrame(base: THREE.Vector3, target: THREE.Vector3, rise: number, F: THREE.Vector3, S: THREE.Vector3, N: THREE.Vector3, down = 0, pitch: number | null = null): void {
   _h.set(target.x - base.x, 0, target.z - base.z);
   if (_h.lengthSq() < 1e-6) _h.set(0, 0, 1);
   _h.normalize();
   // Over the flyer the fingers lie about level (GRAB_PITCH, a touch up, so the leaning arm need hardly bend to them:
   // the palm still faces down); dragging its prize down (`down` 0..1) the hand tips over to DRAG_PITCH.
-  const p = -1.25 + (1.25 + GRAB_PITCH) * smooth(clamp01((rise - 0.15) / 0.7)) + (DRAG_PITCH - GRAB_PITCH) * smooth(clamp01(down));
+  // A fixed `pitch` keeps the hand in line with an arm that comes straight up (Devour's).
+  const p = pitch ?? -1.25 + (1.25 + GRAB_PITCH) * smooth(clamp01((rise - 0.15) / 0.7)) + (DRAG_PITCH - GRAB_PITCH) * smooth(clamp01(down));
   const c = Math.cos(p);
   const s = Math.sin(p);
   F.set(_h.x * c, -s, _h.z * c);

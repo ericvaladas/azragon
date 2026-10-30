@@ -20,24 +20,23 @@ describe('devourPhase', () => {
     expect(devourPhase(0).time).toBe(1);
     expect(devourPhase(1).time).toBeCloseTo(U.timeScale);
     expect(devourPhase(1).sky).toBe(1);
-    expect(devourPhase(2).camera).toBe(1);
+    expect(devourPhase(U.t.cameraIn).camera).toBe(1);
+    expect(devourPhase(U.t.cameraIn / 2).camera).toBeLessThan(1);
     const end = devourPhase(U.t.end);
     expect(end.done).toBe(true);
     expect(end.time).toBe(1);
     expect(end.sky).toBe(0);
-    expect(end.camera).toBe(0);
+    // The camera is still on its way back when the sequence hands control back, and home by outroFrom + cameraOut.
+    expect(end.camera).toBeGreaterThan(0);
+    expect(devourPhase(U.t.outroFrom + U.t.cameraOut).camera).toBe(0);
     expect(devourPhase(2).bolts).toBe(true);
     expect(devourPhase(0.1).bolts).toBe(false);
     expect(devourPhase(4).bolts).toBe(false);
   });
 
-  it('fades the circle in, raises the figures, then drags them under', () => {
+  it('fades the circle in, and out with the outro', () => {
     expect(devourPhase(0.4).circle).toBe(0);
     expect(devourPhase(U.t.circleTo).circle).toBe(1);
-    expect(devourPhase(U.t.emergeFrom).emerge).toBe(0);
-    expect(devourPhase(U.t.grasp).emerge).toBe(1);
-    expect(devourPhase(U.t.dragFrom).drag).toBe(0);
-    expect(devourPhase(U.t.dragTo).drag).toBe(1);
     expect(devourPhase(U.t.end).circle).toBe(0);
   });
 });

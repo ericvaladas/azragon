@@ -1,65 +1,70 @@
 import * as THREE from 'three';
-import { boltPath } from './lightningMath';
+import { BOLT_LIFE, LEADER, boltPath, segmentBrightness, strikeFlash, strokeHeat } from './lightningMath';
 
 /** Bolts alive at once; a new strike takes the oldest slot. */
 const MAX_BOLTS = 4;
-/** Main path segments, fork count and fork segments per bolt. */
-const MAIN_SEGS = 8;
-const FORKS = 2;
-const FORK_SEGS = 3;
-const SEGS_PER_BOLT = MAIN_SEGS + FORKS * FORK_SEGS;
+/** Main channel segments, branch count and segments per branch. */
+const MAIN_SEGS = 14;
+const BRANCHES = 5;
+const BRANCH_SEGS = 5;
+const SEGS_PER_BOLT = MAIN_SEGS + BRANCHES * BRANCH_SEGS;
 const VERTS_PER_BOLT = SEGS_PER_BOLT * 6;
 /** Bolts start this high (m) above the strike point. */
 const HEIGHT = 3000;
-/** Seconds a bolt shows at full strength, then fades over FADE. */
-const SHOW = 0.12;
-const FADE = 0.12;
-/** The scene-light flash: full on the strike, gone after FLASH s. */
-const FLASH = 0.08;
-/** Ribbon half-widths (m): the white core and the red edge around it. */
-const CORE_W = 9;
-const EDGE_W = 26;
-/** Sideways wander of the main path and of a fork (m). */
-const JITTER = 140;
-const FORK_JITTER = 70;
+/** Ribbon half-widths (m): the white core and the red edge around it; branches are this much thinner. */
+const CORE_W = 5;
+const EDGE_W = 12;
+const BRANCH_W = 0.5;
+/** Sideways wander of the main channel and of a branch (m). */
+const JITTER = 160;
+const BRANCH_JITTER = 90;
 /** Scorch marks: how many, their radius (m) and how long they take to shrink away (s). */
 const SCORCHES = 8;
 const SCORCH_R = 70;
 const SCORCH_LIFE = 2;
 
-type Bolt = { age: number; on: boolean };
+type Bolt = { age: number; on: boolean; struck: boolean; ground: THREE.Vector3 };
 
 const _from = new THREE.Vector3();
 const _right = new THREE.Vector3();
+const _end = new THREE.Vector3();
 const _p: THREE.Vector3[] = [];
 const _f: THREE.Vector3[] = [];
 const _m = new THREE.Matrix4();
 const _c = new THREE.Color();
+const _hot = new THREE.Color();
+const WHITE = new THREE.Color(0xffffff);
 
 /**
- * Lightning: jagged bolts from high in the sky to a ground point, each with up to two short forks, drawn as
- * camera-facing ribbons (a white core inside a red edge, additive) that show for SHOW s and fade; each strike
- * leaves a scorch mark and reports a flash for the scene light. Three draw calls; everything is pooled.
+ * Lightning as slow-motion footage shows it: a faint stepped leader creeps down from the sky in jerks, branching as
+ * it goes; when it touches the ground the return stroke blazes the main channel white (lighting the scene and
+ * scorching the ground) while the branches die, then the channel flickers once and fades (segmentBrightness).
+ * Drawn as camera-facing ribbons, a white core inside a red edge, additive. Three draw calls; everything is pooled.
  */
 export class Lightning {
-  private bolts: Bolt[] = Array.from({ length: MAX_BOLTS }, () => ({ age: 0, on: false }));
+  private bolts: Bolt[] = Array.from({ length: MAX_BOLTS }, () => ({ age: 0, on: false, struck: false, ground: new THREE.Vector3() }));
   private next = 0;
   private core: THREE.Mesh;
   private edge: THREE.Mesh;
+  /** Per segment of every bolt: its descent fraction (0 at the sky, 1 at the ground) and whether it is the main channel. */
+  private depth = new Float32Array(MAX_BOLTS * SEGS_PER_BOLT);
+  private main = new Uint8Array(MAX_BOLTS * SEGS_PER_BOLT);
   private scorch: THREE.InstancedMesh;
   private scorchAge = new Float32Array(SCORCHES).fill(Infinity);
   private scorchAt: THREE.Vector3[] = Array.from({ length: SCORCHES }, () => new THREE.Vector3());
   private nextScorch = 0;
-  private flashT = Infinity;
 
   constructor(
     scene: THREE.Scene,
     private camera: THREE.Camera,
     private colors: { core: number; edge: number; scorch: number },
     private rand: () => number = Math.random,
+    /** Called as each return stroke hits the ground. */
+    private onStroke: (ground: THREE.Vector3) => void = () => {},
   ) {
-    this.core = this.ribbon(scene, 2);
-    this.edge = this.ribbon(scene, 1);
+    // Drawn after the ground overlays (Devour's circle, pools), which would otherwise paint over the bolts.
+    this.core = this.ribbon(scene, 6);
+    this.edge = this.ribbon(scene, 5);
     const disc = new THREE.CircleGeometry(1, 12).rotateX(-Math.PI / 2);
     this.scorch = new THREE.InstancedMesh(
       disc,
@@ -84,65 +89,91 @@ export class Lightning {
     return mesh;
   }
 
-  /** A bolt strikes the ground at `ground`. */
+  /** A strike begins over `ground`: its leader starts down now and the return stroke lands LEADER s later. */
   strike(ground: THREE.Vector3): void {
     const i = this.next;
     this.next = (this.next + 1) % MAX_BOLTS;
-    this.bolts[i] = { age: 0, on: true };
-    // Ribbons face the camera across its right vector at the moment of the strike (a bolt lasts a blink).
+    const bolt = this.bolts[i]!;
+    bolt.age = 0;
+    bolt.on = true;
+    bolt.struck = false;
+    bolt.ground.copy(ground);
+    // Ribbons face the camera across its right vector at the moment of the strike (a strike lasts well under a second).
     _right.setFromMatrixColumn(this.camera.matrixWorld, 0).setY(0).normalize();
     if (_right.lengthSq() === 0) _right.set(1, 0, 0);
-    _from.copy(ground).add(new THREE.Vector3((this.rand() - 0.5) * 600, HEIGHT, (this.rand() - 0.5) * 600));
+    _from.set(ground.x + (this.rand() - 0.5) * 600, ground.y + HEIGHT, ground.z + (this.rand() - 0.5) * 600);
     boltPath(_from, ground, MAIN_SEGS, JITTER, this.rand, _p);
     let seg = 0;
-    for (let k = 0; k < MAIN_SEGS; k++) this.quad(i, seg++, _p[k]!, _p[k + 1]!);
-    for (let f = 0; f < FORKS; f++) {
-      // A fork leaves a point on the upper part of the bolt and dies off to one side.
-      const start = _p[1 + Math.floor(this.rand() * (MAIN_SEGS / 2))]!;
-      const end = start.clone().add(new THREE.Vector3((this.rand() - 0.5) * 900, -300 - this.rand() * 600, (this.rand() - 0.5) * 900));
-      boltPath(start, end, FORK_SEGS, FORK_JITTER, this.rand, _f);
-      for (let k = 0; k < FORK_SEGS; k++) this.quad(i, seg++, _f[k]!, _f[k + 1]!);
+    for (let k = 0; k < MAIN_SEGS; k++) this.quad(i, seg++, _p[k]!, _p[k + 1]!, true, 1);
+    for (let b = 0; b < BRANCHES; b++) {
+      // A branch leaves the channel somewhere on its upper two thirds and dies off downward and to one side.
+      const start = _p[1 + Math.floor(this.rand() * ((MAIN_SEGS * 2) / 3))]!;
+      const len = 500 + this.rand() * 700;
+      _end.set(start.x + (this.rand() - 0.5) * len * 1.4, start.y - len * (0.6 + this.rand() * 0.4), start.z + (this.rand() - 0.5) * len * 1.4);
+      _end.y = Math.max(ground.y + 50, _end.y);
+      boltPath(start, _end, BRANCH_SEGS, BRANCH_JITTER, this.rand, _f);
+      for (let k = 0; k < BRANCH_SEGS; k++) this.quad(i, seg++, _f[k]!, _f[k + 1]!, false, BRANCH_W);
     }
     for (const m of [this.core, this.edge]) (m.geometry.getAttribute('position') as THREE.BufferAttribute).needsUpdate = true;
-    this.flashT = 0;
-    const s = this.nextScorch;
-    this.nextScorch = (s + 1) % SCORCHES;
-    this.scorchAt[s]!.set(ground.x, 4, ground.z);
-    this.scorchAge[s] = 0;
   }
 
-  /** Write segment `seg` of bolt `b` (a → b) into both ribbons, `w` wide across the camera. */
-  private quad(b: number, seg: number, a: THREE.Vector3, c: THREE.Vector3): void {
-    for (const [mesh, w] of [[this.core, CORE_W], [this.edge, EDGE_W]] as const) {
+  /** Write segment `seg` of bolt `b` (a → c) into both ribbons, `w` × their widths across the camera, and record its depth. */
+  private quad(b: number, seg: number, a: THREE.Vector3, c: THREE.Vector3, main: boolean, w: number): void {
+    const slot = b * SEGS_PER_BOLT + seg;
+    const ground = this.bolts[b]!.ground.y;
+    this.depth[slot] = 1 - (a.y - ground) / HEIGHT;
+    this.main[slot] = main ? 1 : 0;
+    for (const [mesh, width] of [[this.core, CORE_W * w], [this.edge, EDGE_W * w]] as const) {
       const pos = mesh.geometry.getAttribute('position') as THREE.BufferAttribute;
-      const o = b * VERTS_PER_BOLT + seg * 6;
-      const ax = _right.x * w;
-      const az = _right.z * w;
-      const v = [
-        [a.x - ax, a.y, a.z - az], [a.x + ax, a.y, a.z + az], [c.x + ax, c.y, c.z + az],
-        [a.x - ax, a.y, a.z - az], [c.x + ax, c.y, c.z + az], [c.x - ax, c.y, c.z - az],
-      ];
-      v.forEach((p, k) => pos.setXYZ(o + k, p[0]!, p[1]!, p[2]!));
+      const o = slot * 6;
+      const ax = _right.x * width;
+      const az = _right.z * width;
+      pos.setXYZ(o, a.x - ax, a.y, a.z - az);
+      pos.setXYZ(o + 1, a.x + ax, a.y, a.z + az);
+      pos.setXYZ(o + 2, c.x + ax, c.y, c.z + az);
+      pos.setXYZ(o + 3, a.x - ax, a.y, a.z - az);
+      pos.setXYZ(o + 4, c.x + ax, c.y, c.z + az);
+      pos.setXYZ(o + 5, c.x - ax, c.y, c.z - az);
     }
   }
 
   /** Advance by dt; returns this frame's flash (0..1) for the scene light. */
   update(dt: number): number {
     let any = false;
-    for (const [mesh, hex] of [[this.core, this.colors.core], [this.edge, this.colors.edge]] as const) {
-      const col = mesh.geometry.getAttribute('color') as THREE.BufferAttribute;
-      this.bolts.forEach((bolt, i) => {
-        const k = bolt.on ? Math.max(0, 1 - Math.max(0, bolt.age - SHOW) / FADE) : 0;
-        _c.setHex(hex).multiplyScalar(k);
-        for (let v = 0; v < VERTS_PER_BOLT; v++) col.setXYZ(i * VERTS_PER_BOLT + v, _c.r, _c.g, _c.b);
-      });
-      col.needsUpdate = true;
-    }
+    let flash = 0;
     for (const bolt of this.bolts) {
       if (!bolt.on) continue;
       bolt.age += dt;
-      if (bolt.age > SHOW + FADE) bolt.on = false;
+      if (!bolt.struck && bolt.age >= LEADER) {
+        // The return stroke: the ground takes the hit.
+        bolt.struck = true;
+        const s = this.nextScorch;
+        this.nextScorch = (s + 1) % SCORCHES;
+        this.scorchAt[s]!.set(bolt.ground.x, 4, bolt.ground.z);
+        this.scorchAge[s] = 0;
+        this.onStroke(bolt.ground);
+      }
+      if (bolt.age >= LEADER + BOLT_LIFE) bolt.on = false;
       else any = true;
+      flash = Math.max(flash, strikeFlash(bolt.age));
+    }
+    for (const [mesh, hex] of [[this.core, this.colors.core], [this.edge, this.colors.edge]] as const) {
+      const col = mesh.geometry.getAttribute('color') as THREE.BufferAttribute;
+      for (let b = 0; b < MAX_BOLTS; b++) {
+        const bolt = this.bolts[b]!;
+        // The main channel burns white-hot through the stroke, edge and all, cooling back to its colour as it fades.
+        _hot.setHex(hex).lerp(WHITE, bolt.on ? strokeHeat(bolt.age) : 0);
+        for (let s = 0; s < SEGS_PER_BOLT; s++) {
+          const slot = b * SEGS_PER_BOLT + s;
+          const main = this.main[slot] === 1;
+          const k = bolt.on ? segmentBrightness(bolt.age, this.depth[slot]!, main) : 0;
+          if (main) _c.copy(_hot);
+          else _c.setHex(hex);
+          _c.multiplyScalar(k);
+          for (let v = 0; v < 6; v++) col.setXYZ(slot * 6 + v, _c.r, _c.g, _c.b);
+        }
+      }
+      col.needsUpdate = true;
     }
     this.core.visible = this.edge.visible = any;
     let n = 0;
@@ -154,8 +185,7 @@ export class Lightning {
     }
     this.scorch.count = n;
     this.scorch.instanceMatrix.needsUpdate = true;
-    this.flashT += dt;
-    return Math.max(0, 1 - this.flashT / FLASH);
+    return flash;
   }
 
   clear(): void {
@@ -163,7 +193,6 @@ export class Lightning {
     this.scorchAge.fill(Infinity);
     this.scorch.count = 0;
     this.core.visible = this.edge.visible = false;
-    this.flashT = Infinity;
   }
 
   dispose(): void {

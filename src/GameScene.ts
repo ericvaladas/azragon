@@ -241,6 +241,7 @@ export class GameScene {
     this.hands = new ShadowHands(this.scene);
     const U = CONFIG.wendigo.ultimate;
     this.devour = new Devour(this.scene, this.camera, {
+      particles: this.particles,
       enemies: () => this.enemyTargets(),
       take: (t) => {
         this.quietKill = true;
@@ -256,10 +257,11 @@ export class GameScene {
         return out;
       },
       sky: (k) => this.city.blendAtmosphere(BLOOD_ATMOSPHERE, k),
-      camera: (k) => this.rig.pull(k, U.cameraPitch, CONFIG.camera.defaultDistance * U.cameraDistanceMult),
+      // The camera only backs away: it keeps the player's own angle.
+      camera: (k) => this.rig.pull(k, this.rig.orbit.pitch, CONFIG.camera.defaultDistance * U.cameraDistanceMult),
       shake: (a) => this.rig.addTrauma(a),
       flash: (k) => {
-        this.lighting.hemi.intensity += k * 1.5;
+        this.lighting.hemi.intensity += k * 3;
       },
       burst: (at, kind) => {
         if (kind === 'take') {
@@ -1606,7 +1608,8 @@ export class GameScene {
       }
       if (cameraFollowsWalk(this.input.pointerHeld(), this.ultimateActive)) this.rig.swingBehind(m.yaw, dt);
     }
-    if (!m.busy) {
+    // An ultimate holds the monster still (its howl may end before the last hand is down).
+    if (!m.busy && !this.ultimateActive) {
       // A breather only picks targets its neck can reach, so the body never has to turn away from its path.
       const reach = this.ms.meleeRange * 0.8;
       const groundOnly = m.kind.ranged === 'hurl' || m.kind.ranged === 'gaze';
