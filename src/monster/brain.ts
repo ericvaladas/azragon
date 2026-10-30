@@ -1,12 +1,17 @@
 import { dist2, type Vec2 } from '../util/math';
 
-export type BrainTarget = { x: number; z: number; radius: number; airborne: boolean; alive: boolean };
+/**
+ * `building`: ranged attacks never fire at it; an attack order on one walks up and strikes it in melee.
+ * `lowFlyer`: an airborne target within the melee's reach overhead (the Wendigo's claws); ordered, it is approached
+ * and struck like a ground target.
+ */
+export type BrainTarget = { x: number; z: number; radius: number; airborne: boolean; alive: boolean; building?: boolean; lowFlyer?: boolean };
 export type BrainOrder = { kind: 'move'; to: Vec2 } | { kind: 'attack'; target: BrainTarget } | null;
 export type BrainInput = {
   pos: Vec2;
   order: BrainOrder;
   auto: BrainTarget | null;
-  /** Nearest live ground enemy within leg-strike reach, struck automatically when the strike is ready. */
+  /** Nearest live ground enemy (or low flyer, for claws that reach them) within strike reach, struck automatically when ready. */
   autoMelee: BrainTarget | null;
   meleeRange: number;
   spikeRange: number;
@@ -50,7 +55,7 @@ export function decide(i: BrainInput): Decision {
     if (t.alive) {
       const at = { x: t.x, z: t.z };
       const gap = dist2(i.pos, at) - t.radius;
-      if (t.airborne) {
+      if (t.airborne && !t.lowFlyer) {
         if (gap <= i.spikeRange) {
           return { ...IDLE, face: at, attack: i.spikeReady ? 'ranged' : null, attackOn: i.spikeReady ? 'order' : null };
         }
@@ -58,6 +63,11 @@ export function decide(i: BrainInput): Decision {
       }
       if (gap <= i.meleeRange) {
         return i.meleeReady ? { ...IDLE, face: at, attack: 'melee', attackOn: 'order', meleeAt: at } : { ...IDLE, face: at };
+      }
+      // Walking up to an ordered building, the ranged attack keeps firing at enemies in range instead.
+      if (t.building) {
+        const auto = i.auto && i.auto.alive && i.spikeReady;
+        return { ...IDLE, moveTo: at, attack: auto ? 'ranged' : null, attackOn: auto ? 'auto' : null };
       }
       const fire = gap <= i.spikeRange && i.spikeReady;
       return { ...IDLE, moveTo: at, attack: fire ? 'ranged' : null, attackOn: fire ? 'order' : null };

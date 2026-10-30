@@ -44,7 +44,7 @@ export type FxTheme = {
   spike: number;
   glob: number;
   pool: number;
-  /** Footprint/landing pool opacity (default 0.55). */
+  /** Burning ground patch opacity (default 0.55). */
   poolOpacity?: number;
   /** Pools are drawn over the crater decal too (polygon offset). */
   poolLift?: boolean;
@@ -94,7 +94,7 @@ export type BodyFrame = {
   lookAt: THREE.Vector3 | null;
   /** Ranged charge 0..1 (Kaiju plates). */
   charge: number;
-  /** Ravenous Hunger heat 0..1 (Wendigo); 0 for every other body. */
+  /** Haste When Hurt heat 0..1; 0 when it isn't taken. */
   heat: number;
   flash: boolean;
   glow: number;

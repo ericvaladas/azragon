@@ -79,5 +79,19 @@ describe('Abilities', () => {
     a.setRank('roar', 1);
     a.setRank('dash', 1);
     expect(a.view().map((v) => v.id)).toEqual(['leap', 'dash', 'roar']);
+    a.setRank('bubble', 1);
+    expect(a.view().map((v) => v.id)).toEqual(['leap', 'dash', 'roar', 'bubble']);
+  });
+
+  it('Shield Bubble recharges over its rank duration plus cooldown, counted from when it goes up', () => {
+    const B = CONFIG.passives.bubble;
+    const a = new Abilities();
+    expect(a.trigger('bubble')).toBe(false);
+    a.setRank('bubble', 1);
+    expect(a.trigger('bubble')).toBe(true);
+    a.tick(B.duration[1]! + B.cooldown[1]! - 0.1);
+    expect(a.ready('bubble')).toBe(false);
+    a.tick(0.2);
+    expect(a.ready('bubble')).toBe(true);
   });
 });

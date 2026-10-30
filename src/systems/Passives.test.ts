@@ -4,23 +4,24 @@ import type { AbilityId } from './Progression';
 import { CONFIG } from '../config';
 
 const P = CONFIG.passives;
-const ranks = (r: Partial<Record<AbilityId, number>>) => () => ({ dash: 0, roar: 0, acid: 0, storm: 0, chitin: 0, frenzy: 0, brood: 0, overload: 0, spines: 0, swat: 0, nova: 0, mortar: 0, bubble: 0, reflect: 0, meltdown: 0, grip: 0, core: 0, ...r });
+const ranks = (r: Partial<Record<AbilityId, number>>) => () => ({ dash: 0, roar: 0, storm: 0, chitin: 0, brood: 0, overload: 0, spines: 0, swat: 0, nova: 0, mortar: 0, bubble: 0, reflect: 0, meltdown: 0, grip: 0, core: 0, ...r });
 
 describe('Passives', () => {
   it('has no effect at rank 0', () => {
     const p = new Passives(ranks({}));
     expect(p.tryOverload()).toBe(false);
     expect(p.deflectChance()).toBe(0);
-    expect(p.frenzyHeal()).toBe(0);
-    expect(p.acidPool()).toBeNull();
     expect(p.update(100)).toEqual({ storm: 0, brood: 0, nova: 0, mortar: 0, intercepts: 0 });
   });
 
   it('scales simple passives by rank', () => {
-    const p = new Passives(ranks({ chitin: 3, frenzy: 2, acid: 3 }));
+    const p = new Passives(ranks({ chitin: 3 }));
     expect(p.deflectChance()).toBeCloseTo(0.45);
-    expect(p.frenzyHeal()).toBe(12);
-    expect(p.acidPool()).toEqual({ radius: P.acid.radius * (1 + 2 * P.acid.radiusPerRank), life: P.acid.life + 2 * P.acid.lifePerRank });
+  });
+
+  it('runs interval timers faster at a higher cooldown rate (Haste When Hurt)', () => {
+    const p = new Passives(ranks({ storm: 1 }));
+    expect(p.update(P.storm.interval / 2 + 0.01, 1, 2).storm).toBe(P.storm.spikes);
   });
 
   it('fires Spike Storm on its interval with rank-scaled spike counts', () => {
@@ -43,12 +44,13 @@ describe('Passives', () => {
     expect(p.update(1).storm).toBe(0);
   });
 
-  it('gives the base-kit Tail Swat at rank 0 and improves it per rank', () => {
-    const base = new Passives(ranks({}));
-    expect(base.swat()).toEqual({ cooldown: P.swat.cooldown[0], range: P.swat.range[0], damage: P.swat.damage[0], targets: 1 });
-    const r3 = new Passives(ranks({ swat: 3 }));
-    expect(r3.swat().cooldown).toBeLessThan(P.swat.cooldown[0]!);
-    expect(r3.swat().targets).toBe(P.swat.targets[3]);
+  it('has no anti-air until it is picked, then improves it per rank', () => {
+    expect(new Passives(ranks({})).swat()).toBeNull();
+    const r1 = new Passives(ranks({ swat: 1 })).swat();
+    expect(r1).toEqual({ cooldown: P.swat.cooldown[1], range: P.swat.range[1], damage: P.swat.damage[1], targets: 1 });
+    const r3 = new Passives(ranks({ swat: 3 })).swat();
+    expect(r3!.cooldown).toBeLessThan(r1!.cooldown);
+    expect(r3!.targets).toBe(P.swat.targets[3]);
   });
 
   it('fires Venom Nova on its rank interval with rank radius and damage', () => {
@@ -95,24 +97,34 @@ describe('Passives', () => {
     expect(p.update(10).intercepts).toBe(Math.floor(P.spines.rate[3]!));
   });
 
-  it('auto-shields only trigger when taken, ready, and something is about to hit', () => {
-    expect(new Passives(ranks({})).tryShields(true)).toEqual({ bubble: false, reflect: false });
-    const p = new Passives(ranks({ bubble: 1, reflect: 1 }));
-    expect(p.tryShields(false)).toEqual({ bubble: false, reflect: false });
-    expect(p.tryShields(true)).toEqual({ bubble: true, reflect: true });
-    expect(p.bubbleActive()).toBe(true);
+  it('Reflect Shield only triggers when taken, ready, and something is about to hit', () => {
+    expect(new Passives(ranks({})).tryReflect(true)).toBe(false);
+    const p = new Passives(ranks({ reflect: 1 }));
+    expect(p.tryReflect(false)).toBe(false);
+    expect(p.tryReflect(true)).toBe(true);
     expect(p.reflectActive()).toBe(true);
-    expect(p.tryShields(true)).toEqual({ bubble: false, reflect: false });
+    expect(p.tryReflect(true)).toBe(false);
   });
 
-  it('shields last their rank duration, then wait out their cooldown', () => {
-    const p = new Passives(ranks({ bubble: 1 }));
-    p.tryShields(true);
-    p.update(P.bubble.duration[1]! + 0.01);
+  it('Reflect Shield lasts its rank duration, then waits out its cooldown', () => {
+    const p = new Passives(ranks({ reflect: 1 }));
+    p.tryReflect(true);
+    p.update(P.reflect.duration[1]! + 0.01);
+    expect(p.reflectActive()).toBe(false);
+    expect(p.tryReflect(true)).toBe(false);
+    p.update(P.reflect.cooldown[1]!);
+    expect(p.tryReflect(true)).toBe(true);
+  });
+
+  it('Shield Bubble goes up only when taken, and lasts its rank duration', () => {
+    const none = new Passives(ranks({}));
+    none.startBubble();
+    expect(none.bubbleActive()).toBe(false);
+    const p = new Passives(ranks({ bubble: 2 }));
+    p.startBubble();
+    expect(p.bubbleActive()).toBe(true);
+    p.update(P.bubble.duration[2]! + 0.01);
     expect(p.bubbleActive()).toBe(false);
-    expect(p.tryShields(true).bubble).toBe(false);
-    p.update(P.bubble.cooldown[1]!);
-    expect(p.tryShields(true).bubble).toBe(true);
   });
 
   it('Overload absorbs one beam hit, then waits out its rank cooldown', () => {
@@ -149,13 +161,11 @@ describe('grip', () => {
 });
 
 describe('core', () => {
-  it('Ravenous Hunger: off at rank 0, then a growing damage bonus, aura radius and wither per rank', () => {
+  it('Haste When Hurt: off at rank 0, then a growing cooldown haste per rank', () => {
     expect(new Passives(ranks({})).core()).toBeNull();
     const c1 = new Passives(ranks({ core: 1 })).core()!;
     const c3 = new Passives(ranks({ core: 3 })).core()!;
-    expect(c1).toEqual({ bonus: P.core.bonus[1], radius: P.core.radius[1], dps: P.core.dps[1] });
-    expect(c3.bonus).toBeGreaterThan(c1.bonus);
-    expect(c3.radius).toBeGreaterThan(c1.radius);
-    expect(c3.dps).toBeGreaterThan(c1.dps);
+    expect(c1).toEqual({ haste: P.core.haste[1] });
+    expect(c3.haste).toBeGreaterThan(c1.haste);
   });
 });

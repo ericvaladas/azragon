@@ -27,8 +27,10 @@ export class Monster {
   glow = 0;
   /** Ranged charge 0..1, shown by bodies that telegraph it (Kaiju plates). */
   charge = 0;
-  /** Ravenous Hunger heat 0..1 (Wendigo), written by GameScene. */
+  /** Haste When Hurt heat 0..1, written by GameScene. */
   heat = 0;
+  /** How many times as fast the melee and ranged cooldowns recover (Haste When Hurt), written by GameScene. */
+  cooldownRate = 1;
   /** World point the head should turn toward (Kaiju breath), or null. */
   lookAt: THREE.Vector3 | null = null;
   /** Extra body pose offsets driven by attacks, abilities, the intro, and death. */
@@ -211,6 +213,7 @@ export class Monster {
     this.crouch = false;
     this.charge = 0;
     this.heat = 0;
+    this.cooldownRate = 1;
     this.lookAt = null;
   }
 
@@ -318,16 +321,17 @@ export class Monster {
   /**
    * Melee strike on `side` (0 = left/+X, 1 = right) at `point` (world XZ, already clamped to reach), on the kind's
    * meleeTiming unless the strike brings its own `timing` (the Wendigo's backhand). `kind` (the Wendigo's slam or
-   * backhand, decided by the game) is passed on to the body, so the pose is the strike the damage uses.
+   * backhand, decided by the game) is passed on to the body, so the pose is the strike the damage uses. `height` (m)
+   * raises the strike point off the ground, toward a low flyer.
    */
-  startMelee(cooldownMult: number, side: number, point: Vec2, timing?: MeleeTiming, kind?: StrikeKind): void {
+  startMelee(cooldownMult: number, side: number, point: Vec2, timing?: MeleeTiming, kind?: StrikeKind, height = 0): void {
     this.meleeKind = kind;
     this.meleeTiming = timing ?? this.kind.stats.meleeTiming;
     this.meleeCd = this.kind.stats.meleeCooldown * cooldownMult;
     this.meleeT = 0;
     this.impactDone = false;
     this.meleeSide = side;
-    this.strikePoint.set(point.x, 0, point.z);
+    this.strikePoint.set(point.x, height, point.z);
   }
 
   consumeRanged(cooldownMult: number): void {
@@ -436,8 +440,8 @@ export class Monster {
       this.pose.pitch = -0.45 * Math.sin(Math.PI * Math.min(1, k));
       if (k >= 1) this.roarT = -1;
     }
-    this.meleeCd = Math.max(0, this.meleeCd - dt);
-    this.rangedCd = Math.max(0, this.rangedCd - dt);
+    this.meleeCd = Math.max(0, this.meleeCd - dt * this.cooldownRate);
+    this.rangedCd = Math.max(0, this.rangedCd - dt * this.cooldownRate);
     if (this.meleeT < 0) {
       if (this.leapT < 0 && this.roarT < 0) this.pose.pitch *= Math.exp(-10 * dt);
       this.pose.dip += ((this.crouch ? 35 : 0) - this.pose.dip) * (1 - Math.exp(-10 * dt));

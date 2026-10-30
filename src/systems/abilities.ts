@@ -1,21 +1,21 @@
 import { CONFIG } from '../config';
 
-export type ActiveId = 'leap' | 'dash' | 'roar';
+export type ActiveId = 'leap' | 'dash' | 'roar' | 'bubble';
 /** Abilities that need a ground point picked before they fire (Dash fires straight ahead instead). */
 export type AimId = 'leap';
 export type AbilityView = { id: ActiveId; ready: boolean; cdFrac: number; aiming: boolean };
 
 /** Button order, left to right. */
-const IDS: readonly ActiveId[] = ['leap', 'dash', 'roar'];
+const IDS: readonly ActiveId[] = ['leap', 'dash', 'roar', 'bubble'];
 
 /**
- * Active abilities: Leap is owned from the start; Dash and Roar are owned once picked at a level-up
+ * Active abilities: Leap is owned from the start; Dash, Roar and Shield Bubble are owned once picked at a level-up
  * (rank ≥ 1), and higher ranks shorten their cooldown. Also tracks Leap's aim mode.
  */
 export class Abilities {
   aiming: AimId | null = null;
-  private cd: Record<ActiveId, number> = { leap: 0, dash: 0, roar: 0 };
-  private rank: Record<ActiveId, number> = { leap: 1, dash: 0, roar: 0 };
+  private cd: Record<ActiveId, number> = { leap: 0, dash: 0, roar: 0, bubble: 0 };
+  private rank: Record<ActiveId, number> = { leap: 1, dash: 0, roar: 0, bubble: 0 };
 
   setRank(id: ActiveId, rank: number): void {
     this.rank[id] = rank;
@@ -30,7 +30,12 @@ export class Abilities {
     return this.unlocked(id) && this.cd[id] <= 0;
   }
 
+  /** Seconds from firing to ready again. Shield Bubble's counts from when it goes up: its rank's duration plus cooldown. */
   private cooldown(id: ActiveId): number {
+    if (id === 'bubble') {
+      const B = CONFIG.passives.bubble;
+      return B.duration[this.rank.bubble]! + B.cooldown[this.rank.bubble]!;
+    }
     return CONFIG.abilities[id].cooldown * (CONFIG.abilities.rankCooldown[this.rank[id]] ?? 1);
   }
 
@@ -69,8 +74,8 @@ export class Abilities {
 
   /** New run: cooldowns cleared, only Leap owned. */
   reset(): void {
-    this.cd = { leap: 0, dash: 0, roar: 0 };
-    this.rank = { leap: 1, dash: 0, roar: 0 };
+    this.cd = { leap: 0, dash: 0, roar: 0, bubble: 0 };
+    this.rank = { leap: 1, dash: 0, roar: 0, bubble: 0 };
     this.aiming = null;
   }
 }

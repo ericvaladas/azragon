@@ -964,7 +964,8 @@ export class WendigoBody implements MonsterBody {
     if (f.melee) {
       this.root.updateMatrixWorld();
       this.frame.worldToLocal(_aim.copy(f.melee.target));
-      _aim.y = FIST_R;
+      // On the ground the fist lands at its own radius; a low flyer raises the strike to its height.
+      _aim.y = Math.max(FIST_R, _aim.y);
       // The kind the game decided (and deals damage as); only a frame without one falls back to the same rule here.
       if (strikeStarted(this.meleePrevT, f.melee.t)) this.strikeKind = f.melee.kind ?? fistKind(Math.atan2(_aim.x, _aim.z), G.fist.frontHalf);
       this.meleePrevT = f.melee.t;
@@ -1433,7 +1434,7 @@ export class WendigoBody implements MonsterBody {
       const r = r0 + (BACKHAND_SWEEP_R - r0) * k;
       // Low early (ease-out), so the claw sweeps round under the turning head.
       const ky = 1 - (1 - k) * (1 - k);
-      return o.set(Math.sin(a) * r + _lunge.x, _raise.y + (FIST_R + 30 - _raise.y) * ky, Math.cos(a) * r + _lunge.z);
+      return o.set(Math.sin(a) * r + _lunge.x, _raise.y + (Math.max(FIST_R + 30, _aim.y) - _raise.y) * ky, Math.cos(a) * r + _lunge.z);
     };
     if (t < T.windup) out.lerpVectors(gait, _raise, smooth(0, 1, t / T.windup));
     else if (t < T.impact + hold) at(backhandSweep(t, T, hold), out);

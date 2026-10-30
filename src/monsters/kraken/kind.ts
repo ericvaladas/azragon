@@ -12,7 +12,6 @@ export const KRAKEN: MonsterKind = {
   moves: [
     { label: 'Tentacle Slam' },
     { label: 'Hurl' },
-    { label: 'Tentacle Lash' },
   ],
   stats: K.stats,
   melee: { kind: 'multi' },
@@ -21,14 +20,12 @@ export const KRAKEN: MonsterKind = {
   tailSweep: false,
   /** Ink Cloud fires about a third as often as Spine Shield. */
   interceptRate: 1 / 3,
-  signatures: ['acid', 'storm', 'chitin', 'frenzy', 'spines', 'swat', 'nova', 'mortar', 'grip'],
+  signatures: ['storm', 'chitin', 'spines', 'swat', 'nova', 'mortar', 'grip'],
   abilityText: {
-    acid: { desc: (r) => (r === 1 ? 'Planted arms leave corrosive ink slicks' : 'Bigger, longer-lasting slicks') },
-    storm: { desc: (r) => (r === 1 ? 'Every free arm hurls debris every 6s' : '+3 chunks, throws faster') },
+    storm: { desc: (r) => (r === 1 ? 'Every free arm hurls debris every 8s' : '+2 chunks, throws faster') },
     chitin: { desc: () => '+15% chance to deflect hits' },
-    frenzy: { desc: () => '+6 HP per kill' },
     spines: { desc: (r) => (r === 1 ? 'Ink smothers incoming shells and missiles' : 'Thicker, wider ink') },
-    swat: { desc: () => 'Lashes flyers faster, harder, more at once' },
+    swat: { desc: (r) => (r === 1 ? 'Tentacle Lash: whips nearby flyers' : 'Lashes faster, harder, more at once') },
     nova: { desc: (r) => (r === 1 ? 'All arms spin out every 7s, hitting everything near' : 'Wider, stronger, more often') },
     mortar: { desc: (r) => (r === 1 ? 'Lobs chunks at artillery, SAMs, trucks' : 'More chunks, bigger splash') },
     grip: { desc: (r) => (r === 1 ? 'Planted arms crush an enemy beside them' : 'Wider, harder grip') },

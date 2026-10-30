@@ -77,17 +77,17 @@ describe('Progression abilities', () => {
   it('ranks abilities up on choose and shows the next rank on the card', () => {
     const p = new Progression(mulberry32(7));
     p.addExp(expToNext(1));
-    expect(p.choose('acid')).toBe(true);
-    expect(p.ranks.acid).toBe(1);
+    expect(p.choose('nova')).toBe(true);
+    expect(p.ranks.nova).toBe(1);
     p.addExp(expToNext(2));
     for (let i = 0; i < 50; i++) {
-      const offer = p.offer().find((o) => o.id === 'acid');
+      const offer = p.offer().find((o) => o.id === 'nova');
       if (offer) {
-        expect(offer.title).toBe(`${ABILITIES.acid.title} II`);
+        expect(offer.title).toBe(`${ABILITIES.nova.title} II`);
         return;
       }
     }
-    throw new Error('acid never offered');
+    throw new Error('nova never offered');
   });
 
   it('never offers an ability at max rank', () => {
@@ -128,23 +128,23 @@ describe('Progression abilities', () => {
   it('reset clears ranks', () => {
     const p = new Progression(mulberry32(10));
     p.addExp(expToNext(1));
-    p.choose('frenzy');
+    p.choose('chitin');
     p.reset();
-    expect(p.ranks.frenzy).toBe(0);
+    expect(p.ranks.chitin).toBe(0);
   });
 });
 
 describe('Progression pools', () => {
   const pool: PoolSpec = {
-    signatures: ['acid', 'nova'],
-    abilityText: { acid: { title: 'Radiant Wake', desc: () => 'glow' } },
+    signatures: ['storm', 'nova'],
+    abilityText: { storm: { title: 'Radiant Wake', desc: () => 'glow' } },
     upgradeText: { vitality: { title: 'Ironscale Hide' } },
   };
 
   it('offers only the shared abilities, the pool\'s signatures, and stat upgrades', () => {
     const p = new Progression(mulberry32(11));
     p.setPool(pool);
-    const allowed = new Set<string>([...SHARED_ABILITIES, 'acid', 'nova', 'damage', 'attackSpeed', 'vitality', 'regen', 'stompRadius', 'multiShot', 'moveSpeed']);
+    const allowed = new Set<string>([...SHARED_ABILITIES, 'storm', 'nova', 'damage', 'attackSpeed', 'vitality', 'regen', 'stompRadius', 'multiShot', 'moveSpeed']);
     for (let i = 0; i < 300; i++) for (const o of p.offer()) expect(allowed.has(o.id)).toBe(true);
   });
 
@@ -153,7 +153,7 @@ describe('Progression pools', () => {
     p.setPool(pool);
     const seen = new Map<string, string>();
     for (let i = 0; i < 300; i++) for (const o of p.offer()) seen.set(o.id, o.title);
-    expect(seen.get('acid')).toBe('Radiant Wake I');
+    expect(seen.get('storm')).toBe('Radiant Wake I');
     expect(seen.get('vitality')).toBe('Ironscale Hide');
     expect(seen.get('nova')).toBe('Area Pulse I');
   });
@@ -163,7 +163,7 @@ describe('Progression pools', () => {
     p.setPool(pool);
     p.addExp(1e6);
     expect(p.choose('brood')).toBe(false);
-    expect(p.choose('acid')).toBe(true);
+    expect(p.choose('nova')).toBe(true);
   });
 });
 
@@ -171,7 +171,7 @@ describe('Progression.offer(all)', () => {
   it('lists every upgrade and every pool ability below max rank, in a fixed order', () => {
     const p = new Progression(mulberry32(3));
     const ids = p.offer(true).map((o) => o.id);
-    const pool = (Object.keys(ABILITIES) as AbilityId[]).filter((id) => id !== 'meltdown' && id !== 'grip' && id !== 'core');
+    const pool = (Object.keys(ABILITIES) as AbilityId[]).filter((id) => id !== 'meltdown' && id !== 'grip');
     expect(ids).toEqual([...Object.keys(UPGRADES), ...pool]);
     expect(p.offer(true).map((o) => o.id)).toEqual(ids);
   });
@@ -186,11 +186,12 @@ describe('Progression.offer(all)', () => {
   });
 });
 
-describe('Damage When Hurt ability', () => {
-  it('exists with a title, and the Insect\'s default pool never offers it', () => {
-    expect(ABILITIES.core.title).toBe('Damage When Hurt');
+describe('Haste When Hurt ability', () => {
+  it('exists with a title and is offered to every monster', () => {
+    expect(ABILITIES.core.title).toBe('Haste When Hurt');
+    expect(SHARED_ABILITIES).toContain('core');
     const p = new Progression(mulberry32(5));
-    expect(p.offer(true).map((o) => o.id)).not.toContain('core');
+    expect(p.offer(true).map((o) => o.id)).toContain('core');
   });
 });
 

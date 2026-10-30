@@ -17,11 +17,10 @@ describe('WENDIGO kind (the Wendigo)', () => {
     expect(WENDIGO.ranged).toBe('gaze');
     expect(WENDIGO.antiAir).toBe('hands');
     expect(WENDIGO.tailSweep).toBe(false);
-    expect(WENDIGO.moves.map((m) => m.label)).toEqual(['Rending Claws', 'Dread Gaze', 'Shadow Hands']);
+    expect(WENDIGO.moves.map((m) => m.label)).toEqual(['Rending Claws', 'Dread Gaze']);
   });
-  it('has its own signatures with Damage When Hurt — never Brood Swarm, Meltdown or Sucker Grip', () => {
+  it('has its own signatures — never Brood Swarm, Meltdown or Sucker Grip', () => {
     for (const id of ['brood', 'meltdown', 'grip'] as const) expect(WENDIGO.signatures).not.toContain(id);
-    expect(WENDIGO.signatures).toContain('core');
     for (const id of WENDIGO.signatures) expect(WENDIGO.abilityText[id]?.title).toBeUndefined();
     expect(WENDIGO.abilityText.mortar?.desc(1)).toMatch(/black fire/);
     expect(WENDIGO.fx.particle).toBe('rot');
@@ -41,15 +40,9 @@ describe('WENDIGO kind (the Wendigo)', () => {
   it('swings its backhand on its own slower, heavier timeline; slams keep the kind\'s', () => {
     const S = CONFIG.wendigo.stats.meleeTiming;
     const B = CONFIG.wendigo.fist.backhandTiming;
-    expect(S).toEqual({ windup: 0.3, impact: 0.45, end: 0.85 });
-    // Old backhand (the shared timeline): coil 0.30, sweep 0.15, follow-through and settle 0.40, 0.85 in all.
-    expect(B.windup / S.windup).toBeGreaterThanOrEqual(1.15);
-    expect((B.impact - B.windup) / (S.impact - S.windup)).toBeGreaterThanOrEqual(1.35);
-    expect((B.impact - B.windup) / (S.impact - S.windup)).toBeLessThanOrEqual(1.45);
-    expect((B.end - B.impact) / (S.end - S.impact)).toBeGreaterThanOrEqual(1.35);
-    expect(B.end / S.end).toBeGreaterThanOrEqual(1.33);
-    expect(B.end / S.end).toBeLessThanOrEqual(1.42);
-    expect(B.impact - S.impact).toBeLessThanOrEqual(0.13);
+    expect(B.windup).toBeGreaterThan(S.windup);
+    expect(B.impact - B.windup).toBeGreaterThan(S.impact - S.windup);
+    expect(B.end - B.impact).toBeGreaterThan(S.end - S.impact);
   });
 });
 

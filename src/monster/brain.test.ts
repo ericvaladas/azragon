@@ -39,6 +39,25 @@ describe('decide', () => {
     expect(d.attack).toBe('ranged');
     expect(d.attackOn).toBe('order');
   });
+  it('walks up to an ordered building without firing at it, firing at enemies in range instead', () => {
+    const building: BrainTarget = { ...ground(900), building: true };
+    const d = decide({ ...base, order: { kind: 'attack', target: building } });
+    expect(d.moveTo).toEqual({ x: 900, z: 0 });
+    expect(d.attack).toBeNull();
+    const withEnemy = decide({ ...base, order: { kind: 'attack', target: building }, auto: ground(600) });
+    expect(withEnemy.attack).toBe('ranged');
+    expect(withEnemy.attackOn).toBe('auto');
+  });
+  it('strikes an ordered building in melee once in reach', () => {
+    const d = decide({ ...base, order: { kind: 'attack', target: { ...ground(250), building: true } } });
+    expect(d.attack).toBe('melee');
+    expect(d.meleeAt).toEqual({ x: 250, z: 0 });
+  });
+  it('strikes an ordered low flyer in melee once in reach, like a ground target', () => {
+    const d = decide({ ...base, order: { kind: 'attack', target: { ...air(250), lowFlyer: true } } });
+    expect(d.attack).toBe('melee');
+    expect(d.meleeAt).toEqual({ x: 250, z: 0 });
+  });
   it('spikes airborne targets in range without moving', () => {
     const d = decide({ ...base, order: { kind: 'attack', target: air(1200) } });
     expect(d.attack).toBe('ranged');

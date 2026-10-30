@@ -214,7 +214,7 @@ export const CONFIG = {
     height: 550 * MONSTER_SCALE,
     maxHp: 1000,
     regenPerSec: 4,
-    moveSpeed: 130,
+    moveSpeed: 150,
     turnRate: 2.4,
     /** Backing up (S held) runs at this fraction of the walk speed. */
     reverseSpeed: 0.5,
@@ -229,7 +229,7 @@ export const CONFIG = {
     /** Leg-strike reach from the monster's root. */
     meleeRange: 480,
     meleeRadius: 170 * MONSTER_SCALE,
-    meleeDamage: 90,
+    meleeDamage: 112,
     meleeCooldown: 0.7,
     meleeWindup: 0.3,
     spikeRange: 1700,
@@ -243,7 +243,7 @@ export const CONFIG = {
   kaiju: {
     stats: {
       maxHp: 1250,
-      moveSpeed: 140,
+      moveSpeed: 161,
       turnRate: 1.9,
       damageMult: 1.15,
       strideLength: 300,
@@ -252,7 +252,7 @@ export const CONFIG = {
       footDamage: 150,
       meleeRange: 420,
       meleeRadius: 0,
-      meleeDamage: 115,
+      meleeDamage: 144,
       meleeCooldown: 0.9,
       meleeTiming: { windup: 0.25, impact: 0.4, end: 0.8 },
       rangedRange: 1300,
@@ -291,7 +291,7 @@ export const CONFIG = {
   kraken: {
     stats: {
       maxHp: 1100,
-      moveSpeed: 125,
+      moveSpeed: 144,
       turnRate: 2.0,
       damageMult: 1.1,
       /** One crawl cycle covers this many model units (each front arm pulls the mantle half of it). */
@@ -302,7 +302,7 @@ export const CONFIG = {
       /** Slam reach (world m) — also the brain's melee range for attack orders. */
       meleeRange: 400,
       meleeRadius: 90,
-      meleeDamage: 105,
+      meleeDamage: 131,
       meleeCooldown: 1.4,
       meleeTiming: { windup: 0.3, impact: 0.45, end: 0.85 },
       rangedRange: 1400,
@@ -333,7 +333,7 @@ export const CONFIG = {
     scale: 0.9,
     stats: {
       maxHp: 1450,
-      moveSpeed: 110,
+      moveSpeed: 127,
       turnRate: 1.6,
       damageMult: 1.2,
       /** One knuckle-walk cycle (all four limbs) covers this many model units. */
@@ -344,12 +344,12 @@ export const CONFIG = {
       /** Fist reach (world m) — also the brain's melee range for attack orders. */
       meleeRange: 324,
       meleeRadius: 110,
-      meleeDamage: 145,
+      meleeDamage: 181,
       meleeCooldown: 1.2,
-      meleeTiming: { windup: 0.3, impact: 0.45, end: 0.85 },
-      rangedRange: 1400,
+      meleeTiming: { windup: 0.2, impact: 0.33, end: 0.7 },
+      rangedRange: 1000,
       rangedDamage: 90,
-      rangedCooldown: 2.0,
+      rangedCooldown: 3.0,
       headHeight: 432,
       /** Measured standing bounding box (world m). */
       size: { width: 425, length: 408, height: 371 },
@@ -364,7 +364,9 @@ export const CONFIG = {
       backhandHalf: 1.25,
       buildingMult: 2,
       /** The backhand's own timeline (s): a slower, heavier coil, sweep and follow-through than the slam's meleeTiming. */
-      backhandTiming: { windup: 0.36, impact: 0.57, end: 1.15 },
+      backhandTiming: { windup: 0.45, impact: 0.7, end: 1.35 },
+      /** Flyers at or below this altitude (m) are in the claws' reach (helicopters and jets; not blimps or bombers). */
+      airHeight: 300,
     },
     /**
      * Dread Gaze: the target burns `delay` s after the Wendigo looks at it, then the black fire flares over `splash` m;
@@ -414,16 +416,16 @@ export const CONFIG = {
     baseSalvo: 3, levelsPerExtra: 3, maxSalvo: 8,
   },
   passives: {
-    acid: { radius: 60, life: 3, radiusPerRank: 0.2, lifePerRank: 1, dps: 30 },
-    storm: { interval: 6, intervalStep: 1, spikes: 6, extraSpikes: 3 },
+    /** Burning ground patches (the Wendigo's black fire): damage per second to ground enemies inside one. */
+    acid: { dps: 30 },
+    storm: { interval: 8, intervalStep: 1, spikes: 4, extraSpikes: 2 },
     chitin: { perRank: 0.15 },
-    frenzy: { perRank: 6 },
     brood: { interval: 10, drones: 3, extraDrones: 2, life: 8, speed: 450, damage: 40, hitCooldown: 0.5 },
     /** Overload: absorb the next beam/orbital hit and fire it back (truck destroyed; orbital = energy blast). */
     overload: { cooldown: [0, 20, 15, 11], blastRadius: 450, blastDamage: 250, reflectDamage: 400 },
-    /** Arrays are indexed by rank (0 = not taken; Tail Swat rank 0 is the base kit). */
+    /** Arrays are indexed by rank (0 = not taken). */
     spines: { rate: [0, 2, 3, 4.5], radius: [0, 500, 600, 700] },
-    swat: { cooldown: [2.5, 2, 1.6, 1.3], range: [450, 500, 550, 600], damage: [120, 180, 240, 320], targets: [1, 2, 3, 4], headHeight: 380 },
+    swat: { cooldown: [0, 3.75, 2.85, 1.95], range: [0, 450, 525, 600], damage: [0, 120, 220, 320], targets: [0, 1, 2, 3], headHeight: 380 },
     nova: { interval: [0, 7, 6, 5], radius: [0, 600, 700, 800], damage: [0, 80, 120, 170] },
     mortar: { interval: [0, 4, 3.5, 3], globs: [0, 2, 3, 4], splash: [0, 90, 110, 130], damage: 90, range: 1800, flightTime: 1.2, arc: 300 },
     bubble: { duration: [0, 3, 3.5, 4], cooldown: [0, 25, 21, 17] },
@@ -433,10 +435,10 @@ export const CONFIG = {
     /** Sucker Grip (Kraken): each plant crushes the nearest ground enemy within radius[rank] of the tip. */
     grip: { radius: [0, 140, 180, 220], damage: [0, 90, 140, 200] },
     /**
-     * Ravenous Hunger (Wendigo): heat 0..1 rises by (damage taken / max HP) × gain and cools by `cool` per second.
-     * Damage × (1 + heat × bonus[rank]); at heat ≥ auraAt a withering aura of radius[rank] deals dps[rank] to ground enemies.
+     * Haste When Hurt: heat 0..1 rises by (damage taken / max HP) × gain and cools by `cool` per second.
+     * Every cooldown recovers (1 + heat × haste[rank]) times as fast.
      */
-    core: { gain: 4, cool: 0.12, auraAt: 0.5, bonus: [0, 0.3, 0.45, 0.6], radius: [0, 260, 320, 380], dps: [0, 40, 60, 85] },
+    core: { gain: 4, cool: 0.12, haste: [0, 0.5, 0.75, 1] },
     /** Auto-shields trigger only when something is about to hit: projectiles or blimps within this range. */
     threatRange: 700,
     earlyAbilityPicks: 3,

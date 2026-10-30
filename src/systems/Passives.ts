@@ -14,7 +14,6 @@ export class Passives {
   private interceptBank = 0;
   private overloadCd = 0;
   private bubbleT = 0;
-  private bubbleCd = 0;
   private reflectT = 0;
   private reflectCd = 0;
 
@@ -32,19 +31,10 @@ export class Passives {
     return this.ranks().chitin * P.chitin.perRank;
   }
 
-  frenzyHeal(): number {
-    return this.ranks().frenzy * P.frenzy.perRank;
-  }
-
-  acidPool(): { radius: number; life: number } | null {
-    const r = this.ranks().acid;
-    if (r === 0) return null;
-    return { radius: P.acid.radius * (1 + (r - 1) * P.acid.radiusPerRank), life: P.acid.life + (r - 1) * P.acid.lifePerRank };
-  }
-
-  /** Tail Swat (base kit at rank 0): cooldown, reach from the head, damage, and how many flyers per swing. */
-  swat(): { cooldown: number; range: number; damage: number; targets: number } {
+  /** Anti-Air (a level-up pick): cooldown, reach from the head, damage, and how many flyers per swing; null until taken. */
+  swat(): { cooldown: number; range: number; damage: number; targets: number } | null {
     const r = this.ranks().swat;
+    if (r === 0) return null;
     return { cooldown: P.swat.cooldown[r]!, range: P.swat.range[r]!, damage: P.swat.damage[r]!, targets: P.swat.targets[r]! };
   }
 
@@ -59,10 +49,10 @@ export class Passives {
     return r > 0 ? { radius: P.grip.radius[r]!, damage: P.grip.damage[r]! } : null;
   }
 
-  /** Ravenous Hunger (Wendigo): max damage bonus at full heat, withering-aura radius and damage per second, or null if not taken. */
-  core(): { bonus: number; radius: number; dps: number } | null {
+  /** Haste When Hurt: extra cooldown recovery at full heat (1 + haste times as fast), or null if not taken. */
+  core(): { haste: number } | null {
     const r = this.ranks().core;
-    return r > 0 ? { bonus: P.core.bonus[r]!, radius: P.core.radius[r]!, dps: P.core.dps[r]! } : null;
+    return r > 0 ? { haste: P.core.haste[r]! } : null;
   }
 
   mortarSplash(): number {
@@ -87,22 +77,19 @@ export class Passives {
     return this.reflectT > 0;
   }
 
-  /** Auto-shields: each fires if taken, off cooldown, and `threat` (something about to hit). Returns which fired. */
-  tryShields(threat: boolean): { bubble: boolean; reflect: boolean } {
-    const r = this.ranks();
-    const out = { bubble: false, reflect: false };
-    if (!threat) return out;
-    if (r.bubble > 0 && this.bubbleCd <= 0 && this.bubbleT <= 0) {
-      this.bubbleT = P.bubble.duration[r.bubble]!;
-      this.bubbleCd = this.bubbleT + P.bubble.cooldown[r.bubble]!;
-      out.bubble = true;
-    }
-    if (r.reflect > 0 && this.reflectCd <= 0 && this.reflectT <= 0) {
-      this.reflectT = P.reflect.duration[r.reflect]!;
-      this.reflectCd = this.reflectT + P.reflect.cooldown[r.reflect]!;
-      out.reflect = true;
-    }
-    return out;
+  /** Shield Bubble (button; its cooldown is kept by Abilities): invincible for the rank's duration. */
+  startBubble(): void {
+    const r = this.ranks().bubble;
+    if (r > 0) this.bubbleT = P.bubble.duration[r]!;
+  }
+
+  /** Reflect Shield (auto): fires if taken, off cooldown, and `threat` (something about to hit). Returns whether it fired. */
+  tryReflect(threat: boolean): boolean {
+    const r = this.ranks().reflect;
+    if (!threat || r === 0 || this.reflectCd > 0 || this.reflectT > 0) return false;
+    this.reflectT = P.reflect.duration[r]!;
+    this.reflectCd = this.reflectT + P.reflect.cooldown[r]!;
+    return true;
   }
 
   /** Spine Shield shots that were actually used this frame. */
@@ -113,15 +100,17 @@ export class Passives {
   /**
    * Advance timers. Returns this frame's storm spikes, brood drones, nova pulses (0/1), mortar globs,
    * and the Spine Shield shots available (banked up to one second's worth, at least one shot; spend what you use). `interceptScale` scales the rate for the monster kind.
+   * `cdRate` (Haste When Hurt) speeds the interval timers and cooldowns; shield durations still run on `dt`.
    */
-  update(dt: number, interceptScale = 1): { storm: number; brood: number; nova: number; mortar: number; intercepts: number } {
+  update(dt: number, interceptScale = 1, cdRate = 1): { storm: number; brood: number; nova: number; mortar: number; intercepts: number } {
     const r = this.ranks();
+    const cdDt = dt * cdRate;
     let storm = 0;
     let brood = 0;
     let nova = 0;
     let mortar = 0;
     if (r.nova > 0) {
-      this.novaT += dt;
+      this.novaT += cdDt;
       const interval = P.nova.interval[r.nova]!;
       if (this.novaT >= interval) {
         this.novaT -= interval;
@@ -129,23 +118,22 @@ export class Passives {
       }
     }
     if (r.mortar > 0) {
-      this.mortarT += dt;
+      this.mortarT += cdDt;
       const interval = P.mortar.interval[r.mortar]!;
       if (this.mortarT >= interval) {
         this.mortarT -= interval;
         mortar = P.mortar.globs[r.mortar]!;
       }
     }
-    this.overloadCd = Math.max(0, this.overloadCd - dt);
+    this.overloadCd = Math.max(0, this.overloadCd - cdDt);
     this.bubbleT = Math.max(0, this.bubbleT - dt);
-    this.bubbleCd = Math.max(0, this.bubbleCd - dt);
     this.reflectT = Math.max(0, this.reflectT - dt);
-    this.reflectCd = Math.max(0, this.reflectCd - dt);
+    this.reflectCd = Math.max(0, this.reflectCd - cdDt);
     const rate = P.spines.rate[r.spines]! * interceptScale;
     this.interceptBank = Math.min(interceptCap(rate), this.interceptBank + rate * dt);
     const intercepts = Math.floor(this.interceptBank + 1e-9);
     if (r.storm > 0) {
-      this.stormT += dt;
+      this.stormT += cdDt;
       const interval = P.storm.interval - (r.storm - 1) * P.storm.intervalStep;
       if (this.stormT >= interval) {
         this.stormT -= interval;
@@ -153,7 +141,7 @@ export class Passives {
       }
     }
     if (r.brood > 0) {
-      this.broodT += dt;
+      this.broodT += cdDt;
       if (this.broodT >= P.brood.interval) {
         this.broodT -= P.brood.interval;
         brood = P.brood.drones + (r.brood - 1) * P.brood.extraDrones;
@@ -168,7 +156,7 @@ export class Passives {
     this.novaT = 0;
     this.mortarT = 0;
     this.interceptBank = 0;
-    this.bubbleT = this.bubbleCd = this.reflectT = this.reflectCd = 0;
+    this.bubbleT = this.reflectT = this.reflectCd = 0;
     this.overloadCd = 0;
   }
 }

@@ -7,7 +7,7 @@ export type InputHandlers = {
   hover(x: number, y: number): void;
   wheel(deltaY: number): void;
   /** Ability key pressed; return true when the game used it (then the browser default is suppressed). */
-  key(id: 'leap' | 'dash' | 'roar'): boolean | void;
+  key(id: 'leap' | 'dash' | 'roar' | 'bubble'): boolean | void;
   /** A plain key press; return true when it skipped the intro (then it isn't also an ability key). */
   skipKey(): boolean;
   /** Browse/confirm key (select screen, level-up cards); return true when the menu used it. */

@@ -3,9 +3,3 @@ export function regen(hp: number, maxHp: number, perSec: number, dt: number): nu
   if (hp <= 0) return 0;
   return Math.min(maxHp, hp + perSec * dt);
 }
-
-/** Feeding Frenzy heal on a kill, capped at maxHp. A dead monster is never healed. */
-export function healOnKill(hp: number, maxHp: number, amount: number, alive: boolean): number {
-  if (!alive) return hp;
-  return Math.min(maxHp, hp + amount);
-}

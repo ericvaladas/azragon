@@ -46,7 +46,7 @@ import { mulberry32 } from './util/rng';
 import { forcedCity, pickCity } from './cities';
 import type { CityStyle } from './cities/types';
 import { Progression, expToNext } from './systems/Progression';
-import { healOnKill, regen } from './monster/vitals';
+import { regen } from './monster/vitals';
 import { DebugOverlay } from './systems/DebugOverlay';
 import { Abilities, type AbilityView, type ActiveId } from './systems/abilities';
 import { Shockwave } from './systems/Shockwave';
@@ -67,9 +67,8 @@ import { assignStrikes } from './monsters/kraken/strikes';
 import type { ArmStrike } from './monsters/kraken/TentacleArms';
 import { INSECT } from './monsters/insect/kind';
 import { backhandYaw, bearingTo, fistKind, type FistKind } from './monsters/wendigo/fist';
-import { auraOn, coolHeat, coreDamageMult, heatAfterHit } from './monsters/wendigo/heat';
+import { coolHeat, coreCooldownRate, heatAfterHit } from './systems/heat';
 import { ShadowHands } from './monsters/wendigo/ShadowHands';
-import { WitherAura } from './monsters/wendigo/WitherAura';
 import { RotRing } from './monsters/wendigo/RotRing';
 import { burnIntensity, GAZE, gazing } from './monsters/wendigo/gaze';
 import { KINDS, ROSTER_ORDER, isMonsterId, rosterEntries } from './monsters/roster';
@@ -184,11 +183,10 @@ export class GameScene {
     }
     return surfaceAt(this.netHF, lx, lz);
   };
-  /** Ravenous Hunger heat 0..1 (Wendigo); always 0 when the passive isn't taken. */
+  /** Haste When Hurt heat 0..1; always 0 when the passive isn't taken. */
   private heat = 0;
-  /** Wendigo: Shadow Hands (anti-air) and Ravenous Hunger's withering aura. */
+  /** Wendigo: Shadow Hands (anti-air). */
   private hands: ShadowHands;
-  private wither: WitherAura;
   private rotRing: RotRing;
   /** Dread Gaze and Evil Eye: targets burning with black fire until it flares. */
   /** The Insect's ranged target (the one its spikes go to): its tail aims the stinger there. */
@@ -197,6 +195,8 @@ export class GameScene {
   /** Rending Claws in flight: its kind and side (+1 left/+X, −1 right), both latched when the strike starts. */
   private fistStrike: FistKind = 'slam';
   private fistSide = 1;
+  /** The Rending Claws strike's target, kept so a slam at a low flyer follows it to the impact. */
+  private fistTarget: Target | null = null;
   private shieldFx: ShieldFx;
   private passives: Passives;
   private acid: AcidPools;
@@ -234,7 +234,6 @@ export class GameScene {
     this.projectiles = new Projectiles(this.scene);
     this.breath = new BreathBeam(this.scene);
     this.hands = new ShadowHands(this.scene);
-    this.wither = new WitherAura(this.scene);
     this.rotRing = new RotRing(this.scene);
     this.projectiles.onTrail = this.onShotTrail;
     this.projectiles.onHit = this.onProjectileHit;
@@ -269,8 +268,6 @@ export class GameScene {
       }
       this.rig.addTrauma(0.06);
       this.footCrush(p);
-      const pool = this.passives.acidPool();
-      if (pool && this.state === 'playing') this.acid.add(p, pool.radius, pool.life);
       const grip = this.passives.grip();
       if (grip && this.state === 'playing') {
         const victim = nearestInRange({ x: p.x, z: p.z }, this.enemyTargets().filter((t) => !t.airborne), grip.radius);
@@ -355,7 +352,7 @@ export class GameScene {
   chooseUpgrade(id: string, seq: number): void {
     if (this.state !== 'levelup' || !this.progression.choose(id, seq)) return;
     if (this.cheatLevels > 0) this.cheatLevels--;
-    if (id === 'dash' || id === 'roar') this.abilities.setRank(id, this.progression.ranks[id]);
+    if (id === 'dash' || id === 'roar' || id === 'bubble') this.abilities.setRank(id, this.progression.ranks[id]);
     const s = this.progression.stats;
     const m = this.monster;
     const newMax = Math.round(this.ms.maxHp * s.maxHpMult);
@@ -461,7 +458,6 @@ export class GameScene {
     this.heat = 0;
     this.monster.heat = 0;
     this.hands.clear();
-    this.wither.clear();
     this.rotRing.clear();
     this.gazes = [];
     this.shieldFx.clear();
@@ -555,12 +551,16 @@ export class GameScene {
     this.breath.clear();
   }
 
-  /** All of the monster's damage: upgrades × the creature's own multiplier × Meltdown × Ravenous Hunger heat. */
+  /** All of the monster's damage: upgrades × the creature's own multiplier × Meltdown. */
   private dmgMult(): number {
     const m = this.monster;
+    return this.progression.stats.damageMult * m.kind.stats.damageMult * this.passives.meltdown(m.hp / m.maxHp).damage;
+  }
+
+  /** How many times as fast every cooldown recovers: Haste When Hurt heat; 1 without it. */
+  private cdRate(): number {
     const core = this.passives.core();
-    const heat = core ? coreDamageMult(this.heat, core.bonus) : 1;
-    return this.progression.stats.damageMult * m.kind.stats.damageMult * this.passives.meltdown(m.hp / m.maxHp).damage * heat;
+    return core ? coreCooldownRate(this.heat, core.haste) : 1;
   }
 
   /** Ranged recharge: upgrades × Meltdown. */
@@ -721,7 +721,11 @@ export class GameScene {
       this.elapsed += dt;
       if (this.state === 'playing') {
         this.runTime += dt;
-        this.abilities.tick(dt);
+        // Cooldowns recover on their own clock, sped up by Haste When Hurt.
+        const cdRate = this.cdRate();
+        const cdDt = dt * cdRate;
+        this.monster.cooldownRate = cdRate;
+        this.abilities.tick(cdDt);
         if (this.pendingSnare > 0 && !this.monster.airborne) {
           this.startSnare(this.pendingSnare);
           this.pendingSnare = 0;
@@ -734,17 +738,16 @@ export class GameScene {
           const at = waveCenter({ x: mp.x, z: mp.z }, this.runaway.dir);
           for (const p of ringOnRoads(this.city.style, at, R.waveCount, R.waveRadius)) this.enemies.get<TankFleet>('tank').spawnAt(p.x, p.z, this.ctx);
         }
-        const fire = this.passives.update(dt, this.monster.kind.interceptRate ?? 1);
+        const fire = this.passives.update(dt, this.monster.kind.interceptRate ?? 1, cdRate);
         if (fire.storm > 0) this.spikeStorm(fire.storm);
         if (fire.brood > 0) this.brood.spawn(fire.brood, this.monster.launchOrigin(new THREE.Vector3()));
         if (fire.nova > 0) this.venomNova();
         if (fire.mortar > 0) this.acidMortar(fire.mortar);
         if (fire.intercepts > 0) this.passives.spendIntercepts(this.spineShield(fire.intercepts));
-        this.tailSwat(dt);
-        this.tailSweep(dt);
+        this.tailSwat(cdDt);
+        this.tailSweep(cdDt);
         this.updateCore(dt);
-        const shields = this.passives.tryShields(this.threatImminent());
-        if (shields.bubble || shields.reflect) this.rig.addTrauma(0.1);
+        if (this.passives.tryReflect(this.threatImminent())) this.rig.addTrauma(0.1);
         if (this.passives.reflectActive()) this.reflectProjectiles();
         if (this.monster.dashing) this.dashCrush();
         if (!this.openingDone && this.runTime >= CONFIG.opening.time) {
@@ -849,6 +852,12 @@ export class GameScene {
     if ((id === 'leap' || id === 'dash') && this.snare.blocksMobility) return;
     if (id === 'roar') {
       if (this.abilities.trigger('roar')) this.roar();
+      return;
+    }
+    if (id === 'bubble') {
+      if (this.passives.bubbleActive() || !this.abilities.trigger('bubble')) return;
+      this.passives.startBubble();
+      this.rig.addTrauma(0.1);
       return;
     }
     if (id === 'dash') {
@@ -979,8 +988,8 @@ export class GameScene {
    * Tail Sweep (Kaiju base kit): on its own cooldown, whip the tail at the nearest ground enemy beside or
    * behind; when it lands, everything on the ground in a wedge toward that side takes the hit. Never stops walking.
    */
-  private tailSweep(dt: number): void {
-    this.tailCd = Math.max(0, this.tailCd - dt);
+  private tailSweep(cdDt: number): void {
+    this.tailCd = Math.max(0, this.tailCd - cdDt);
     const m = this.monster;
     if (!m.kind.tailSweep || this.tailCd > 0 || m.airborne || m.tailSweeping || !m.alive) return;
     const TS = CONFIG.kaiju.tail;
@@ -1007,36 +1016,26 @@ export class GameScene {
   }
 
   /**
-   * Ravenous Hunger: heat (hunger) cools; a dark miasma of smoke gathers about the body, thicker the hungrier it is;
-   * above the threshold a withering aura blackens the ground around it and hurts ground enemies close by.
+   * Haste When Hurt: heat cools; a haze gathers about the body, thicker the hotter it is (dark miasma on the Wendigo,
+   * smoke on the others).
    */
   private updateCore(dt: number): void {
     const core = this.passives.core();
     const K = CONFIG.passives.core;
     this.heat = core ? coolHeat(this.heat, dt, K.cool) : 0;
     this.monster.heat = this.heat;
-    const p = this.monster.position;
-    const on = core !== null && auraOn(this.heat, K.auraAt);
-    this.wither.update(dt, p, on && core ? core.radius : 0);
     if (!core) return;
+    const p = this.monster.position;
     const sc = CONFIG.monster.scale;
+    const wendigo = this.monster.kind.id === 'wendigo';
+    const haze = wendigo ? 'shade' : 'smoke';
     for (let n = Math.floor(dt * 60 * this.heat * this.heat + Math.random()); n > 0; n--) {
       const a = Math.random() * Math.PI * 2;
       const r = (40 + Math.random() * 220) * sc;
       const y = (60 + Math.random() * 460) * sc;
-      this.particles.emit('shade', this.tmpV.set(p.x + Math.sin(a) * r, p.y + y, p.z + Math.cos(a) * r), 1, 0.3);
+      this.particles.emit(haze, this.tmpV.set(p.x + Math.sin(a) * r, p.y + y, p.z + Math.cos(a) * r), 1, 0.3);
     }
-    if (this.heat > 0.85 && Math.random() < dt * 6) this.particles.emit('mist', this.bodyPoint(380), 1, 0.4);
-    if (!on) return;
-    const dmg = core.dps * dt * this.dmgMult();
-    for (const t of footTargets({ x: p.x, z: p.z }, core.radius, this.enemyTargets())) t.applyDamage(dmg);
-    if (Math.random() < dt * 14) {
-      // Rot creeps along the rim and smoke rises off the dead ground.
-      const a = Math.random() * Math.PI * 2;
-      const rim = Math.random() < 0.6;
-      const r = rim ? core.radius * (0.85 + Math.random() * 0.15) : Math.random() * core.radius;
-      this.particles.emit(rim ? 'rot' : 'shade', this.tmpV.set(p.x + Math.sin(a) * r, 8, p.z + Math.cos(a) * r), 1, 0.35);
-    }
+    if (wendigo && this.heat > 0.85 && Math.random() < dt * 6) this.particles.emit('mist', this.bodyPoint(380), 1, 0.4);
   }
 
   /** Head-height point the tail swats around and spines fire from (world space). */
@@ -1044,11 +1043,12 @@ export class GameScene {
     return this.monster.position.clone().setY(this.monster.position.y + height * CONFIG.monster.scale);
   }
 
-  /** Base kit: the tail lashes at the nearest flyers near the head on a rank-based cooldown. */
-  private tailSwat(dt: number): void {
-    this.swatCd = Math.max(0, this.swatCd - dt);
+  /** Anti-Air (once picked): the tail lashes at the nearest flyers near the head on a rank-based cooldown (`cdDt`: cooldown time). */
+  private tailSwat(cdDt: number): void {
+    this.swatCd = Math.max(0, this.swatCd - cdDt);
     if (this.swatCd > 0 || this.monster.airborne || this.monster.swatting) return;
     const sw = this.passives.swat();
+    if (!sw) return;
     const head = this.bodyPoint(this.ms.headHeight);
     const flyers = this.enemyTargets().filter((t) => t.airborne && t.isAlive());
     const hits = nearestWithin(head, sw.range, flyers, sw.targets, (t) => t.position);
@@ -1393,7 +1393,17 @@ export class GameScene {
   };
 
   private toBrain(t: Target): BrainTarget {
-    return { x: t.position.x, z: t.position.z, radius: t.radius, airborne: t.airborne, alive: t.isAlive() };
+    return { x: t.position.x, z: t.position.z, radius: t.radius, airborne: t.airborne, alive: t.isAlive(), building: t.kind === 'building', lowFlyer: this.clawReaches(t) };
+  }
+
+  /** Rending Claws reach this flyer: it is airborne at or below CONFIG.wendigo.fist.airHeight (the Wendigo only). */
+  private clawReaches(t: Target): boolean {
+    return this.monster.kind.melee.kind === 'fist' && t.airborne && t.position.y <= CONFIG.wendigo.fist.airHeight;
+  }
+
+  /** Live flyers within the claws' reach overhead (none for monsters whose melee stays on the ground). */
+  private lowFlyers(): Target[] {
+    return this.enemyTargets().filter((t) => t.isAlive() && this.clawReaches(t));
   }
 
   /** A landed foot damages buildings and ground enemies under it. */
@@ -1439,6 +1449,13 @@ export class GameScene {
       const at = { x: p.x, z: p.z };
       this.city.forEachStandingInRadius(at, r, (t) => t.applyDamage(dmg * F.buildingMult));
       for (const t of footTargets(at, r, this.enemyTargets())) t.applyDamage(dmg);
+      // Low flyers: any around the strike point, and the struck flyer itself if it is still within the claws' reach.
+      const reach = this.ms.meleeRange * s.stompRadiusMult;
+      for (const t of this.lowFlyers()) {
+        const near = Math.hypot(t.position.x - at.x, t.position.z - at.z) <= r + t.radius;
+        const struck = t === this.fistTarget && Math.hypot(t.position.x - from.x, t.position.z - from.z) <= reach + t.radius;
+        if (near || struck) this.clawFlyer(t, dmg);
+      }
       this.particles.ring('dust', p, r, 16);
       // Rending Claws: a spray of dark blood mist and clots of rot.
       this.particles.emit('mist', this.tmpV.copy(p).setY(20), 9, 1.1);
@@ -1450,6 +1467,7 @@ export class GameScene {
     const reach = this.ms.meleeRange * s.stompRadiusMult;
     const yaw = backhandYaw(m.yaw, this.fistSide, F.backhandCenter);
     for (const t of arcTargets(from, yaw, reach, F.backhandHalf, this.enemyTargets())) t.applyDamage(dmg);
+    for (const t of this.lowFlyers()) if (inArc(from, yaw, reach, F.backhandHalf, t.position, t.radius)) this.clawFlyer(t, dmg);
     const buildings: Target[] = [];
     this.city.forEachStandingInRadius(from, reach, (t) => buildings.push(t));
     for (const t of arcTargets(from, yaw, reach, F.backhandHalf, buildings)) t.applyDamage(dmg * F.buildingMult);
@@ -1462,6 +1480,13 @@ export class GameScene {
       this.particles.emit('debris', this.tmpV.setY(15), 3, 1);
     }
     this.rig.addTrauma(0.3);
+  }
+
+  /** Rending Claws rake a low flyer out of the air. */
+  private clawFlyer(t: Target, dmg: number): void {
+    t.applyDamage(dmg);
+    this.particles.emit('mist', t.position, 8, 1);
+    this.particles.emit('shade', t.position, 6, 0.9);
   }
 
   private meleeImpact(p: THREE.Vector3): void {
@@ -1511,11 +1536,11 @@ export class GameScene {
         : this.enemyTargets();
       const auto = nearestInRange(pos, rangedPool, this.ms.rangedRange);
       if (m.kind.ranged === 'spikes') {
-        const o = this.order?.kind === 'attack' ? this.order.target : null;
+        const o = this.order?.kind === 'attack' && this.order.target.kind !== 'building' ? this.order.target : null;
         const orderedInRange = o && o.isAlive() && Math.hypot(o.position.x - pos.x, o.position.z - pos.z) <= this.ms.rangedRange ? o : null;
         this.spikeAim = orderedInRange ?? auto;
       } else this.spikeAim = null;
-      const autoMelee = nearestInRange(pos, this.enemyTargets().filter((t) => !t.airborne), this.ms.meleeRange);
+      const autoMelee = nearestInRange(pos, this.enemyTargets().filter((t) => !t.airborne || this.clawReaches(t)), this.ms.meleeRange);
       const order: BrainOrder =
         this.order?.kind === 'attack' ? { kind: 'attack', target: this.toBrain(this.order.target) } : this.order;
       const d = decide({
@@ -1547,10 +1572,14 @@ export class GameScene {
         // Rending Claws: slam or backhand is decided once, here at the start, and the body is told it (so the pose
         // is the strike the damage uses); the backhand swings on its own slower timeline.
         if (shape.kind === 'fist') {
+          this.fistTarget = d.attackOn === 'order' && this.order?.kind === 'attack' ? this.order.target : autoMelee;
           this.fistStrike = fistKind(bearingTo(pos, m.yaw, plan.point), CONFIG.wendigo.fist.frontHalf);
           this.fistSide = plan.leg === FRONT_LEFT ? 1 : -1;
         }
-        if (shape.kind === 'fist') m.startMelee(s.cooldownMult, plan.leg, plan.point, this.fistStrike === 'backhand' ? CONFIG.wendigo.fist.backhandTiming : undefined, this.fistStrike);
+        if (shape.kind === 'fist') {
+          const height = this.fistTarget?.airborne ? this.fistTarget.position.y : 0;
+          m.startMelee(s.cooldownMult, plan.leg, plan.point, this.fistStrike === 'backhand' ? CONFIG.wendigo.fist.backhandTiming : undefined, this.fistStrike, height);
+        }
         else m.startMelee(s.cooldownMult, plan.leg, plan.point);
       }
       if (d.attack === 'ranged') this.fireRanged(d.attackOn === 'order' && this.order?.kind === 'attack' ? this.order.target : auto);
@@ -1839,10 +1868,7 @@ export class GameScene {
 
   private onTargetDestroyed = (target: Target, exp: number): void => {
     if (target.kind !== 'building') this.particles.explosion(target.position, target.airborne ? 1.2 : 1);
-    if (target.kind !== 'building') {
-      this.kills++;
-      this.monster.hp = healOnKill(this.monster.hp, this.monster.maxHp, this.passives.frenzyHeal(), this.monster.alive);
-    }
+    if (target.kind !== 'building') this.kills++;
     if (!this.monster.alive) return;
     this.progression.addExp(exp);
     this.events.emit('expGain', exp);

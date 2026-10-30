@@ -14,7 +14,6 @@ export const INSECT: MonsterKind = {
   moves: [
     { label: 'Leg Strike' },
     { label: 'Stinger Spikes' },
-    { label: 'Tail Swat' },
   ],
   stats: {
     maxHp: M.maxHp,
@@ -40,7 +39,7 @@ export const INSECT: MonsterKind = {
   ranged: 'spikes',
   antiAir: 'tail',
   tailSweep: false,
-  signatures: ['acid', 'storm', 'chitin', 'frenzy', 'brood', 'spines', 'swat', 'nova', 'mortar'],
+  signatures: ['storm', 'chitin', 'brood', 'spines', 'swat', 'nova', 'mortar'],
   abilityText: {},
   upgradeText: {},
   fx: { spike: P.stinger, glob: P.acid, pool: P.acid, nova: P.acid, particle: 'acid', intercept: 'spark', spikeTrail: false },

@@ -10,7 +10,7 @@ describe('KRAKEN kind', () => {
     expect(KRAKEN.ranged).toBe('hurl');
     expect(KRAKEN.antiAir).toBe('lash');
     expect(KRAKEN.tailSweep).toBe(false);
-    expect(KRAKEN.moves.map((m) => m.label)).toEqual(['Tentacle Slam', 'Hurl', 'Tentacle Lash']);
+    expect(KRAKEN.moves.map((m) => m.label)).toEqual(['Tentacle Slam', 'Hurl']);
   });
   it('has its own signatures (shared plain names, its own descriptions) — never the Insect\'s Brood Swarm or the Kaiju\'s Meltdown', () => {
     expect(KRAKEN.signatures).not.toContain('brood');

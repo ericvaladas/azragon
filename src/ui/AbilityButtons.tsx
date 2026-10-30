@@ -4,6 +4,7 @@ const META: Record<ActiveId, { key: string; label: string }> = {
   leap: { key: 'SPACE', label: 'Leap' },
   dash: { key: 'E', label: 'Dash' },
   roar: { key: 'R', label: 'Roar' },
+  bubble: { key: 'T', label: 'Shield' },
 };
 
 /** One round button per unlocked active ability; new buttons appear as they unlock. */
