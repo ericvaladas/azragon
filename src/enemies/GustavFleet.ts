@@ -135,6 +135,10 @@ export class GustavFleet implements EnemySystem {
     g.alive = false;
     const ctx = this.ctx;
     if (!ctx) return;
+    if (ctx.quiet) {
+      ctx.onDestroyed(g, G.exp);
+      return;
+    }
     // A huge blast: several fireballs along the hull and a dust ring (buildings are left standing).
     for (const k of [-0.3, 0, 0.3]) {
       _v.set(g.position.x + Math.sin(g.heading) * G.size * k, g.position.y, g.position.z + Math.cos(g.heading) * G.size * k);

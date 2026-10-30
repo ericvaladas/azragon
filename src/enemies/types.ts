@@ -35,6 +35,11 @@ export interface WorldContext {
   blocked?(x: number, z: number): boolean;
   readonly particles: Particles;
   /**
+   * True while an ultimate takes units into the ground: a unit killed now dies quietly (no explosion, no crash; an
+   * aircraft drops out of sight at once), though its kill is still reported. Absent means false.
+   */
+  readonly quiet?: boolean;
+  /**
    * The road network: nearest road point, nearest road point off every bridge deck (for things that sit on the
    * ground), and a waypoint route over existing segments (excluding `from`).
    */

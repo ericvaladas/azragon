@@ -158,14 +158,14 @@ export class SamSilos implements EnemySystem {
     s.hp -= amount;
     if (s.hp > 0) return;
     s.alive = false;
-    this.ctx?.particles.explosion(s.position, 2);
+    if (!this.ctx?.quiet) this.ctx?.particles.explosion(s.position, 2);
     this.ctx?.onDestroyed(s, C.exp);
   };
 
   private damageMissile = (m: Missile): void => {
     if (!m.alive) return;
     m.alive = false;
-    this.ctx?.particles.explosion(m.position, 0.5);
+    if (!this.ctx?.quiet) this.ctx?.particles.explosion(m.position, 0.5);
     this.ctx?.onDestroyed(m, C.missileExp);
   };
 

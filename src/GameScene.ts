@@ -48,7 +48,7 @@ import type { CityStyle } from './cities/types';
 import { Progression, expToNext } from './systems/Progression';
 import { regen } from './monster/vitals';
 import { DebugOverlay } from './systems/DebugOverlay';
-import { Abilities, ultimateBlocked, type AbilityView, type ActiveId } from './systems/abilities';
+import { Abilities, cameraFollowsWalk, ultimateBlocked, untouchable, type AbilityView, type ActiveId } from './systems/abilities';
 import { Shockwave } from './systems/Shockwave';
 import { LevelUpMoment, levelUpNow } from './systems/levelUpMoment';
 import { Devour } from './monsters/wendigo/DevourSequence';
@@ -1299,6 +1299,9 @@ export class GameScene {
   private buildContext(): WorldContext {
     const self = this;
     return {
+      get quiet() {
+        return self.quietKill;
+      },
       get monster() {
         const m = self.monster;
         return {
@@ -1359,11 +1362,12 @@ export class GameScene {
   damageMonster(amount: number, source: DamageSource, attacker?: Target): void {
     const m = this.monster;
     if (!m.alive || this.state !== 'playing') return;
-    if ((source === 'beam' || source === 'laser') && !this.passives.bubbleActive() && this.passives.tryOverload()) {
+    const shielded = untouchable(this.passives.bubbleActive(), this.ultimateActive);
+    if ((source === 'beam' || source === 'laser') && !shielded && this.passives.tryOverload()) {
       this.overload(source, attacker);
       return;
     }
-    const r = resolveHit(amount, source, { dmgMult: difficulty(this.progression.level).dmgMult, deflectChance: this.deflectChance(), airborne: m.airborne, invulnerable: this.passives.bubbleActive() || this.ultimateActive }, Math.random());
+    const r = resolveHit(amount, source, { dmgMult: difficulty(this.progression.level).dmgMult, deflectChance: this.deflectChance(), airborne: m.airborne, invulnerable: shielded }, Math.random());
     if (r.deflected) {
       this.particles.emit('spark', m.position.clone().setY(300 * CONFIG.monster.scale), 8);
       return;
@@ -1378,7 +1382,7 @@ export class GameScene {
 
   /** An Osprey net lands: snares the monster now, or when it lands if it is mid-leap. Ignored once it is dead. */
   private snareMonster(duration: number): void {
-    if (!this.monster.alive || this.state !== 'playing') return;
+    if (!this.monster.alive || this.state !== 'playing' || untouchable(false, this.ultimateActive)) return;
     if (this.monster.airborne) this.pendingSnare = duration;
     else this.startSnare(duration);
   }
@@ -1600,7 +1604,7 @@ export class GameScene {
         this.order = null;
         this.markers.setTarget(null);
       }
-      if (!this.input.pointerHeld()) this.rig.swingBehind(m.yaw, dt);
+      if (cameraFollowsWalk(this.input.pointerHeld(), this.ultimateActive)) this.rig.swingBehind(m.yaw, dt);
     }
     if (!m.busy) {
       // A breather only picks targets its neck can reach, so the body never has to turn away from its path.
@@ -1939,7 +1943,8 @@ export class GameScene {
     this.progression.addExp(exp);
     this.cheatLevels++;
     this.events.emit('expGain', exp);
-    this.startLevelUpMoment();
+    // During an ultimate the level waits for its end, like any other.
+    if (levelUpNow(this.progression.pendingLevels, true, this.ultimateActive)) this.startLevelUpMoment();
   };
 
   private onTargetDestroyed = (target: Target, exp: number): void => {

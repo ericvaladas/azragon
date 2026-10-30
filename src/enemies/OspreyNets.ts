@@ -58,6 +58,8 @@ class Osprey implements Target {
   vy = 0;
   bank = 0;
   spin = 0;
+  /** Taken quietly: it vanishes below the ground instead of crashing. */
+  silent = false;
   trailT = 0;
 
   constructor(
@@ -191,8 +193,13 @@ export class OspreyNets implements EnemySystem {
     if (o.hp > 0) return;
     o.crashing = true;
     o.spin = (Math.random() < 0.5 ? -1 : 1) * 2.5;
-    this.ctx?.particles.explosion(o.position, 1.2);
-    this.ctx?.particles.emit('smoke', o.position, 6, 0.8);
+    if (this.ctx?.quiet) {
+      o.silent = true;
+      o.position.y = -1;
+    } else {
+      this.ctx?.particles.explosion(o.position, 1.2);
+      this.ctx?.particles.emit('smoke', o.position, 6, 0.8);
+    }
     const team = o.team;
     // Too few left to hold the net up: the drop is off at once.
     if (team.net?.mode === 'carried' && dropOutcome(this.living(team)) === 'abort') {
@@ -278,6 +285,7 @@ export class OspreyNets implements EnemySystem {
       ctx.particles.emit('fire', o.position, 1, 0.2);
     }
     if (o.position.y > 0) return false;
+    if (o.silent) return true;
     const p = o.position.clone().setY(0);
     ctx.particles.explosion(p, 2);
     ctx.particles.ring('dust', p, 120, 12);

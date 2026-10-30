@@ -24,6 +24,8 @@ class Jet implements Target {
   salvoFired = false;
   bank = 0;
   spin = 0;
+  /** Taken quietly: it vanishes below the ground instead of crashing. */
+  silent = false;
   vy = 0;
   trailT = 0;
   flashT = 0;
@@ -93,6 +95,10 @@ export class JetSquadron implements EnemySystem {
     if (j.hp <= 0) {
       j.mode = 'crashing';
       j.spin = (Math.random() < 0.5 ? -1 : 1) * 4;
+      if (this.ctx?.quiet) {
+        j.silent = true;
+        j.position.y = -1;
+      }
       this.ctx?.onDestroyed(j, CONFIG.jet.exp);
     }
   };
@@ -117,11 +123,13 @@ export class JetSquadron implements EnemySystem {
           ctx.particles.emit('smoke', j.position, 1, 0.3);
         }
         if (j.position.y <= 0) {
-          const p = j.position.clone().setY(0);
-          ctx.particles.explosion(p, 2);
-          ctx.particles.ring('dust', p, 120, 12);
-          ctx.splash(p, 2);
-          ctx.shake(0.3);
+          if (!j.silent) {
+            const p = j.position.clone().setY(0);
+            ctx.particles.explosion(p, 2);
+            ctx.particles.ring('dust', p, 120, 12);
+            ctx.splash(p, 2);
+            ctx.shake(0.3);
+          }
           this.scene.remove(j.group);
           this.jets.splice(i, 1);
           continue;

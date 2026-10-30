@@ -151,7 +151,7 @@ export class LaserTrucks implements EnemySystem {
     t.hp -= amount;
     if (t.hp > 0) return;
     t.alive = false;
-    this.ctx?.particles.explosion(t.position, 1.4);
+    if (!this.ctx?.quiet) this.ctx?.particles.explosion(t.position, 1.4);
     this.ctx?.onDestroyed(t, T.exp);
   };
 

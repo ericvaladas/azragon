@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { Abilities, ultimateBlocked } from './abilities';
+import { Abilities, cameraFollowsWalk, ultimateBlocked, untouchable } from './abilities';
 import { CONFIG } from '../config';
 
 const A = CONFIG.abilities;
@@ -120,5 +120,17 @@ describe('Abilities', () => {
     expect(ultimateBlocked(ok)).toBe(false);
     for (const k of ['airborne', 'dashing', 'snared', 'leveling', 'running'] as const) expect(ultimateBlocked({ ...ok, [k]: true })).toBe(true);
     for (const k of ['playing', 'alive'] as const) expect(ultimateBlocked({ ...ok, [k]: false })).toBe(true);
+  });
+
+  it('while an ultimate runs the monster is untouchable (no snare, no Laser Absorb spent), as under the bubble', () => {
+    expect(untouchable(false, false)).toBe(false);
+    expect(untouchable(true, false)).toBe(true);
+    expect(untouchable(false, true)).toBe(true);
+  });
+
+  it('walking swings the camera behind only when the player is not panning and no ultimate holds the camera', () => {
+    expect(cameraFollowsWalk(false, false)).toBe(true);
+    expect(cameraFollowsWalk(true, false)).toBe(false);
+    expect(cameraFollowsWalk(false, true)).toBe(false);
   });
 });

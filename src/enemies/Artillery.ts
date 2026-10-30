@@ -146,7 +146,7 @@ export class Artillery implements EnemySystem {
     g.hp -= amount;
     if (g.hp > 0) return;
     g.alive = false;
-    this.ctx?.particles.explosion(g.position, 1.2);
+    if (!this.ctx?.quiet) this.ctx?.particles.explosion(g.position, 1.2);
     this.ctx?.onDestroyed(g, A.exp);
   };
 

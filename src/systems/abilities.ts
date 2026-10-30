@@ -96,3 +96,13 @@ export class Abilities {
     this.aiming = null;
   }
 }
+
+/** Nothing can touch the monster: under the Shield Bubble or while an ultimate runs (no damage, no snare, no Laser Absorb spent). */
+export function untouchable(bubble: boolean, ultimateRunning: boolean): boolean {
+  return bubble || ultimateRunning;
+}
+
+/** Walking swings the camera behind the monster unless the player is panning it or an ultimate holds it. */
+export function cameraFollowsWalk(pointerHeld: boolean, ultimateRunning: boolean): boolean {
+  return !pointerHeld && !ultimateRunning;
+}

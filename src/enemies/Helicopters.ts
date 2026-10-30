@@ -25,6 +25,8 @@ class Heli implements Target {
   /** Crash fall: vertical speed, yaw spin (rad/s) and the trail clock. */
   vy = 0;
   spin = 0;
+  /** Taken quietly: it vanishes below the ground instead of crashing. */
+  silent = false;
   trailT = 0;
   rotorSpeed: number = H.rotorSpin;
   /** Volleys alternate pods. */
@@ -115,7 +117,10 @@ export class Helicopters implements EnemySystem {
     if (h.hp > 0) return;
     h.crashing = true;
     h.spin = (Math.random() < 0.5 ? -1 : 1) * 3;
-    this.ctx?.particles.explosion(h.position, 1);
+    if (this.ctx?.quiet) {
+      h.silent = true;
+      h.position.y = -1;
+    } else this.ctx?.particles.explosion(h.position, 1);
     this.ctx?.onDestroyed(h, H.exp);
   };
 
@@ -143,11 +148,13 @@ export class Helicopters implements EnemySystem {
           ctx.particles.emit('smoke', h.position, 1, 0.3);
         }
         if (h.position.y <= 0) {
-          const p = h.position.clone().setY(0);
-          ctx.particles.explosion(p, 2);
-          ctx.particles.ring('dust', p, 120, 12);
-          ctx.splash(p, 2);
-          ctx.shake(0.3);
+          if (!h.silent) {
+            const p = h.position.clone().setY(0);
+            ctx.particles.explosion(p, 2);
+            ctx.particles.ring('dust', p, 120, 12);
+            ctx.splash(p, 2);
+            ctx.shake(0.3);
+          }
           this.scene.remove(h.group);
           this.helis.splice(i, 1);
           continue;

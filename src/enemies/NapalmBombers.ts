@@ -48,6 +48,8 @@ class Bomber implements Target {
   vy = 0;
   bank = 0;
   spin = 0;
+  /** Taken quietly: it vanishes below the ground instead of crashing. */
+  silent = false;
   trailT = 0;
   propSpeed: number = N.propSpin;
 
@@ -204,8 +206,13 @@ export class NapalmBombers implements EnemySystem {
     if (b.hp > 0) return;
     b.crashing = true;
     b.spin = (Math.random() < 0.5 ? -1 : 1) * 2.5;
-    this.ctx?.particles.explosion(b.position, 1.2);
-    this.ctx?.particles.emit('smoke', b.position, 6, 0.8);
+    if (this.ctx?.quiet) {
+      b.silent = true;
+      b.position.y = -1;
+    } else {
+      this.ctx?.particles.explosion(b.position, 1.2);
+      this.ctx?.particles.emit('smoke', b.position, 6, 0.8);
+    }
     // Bombs already falling still land, and their strip fades out on schedule; shot down before the first
     // release, nothing drops and the strip goes with it.
     if (b.next > 0) this.strips.push({ run: b.run, t: b.t, mesh: b.strip });
@@ -270,6 +277,7 @@ export class NapalmBombers implements EnemySystem {
       ctx.particles.emit('fire', b.position, 1, 0.2);
     }
     if (b.position.y > 0) return false;
+    if (b.silent) return true;
     const p = b.position.clone().setY(0);
     ctx.particles.explosion(p, 2);
     ctx.particles.ring('dust', p, 120, 12);

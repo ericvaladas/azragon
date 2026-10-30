@@ -100,7 +100,7 @@ export class Blimps implements EnemySystem {
     b.flashT = 0.1;
     if (b.hp > 0) return;
     b.alive = false;
-    this.ctx?.particles.explosion(b.position, 2.5);
+    if (!this.ctx?.quiet) this.ctx?.particles.explosion(b.position, 2.5);
     this.ctx?.onDestroyed(b, B.exp);
   };
 
