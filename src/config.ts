@@ -131,6 +131,11 @@ export const CONFIG = {
     cottage4: 0xcfe3c8,
     gustavHazard: 0xf2c230,
     gustavHazardDark: 0x1e1e1e,
+    /** Shield Bubble: the cyan dome's fill and the triangle lattice over it. Reflect Shield's patches are violet. */
+    bubbleFill: 0x6fe7ff,
+    bubbleRim: 0xbff6ff,
+    reflectFill: 0x8a3fd6,
+    reflectRim: 0xe2c2ff,
   },
   fog: { near: 2200, far: 4700 },
   camera: {
@@ -464,7 +469,13 @@ export const CONFIG = {
     swat: { cooldown: [0, 3.75, 2.85, 1.95], range: [0, 450, 525, 600], damage: [0, 120, 220, 320], targets: [0, 1, 2, 3], headHeight: 380 },
     nova: { interval: [0, 7, 6, 5], radius: [0, 600, 700, 800], damage: [0, 80, 120, 170] },
     mortar: { interval: [0, 4, 3.5, 3], globs: [0, 2, 3, 4], splash: [0, 90, 110, 130], damage: 90, range: 1800, flightTime: 1.2, arc: 300 },
-    bubble: { duration: [0, 3, 3.5, 4], cooldown: [0, 25, 21, 17] },
+    /**
+     * Shield Bubble: invincible for the rank's duration. The dome builds itself from the ground up over `build` s —
+     * each triangle spends `brickWindow` of that opening (so a brick's own pop lasts build × brickWindow; the rest
+     * is the front's climb) and glows `flash` times as bright the moment it lands. When the bubble ends the dome
+     * lets go where it hung: out by `fadeSwell` of its radius as it dims, over `fade` s.
+     */
+    bubble: { duration: [0, 3, 3.5, 4], cooldown: [0, 25, 21, 17], build: 0.9, brickWindow: 0.28, flash: 16, fade: 0.4, fadeSwell: 0.05 },
     reflect: { duration: [0, 4, 5, 6], cooldown: [0, 20, 17, 14], radius: 380, damage: 60 },
     /**
      * Haste When Hurt: heat 0..1 rises by (damage taken / max HP) × gain and cools by `cool` per second.
