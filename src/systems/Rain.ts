@@ -9,8 +9,8 @@ const SPEED = 1100;
 const BOX_PER_DIST = 1.1;
 const MIN_BOX = 800;
 /** A streak's length and width as fractions of the box size, and its slant (rad, the wind). */
-const LENGTH = 0.035;
-const WIDTH = 0.0016;
+const LENGTH = 0.022;
+const WIDTH = 0.0009;
 const SLANT = 0.18;
 
 const _dir = new THREE.Vector3();
@@ -33,7 +33,7 @@ export class Rain {
   constructor(scene: THREE.Scene, color: number) {
     this.mesh = new THREE.InstancedMesh(
       new THREE.PlaneGeometry(1, 1),
-      new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.45, depthWrite: false, fog: false, side: THREE.DoubleSide }),
+      new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.32, depthWrite: false, fog: false, side: THREE.DoubleSide }),
       DROPS,
     );
     this.mesh.frustumCulled = false;
