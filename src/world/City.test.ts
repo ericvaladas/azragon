@@ -714,6 +714,19 @@ describe('City atmosphere', () => {
     city.reset(TOKYO);
     expect(snap(city, t)).toEqual(tokyo);
   });
+
+  it('blends toward another atmosphere and back: 1 is the target, 0 restores the style exactly', () => {
+    const { city } = make();
+    const t = targets();
+    city.attachAtmosphere(t);
+    const tokyo = snap(city, t);
+    city.blendAtmosphere(DUSK.atmosphere, 1);
+    expect(snap(city, t).zenith).toBe(0x4b4a8c);
+    expect(snap(city, t).fog).toBe(0xe9a985);
+    city.blendAtmosphere(DUSK.atmosphere, 0.5);
+    city.blendAtmosphere(DUSK.atmosphere, 0);
+    expect(snap(city, t)).toEqual(tokyo);
+  });
 });
 
 describe('City style switch', () => {

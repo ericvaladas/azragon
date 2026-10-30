@@ -3,7 +3,7 @@ import { CONFIG } from '../config';
 import type { OnDestroyed, Target } from '../combat';
 import type { Vec2 } from '../util/math';
 import { mulberry32 } from '../util/rng';
-import type { CityStyle, LandmarkSpec, SignDef } from '../cities/types';
+import type { Atmosphere, CityStyle, LandmarkSpec, SignDef } from '../cities/types';
 import { blastTopples, chunksInRadius, DestroyedLog, generateChunk, nodeSize, planStreaming, seaWallRects, SEA_WALL_SIZE, type BuildingSpec, type ChunkContent, type Rect, type SeaWallSpec } from './chunks';
 import { isIsland, isWater, PITCH, type Segment } from './roads';
 import { canvasCityTextures, patchFacadeShader, patchRoadShader, SCREEN_FRAME_PX, SCREEN_FRAMES, SIGN_ATLAS_PX, SIGN_RECTS, signLod, type CityTextures } from './pixelTextures';
@@ -11,7 +11,7 @@ import { rubbleGeometry } from './rubble';
 import { Landforms } from './LandformRenderer';
 import { craneColors, craneGeometry } from './crane';
 import { faceted, toonMat } from '../render/toon';
-import { applyAtmosphere, windowGlowColor, type AtmosphereTargets } from '../render/atmosphere';
+import { applyAtmosphere, lerpAtmosphere, windowGlowColor, type AtmosphereTargets } from '../render/atmosphere';
 
 type BuildingState = 'standing' | 'collapsing' | 'rubble';
 
@@ -304,6 +304,8 @@ export class City {
   private glowUniform = { value: this.windowGlow };
   /** Sky, fog and lights the style's atmosphere drives, once attached. */
   private atmosphere: AtmosphereTargets | null = null;
+  /** Scratch atmosphere for blendAtmosphere (no per-frame allocation). */
+  private blended: Atmosphere = { skyZenith: 0, skyHorizon: 0, fog: 0, hemiSky: 0, hemiGround: 0, hemiIntensity: 0, sun: 0, sunIntensity: 0, sunDir: { x: 0, y: 1, z: 0 }, windowGlow: { color: 0, strength: 0 } };
 
   constructor(
     private scene: THREE.Scene,
@@ -533,6 +535,16 @@ export class City {
   attachAtmosphere(t: Omit<AtmosphereTargets, 'windowGlow'>): void {
     this.atmosphere = { ...t, windowGlow: this.windowGlow };
     applyAtmosphere(this._style.atmosphere, this.atmosphere);
+  }
+
+  /** Blend the attached sky, fog and lights from the style's atmosphere toward `to` by k (0 is the style's own, exactly). */
+  blendAtmosphere(to: Atmosphere, k: number): void {
+    if (!this.atmosphere) return;
+    if (k <= 0) {
+      applyAtmosphere(this._style.atmosphere, this.atmosphere);
+      return;
+    }
+    applyAtmosphere(lerpAtmosphere(this._style.atmosphere, to, k, this.blended), this.atmosphere);
   }
 
   private resetPools(): void {

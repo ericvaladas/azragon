@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { CONFIG } from '../config';
 import { TOKYO } from '../cities/tokyo';
 import type { Atmosphere } from '../cities/types';
-import { applyAtmosphere, fogDistances, windowGlowColor, type AtmosphereTargets } from './atmosphere';
+import { applyAtmosphere, fogDistances, lerpAtmosphere, windowGlowColor, type AtmosphereTargets } from './atmosphere';
 import { Lighting } from './Lighting';
 import { createSky, skyColors } from './Sky';
 
@@ -87,5 +87,26 @@ describe('atmosphere', () => {
     const fog = scene.fog as THREE.Fog;
     expect(fog.color.getHex()).toBe(0xe9a985);
     expect([fog.near, fog.far]).toEqual([1800, 4200]);
+  });
+});
+
+describe('lerpAtmosphere', () => {
+  const a = TOKYO.atmosphere;
+  const out = (): Atmosphere => ({ ...DUSK, sunDir: { ...DUSK.sunDir }, windowGlow: { ...DUSK.windowGlow } });
+  it('blend 0 restores the style exactly', () => {
+    expect(lerpAtmosphere(a, DUSK, 0, out())).toEqual({ ...a, fogNear: fogDistances(a).near, fogFar: fogDistances(a).far });
+  });
+  it('blend 1 is the target', () => {
+    expect(lerpAtmosphere(a, DUSK, 1, out())).toEqual(DUSK);
+  });
+  it('blend 0.5 is halfway', () => {
+    const m = lerpAtmosphere(a, DUSK, 0.5, out());
+    expect(m.hemiIntensity).toBeCloseTo((a.hemiIntensity + DUSK.hemiIntensity) / 2);
+    for (const shift of [16, 8, 0]) {
+      const ch = (hex: number) => (hex >> shift) & 0xff;
+      const [lo, hi] = [ch(a.skyZenith), ch(DUSK.skyZenith)].sort((x, y) => x - y);
+      expect(ch(m.skyZenith)).toBeGreaterThanOrEqual(lo!);
+      expect(ch(m.skyZenith)).toBeLessThanOrEqual(hi!);
+    }
   });
 });

@@ -40,3 +40,31 @@ export function applyAtmosphere(a: Atmosphere, t: AtmosphereTargets): void {
   t.sunDir.set(a.sunDir.x, a.sunDir.y, a.sunDir.z).normalize();
   windowGlowColor(a, t.windowGlow);
 }
+
+const _ca = new THREE.Color();
+const _cb = new THREE.Color();
+const mixHex = (a: number, b: number, k: number): number => _ca.setHex(a).lerp(_cb.setHex(b), k).getHex();
+const mix = (a: number, b: number, k: number): number => a * (1 - k) + b * k;
+
+/** `a` blended toward `b` by k (0..1, clamped) into `out`: colours in linear RGB, numbers and the sun direction linearly, fog distances filled in. */
+export function lerpAtmosphere(a: Atmosphere, b: Atmosphere, k: number, out: Atmosphere): Atmosphere {
+  const t = Math.min(1, Math.max(0, k));
+  const fa = fogDistances(a);
+  const fb = fogDistances(b);
+  out.skyZenith = mixHex(a.skyZenith, b.skyZenith, t);
+  out.skyHorizon = mixHex(a.skyHorizon, b.skyHorizon, t);
+  out.fog = mixHex(a.fog, b.fog, t);
+  out.fogNear = mix(fa.near, fb.near, t);
+  out.fogFar = mix(fa.far, fb.far, t);
+  out.hemiSky = mixHex(a.hemiSky, b.hemiSky, t);
+  out.hemiGround = mixHex(a.hemiGround, b.hemiGround, t);
+  out.hemiIntensity = mix(a.hemiIntensity, b.hemiIntensity, t);
+  out.sun = mixHex(a.sun, b.sun, t);
+  out.sunIntensity = mix(a.sunIntensity, b.sunIntensity, t);
+  out.sunDir.x = mix(a.sunDir.x, b.sunDir.x, t);
+  out.sunDir.y = mix(a.sunDir.y, b.sunDir.y, t);
+  out.sunDir.z = mix(a.sunDir.z, b.sunDir.z, t);
+  out.windowGlow.color = mixHex(a.windowGlow.color, b.windowGlow.color, t);
+  out.windowGlow.strength = mix(a.windowGlow.strength, b.windowGlow.strength, t);
+  return out;
+}
