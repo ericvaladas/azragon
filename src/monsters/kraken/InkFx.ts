@@ -32,7 +32,7 @@ const SIPHON_PUFFS = 3;
 const SIPHON_R = 22;
 const SIPHON_RATE = 4.5;
 
-type Blob = { from: THREE.Vector3; to: THREE.Vector3; t: number; dur: number; seed: number };
+type Blob = { from: THREE.Vector3; to: THREE.Vector3; t: number; dur: number; seed: number; scale: number };
 type Puff = { pos: THREE.Vector3; vel: THREE.Vector3; age: number; delay: number; size: number; color: number; rate: number; spin: number };
 
 const _m = new THREE.Matrix4();
@@ -81,15 +81,16 @@ export class InkFx {
     scene.add(this.mesh);
   }
 
-  /** Squirt a blob from `from` (the siphon) to `to` (the stopped shot); it bursts into a cloud on arrival. */
-  jet(from: THREE.Vector3, to: THREE.Vector3): void {
+  /** Squirt a blob from `from` (the siphon) to `to` (the stopped shot); it bursts into a cloud of `scale` (burst) on arrival. */
+  jet(from: THREE.Vector3, to: THREE.Vector3, scale = 1): void {
     if (this.blobs.length >= MAX_BLOBS) return;
-    const b = this.freeBlobs.pop() ?? { from: new THREE.Vector3(), to: new THREE.Vector3(), t: 0, dur: 0, seed: 0 };
+    const b = this.freeBlobs.pop() ?? { from: new THREE.Vector3(), to: new THREE.Vector3(), t: 0, dur: 0, seed: 0, scale: 1 };
     b.from.copy(from);
     b.to.copy(to);
     b.t = 0;
     b.dur = blobFlightTime(from.distanceTo(to));
     b.seed = Math.random() * 10;
+    b.scale = scale;
     this.blobs.push(b);
     for (let k = 0; k < SIPHON_PUFFS; k++) {
       _dir.subVectors(to, from).setY(0).normalize().multiplyScalar(rand(40, 90));
@@ -97,15 +98,15 @@ export class InkFx {
     }
   }
 
-  /** Burst a billowing cloud at `at`. */
-  burst(at: THREE.Vector3): void {
+  /** Burst a billowing cloud at `at`; `scale` multiplies its spread, speed and puff size (Ink Storm's are big). */
+  burst(at: THREE.Vector3, scale = 1): void {
     for (let k = 0; k < CLOUD_PUFFS; k++) {
       // The first puff is a dense core; the rest spread out around it, some a beat later so it keeps billowing.
       const core = k === 0;
       _dir.set(rand(-1, 1), rand(-0.6, 1), rand(-1, 1)).normalize();
-      const sp = core ? 0 : rand(...PUFF_SPEED);
-      _p.copy(at).addScaledVector(_dir, core ? 0 : rand(0.3, 1) * CLOUD_SPREAD);
-      this.puff(_p, _dir.x * sp, _dir.y * sp + PUFF_RISE, _dir.z * sp, core ? 0 : rand(0, 0.14), core ? PUFF_R[1] : rand(...PUFF_R), core ? INK_DEEP : pick(CLOUD_COLORS), 1);
+      const sp = core ? 0 : rand(...PUFF_SPEED) * scale;
+      _p.copy(at).addScaledVector(_dir, core ? 0 : rand(0.3, 1) * CLOUD_SPREAD * scale);
+      this.puff(_p, _dir.x * sp, _dir.y * sp + PUFF_RISE, _dir.z * sp, core ? 0 : rand(0, 0.14), (core ? PUFF_R[1] : rand(...PUFF_R)) * scale, core ? INK_DEEP : pick(CLOUD_COLORS), 1);
     }
   }
 
@@ -131,7 +132,7 @@ export class InkFx {
       const b = this.blobs[i]!;
       b.t += dt;
       if (b.t >= b.dur) {
-        this.burst(b.to);
+        this.burst(b.to, b.scale);
         this.blobs.splice(i, 1);
         this.freeBlobs.push(b);
         continue;
@@ -200,5 +201,11 @@ export class InkFx {
     this.n = 0;
     this.mesh.count = 0;
     this.mesh.visible = false;
+  }
+
+  dispose(): void {
+    this.mesh.removeFromParent();
+    this.mesh.geometry.dispose();
+    (this.mesh.material as THREE.Material).dispose();
   }
 }

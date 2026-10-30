@@ -89,6 +89,61 @@ describe('InkFx', () => {
     expect(maxD).toBeLessThanOrEqual(130);
   });
 
+  it('a bigger burst spreads wider', () => {
+    const reach = (scale: number) => {
+      const scene = new THREE.Scene();
+      const fx = new InkFx(scene);
+      const at = new THREE.Vector3(0, 300, 0);
+      fx.burst(at, scale);
+      const mesh = meshOf(scene);
+      const m = new THREE.Matrix4();
+      const pos = new THREE.Vector3();
+      const q = new THREE.Quaternion();
+      const sc = new THREE.Vector3();
+      let r = 0;
+      let d = 0;
+      for (let t = 0; t < CLOUD.life; t += 0.05) {
+        fx.update(0.05);
+        for (let i = 0; i < mesh.count; i++) {
+          mesh.getMatrixAt(i, m);
+          m.decompose(pos, q, sc);
+          r = Math.max(r, sc.x);
+          d = Math.max(d, pos.distanceTo(at));
+        }
+      }
+      return { r, d };
+    };
+    const one = reach(1);
+    const three = reach(3);
+    expect(three.d).toBeGreaterThan(one.d * 2);
+    expect(three.r).toBeGreaterThan(one.r * 2);
+  });
+
+  it('a scaled jet bursts into a scaled cloud where it lands', () => {
+    const scene = new THREE.Scene();
+    const fx = new InkFx(scene);
+    const from = new THREE.Vector3(0, 600, 0);
+    const to = new THREE.Vector3(500, 0, 0);
+    fx.jet(from, to, 3);
+    const flight = blobFlightTime(from.distanceTo(to));
+    for (let t = 0; t < flight + 0.02; t += 0.01) fx.update(0.01);
+    const mesh = meshOf(scene);
+    const m = new THREE.Matrix4();
+    const pos = new THREE.Vector3();
+    const q = new THREE.Quaternion();
+    const sc = new THREE.Vector3();
+    let r = 0;
+    for (let t = 0; t < 0.6; t += 0.05) {
+      fx.update(0.05);
+      for (let i = 0; i < mesh.count; i++) {
+        mesh.getMatrixAt(i, m);
+        m.decompose(pos, q, sc);
+        if (pos.distanceTo(to) < 600) r = Math.max(r, sc.x);
+      }
+    }
+    expect(r).toBeGreaterThan(100);
+  });
+
   it('draws nothing around the body while there are no jets or clouds (no haze)', () => {
     const scene = new THREE.Scene();
     const fx = new InkFx(scene);
@@ -105,5 +160,12 @@ describe('InkFx', () => {
     fx.clear();
     expect(fx.active).toEqual({ blobs: 0, puffs: 0 });
     expect(meshOf(scene).visible).toBe(false);
+  });
+
+  it('dispose takes its mesh out of the scene', () => {
+    const scene = new THREE.Scene();
+    const fx = new InkFx(scene);
+    fx.dispose();
+    expect(scene.children).toHaveLength(0);
   });
 });

@@ -330,7 +330,7 @@ export const CONFIG = {
       eye: 0xffb320,
       ink: 0x2a1838,
       chunk: 0x8a8378,
-      /** Ink Storm's sky (zenith, horizon, fog, the two lights), its rain and its denser ink. */
+      /** Ink Storm's sky (zenith, horizon, fog, the two lights) and its rain. */
       stormZenith: 0x0b1018,
       stormHorizon: 0x2c3846,
       stormFog: 0x262c33,
@@ -338,14 +338,15 @@ export const CONFIG = {
       stormHemiGround: 0x101418,
       stormSun: 0x9fb4cc,
       rain: 0xa8b8cc,
-      stormInk: 0x140c1c,
     },
     /**
      * Ink Storm (Q), on real seconds: the ink's radius (m), the world time scale, chunks (one per arm), the leap's
-     * peak (m), the camera pull, a chunk's flight (s), the ink jets, the beats (s), and the storm's light intensities.
+     * peak (m), the camera pull, a chunk's flight (s), arc (m) and size (m), the ink jets and the scale of the cloud
+     * each bursts into (InkFx.burst), how far out the arms plunge (m), the beats (s), and the storm's light intensities.
      */
     ultimate: {
-      radius: 900, timeScale: 0.25, chunks: 8, peak: 600, cameraDistanceMult: 2.2, chunkFlight: 0.5, inkJets: 14,
+      radius: 900, timeScale: 0.25, chunks: 8, peak: 600, cameraDistanceMult: 2.2, chunkFlight: 0.5, chunkArc: 120, chunkSize: 80,
+      inkJets: 14, inkScale: 3.6, grabReach: 280,
       t: { easeIn: 0.2, sky: 0.8, rainFrom: 0.3, grabFrom: 0.5, grabTo: 1.4, leapFrom: 1.4, peakAt: 2.2, inkFrom: 2.2, inkTo: 3.0, throwFrom: 2.4, throwTo: 3.0, fallTo: 3.8, outroFrom: 3.8, end: 4.8 },
       hemiIntensity: 0.45, sunIntensity: 0.6,
     },
