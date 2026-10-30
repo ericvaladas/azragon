@@ -50,6 +50,8 @@ export class Input {
     el.addEventListener('pointermove', this.onMove);
     el.addEventListener('pointerup', this.onUp);
     el.addEventListener('pointercancel', this.onUp);
+    // A pointer whose capture is lost never reports its release here: treat it as released (never a tap).
+    el.addEventListener('lostpointercapture', this.onUp);
     el.addEventListener('wheel', this.onWheel, { passive: false });
     el.addEventListener('contextmenu', this.onContextMenu);
     window.addEventListener('keydown', this.onKey);
@@ -60,6 +62,19 @@ export class Input {
   /** The held walking keys as axes: throttle +1 forward / −1 back, turn +1 left / −1 right. */
   drive(): { throttle: number; turn: number } {
     return driveAxes(this.held);
+  }
+
+  /** A pointer is held down on the canvas: the player may be panning the camera (or about to). */
+  pointerHeld(): boolean {
+    return this.down.size > 0;
+  }
+
+  /** Forget every pointer held down (no tap, no drag), e.g. when a menu covers the canvas. */
+  releasePointers(): void {
+    this.down.clear();
+    this.pinching = false;
+    this.activeId = null;
+    this.dragging = false;
   }
 
   private local(e: PointerEvent): [number, number] {
@@ -99,6 +114,12 @@ export class Input {
       return;
     }
     if (!this.down.has(e.pointerId)) return;
+    // A mouse moving with no button pressed missed its release: drop the stale press instead of dragging.
+    if (e.pointerType === 'mouse' && e.buttons === 0) {
+      this.releasePointers();
+      if (this.down.size === 0) this.h.hover(x, y);
+      return;
+    }
     this.down.set(e.pointerId, { x, y });
     if (this.pinching) {
       if (this.down.size >= 2) {
@@ -184,6 +205,7 @@ export class Input {
     this.el.removeEventListener('pointermove', this.onMove);
     this.el.removeEventListener('pointerup', this.onUp);
     this.el.removeEventListener('pointercancel', this.onUp);
+    this.el.removeEventListener('lostpointercapture', this.onUp);
     this.el.removeEventListener('wheel', this.onWheel);
     this.el.removeEventListener('contextmenu', this.onContextMenu);
     window.removeEventListener('keydown', this.onKey);

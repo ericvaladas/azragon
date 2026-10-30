@@ -690,6 +690,8 @@ export class GameScene {
     this.state = next;
     if (next === 'select' || next === 'title') this.music.enterMenu();
     if (next !== 'playing') {
+      // A menu now covers the canvas: a press still held there will not see its release.
+      this.input.releasePointers();
       this.abilities.cancelAim();
       this.monster.crouch = false;
       this.markers.setAim(null, 0);
@@ -1516,7 +1518,8 @@ export class GameScene {
     const m = this.monster;
     const s = this.progression.stats;
     const pos = { x: m.position.x, z: m.position.z };
-    // Walking keys (WASD / arrows) take over from any tap order, and keep the camera behind the monster.
+    // Walking keys (WASD / arrows) take over from any tap order, and keep the camera behind the monster, except while
+    // a pointer is held down (the player panning the camera), so the camera is theirs until they let go.
     const drive = this.input.drive();
     const driving = drive.throttle !== 0 || drive.turn !== 0;
     if (driving) {
@@ -1524,7 +1527,7 @@ export class GameScene {
         this.order = null;
         this.markers.setTarget(null);
       }
-      this.rig.swingBehind(m.yaw, dt);
+      if (!this.input.pointerHeld()) this.rig.swingBehind(m.yaw, dt);
     }
     if (!m.busy) {
       // A breather only picks targets its neck can reach, so the body never has to turn away from its path.
