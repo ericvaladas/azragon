@@ -943,7 +943,7 @@ export class WendigoBody implements MonsterBody {
       this.leapPlanted = true;
     }
     // Roar: a wolf's howl, all four limbs planted.
-    const roarD = CONFIG.abilities.roar.duration;
+    const roarD = f.roarDuration;
     if (f.roaring) this.howlT = this.howlT < 0 ? 0 : this.howlT + f.dt;
     else if (this.howlT >= 0) {
       this.howlT = Math.max(this.howlT, roarD) + f.dt;

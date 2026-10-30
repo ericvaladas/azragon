@@ -428,8 +428,10 @@ export const CONFIG = {
       bloodHemiSky: 0xb0303a,
       bloodHemiGround: 0x1a0406,
       bloodSun: 0xff5a40,
-      demon: 0x0a0609,
-      demonRim: 0x5a1a2e,
+      demon: 0x160c12,
+      demonRim: 0xb3243a,
+      /** The glowing outline around each figure, so it reads against the black circle. */
+      demonGlow: 0xc0182a,
       demonEye: 0xff3020,
       circle: 0x050204,
       circleGlow: 0x5a0a0e,

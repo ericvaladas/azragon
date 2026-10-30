@@ -86,6 +86,8 @@ export type BodyFrame = {
   /** Active anti-air strike: seconds since it started, reach weight (swatWeight curve) toward the world target. */
   antiAir: { t: number; weight: number; target: THREE.Vector3 } | null;
   roaring: boolean;
+  /** How long the current (or last) roar lasts, world seconds. */
+  roarDuration: number;
   airborne: boolean;
   dashing: boolean;
   /** Active Tail Sweep: seconds in, which side (+1 = left/+X), its timeline. */

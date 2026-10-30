@@ -79,3 +79,11 @@ export function devourVictims(center: Vec2, radius: number, targets: readonly Ta
   const taken = inside.filter((t) => !t.boss).sort((a, b) => dist(a) - dist(b));
   return { held: taken.slice(0, maxFigures), extra: taken.slice(maxFigures), bosses };
 }
+
+/** How long the sequence lasts in world (slowed) seconds: the integral of its time scale over its real length. */
+export function devourWorldLength(): number {
+  const n = 440;
+  let sum = 0;
+  for (let i = 0; i < n; i++) sum += devourPhase(((i + 0.5) / n) * T.end).time;
+  return (sum / n) * T.end;
+}

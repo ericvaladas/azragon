@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { LevelUpMoment } from './levelUpMoment';
+import { LevelUpMoment, levelUpNow } from './levelUpMoment';
 import { CONFIG } from '../config';
 
 const L = CONFIG.levelUp;
@@ -38,5 +38,14 @@ describe('LevelUpMoment', () => {
     m.reset();
     expect(m.active).toBe(false);
     expect(m.update(5)).toBe(false);
+  });
+});
+
+describe('levelUpNow', () => {
+  it('banks the level-up until the end of an ultimate', () => {
+    expect(levelUpNow(1, true, true)).toBe(false);
+    expect(levelUpNow(1, true, false)).toBe(true);
+    expect(levelUpNow(0, true, false)).toBe(false);
+    expect(levelUpNow(1, false, false)).toBe(false);
   });
 });

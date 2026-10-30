@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import { CONFIG } from '../../config';
 import type { Target } from '../../combat';
-import { devourPhase, devourVictims } from './devour';
+import { devourPhase, devourVictims, devourWorldLength } from './devour';
 
 const U = CONFIG.wendigo.ultimate;
 const target = (x: number, y = 0, extra: Partial<Target> = {}): Target => ({
@@ -39,6 +39,14 @@ describe('devourPhase', () => {
     expect(devourPhase(U.t.dragFrom).drag).toBe(0);
     expect(devourPhase(U.t.dragTo).drag).toBe(1);
     expect(devourPhase(U.t.end).circle).toBe(0);
+  });
+});
+
+describe('devourWorldLength', () => {
+  it('is the sequence in world seconds: shorter than real time, longer than all of it slowed', () => {
+    const w = devourWorldLength();
+    expect(w).toBeLessThan(U.t.end);
+    expect(w).toBeGreaterThan(U.t.end * U.timeScale);
   });
 });
 

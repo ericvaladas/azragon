@@ -6,13 +6,13 @@ import { DEMON_CLAW, demonGeometry, demonPose } from './demonModel';
 const U = CONFIG.wendigo.ultimate;
 const C = CONFIG.wendigo.colors;
 /** Smallest figure (m tall); bigger victims get bigger figures, aircraft ones tall enough to reach them. */
-const MIN_SIZE = 200;
+const MIN_SIZE = 320;
 const SIZE_PER_RADIUS = 4;
 /** How far a figure leans into its reach (rad) and how hard its clutch squashes it. */
 const REACH_LEAN = 0.35;
 const CLUTCH_SQUASH = 0.12;
-/** The smoky shell drawn around each figure, this much bigger. */
-const SHELL = 1.08;
+/** The glowing outline drawn around each figure, this much bigger. */
+const SHELL = 1.12;
 
 type Figure = { base: THREE.Vector3; yaw: number; size: number; victimY: number; husk: number };
 
@@ -38,7 +38,8 @@ export class DemonFigures {
     this.body = new THREE.InstancedMesh(geo, toonMat(0xffffff, { vertexColors: true, emissive: C.demonEye }), U.maxFigures);
     // The emissive glow is for the eyes; the vertex colours keep the body near-black, so a faint glow only.
     (this.body.material as THREE.MeshToonMaterial).emissiveIntensity = 0.08;
-    this.shell = new THREE.InstancedMesh(geo, new THREE.MeshBasicMaterial({ color: C.handSmoke, transparent: true, opacity: 0.45, depthWrite: false, side: THREE.BackSide }), U.maxFigures);
+    // A glowing deep-red outline (the back faces of a slightly bigger copy), so the near-black figure reads against the black circle.
+    this.shell = new THREE.InstancedMesh(geo, new THREE.MeshBasicMaterial({ color: C.demonGlow, transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.BackSide, fog: false }), U.maxFigures);
     this.shell.renderOrder = 1;
     this.husks = new THREE.InstancedMesh(painted(faceted(new THREE.BoxGeometry(1, 0.6, 1.4)), C.demon), toonMat(0xffffff, { vertexColors: true }), U.maxFigures);
     for (const m of [this.body, this.shell, this.husks]) {

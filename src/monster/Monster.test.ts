@@ -40,6 +40,15 @@ describe('Monster', () => {
     expect(spent).toBe(1);
   });
 
+  it('a long roar holds busy for its duration', () => {
+    const m = new Monster(new THREE.Scene(), kind());
+    m.startRoar(4);
+    m.tick(3.5);
+    expect(m.busy).toBe(true);
+    m.tick(0.6);
+    expect(m.busy).toBe(false);
+  });
+
   it('takes HP, speed, and cooldowns from its kind', () => {
     const m = new Monster(new THREE.Scene(), kind({ maxHp: 777, moveSpeed: 100, meleeCooldown: 2, rangedCooldown: 3 }));
     expect(m.hp).toBe(777);

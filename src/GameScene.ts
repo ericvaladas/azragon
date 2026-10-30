@@ -50,7 +50,9 @@ import { regen } from './monster/vitals';
 import { DebugOverlay } from './systems/DebugOverlay';
 import { Abilities, ultimateBlocked, type AbilityView, type ActiveId } from './systems/abilities';
 import { Shockwave } from './systems/Shockwave';
-import { LevelUpMoment } from './systems/levelUpMoment';
+import { LevelUpMoment, levelUpNow } from './systems/levelUpMoment';
+import { Devour } from './monsters/wendigo/DevourSequence';
+import { BLOOD_ATMOSPHERE, devourWorldLength } from './monsters/wendigo/devour';
 import { LevelUpAura } from './systems/LevelUpAura';
 import { ShieldFx } from './systems/ShieldFx';
 import { InkFx } from './monsters/kraken/InkFx';
@@ -198,6 +200,10 @@ export class GameScene {
   private fistTarget: Target | null = null;
   /** An ultimate's sequence is running. */
   private ultimateActive = false;
+  /** The Wendigo's ultimate. */
+  private devour!: Devour;
+  /** Set while Devour takes a victim: its death skips the usual explosion. */
+  private quietKill = false;
   private shieldFx: ShieldFx;
   private passives: Passives;
   private acid: AcidPools;
@@ -233,6 +239,37 @@ export class GameScene {
     this.projectiles = new Projectiles(this.scene);
     this.breath = new BreathBeam(this.scene);
     this.hands = new ShadowHands(this.scene);
+    const U = CONFIG.wendigo.ultimate;
+    this.devour = new Devour(this.scene, this.camera, {
+      enemies: () => this.enemyTargets(),
+      take: (t) => {
+        this.quietKill = true;
+        t.applyDamage(1e9);
+        this.quietKill = false;
+        this.particles.emit('shade', t.position, 10, 1.2);
+        this.particles.emit('mist', t.position, 6, 1);
+      },
+      hurtBoss: (t, dmg) => t.applyDamage(dmg),
+      buildingsWithin: (c, r) => {
+        const out: Target[] = [];
+        this.city.forEachStandingInRadius(c, r, (t) => out.push(t));
+        return out;
+      },
+      sky: (k) => this.city.blendAtmosphere(BLOOD_ATMOSPHERE, k),
+      camera: (k) => this.rig.pull(k, U.cameraPitch, CONFIG.camera.defaultDistance * U.cameraDistanceMult),
+      shake: (a) => this.rig.addTrauma(a),
+      flash: (k) => {
+        this.lighting.hemi.intensity += k * 1.5;
+      },
+      burst: (at, kind) => {
+        if (kind === 'take') {
+          this.particles.emit('shade', at, 14, 1.4);
+          return;
+        }
+        this.particles.emit('dust', at, 8, 1.2);
+        this.particles.emit('ember', at, 6, 1);
+      },
+    });
     this.rotRing = new RotRing(this.scene);
     this.projectiles.onTrail = this.onShotTrail;
     this.projectiles.onHit = this.onProjectileHit;
@@ -460,6 +497,7 @@ export class GameScene {
     this.shieldFx.clear();
     this.inkFx.clear();
     this.moment.reset();
+    this.cancelUltimate();
     this.aura.clear();
     this.monster.glow = 0;
     this.passives.reset();
@@ -545,6 +583,7 @@ export class GameScene {
     // The Roar shockwave: the Wendigo's is a ring of shadow; every other monster keeps the stinger yellow.
     this.shockwave.setColor(kind.id === 'wendigo' ? CONFIG.wendigo.colors.shade : CONFIG.palette.stinger);
     this.breath.clear();
+    this.cancelUltimate();
     this.abilities.setRank('ultimate', kind.ultimate ? 1 : 0);
   }
 
@@ -664,6 +703,7 @@ export class GameScene {
   }
 
   private startDying(): void {
+    this.cancelUltimate();
     this.breath.clear();
     this.enemies.get<OspreyNets>('osprey').netTornFree();
     this.snare.clear();
@@ -708,8 +748,8 @@ export class GameScene {
     this.animationFrameId = requestAnimationFrame(this.update);
     const raw = this.clock.getDelta();
     const realDt = clampDelta(raw);
-    // World time runs in slow motion during the level-up moment; the aura and moment use real time.
-    const dt = realDt * this.moment.timeScale();
+    // World time runs in slow motion during the level-up moment or an ultimate (which wins); both run on real time.
+    const dt = realDt * (this.devour.active ? this.devour.timeScale() : this.moment.timeScale());
     this.splasher.newFrame();
     const frozen = this.state === 'levelup' || this.state === 'paused' || this.state === 'loading';
 
@@ -789,6 +829,11 @@ export class GameScene {
       this.shieldFx.update(dt, this.monster.position, this.passives.bubbleActive());
       this.inkFx.update(dt);
       if (this.moment.update(realDt) && this.state === 'playing' && this.progression.pendingLevels > 0) this.enterLevelUp();
+      if (this.devour.update(realDt)) {
+        this.ultimateActive = false;
+        // Levels earned during the ultimate waited for its end.
+        if (levelUpNow(this.progression.pendingLevels, this.state === 'playing', false)) this.startLevelUpMoment();
+      }
       const dm = this.dmgMult();
       this.acid.update(dt, this.enemyTargets(), dm);
       // The Wendigo's patches of black fire keep burning.
@@ -856,14 +901,25 @@ export class GameScene {
     });
   }
 
-  /** The monster's ultimate goes off (the Wendigo's Devour). */
+  /** The monster's ultimate goes off (the Wendigo's Devour; the only one so far). */
   private startUltimate(): void {
-    this.monster.startRoar();
-    this.rig.addTrauma(0.5);
+    this.ultimateActive = true;
+    this.order = null;
+    this.markers.setTarget(null);
+    this.abilities.cancelAim();
+    this.devour.start(this.monster.position, this.dmgMult());
+    // The Wendigo rears up and holds its howl for the whole sequence (in world time, which runs slowed).
+    this.monster.startRoar(devourWorldLength());
+  }
+
+  /** Stop a running ultimate at once (restart, exit, death, a monster change). */
+  private cancelUltimate(): void {
+    this.devour.cancel();
+    this.ultimateActive = false;
   }
 
   pressAbility(id: ActiveId): void {
-    if (this.state !== 'playing' || !this.monster.alive) return;
+    if (this.state !== 'playing' || !this.monster.alive || this.ultimateActive) return;
     if (id === 'ultimate') {
       if (this.canUltimate() && this.abilities.trigger('ultimate')) this.startUltimate();
       return;
@@ -1307,7 +1363,7 @@ export class GameScene {
       this.overload(source, attacker);
       return;
     }
-    const r = resolveHit(amount, source, { dmgMult: difficulty(this.progression.level).dmgMult, deflectChance: this.deflectChance(), airborne: m.airborne, invulnerable: this.passives.bubbleActive() }, Math.random());
+    const r = resolveHit(amount, source, { dmgMult: difficulty(this.progression.level).dmgMult, deflectChance: this.deflectChance(), airborne: m.airborne, invulnerable: this.passives.bubbleActive() || this.ultimateActive }, Math.random());
     if (r.deflected) {
       this.particles.emit('spark', m.position.clone().setY(300 * CONFIG.monster.scale), 8);
       return;
@@ -1887,12 +1943,13 @@ export class GameScene {
   };
 
   private onTargetDestroyed = (target: Target, exp: number): void => {
-    if (target.kind !== 'building') this.particles.explosion(target.position, target.airborne ? 1.2 : 1);
+    // Taken by Devour: it goes down into the dark, not up in flames.
+    if (target.kind !== 'building' && !this.quietKill) this.particles.explosion(target.position, target.airborne ? 1.2 : 1);
     if (target.kind !== 'building') this.kills++;
     if (!this.monster.alive) return;
     this.progression.addExp(exp);
     this.events.emit('expGain', exp);
-    if (this.progression.pendingLevels > 0 && this.state === 'playing') this.startLevelUpMoment();
+    if (levelUpNow(this.progression.pendingLevels, this.state === 'playing', this.ultimateActive)) this.startLevelUpMoment();
   };
 
   dispose(): void {
@@ -1902,6 +1959,7 @@ export class GameScene {
     this.input.dispose();
     this.debug?.dispose();
     this.intro.dispose();
+    this.devour.dispose();
     cancelAnimationFrame(this.animationFrameId);
     this.resizeObserver.disconnect();
     this.pixel.dispose();

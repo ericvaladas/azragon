@@ -61,6 +61,7 @@ export class Monster {
   /** This leap's height: lower for a shorter jump. */
   private leapHeight = 0;
   private roarT = -1;
+  private roarD: number = CONFIG.abilities.roar.duration;
   private swatT = -1;
   private swatTarget: THREE.Vector3 | null = null;
   private swatHit = false;
@@ -79,7 +80,7 @@ export class Monster {
   private strikePoint = new THREE.Vector3();
   private frame: BodyFrame = {
     dt: 0, time: 0, cycle: 0, prevCycle: 0, motion: 0, pose: this.pose,
-    melee: null, antiAir: null, roaring: false, airborne: false, dashing: false, tailSweep: null, lookAt: null, charge: 0, heat: 0, flash: false, glow: 0,
+    melee: null, antiAir: null, roaring: false, roarDuration: CONFIG.abilities.roar.duration, airborne: false, dashing: false, tailSweep: null, lookAt: null, charge: 0, heat: 0, flash: false, glow: 0,
   };
   private meleeFrame: { t: number; side: number; target: THREE.Vector3; kind?: StrikeKind } = { t: 0, side: 0, target: this.strikePoint };
   /** The running strike's kind, when its starter decided one (the Wendigo's slam or backhand). */
@@ -248,7 +249,9 @@ export class Monster {
     this.swatHit = false;
   }
 
-  startRoar(): void {
+  /** Roar for `duration` world seconds (the howl pose and `busy` last that long). */
+  startRoar(duration: number = CONFIG.abilities.roar.duration): void {
+    this.roarD = duration;
     this.roarT = 0;
     this.meleeT = -1;
   }
@@ -372,6 +375,7 @@ export class Monster {
       f.leap = this.leapFrame;
     } else f.leap = null;
     f.roaring = this.roarT >= 0;
+    f.roarDuration = this.roarD;
     f.airborne = this.airborne;
     f.dashing = this.dashing;
     if (this.tailT >= 0) {
@@ -436,7 +440,7 @@ export class Monster {
     }
     if (this.roarT >= 0) {
       this.roarT += dt;
-      const k = this.roarT / CONFIG.abilities.roar.duration;
+      const k = this.roarT / this.roarD;
       this.pose.pitch = -0.45 * Math.sin(Math.PI * Math.min(1, k));
       if (k >= 1) this.roarT = -1;
     }

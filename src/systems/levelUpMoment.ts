@@ -34,3 +34,8 @@ export class LevelUpMoment {
     this.t = 0;
   }
 }
+
+/** Whether a level-up moment may start now: levels are pending, the game is playing, and no ultimate is running (it waits for the end). */
+export function levelUpNow(pending: number, playing: boolean, ultimateRunning: boolean): boolean {
+  return pending > 0 && playing && !ultimateRunning;
+}
