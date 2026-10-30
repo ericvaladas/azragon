@@ -102,6 +102,11 @@ export function untouchable(bubble: boolean, ultimateRunning: boolean): boolean 
   return bubble || ultimateRunning;
 }
 
+/** A tentacle slam lands its damage, except while an ultimate runs (Ink Storm's grab is only for show). */
+export function armSlamCounts(ultimateRunning: boolean): boolean {
+  return !ultimateRunning;
+}
+
 /** Walking swings the camera behind the monster unless the player is panning it or an ultimate holds it. */
 export function cameraFollowsWalk(pointerHeld: boolean, ultimateRunning: boolean): boolean {
   return !pointerHeld && !ultimateRunning;

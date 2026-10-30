@@ -49,11 +49,13 @@ import { Progression, expToNext } from './systems/Progression';
 import { regen } from './monster/vitals';
 import { DebugOverlay } from './systems/DebugOverlay';
 import type { Ultimate, UltimateId } from './systems/ultimate';
-import { Abilities, cameraFollowsWalk, ultimateBlocked, untouchable, type AbilityView, type ActiveId } from './systems/abilities';
+import { Abilities, armSlamCounts, cameraFollowsWalk, ultimateBlocked, untouchable, type AbilityView, type ActiveId } from './systems/abilities';
 import { Shockwave } from './systems/Shockwave';
 import { LevelUpMoment, levelUpNow } from './systems/levelUpMoment';
 import { Devour } from './monsters/wendigo/DevourSequence';
 import { BLOOD_ATMOSPHERE, devourWorldLength } from './monsters/wendigo/devour';
+import { InkStorm } from './monsters/kraken/InkStormSequence';
+import { STORM_ATMOSPHERE } from './monsters/kraken/inkStorm';
 import { LevelUpAura } from './systems/LevelUpAura';
 import { ShieldFx } from './systems/ShieldFx';
 import { InkFx } from './monsters/kraken/InkFx';
@@ -269,6 +271,45 @@ export class GameScene {
         }
         this.particles.emit('dust', at, 8, 1.2);
         this.particles.emit('ember', at, 6, 1);
+      },
+    });
+    const K = CONFIG.kraken.ultimate;
+    this.ultimates.inkStorm = new InkStorm(this.scene, this.camera, {
+      enemies: () => this.enemyTargets(),
+      // Taken quietly under the ink: no explosion, a wisp of ink where it was.
+      take: (t) => {
+        this.particles.emit('ink', t.position, 6, 1);
+        this.quietKill = true;
+        t.applyDamage(1e9);
+        this.quietKill = false;
+      },
+      smash: (t) => t.applyDamage(1e9),
+      hurtBoss: (t, dmg) => t.applyDamage(dmg),
+      buildingsWithin: (c, r) => {
+        const out: Target[] = [];
+        this.city.forEachStandingInRadius(c, r, (t) => out.push(t));
+        return out;
+      },
+      sky: (k) => this.city.blendAtmosphere(STORM_ATMOSPHERE, k),
+      camera: (k) => this.rig.pull(k, this.rig.orbit.pitch, CONFIG.camera.defaultDistance * K.cameraDistanceMult),
+      shake: (a) => this.rig.addTrauma(a),
+      height: (y) => this.monster.hold(y),
+      tips: () => this.monster.body.arms?.tips ?? null,
+      // Every arm plunges at once; the arms run on world time, so the slam is squeezed to fill the grab beat in real time.
+      grab: (points) => {
+        const arms = this.monster.body.arms;
+        if (!arms) return;
+        const S = CONFIG.kraken.stats.meleeTiming;
+        const k = ((K.t.grabTo - K.t.grabFrom) * K.timeScale) / S.end;
+        const timing = { windup: S.windup * k, impact: S.impact * k, end: S.end * k };
+        arms.clear();
+        points.forEach((p, i) => arms.start(i, 'slam', p, null, 0, timing));
+      },
+      siphon: (out) => this.monster.siphonOrigin(this.tmpV2.set(this.monster.position.x, 0, this.monster.position.z), out),
+      dust: (at) => {
+        this.particles.ring('dust', at, 90, 10);
+        this.particles.emit('debris', this.tmpV2.copy(at).setY(at.y + 10), 8, 1.2);
+        this.splasher.at(at);
       },
     });
     this.rotRing = new RotRing(this.scene);
@@ -1829,6 +1870,7 @@ export class GameScene {
 
   /** An arm's strike lands: a slam hits around its tip; a hurl releases its chunk from the tip. */
   private onArmImpact = (arm: number, s: ArmStrike): void => {
+    if (!armSlamCounts(this.ultimateActive)) return;
     const arms = this.monster.body.arms!;
     if (s.kind === 'hurl') {
       const tip = arms.tips[arm]!;

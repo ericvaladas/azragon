@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { Abilities, cameraFollowsWalk, ultimateBlocked, untouchable } from './abilities';
+import { Abilities, armSlamCounts, cameraFollowsWalk, ultimateBlocked, untouchable } from './abilities';
 import { CONFIG } from '../config';
 
 const A = CONFIG.abilities;
@@ -126,6 +126,11 @@ describe('Abilities', () => {
     expect(untouchable(false, false)).toBe(false);
     expect(untouchable(true, false)).toBe(true);
     expect(untouchable(false, true)).toBe(true);
+  });
+
+  it("a tentacle slam does its damage unless an ultimate runs (Ink Storm's grab is only for show)", () => {
+    expect(armSlamCounts(false)).toBe(true);
+    expect(armSlamCounts(true)).toBe(false);
   });
 
   it('walking swings the camera behind only when the player is not panning and no ultimate holds the camera', () => {
