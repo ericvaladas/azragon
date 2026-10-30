@@ -147,6 +147,17 @@ describe('Monster frame flags', () => {
 });
 
 describe('Monster.hold', () => {
+  it("passes the hold's brace to the body, and none once set down", () => {
+    const k = kind();
+    const seen: { carried: boolean; brace: number }[] = [];
+    const m = new Monster(new THREE.Scene(), { ...k, createBody: () => ({ ...stubBody(), animate: (f) => seen.push({ carried: f.carried, brace: f.brace }) }) });
+    m.hold(0, 0.7);
+    m.animate(0.016, 0);
+    m.hold(null);
+    m.animate(0.016, 0);
+    expect(seen).toEqual([{ carried: true, brace: 0.7 }, { carried: false, brace: 0 }]);
+  });
+
   it('a held monster stays where it is put, busy and airborne off the ground, then lands', () => {
     const k = kind();
     const m = new Monster(new THREE.Scene(), { ...k, createBody: () => ({ ...stubBody(), animate: (_f, land) => land(new THREE.Vector3()) }) });

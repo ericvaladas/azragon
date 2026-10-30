@@ -9,8 +9,7 @@ const INK_VIOLET = 0x45265e;
 const INK_SHEEN = 0x6a3d8c;
 const CLOUD_COLORS = [INK_DEEP, INK_DEEP, INK_DEEP, INK, INK, INK_VIOLET, INK_VIOLET, INK_SHEEN] as const;
 
-/** Pool size shared by blobs (head + trail) and cloud puffs. */
-const MAX = 400;
+/** Default limits: blobs in flight and puffs alive (a blob draws as its head and trail). */
 const MAX_BLOBS = 16;
 const MAX_PUFFS = 240;
 /** Blob head radius (m) and its stretch along the flight; trail blobs lag by TRAIL_LAG of the flight each. */
@@ -60,8 +59,21 @@ export class InkFx {
   private puffs: Puff[] = [];
   private freePuffs: Puff[] = [];
   private n = 0;
+  /** Instances drawn at most: every blob's head and trail plus every puff. */
+  private max: number;
+  private maxBlobs: number;
+  private maxPuffs: number;
 
-  constructor(scene: THREE.Scene) {
+  /** Puffs a run of `jets` jets makes in all (each puffs at the siphon and bursts into a cloud). */
+  static puffsFor(jets: number): number {
+    return jets * (SIPHON_PUFFS + CLOUD_PUFFS);
+  }
+
+  constructor(scene: THREE.Scene, capacity: { blobs: number; puffs: number } = { blobs: MAX_BLOBS, puffs: MAX_PUFFS }) {
+    this.maxBlobs = capacity.blobs;
+    this.maxPuffs = capacity.puffs;
+    this.max = capacity.blobs * (TRAIL + 1) + capacity.puffs;
+    const MAX = this.max;
     const geo = faceted(new THREE.IcosahedronGeometry(1, 1));
     this.alpha = new THREE.InstancedBufferAttribute(new Float32Array(MAX), 1);
     geo.setAttribute('instAlpha', this.alpha);
@@ -83,7 +95,7 @@ export class InkFx {
 
   /** Squirt a blob from `from` (the siphon) to `to` (the stopped shot); it bursts into a cloud of `scale` (burst) on arrival. */
   jet(from: THREE.Vector3, to: THREE.Vector3, scale = 1): void {
-    if (this.blobs.length >= MAX_BLOBS) return;
+    if (this.blobs.length >= this.maxBlobs) return;
     const b = this.freeBlobs.pop() ?? { from: new THREE.Vector3(), to: new THREE.Vector3(), t: 0, dur: 0, seed: 0, scale: 1 };
     b.from.copy(from);
     b.to.copy(to);
@@ -111,7 +123,7 @@ export class InkFx {
   }
 
   private puff(at: THREE.Vector3, vx: number, vy: number, vz: number, delay: number, size: number, color: number, rate: number): void {
-    if (this.puffs.length >= MAX_PUFFS) return;
+    if (this.puffs.length >= this.maxPuffs) return;
     const p = this.freePuffs.pop() ?? { pos: new THREE.Vector3(), vel: new THREE.Vector3(), age: 0, delay: 0, size: 0, color: 0, rate: 1, spin: 0 };
     p.pos.copy(at);
     p.vel.set(vx, vy, vz);
@@ -180,7 +192,7 @@ export class InkFx {
   }
 
   private put(pos: THREE.Vector3, q: THREE.Quaternion, s: THREE.Vector3, color: number, alpha: number): void {
-    if (this.n >= MAX || alpha <= 0.004) return;
+    if (this.n >= this.max || alpha <= 0.004) return;
     const i = this.n++;
     this.mesh.setMatrixAt(i, _m.compose(pos, q, s));
     this.mesh.setColorAt(i, _c.setHex(color));

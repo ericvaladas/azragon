@@ -2,12 +2,15 @@ import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import { CONFIG } from '../../config';
 import type { Target } from '../../combat';
+import { JET } from './inkMath';
 import { InkStorm, type InkStormHost } from './InkStormSequence';
 
 const U = CONFIG.kraken.ultimate;
 const T = U.t;
 const BOSS = CONFIG.wendigo.ultimate.bossDamage;
 const last = <X>(a: X[]) => a[a.length - 1];
+/** When the slowest ink jet has landed. */
+const INK_LANDS = T.inkFrom + JET.maxTime / U.inkSpeed;
 
 const unit = (x: number, y = 0, extra: Partial<Target> = {}): Target & { hits: number[]; kill(): void } => {
   const hits: number[] = [];
@@ -39,7 +42,10 @@ function rig(enemies: Target[], buildings: Target[] = []) {
     sky: [] as number[],
     camera: [] as number[],
     height: [] as [number | null, number][],
+    brace: [] as number[],
+    flash: [] as [number, number][],
     grabs: [] as THREE.Vector3[][],
+    swings: [] as { arm: number; at: THREE.Vector3; windup: number; follow: number; t: number }[],
     dust: [] as [THREE.Vector3, number][],
     buildingT: [] as [number, number][],
     calls: 0,
@@ -71,12 +77,15 @@ function rig(enemies: Target[], buildings: Target[] = []) {
       log.camera.push(k);
     },
     shake: () => {},
-    height: (y) => {
+    flash: (k) => log.flash.push([k, now]),
+    height: (y, brace = 0) => {
       log.calls++;
       log.height.push([y, now]);
+      log.brace.push(brace);
     },
     tips: () => tips,
     grab: (p) => log.grabs.push(p.map((v) => v.clone())),
+    swing: (arm, at, windup, follow) => log.swings.push({ arm, at: at.clone(), windup, follow, t: now }),
     siphon: (out) => out.set(0, 600, 0),
     dust: (at) => log.dust.push([at.clone(), now]),
   };
@@ -113,6 +122,25 @@ describe('InkStorm', () => {
     expect(r.log.height.filter(([h]) => h === null)).toHaveLength(1);
   });
 
+  it("holds the Kraken braced on its arms through the leap's push, per the timeline", () => {
+    const r = rig([]);
+    r.s.start(new THREE.Vector3(), 1);
+    r.run(T.end + 0.1);
+    const at = (t: number) => r.log.brace[r.log.height.findIndex(([, n]) => n >= t)]!;
+    expect(at(T.grabFrom - 0.05)).toBe(0);
+    expect(at(T.leapFrom)).toBeCloseTo(1, 1);
+    expect(at(T.peakAt)).toBe(0);
+  });
+
+  it('runs its ink at inkSpeed: a jet is still in the air when a full-speed one would have landed', () => {
+    const r = rig([]);
+    r.s.start(new THREE.Vector3(), 1);
+    r.run(T.inkFrom + JET.maxTime + 0.02);
+    expect(r.s['ink'].active.blobs).toBeGreaterThan(0);
+    r.run(INK_LANDS + U.inkSquirt + 0.1);
+    expect(r.s['ink'].active.blobs).toBe(0);
+  });
+
   it('takes the ground under the ink nearest first during the ink beat, and the buildings', () => {
     const far = unit(800);
     const near = unit(100);
@@ -126,12 +154,12 @@ describe('InkStorm', () => {
     r.run(T.end + 0.1);
     expect(r.log.taken.map(([t]) => t)).toEqual([near, mid, far]);
     for (const [, t] of r.log.taken) {
-      expect(t).toBeGreaterThanOrEqual(T.inkFrom);
+      expect(t).toBeGreaterThanOrEqual(INK_LANDS - 1e-6);
       expect(t).toBeLessThanOrEqual(T.inkTo + 0.02);
     }
     expect(r.log.buildingT.map(([x]) => x)).toEqual([200, 700]);
     for (const [, t] of r.log.buildingT) {
-      expect(t).toBeGreaterThanOrEqual(T.inkFrom);
+      expect(t).toBeGreaterThanOrEqual(INK_LANDS - 1e-6);
       expect(t).toBeLessThanOrEqual(T.inkTo + 0.02);
     }
     expect(outside.isAlive()).toBe(true);
@@ -144,12 +172,80 @@ describe('InkStorm', () => {
     r.run(T.end + 0.1);
     expect(r.log.smashed.map(([t]) => t)).toEqual(air.slice(0, 8));
     for (const [, t] of r.log.smashed) {
-      expect(t).toBeGreaterThanOrEqual(T.throwFrom + U.chunkFlight);
+      expect(t).toBeGreaterThanOrEqual(T.throwFrom + U.chunkFlight - 0.02);
       expect(t).toBeLessThanOrEqual(T.throwTo + U.chunkFlight + 0.02);
     }
     expect(air[8]!.isAlive()).toBe(true);
     expect(air[9]!.isAlive()).toBe(true);
     expect(r.log.taken).toHaveLength(0);
+  });
+
+  it('swings each arm to throw its chunk: the whip lands as the chunk leaves, aimed where it goes', () => {
+    const air = Array.from({ length: 3 }, (_, i) => unit(80 * (i + 1), 400));
+    const r = rig(air);
+    r.s.start(new THREE.Vector3(), 1);
+    r.run(T.end + 0.1);
+    expect(r.log.swings.map((s) => s.arm)).toEqual([0, 1, 2, 3, 4, 5, 6, 7]);
+    r.log.swings.forEach((s, i) => {
+      const release = T.throwFrom + ((T.throwTo - T.throwFrom) * i) / U.chunks;
+      expect(s.windup).toBe(U.swingWindup);
+      expect(s.follow).toBe(U.swingFollow);
+      expect(s.t).toBeGreaterThanOrEqual(release - U.swingWindup - 1e-6);
+      expect(s.t).toBeLessThan(release - U.swingWindup + 1 / 60 + 1e-6);
+    });
+    // The first three go for the aircraft (nearest first); the rest down into the ink.
+    for (let i = 0; i < 3; i++) expect(r.log.swings[i]!.at.distanceTo(air[i]!.position)).toBeLessThan(1e-6);
+    for (let i = 3; i < 8; i++) expect(r.log.swings[i]!.at.y).toBe(0);
+  });
+
+  it('strikes lightning twice as the sky darkens, flashing the scene, and leaves no flash behind', () => {
+    const r = rig([]);
+    const struck: [THREE.Vector3, number][] = [];
+    const lightning = r.s['lightning'];
+    const strike = lightning.strike.bind(lightning);
+    lightning.strike = (at: THREE.Vector3) => {
+      struck.push([at.clone(), r.at()]);
+      strike(at);
+    };
+    r.s.start(new THREE.Vector3(), 1);
+    r.run(T.end + 0.1);
+    expect(struck.map(([, t]) => t)).toHaveLength(2);
+    struck.forEach(([at, t], i) => {
+      expect(t).toBeGreaterThanOrEqual(U.bolts[i]! - 1e-6);
+      expect(t).toBeLessThan(U.bolts[i]! + 1 / 60 + 1e-6);
+      expect(t).toBeLessThan(T.sky);
+      expect(at.y).toBe(0);
+      expect(Math.hypot(at.x, at.z)).toBeLessThanOrEqual(U.radius);
+    });
+    expect(Math.max(...r.log.flash.map(([k]) => k))).toBeGreaterThan(0.5);
+    expect(last(r.log.flash)![0]).toBe(0);
+  });
+
+  it('jumps, inks, waits, then throws: no arm winds up until a beat after the ink has taken its last', () => {
+    const r = rig([unit(100), unit(800), unit(300, 400)]);
+    r.s.start(new THREE.Vector3(), 1);
+    r.run(T.end + 0.1);
+    const inkDone = Math.max(...r.log.taken.map(([, t]) => t));
+    expect(r.log.taken).toHaveLength(2);
+    expect(r.log.swings[0]!.t).toBeGreaterThanOrEqual(Math.max(inkDone, T.inkTo) + 0.25);
+    expect(r.log.swings[0]!.t).toBeGreaterThan(T.peakAt);
+  });
+
+  it('squirts every one of its ink jets, each landing in its own cloud', () => {
+    const r = rig([]);
+    const ink = r.s['ink'];
+    let bursts = 0;
+    const burst = ink.burst.bind(ink);
+    ink.burst = (at: THREE.Vector3, scale?: number) => {
+      bursts++;
+      burst(at, scale);
+    };
+    r.s.start(new THREE.Vector3(), 1);
+    r.run(T.inkFrom + U.inkSquirt);
+    expect(ink.active.blobs).toBeGreaterThan(16);
+    r.run(T.inkTo + 0.5);
+    expect(bursts).toBe(U.inkJets);
+    expect(U.inkJets).toBeGreaterThanOrEqual(30);
   });
 
   it('chunks with no aircraft fly down into the ink', () => {
@@ -193,7 +289,8 @@ describe('InkStorm', () => {
   it('pauses freeze it', () => {
     const r = rig([unit(100)]);
     r.s.start(new THREE.Vector3(), 1);
-    r.run(2.0);
+    // Mid-leap, just before the ink would take the unit.
+    r.run(T.inkFrom - 0.1);
     const h = last(r.log.height)![0];
     const scale = r.s.timeScale();
     for (let i = 0; i < 100; i++) r.s.update(0);

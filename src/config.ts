@@ -331,24 +331,34 @@ export const CONFIG = {
       ink: 0x2a1838,
       chunk: 0x8a8378,
       /** Ink Storm's sky (zenith, horizon, fog, the two lights) and its rain. */
-      stormZenith: 0x0b1018,
-      stormHorizon: 0x2c3846,
-      stormFog: 0x262c33,
-      stormHemiSky: 0x5a6a80,
-      stormHemiGround: 0x101418,
-      stormSun: 0x9fb4cc,
+      stormZenith: 0x2a3848,
+      stormHorizon: 0x6a7a8c,
+      stormFog: 0x5c6670,
+      stormHemiSky: 0x8a9ab0,
+      stormHemiGround: 0x2a3038,
+      stormSun: 0xb8c8da,
       rain: 0xa8b8cc,
+      /** Ink Storm's lightning: its white core, cold edge and the scorch it leaves. */
+      boltCore: 0xf4f8ff,
+      boltEdge: 0x6fa8ff,
+      boltScorch: 0x14161c,
     },
     /**
      * Ink Storm (Q), on real seconds: the ink's radius (m), the world time scale, chunks (one per arm), the leap's
-     * peak (m), the camera pull, a chunk's flight (s), arc (m) and size (m), the ink jets and the scale of the cloud
-     * each bursts into (InkFx.burst), how far out the arms plunge (m), the beats (s), and the storm's light intensities.
+     * peak (m), the camera pull, a chunk's flight (s), arc (m) and size (m), the ink jets, how long (s) the siphon takes
+     * to squirt them, the scale of the cloud each bursts into (InkFx.burst) and how fast the ink plays (its own slow
+     * motion), how far out the arms dig in (m), the beats (s), and the storm's light intensities.
+     * The leap is one arc: up to (1 - hangDrop) of the peak by peakAt, drifting over the peak through the hang (until
+     * fallFrom) and back to that height, then falling. Lightning strikes at the bolts times (s), within boltSpread of the radius. The camera pulls back until cameraTo.
+     * The arms brace on the ground from braceFrom, fully by braceIn, and push off until pushTo. Each throw is a swing (s):
+     * the arm draws back for swingWindup, the last swingWhip of it lashing out, the chunk leaving as it ends, then
+     * follows through for swingFollow.
      */
     ultimate: {
-      radius: 900, timeScale: 0.25, chunks: 8, peak: 600, cameraDistanceMult: 2.2, chunkFlight: 0.5, chunkArc: 120, chunkSize: 80,
-      inkJets: 14, inkScale: 3.6, grabReach: 280,
-      t: { easeIn: 0.2, sky: 0.8, rainFrom: 0.3, grabFrom: 0.5, grabTo: 1.4, leapFrom: 1.4, peakAt: 2.2, inkFrom: 2.2, inkTo: 3.0, throwFrom: 2.4, throwTo: 3.0, fallTo: 3.8, outroFrom: 3.8, end: 4.8 },
-      hemiIntensity: 0.45, sunIntensity: 0.6,
+      radius: 900, timeScale: 0.25, chunks: 8, peak: 600, hangDrop: 0.15, cameraDistanceMult: 2.2, chunkFlight: 0.9, chunkArc: 120, chunkSize: 80,
+      inkJets: 30, inkSquirt: 0.5, inkScale: 3.6, inkSpeed: 0.3, grabReach: 280, bolts: [0.25, 0.6], boltSpread: 0.6, swingWindup: 0.7, swingWhip: 0.3, swingFollow: 0.6,
+      t: { easeIn: 0.2, sky: 0.8, rainFrom: 0.3, cameraTo: 2.6, grabFrom: 0.5, grabTo: 1.4, braceFrom: 0.5, braceIn: 0.9, leapFrom: 1.4, pushTo: 1.75, peakAt: 2.6, inkFrom: 2.0, inkTo: 3.2, throwFrom: 4.2, throwTo: 5.0, fallFrom: 5.6, fallTo: 6.6, outroFrom: 6.6, end: 7.8 },
+      hemiIntensity: 0.65, sunIntensity: 0.8,
     },
   },
   /** The Wendigo (id `wendigo`). Stats feed its MonsterKind; fist and lob tune its attacks; colours its body and effects. */

@@ -90,6 +90,10 @@ export type BodyFrame = {
   /** How long the current (or last) roar lasts, world seconds. */
   roarDuration: number;
   airborne: boolean;
+  /** An ultimate is holding the monster (Monster.hold): its body rides as one piece, nothing trailing in the world. */
+  carried: boolean;
+  /** How hard a carried body braces against the ground 0..1 (Ink Storm's arms pressing down and pushing off). */
+  brace: number;
   dashing: boolean;
   /** Active Tail Sweep: seconds in, which side (+1 = left/+X), its timeline. */
   tailSweep: { t: number; side: number; timing: { windup: number; impact: number; end: number } } | null;

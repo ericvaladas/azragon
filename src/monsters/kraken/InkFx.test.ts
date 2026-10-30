@@ -89,6 +89,18 @@ describe('InkFx', () => {
     expect(maxD).toBeLessThanOrEqual(130);
   });
 
+  it('flies as many blobs at once as it was built for', () => {
+    const at = new THREE.Vector3(0, 0, 900);
+    const small = new InkFx(new THREE.Scene());
+    const big = new InkFx(new THREE.Scene(), { blobs: 30, puffs: InkFx.puffsFor(30) });
+    for (let i = 0; i < 30; i++) {
+      small.jet(ORIGIN, at);
+      big.jet(ORIGIN, at);
+    }
+    expect(small.active.blobs).toBe(16);
+    expect(big.active.blobs).toBe(30);
+  });
+
   it('a bigger burst spreads wider', () => {
     const reach = (scale: number) => {
       const scene = new THREE.Scene();

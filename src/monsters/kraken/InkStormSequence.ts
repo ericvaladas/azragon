@@ -3,10 +3,12 @@ import { CONFIG } from '../../config';
 import type { Target } from '../../combat';
 import type { Vec2 } from '../../util/math';
 import { faceted, toonMat } from '../../render/toon';
+import { Lightning } from '../../systems/Lightning';
 import { Rain } from '../../systems/Rain';
 import { ballistic } from '../../systems/projectileMath';
 import type { Ultimate } from '../../systems/ultimate';
 import { InkFx } from './InkFx';
+import { JET } from './inkMath';
 import { chunkTargets, inkPhase, inkVictims } from './inkStorm';
 
 const U = CONFIG.kraken.ultimate;
@@ -15,9 +17,9 @@ const C = CONFIG.kraken.colors;
 const BOSS_DAMAGE = CONFIG.wendigo.ultimate.bossDamage;
 /** When the chunks come up out of the ground: halfway through the grab. */
 const TORN_AT = (T.grabFrom + T.grabTo) / 2;
-/** The ink jets leave the siphon one after another over this long (s) from inkFrom. */
-const JET_SPREAD = 0.3;
 const GOLDEN = Math.PI * (3 - Math.sqrt(5));
+/** When the slowest ink jet has landed (its flight played at inkSpeed): the ink starts taking what is under it. */
+const INK_LANDS = T.inkFrom + JET.maxTime / U.inkSpeed;
 
 /** What Ink Storm does to the game, supplied by GameScene. */
 export type InkStormHost = {
@@ -35,12 +37,16 @@ export type InkStormHost = {
   /** Camera pull-back 0..1 (0 restores the player's own view). */
   camera(k: number): void;
   shake(amount: number): void;
+  /** A lightning flash on the scene light, 0..1. */
+  flash(k: number): void;
   /** Hold the Kraken this high (m) above where it stands; null sets it down on the ground and frees it. */
-  height(y: number | null): void;
+  height(y: number | null, brace?: number): void;
   /** The tentacle tips, world space (null when the body has no arms). */
   tips(): readonly THREE.Vector3[] | null;
-  /** Plunge the arms to these ground points, one each. */
+  /** The arms reach out along the ground and dig in at these points, one each (the brace pose takes them there). */
   grab(points: THREE.Vector3[]): void;
+  /** Swing arm `arm` to throw at `at`: drawing back for `windup` real seconds (whipping out at its end), then following through for `follow`. */
+  swing(arm: number, at: THREE.Vector3, windup: number, follow: number): void;
   /** The siphon's world point, squirting down. */
   siphon(out: THREE.Vector3): THREE.Vector3;
   /** Dust and rubble bursting up at a ground point. */
@@ -60,10 +66,11 @@ const _axis = new THREE.Vector3(0.4, 1, 0.2).normalize();
 
 /**
  * Ink Storm, the Kraken's ultimate, on its real-time timeline (inkPhase): the world slows, the camera pulls back, the
- * sky turns to storm and rain falls; all eight arms plunge into the ground and come up holding a chunk each; the
- * Kraken leaps straight up, squirts ink jets down across the circle that billow into a cloud, taking every ground
- * unit and building under it (nearest first); the arms hurl their chunks at the nearest aircraft (or down into the
- * ink); it falls back where it jumped and everything clears. It owns its rain, its ink and its chunks.
+ * sky turns to storm, lightning strikes and rain falls; all eight arms reach out along the ground and dig in, tearing
+ * up a chunk each; braced on them, the Kraken pushes off straight up, squirts ink jets down across the circle that
+ * billow into a cloud, taking every ground unit and building under it (nearest first); the arms swing their chunks
+ * overhead at the nearest aircraft (or down into the ink); it falls back where it jumped and everything clears. It
+ * owns its rain, its lightning, its ink and its chunks.
  */
 export class InkStorm implements Ultimate {
   active = false;
@@ -79,6 +86,9 @@ export class InkStorm implements Ultimate {
   private landed = false;
   private jets = 0;
   private thrown = 0;
+  private swung = 0;
+  private bolted = 0;
+  private lightning: Lightning;
   private falling: Pending[] = [];
   private chunks: Chunk[] = Array.from({ length: U.chunks }, () => ({ state: 'off' as const, from: new THREE.Vector3(), to: new THREE.Vector3(), target: null, t: 0 }));
   private grabPoints = Array.from({ length: U.chunks }, () => new THREE.Vector3());
@@ -98,7 +108,12 @@ export class InkStorm implements Ultimate {
     this.chunkMesh.visible = false;
     scene.add(this.chunkMesh);
     this.rain = new Rain(scene, C.rain);
-    this.ink = new InkFx(scene);
+    this.ink = new InkFx(scene, { blobs: U.inkJets, puffs: InkFx.puffsFor(U.inkJets) });
+    // Dust and a jolt land with each return stroke.
+    this.lightning = new Lightning(scene, camera, { core: C.boltCore, edge: C.boltEdge, scorch: C.boltScorch }, rand, (at) => {
+      this.host.dust(at);
+      this.host.shake(0.04);
+    });
   }
 
   /** World time scale while it runs (1 when idle). */
@@ -118,7 +133,7 @@ export class InkStorm implements Ultimate {
   update(realDt: number): boolean {
     if (!this.active) {
       // The last of the ink thins away after control returns.
-      this.ink.update(realDt);
+      this.ink.update(realDt * U.inkSpeed);
       return false;
     }
     this.t += realDt;
@@ -127,9 +142,18 @@ export class InkStorm implements Ultimate {
     this.host.sky(ph.sky);
     this.host.camera(ph.camera);
     this.rain.update(realDt * ph.time, this.camera, ph.rain);
-    this.host.height(ph.height);
-    this.ink.update(realDt);
+    this.host.height(ph.height, ph.brace);
+    this.ink.update(realDt * U.inkSpeed);
     const c = { x: this.center.x, z: this.center.z };
+
+    // Lightning as the sky darkens.
+    while (this.bolted < U.bolts.length && this.t >= U.bolts[this.bolted]!) {
+      this.bolted++;
+      const a = this.rand() * Math.PI * 2;
+      const r = (0.3 + 0.7 * Math.sqrt(this.rand())) * U.boltSpread * U.radius;
+      this.lightning.strike(_v.set(c.x + Math.sin(a) * r, 0, c.z + Math.cos(a) * r));
+    }
+    this.host.flash(this.lightning.update(realDt));
 
     if (!this.grabbed && this.t >= T.grabFrom) {
       this.grabbed = true;
@@ -152,13 +176,13 @@ export class InkStorm implements Ultimate {
     if (!this.inked && this.t >= T.inkFrom) {
       // The cloud reaches each ground unit, boss and building under it in turn, nearest the centre first.
       this.inked = true;
-      const span = T.inkTo - T.inkFrom;
-      const when = (t: Target) => T.inkFrom + span * Math.min(1, Math.hypot(t.position.x - c.x, t.position.z - c.z) / U.radius);
+      const span = T.inkTo - INK_LANDS;
+      const when = (t: Target) => INK_LANDS + span * Math.min(1, Math.hypot(t.position.x - c.x, t.position.z - c.z) / U.radius);
       const v = inkVictims(c, U.radius, this.host.enemies());
       for (const t of [...v.ground, ...v.bosses, ...this.host.buildingsWithin(c, U.radius)]) this.falling.push({ t: when(t), target: t });
       this.falling.sort((a, b) => a.t - b.t);
     }
-    while (this.inked && this.jets < U.inkJets && this.t >= T.inkFrom + (JET_SPREAD * this.jets) / U.inkJets) {
+    while (this.inked && this.jets < U.inkJets && this.t >= T.inkFrom + (U.inkSquirt * this.jets) / U.inkJets) {
       // Jets spread over the circle on a sunflower spiral, each bursting into a big cloud where it lands.
       const j = this.jets++;
       const r = U.radius * 0.85 * Math.sqrt((j + 0.5) / U.inkJets);
@@ -179,7 +203,8 @@ export class InkStorm implements Ultimate {
       for (const t of inkVictims(c, U.radius, this.host.enemies()).ground) this.host.take(t);
     }
 
-    if (!this.aimed && this.t >= T.throwFrom) {
+    // Aimed as the first arm starts its swing.
+    if (!this.aimed && this.t >= T.throwFrom - U.swingWindup) {
       this.aimed = true;
       const air = chunkTargets(c, U.radius, this.host.enemies(), U.chunks);
       for (let i = 0; i < U.chunks; i++) {
@@ -193,8 +218,13 @@ export class InkStorm implements Ultimate {
         }
       }
     }
+    // Each arm starts its swing so the whip lands as its chunk leaves.
+    while (this.aimed && this.swung < U.chunks && this.t >= this.releaseAt(this.swung) - U.swingWindup) {
+      const k = this.chunks[this.swung]!;
+      this.host.swing(this.swung++, k.target ? k.target.position : k.to, U.swingWindup, U.swingFollow);
+    }
     const tips = this.host.tips();
-    while (this.aimed && this.thrown < U.chunks && this.t >= T.throwFrom + ((T.throwTo - T.throwFrom) * this.thrown) / U.chunks) {
+    while (this.aimed && this.thrown < U.chunks && this.t >= this.releaseAt(this.thrown)) {
       const k = this.chunks[this.thrown++]!;
       this.heldAt(this.thrown - 1, tips, k.from);
       k.state = 'flying';
@@ -222,10 +252,16 @@ export class InkStorm implements Ultimate {
     }
     if (!ph.done) return false;
     this.host.height(null);
+    this.host.flash(0);
     this.host.sky(0);
     this.host.camera(0);
     this.clear(true);
     return true;
+  }
+
+  /** When chunk `i` leaves its arm's tip (s). */
+  private releaseAt(i: number): number {
+    return T.throwFrom + ((T.throwTo - T.throwFrom) * i) / U.chunks;
   }
 
   /** Where arm `i` holds its chunk: its tip, or (with no arms) a point on the ring under the Kraken. */
@@ -256,6 +292,7 @@ export class InkStorm implements Ultimate {
       this.host.height(null);
       this.host.sky(0);
       this.host.camera(0);
+      this.host.flash(0);
     }
     this.clear();
   }
@@ -266,7 +303,7 @@ export class InkStorm implements Ultimate {
     this.t = 0;
     this.time = 1;
     this.grabbed = this.torn = this.inked = this.swept = this.aimed = this.landed = false;
-    this.jets = this.thrown = 0;
+    this.jets = this.thrown = this.swung = this.bolted = 0;
     this.falling = [];
     for (const k of this.chunks) {
       k.state = 'off';
@@ -275,6 +312,7 @@ export class InkStorm implements Ultimate {
     this.chunkMesh.count = 0;
     this.chunkMesh.visible = false;
     this.rain.clear();
+    this.lightning.clear();
     if (!keepInk) this.ink.clear();
   }
 
@@ -284,5 +322,6 @@ export class InkStorm implements Ultimate {
     (this.chunkMesh.material as THREE.Material).dispose();
     this.rain.dispose();
     this.ink.dispose();
+    this.lightning.dispose();
   }
 }

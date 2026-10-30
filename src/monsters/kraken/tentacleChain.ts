@@ -68,9 +68,10 @@ export class TentacleChain {
   /**
    * The chain's frame moved (e.g. the body walked or turned): `delta` maps last frame's coordinates to this
    * frame's, so the joints keep their place in the world and trail behind. A jump longer than `snapDist`
-   * (a teleport) makes the next step snap to its targets instead.
+   * (a teleport) makes the next step snap to its targets instead. `weight` below 1 carries the joints over only that
+   * much of the move; the rest of the way they ride with the frame.
    */
-  shift(delta: THREE.Matrix4, snapDist: number): void {
+  shift(delta: THREE.Matrix4, snapDist: number, weight = 1): void {
     if (!this.ready) return;
     const e = delta.elements;
     if (Math.hypot(e[12]!, e[13]!, e[14]!) > snapDist) {
@@ -79,8 +80,8 @@ export class TentacleChain {
     }
     _m3.setFromMatrix4(delta);
     for (let j = 0; j <= this.segments; j++) {
-      this.joints[j]!.applyMatrix4(delta);
-      this.vel[j]!.applyMatrix3(_m3);
+      this.joints[j]!.lerp(_prev.copy(this.joints[j]!).applyMatrix4(delta), weight);
+      this.vel[j]!.lerp(_mid.copy(this.vel[j]!).applyMatrix3(_m3), weight);
     }
   }
 

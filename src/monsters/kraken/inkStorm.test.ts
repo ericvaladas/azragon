@@ -18,14 +18,45 @@ const target = (x: number, y = 0, extra: Partial<Target> = {}): Target => ({
 const c = { x: 0, z: 0 };
 
 describe('inkPhase', () => {
+  it('keeps moving through the hang: one jump arc, topping out between the ink and the throws, never still', () => {
+    expect(T.fallFrom).toBeGreaterThanOrEqual(Math.max(T.inkTo, T.throwTo) + 0.5);
+    const apex = (T.peakAt + T.fallFrom) / 2;
+    expect(apex).toBeGreaterThan(T.inkTo);
+    expect(apex).toBeLessThan(T.throwFrom);
+    expect(inkPhase(apex).height).toBeCloseTo(U.peak);
+    const h = (t: number) => inkPhase(t).height;
+    for (let t = T.leapFrom + 0.05; t < T.fallTo - 0.02; t += 0.05) {
+      expect(h(t)).toBeLessThanOrEqual(U.peak + 1e-6);
+      // Never still, except for an instant at the apex.
+      if (Math.abs(t - apex) > 0.1) expect(Math.abs(h(t + 0.01) - h(t))).toBeGreaterThan(0.05);
+    }
+    // No jolt where the rise, the hang and the fall meet: the speed carries across.
+    const v = (t: number) => (h(t + 1e-6) - h(t - 1e-6)) / 2e-6;
+    for (const b of [T.peakAt, T.fallFrom]) expect(v(b + 1e-5)).toBeCloseTo(v(b - 1e-5), 0);
+    expect(h(T.fallTo)).toBe(0);
+  });
+
+  it('rises gently at first, pushed off by the arms, not launched at full speed', () => {
+    expect(inkPhase(T.leapFrom + 0.1).height).toBeLessThan(U.peak * 0.05);
+  });
+
+  it('braces the arms with the grab, fully before the leap, and lets go early in the rise', () => {
+    expect(inkPhase(T.braceFrom).brace).toBe(0);
+    expect(inkPhase(T.braceIn).brace).toBe(1);
+    expect(inkPhase(T.leapFrom).brace).toBe(1);
+    const mid = inkPhase((T.leapFrom + T.pushTo) / 2);
+    expect(mid.brace).toBeGreaterThan(0);
+    expect(mid.brace).toBeLessThan(1);
+    expect(mid.height).toBeGreaterThan(0);
+    expect(inkPhase(T.pushTo).brace).toBe(0);
+    expect(inkPhase(T.peakAt).brace).toBe(0);
+  });
+
   it('phases', () => {
     expect(inkPhase(0).time).toBe(1);
     expect(inkPhase(1).time).toBeCloseTo(U.timeScale);
     expect(inkPhase(T.end).time).toBe(1);
     expect(inkPhase(T.leapFrom - 0.01).height).toBe(0);
-    expect(inkPhase(T.peakAt).height).toBeCloseTo(U.peak);
-    expect(inkPhase((T.peakAt + T.inkTo) / 2).height).toBeCloseTo(U.peak);
-    expect(inkPhase(T.inkTo).height).toBeCloseTo(U.peak);
     expect(inkPhase(T.fallTo).height).toBe(0);
     expect(inkPhase(T.inkFrom - 0.01).ink).toBe(0);
     expect(inkPhase(T.inkTo).ink).toBe(1);
@@ -35,7 +66,11 @@ describe('inkPhase', () => {
     expect(inkPhase(2).rain).toBe(1);
     expect(inkPhase(T.end).sky).toBe(0);
     expect(inkPhase(T.end).rain).toBe(0);
-    expect(inkPhase(2).camera).toBe(1);
+    // The camera pulls back slowly, all through the rise.
+    expect(inkPhase(T.leapFrom).camera).toBeGreaterThan(0);
+    expect(inkPhase(T.leapFrom).camera).toBeLessThan(0.75);
+    expect(inkPhase(T.cameraTo).camera).toBe(1);
+    expect(T.cameraTo).toBeGreaterThan(T.leapFrom);
     expect(inkPhase(T.end - 0.01).done).toBe(false);
     expect(inkPhase(T.end).done).toBe(true);
   });

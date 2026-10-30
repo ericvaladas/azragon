@@ -293,17 +293,21 @@ export class GameScene {
       sky: (k) => this.city.blendAtmosphere(STORM_ATMOSPHERE, k),
       camera: (k) => this.rig.pull(k, this.rig.orbit.pitch, CONFIG.camera.defaultDistance * K.cameraDistanceMult),
       shake: (a) => this.rig.addTrauma(a),
-      height: (y) => this.monster.hold(y),
+      flash: (k) => {
+        this.lighting.hemi.intensity += k * 3;
+      },
+      height: (y, brace) => this.monster.hold(y, brace),
       tips: () => this.monster.body.arms?.tips ?? null,
       // Every arm plunges at once; the arms run on world time, so the slam is squeezed to fill the grab beat in real time.
-      grab: (points) => {
+      // The body's brace pose reaches each arm out along the ground to its grab point (BRACE_R is grabReach):
+      // the arms only need freeing from whatever they were doing.
+      grab: () => this.monster.body.arms?.clear(),
+      swing: (arm, at, windup, follow) => {
         const arms = this.monster.body.arms;
         if (!arms) return;
-        const S = CONFIG.kraken.stats.meleeTiming;
-        const k = ((K.t.grabTo - K.t.grabFrom) * K.timeScale) / S.end;
-        const timing = { windup: S.windup * k, impact: S.impact * k, end: S.end * k };
-        arms.clear();
-        points.forEach((p, i) => arms.start(i, 'slam', p, null, 0, timing));
+        // The arms run on slowed world time; the whip lands at the end of the real-time windup.
+        const s = K.timeScale;
+        arms.start(arm, 'fling', at, null, 0, { windup: windup * (1 - K.swingWhip) * s, impact: windup * s, end: (windup + follow) * s });
       },
       siphon: (out) => this.monster.siphonOrigin(this.tmpV2.set(this.monster.position.x, 0, this.monster.position.z), out),
       dust: (at) => {

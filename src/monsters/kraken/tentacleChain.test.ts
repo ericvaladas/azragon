@@ -110,4 +110,14 @@ describe('TentacleChain', () => {
     c.step(1 / 60, tg, 10, TUNE, [], () => 0);
     expect(c.joints[N]!.x).toBeCloseTo(100);
   });
+
+  it('carries over only `weight` of a moved frame: the rest of the way the joints ride with it', () => {
+    const c = new TentacleChain(N);
+    const tg = line(N, 100);
+    run(c, tg, 0.1);
+    c.shift(new THREE.Matrix4().makeTranslation(0, -40, 0), 1000, 0.25);
+    expect(c.joints[N]!.y).toBeCloseTo(-10);
+    c.shift(new THREE.Matrix4().makeTranslation(0, -40, 0), 1000, 0);
+    expect(c.joints[N]!.y).toBeCloseTo(-10);
+  });
 });

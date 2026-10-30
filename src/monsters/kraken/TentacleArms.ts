@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import type { Target } from '../../combat';
 import { ARM_COUNT, type ArmRole } from './crawl';
 
-export type StrikeKind = 'slam' | 'hurl';
+export type StrikeKind = 'slam' | 'hurl' | 'fling';
 export type StrikeTiming = { windup: number; impact: number; end: number };
 export type ArmStrike = { kind: StrikeKind; t: number; target: THREE.Vector3; live: Target | null; timing: StrikeTiming; hit: boolean };
 

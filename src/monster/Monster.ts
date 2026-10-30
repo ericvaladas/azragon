@@ -57,6 +57,7 @@ export class Monster {
   private leapT = -1;
   /** Held at this height by an ultimate (null when free). */
   private heldY: number | null = null;
+  private braceW = 0;
   private dashT = -1;
   private dashDuration = 1;
   private dashFrom = { x: 0, z: 0 };
@@ -85,7 +86,7 @@ export class Monster {
   private strikePoint = new THREE.Vector3();
   private frame: BodyFrame = {
     dt: 0, time: 0, cycle: 0, prevCycle: 0, motion: 0, pose: this.pose,
-    melee: null, antiAir: null, roaring: false, roarDuration: CONFIG.abilities.roar.duration, airborne: false, dashing: false, tailSweep: null, lookAt: null, charge: 0, heat: 0, flash: false, glow: 0,
+    melee: null, antiAir: null, roaring: false, roarDuration: CONFIG.abilities.roar.duration, airborne: false, carried: false, brace: 0, dashing: false, tailSweep: null, lookAt: null, charge: 0, heat: 0, flash: false, glow: 0,
   };
   private meleeFrame: { t: number; side: number; target: THREE.Vector3; kind?: StrikeKind } = { t: 0, side: 0, target: this.strikePoint };
   /** The running strike's kind, when its starter decided one (the Wendigo's slam or backhand). */
@@ -173,9 +174,11 @@ export class Monster {
 
   /**
    * An ultimate holds the monster at `height` (m) above where it stands: busy, airborne while above the ground, its
-   * feet never landing; `null` sets it down on the ground and back to normal control.
+   * feet never landing, its body bracing against the ground by `brace` (0..1); `null` sets it down on the ground and
+   * back to normal control.
    */
-  hold(height: number | null): void {
+  hold(height: number | null, brace = 0): void {
+    this.braceW = brace;
     if (height === null && this.heldY !== null) {
       this.position.y = 0;
       this.pose.dip = 60;
@@ -397,6 +400,8 @@ export class Monster {
     f.roaring = this.roarT >= 0;
     f.roarDuration = this.roarD;
     f.airborne = this.airborne;
+    f.carried = this.heldY !== null;
+    f.brace = this.heldY !== null ? this.braceW : 0;
     f.dashing = this.dashing;
     if (this.tailT >= 0) {
       this.tailFrame.t = this.tailT;

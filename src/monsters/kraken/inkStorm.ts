@@ -31,6 +31,35 @@ const easeInOutCubic = (x: number) => {
 };
 /** 0 before a, rising to 1 at b. */
 const ramp = (t: number, a: number, b: number) => clamp01((t - a) / (b - a));
+/**
+ * The Kraken's height (m) through the leap, one arc with the speed carried across its three parts: pushed off from
+ * standing, it rises to the hang height (hangDrop below the peak) still climbing; through the hang it drifts on a
+ * slow ballistic arc over the peak and back down to that height; then it falls, gathering speed, to the ground.
+ */
+function leapHeight(t: number): number {
+  const hang = U.peak * (1 - U.hangDrop);
+  const D = T.fallFrom - T.peakAt;
+  // The hang: rising U.peak * hangDrop to the apex in D / 2 under constant gravity g, entering at speed v.
+  const g = (8 * U.peak * U.hangDrop) / (D * D);
+  const v = (g * D) / 2;
+  if (t < T.leapFrom) return 0;
+  if (t < T.peakAt) {
+    // Hermite: from rest at 0 to `hang` arriving at speed v.
+    const R = T.peakAt - T.leapFrom;
+    const u = (t - T.leapFrom) / R;
+    return hang * (3 * u * u - 2 * u * u * u) + v * R * (u * u * u - u * u);
+  }
+  if (t < T.fallFrom) {
+    const s = t - T.peakAt;
+    return hang + v * s - (g * s * s) / 2;
+  }
+  // The fall: leaving `hang` at speed v downward, accelerating evenly to reach the ground at fallTo.
+  const F = T.fallTo - T.fallFrom;
+  const s = Math.min(t - T.fallFrom, F);
+  const a = (2 * (hang - v * F)) / (F * F);
+  return Math.max(0, hang - v * s - (a * s * s) / 2);
+}
+
 /** 1 until the outro, falling to 0 at the end. */
 const outro = (t: number) => 1 - ramp(t, T.outroFrom, T.end);
 
@@ -39,12 +68,14 @@ export type InkPhase = {
   time: number;
   /** Storm sky blend 0..1. */
   sky: number;
-  /** Camera pull-back 0..1: in by the leap, home by the end. */
+  /** Camera pull-back 0..1: all the way out by the top of the rise (cameraTo), home by the end. */
   camera: number;
   /** Rain strength 0..1. */
   rain: number;
   /** The Kraken's height above the ground (m). */
   height: number;
+  /** How hard the arms brace on the ground 0..1: pressed down after the grab, pushing off early in the rise. */
+  brace: number;
   /** The ink cloud's coverage of the circle 0..1. */
   ink: number;
   done: boolean;
@@ -53,14 +84,13 @@ export type InkPhase = {
 /** Ink Storm at `t` real seconds after Q. */
 export function inkPhase(t: number): InkPhase {
   const slow = Math.min(smooth(t / T.easeIn), 1 - smooth((t - (T.end - 0.4)) / 0.4));
-  const rise = 1 - Math.pow(1 - ramp(t, T.leapFrom, T.peakAt), 2);
-  const fall = Math.pow(ramp(t, T.inkTo, T.fallTo), 2);
   return {
     time: 1 - (1 - U.timeScale) * slow,
     sky: Math.min(smooth(t / T.sky), outro(t)),
-    camera: Math.min(easeInOutCubic(t / T.leapFrom), easeInOutCubic(outro(t))),
+    camera: Math.min(easeInOutCubic(t / T.cameraTo), easeInOutCubic(outro(t))),
     rain: Math.min(smooth(ramp(t, T.rainFrom, T.sky)), outro(t)),
-    height: t < T.inkTo ? U.peak * rise : U.peak * (1 - fall),
+    height: leapHeight(t),
+    brace: Math.min(smooth(ramp(t, T.braceFrom, T.braceIn)), 1 - smooth(ramp(t, T.leapFrom, T.pushTo))),
     ink: Math.min(smooth(ramp(t, T.inkFrom, T.inkTo)), outro(t)),
     done: t >= T.end,
   };

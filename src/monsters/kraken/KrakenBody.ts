@@ -40,6 +40,17 @@ const WRAP_R = 330;
 const WHIRL_LEN = 680;
 const FLING_R = ANCHOR_R + WHIRL_LEN - 30;
 const FLING_SPEED = 5.5;
+/** Braced (Ink Storm): the tips press into the ground where its arms grabbed, and the mantle crouches this far. */
+const BRACE_R = K.ultimate.grabReach / CONFIG.monster.scale;
+const BRACE_DIP = 90;
+/**
+ * Fling: an overhead swing round a circle of radius FLING_REACH about the arm roots, in the upright plane through
+ * the target. The arm cocks back to FLING_COCK (rad from straight up; negative is away from the target), whips over
+ * the top and down at the target. Each arm keeps FLING_SPREAD to its own side so the swings don't overlap.
+ */
+const FLING_REACH = ARM_LEN * 0.85;
+const FLING_COCK = -1.3;
+const FLING_SPREAD = 150;
 /** A frame-to-frame jump longer than this (model units) is a teleport: the arms snap instead of trailing. */
 const SNAP = 500;
 /** Joint springs: stiff at the root, loose and underdamped at the tip, so motion cracks down the arm. */
@@ -76,6 +87,16 @@ const _side = new THREE.Vector3();
 const _c3 = new THREE.Vector3();
 const _ctrl2 = new THREE.Vector3();
 const _plant = new THREE.Vector3();
+const _ground = new THREE.Vector3();
+const _coil = new THREE.Vector3();
+const _aim = new THREE.Vector3();
+const _h = new THREE.Vector3();
+const _lat = new THREE.Vector3();
+
+/** The point `a` rad from straight up on the fling circle (toward `_h`, offset by `_lat`), root space. */
+function flingArc(a: number, out: THREE.Vector3): THREE.Vector3 {
+  return out.copy(_h).multiplyScalar(Math.sin(a) * FLING_REACH).add(_lat).setY(ANCHOR_Y + Math.cos(a) * FLING_REACH);
+}
 const _delta = new THREE.Matrix4();
 const _path = Array.from({ length: SAMPLES + 1 }, () => new THREE.Vector3());
 const _targets = Array.from({ length: SEGS + 1 }, () => new THREE.Vector3());
@@ -201,17 +222,22 @@ export class KrakenBody implements MonsterBody {
     const S = K.stats.strideLength;
     // Two front arms pull per half cycle, so the mantle surges twice per cycle.
     const surge = moving ? Math.sin(f.cycle * Math.PI * 4) * f.motion : 0;
-    const bob = surge * 12 + Math.sin(f.time * 1.2) * 8 - f.pose.dip - f.pose.collapse * 220;
+    const bob = surge * 12 + Math.sin(f.time * 1.2) * 8 - f.pose.dip - f.pose.collapse * 220 - f.brace * BRACE_DIP;
     this.mantle.position.set(0, MANTLE_Y + bob, surge * 10);
     this.mantle.rotation.set(f.pose.pitch + 0.08 * f.motion + (f.roaring ? -0.35 : 0), 0, 0);
     const breathe = 1 + Math.sin(f.time * 1.2) * 0.02;
     this.mantle.scale.set(breathe, 1 / breathe, breathe);
     this.root.updateMatrixWorld(true);
+    // The ground under the body, in root space (a braced arm presses into it while the body is lifted).
+    const groundY = f.brace > 0 ? this.root.worldToLocal(this.root.getWorldPosition(_ground).setY(0)).y : 0;
 
     // The arms live in the world: carry them over the body's own motion so they trail when it moves or turns.
-    if (this.hasPrev) {
+    // While an ultimate carries the body (on real time, far faster than the arms' world-time springs follow),
+    // they ride with it instead, except as far as they are braced on the ground.
+    const keep = f.carried ? f.brace : 1;
+    if (this.hasPrev && keep > 0) {
       _delta.copy(this.root.matrixWorld).invert().multiply(this.prevWorld);
-      for (const c of this.chains) c.shift(_delta, SNAP);
+      for (const c of this.chains) c.shift(_delta, SNAP, keep);
     }
     this.prevWorld.copy(this.root.matrixWorld);
     this.hasPrev = true;
@@ -288,9 +314,41 @@ export class KrakenBody implements MonsterBody {
         tune = PLANT_TUNE;
       }
       _plant.copy(_tip);
+      // Airborne: tucked under the mantle.
+      _coil.copy(_dir).multiplyScalar(REST_R * 0.55).setY(-160);
 
       const s = this.arms.strikes[i];
-      if (s) {
+      if (s?.kind === 'fling') {
+        // Fling (Ink Storm's throw): cock back behind, whip overhead and down at the target, then settle back
+        // to the arm's pose.
+        const T = s.timing;
+        const base = f.airborne ? _coil : _rest;
+        this.root.worldToLocal(_aim.copy(s.target)).sub(_tmp.set(0, ANCHOR_Y, 0));
+        const flat = Math.hypot(_aim.x, _aim.z);
+        if (flat > 1e-3) _h.set(_aim.x / flat, 0, _aim.z / flat);
+        else _h.copy(_dir);
+        // The target's angle from straight up, toward it.
+        const at = Math.atan2(flat, _aim.y);
+        _lat.copy(_dir).addScaledVector(_h, -_dir.dot(_h)).multiplyScalar(FLING_SPREAD);
+        if (s.t < T.windup) {
+          const u = s.t / T.windup;
+          _tip.lerpVectors(base, flingArc(FLING_COCK, _a), u * u * (3 - 2 * u));
+          arch = 300;
+        } else if (s.t < T.impact) {
+          const u = (s.t - T.windup) / (T.impact - T.windup);
+          flingArc(FLING_COCK + (at - FLING_COCK) * u * u, _tip);
+          arch = 60;
+        } else {
+          const u = Math.min(1, (s.t - T.impact) / (T.end - T.impact));
+          _tip.lerpVectors(flingArc(at, _b), base, u * u * (3 - 2 * u));
+          arch = 120;
+        }
+        pin = false;
+        drop = 0;
+        curl = 0;
+        wave = 0;
+        tune = STRIKE_TUNE;
+      } else if (s) {
         const T = s.timing;
         this.root.worldToLocal(_b.copy(s.target));
         _b.y = 0;
@@ -353,10 +411,20 @@ export class KrakenBody implements MonsterBody {
         curl = 0;
         wave = 0.5;
       }
-      if (f.airborne) {
-        _tip.copy(_dir).multiplyScalar(REST_R * 0.55).setY(-160);
+      if (f.airborne && s?.kind !== 'fling') {
+        _tip.copy(_coil);
         pin = false;
         curl = 0.4;
+      }
+      if (f.brace > 0) {
+        // Braced: bowed like a leg, the tip flat on the ground; as the body rises the tip stays down, pushing off.
+        _tip.lerp(_b.copy(_dir).multiplyScalar(BRACE_R).setY(groundY), f.brace);
+        pin = false;
+        arch += (220 - arch) * f.brace;
+        drop *= 1 - f.brace;
+        curl *= 1 - f.brace;
+        wave *= 1 - f.brace;
+        if (f.brace > 0.5) tune = PLANT_TUNE;
       }
       if (i === lashArm && f.antiAir) {
         this.root.worldToLocal(_b.copy(f.antiAir.target));
