@@ -933,7 +933,6 @@ export class GameScene {
     if (id === 'bubble') {
       if (this.passives.bubbleActive() || !this.abilities.trigger('bubble')) return;
       this.passives.startBubble();
-      this.shieldFx.startBubble();
       this.rig.addTrauma(0.1);
       return;
     }

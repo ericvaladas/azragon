@@ -27,6 +27,16 @@ describe('ShieldFx', () => {
     expect(dome.visible).toBe(true);
   });
 
+  it('starts building the dome by itself when it sees the bubble go up (nothing else needs to start it)', () => {
+    const { self, dome } = fx();
+    self.update(0.1, UP, false);
+    self.update(0.05, UP, true);
+    expect(dome.visible).toBe(true);
+    const build = (self as unknown as { build: { value: number } }).build.value;
+    expect(build).toBeGreaterThan(0);
+    expect(build).toBeLessThan(1);
+  });
+
   it('hangs centred 300 × the monster scale above it at full size while the bubble is up', () => {
     const { self, dome } = fx();
     self.startBubble();
