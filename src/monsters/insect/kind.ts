@@ -37,6 +37,7 @@ export const INSECT: MonsterKind = {
   },
   melee: { kind: 'point' },
   ranged: 'spikes',
+  ultimate: { id: 'spikeRain', label: 'Spike Rain' },
   antiAir: 'tail',
   tailSweep: false,
   signatures: ['storm', 'chitin', 'spines', 'swat', 'nova', 'mortar'],

@@ -1,7 +1,7 @@
 import type * as THREE from 'three';
 
 /** Every monster kind's ultimate, by name. */
-export type UltimateId = 'devour' | 'inkStorm' | 'plasmaLance';
+export type UltimateId = 'devour' | 'inkStorm' | 'plasmaLance' | 'spikeRain';
 
 /**
  * A monster's ultimate (Q) as GameScene runs it: started at the monster, advanced on real seconds, asking for its own

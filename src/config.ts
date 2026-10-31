@@ -320,6 +320,30 @@ export const CONFIG = {
       glint: 0xe8f4ff,
     },
   },
+  /** The Insect Titan's own settings (its stats and colours live in `monster` and `palette`). */
+  insect: {
+    /**
+     * Spike Rain (Q), on real seconds: the area the spikes rain on (from `near` to `far` m in front, `halfAngle` rad
+     * either side of the facing), the world time scale, the camera pull; the spikes (the pool, how many fall at least,
+     * each one's flight (s), arc height (m), length and width (m)), how high the tail aims (m); the purple fog's near and
+     * far (m); the purple sky's light intensities; and the beats (s).
+     */
+    ultimate: {
+      near: 250, far: 1400, halfAngle: 0.873, timeScale: 0.25, cameraDistanceMult: 2.0,
+      pool: 256, spikes: 160, flight: 1.0, arc: 600, spikeLength: 45, spikeWidth: 7, aimHeight: 1500,
+      fogNear: 250, fogFar: 1400, hemiIntensity: 0.45, sunIntensity: 0.4,
+      t: { easeIn: 0.2, sky: 1.5, rearUp: 1.5, volleyFrom: 1.0, volleyTo: 3.0, rainFrom: 2.0, rainTo: 4.0, outroFrom: 4.0, end: 5.5 },
+    },
+    /** Spike Rain's purple sky (zenith, horizon, fog, the two lights). */
+    colors: {
+      rainZenith: 0x1c0a2e,
+      rainHorizon: 0x5a2a7a,
+      rainFog: 0x3e1f56,
+      rainHemiSky: 0x9a6ac8,
+      rainHemiGround: 0x1a0c24,
+      rainSun: 0xc8a0f0,
+    },
+  },
   /** The Kraken. Stats feed its MonsterKind; arms tune the tentacles; colours its body and effects. */
   kraken: {
     stats: {
