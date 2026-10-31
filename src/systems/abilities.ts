@@ -102,6 +102,11 @@ export function untouchable(bubble: boolean, ultimateRunning: boolean): boolean 
   return bubble || ultimateRunning;
 }
 
+/** The body's automatic strikes (Tail Sweep, Snap Bite) go off, except while an ultimate holds the monster. */
+export function autoStrikes(ultimateRunning: boolean): boolean {
+  return !ultimateRunning;
+}
+
 /** A tentacle slam lands its damage, except while an ultimate runs (Ink Storm's grab is only for show). */
 export function armSlamCounts(ultimateRunning: boolean): boolean {
   return !ultimateRunning;

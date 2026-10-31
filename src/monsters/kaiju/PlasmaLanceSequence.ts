@@ -48,8 +48,8 @@ export type PlasmaLanceHost = {
   burst(at: THREE.Vector3, kind: 'vapor' | 'impact'): void;
 };
 
-/** A target in the wedge: its bearing from the facing, how much its size widens it, and whether the beam has hit it. */
-type Mark = { target: Target; bearing: number; widen: number; hit: boolean };
+/** A building in the wedge: its bearing from the facing and how much its size widens it. */
+type Mark = { target: Target; bearing: number; widen: number };
 
 const _aim = new THREE.Vector3();
 const _jaws = new THREE.Vector3();
@@ -73,6 +73,11 @@ export class PlasmaLance implements Ultimate {
   private prevSweep = -Infinity;
   private nextScar = 0;
   private marks: Mark[] = [];
+  /** Everything the beam has hit, so nothing is hit twice. */
+  private hit = new Set<Target>();
+  /** This frame's targets, in sweep order (reused). */
+  private due: Target[] = [];
+  private byEdge = (a: Target, b: Target) => this.edge(a) - this.edge(b);
   private beam: LanceBeam;
   private debris: LanceDebris;
 
@@ -165,31 +170,39 @@ export class PlasmaLance implements Ultimate {
     this.debris.dispose();
   }
 
-  /** Everything the beam can reach, fixed as it fires: enemies at any altitude and standing buildings in the wedge. */
+  /** The standing buildings in the wedge, fixed as it fires (they don't move; enemies are checked where they are each frame). */
   private gather(): void {
     this.marks = [];
-    const add = (t: Target) => {
-      if (!t.isAlive() || !inWedge(this.origin, this.yaw, t.position, t.radius)) return;
-      const d = Math.hypot(t.position.x - this.origin.x, t.position.z - this.origin.z);
-      this.marks.push({ target: t, bearing: bearingOf(this.origin, this.yaw, t.position), widen: angularSize(d, t.radius), hit: false });
-    };
-    for (const t of this.host.enemies()) add(t);
-    for (const t of this.host.buildingsWithin(this.origin, U.range + BUILDING_SLACK)) add(t);
-    // In sweep order, so a long frame still takes them right to left.
-    this.marks.sort((a, b) => a.bearing - a.widen - (b.bearing - b.widen));
+    for (const t of this.host.buildingsWithin(this.origin, U.range + BUILDING_SLACK)) {
+      if (!t.isAlive() || !inWedge(this.origin, this.yaw, t.position, t.radius)) continue;
+      this.marks.push({ target: t, bearing: bearingOf(this.origin, this.yaw, t.position), widen: this.widen(t) });
+    }
     this.prevSweep = -Infinity;
     this.nextScar = this.t;
   }
 
-  /** Take everything the beam passed over since last frame, and vaporize the debris it crossed. */
+  /** How far a target's own size widens the bearing at which the beam catches it. */
+  private widen(t: Target): number {
+    return angularSize(Math.hypot(t.position.x - this.origin.x, t.position.z - this.origin.z), t.radius);
+  }
+
+  /** Take everything the beam passed over since last frame (right to left), and vaporize the debris it crossed. */
   private sweepTo(sweep: number): void {
     const prev = this.prevSweep;
     if (sweep <= prev) return;
-    for (const m of this.marks) {
-      if (m.hit || !crossed(prev, sweep, m.bearing, m.widen) || !m.target.isAlive()) continue;
-      m.hit = true;
-      if (m.target.boss) this.host.hurtBoss(m.target, BOSS_DAMAGE * this.damageMult);
-      else this.host.destroy(m.target);
+    const due = this.due;
+    due.length = 0;
+    for (const m of this.marks) if (!this.hit.has(m.target) && m.target.isAlive() && crossed(prev, sweep, m.bearing, m.widen)) due.push(m.target);
+    for (const t of this.host.enemies()) {
+      if (this.hit.has(t) || !t.isAlive() || !inWedge(this.origin, this.yaw, t.position, t.radius)) continue;
+      if (crossed(prev, sweep, bearingOf(this.origin, this.yaw, t.position), this.widen(t))) due.push(t);
+    }
+    // In sweep order, so a long frame still takes them right to left.
+    if (due.length > 1) due.sort(this.byEdge);
+    for (const t of due) {
+      this.hit.add(t);
+      if (t.boss) this.host.hurtBoss(t, BOSS_DAMAGE * this.damageMult);
+      else this.host.destroy(t);
     }
     const ps = this.debris.positions();
     for (let i = 0; i < ps.length; i++) {
@@ -198,6 +211,11 @@ export class PlasmaLance implements Ultimate {
       this.host.burst(ps[i]!, 'vapor');
     }
     this.prevSweep = sweep;
+  }
+
+  /** The bearing at which the beam first reaches `t` (its right-hand edge). */
+  private edge(t: Target): number {
+    return bearingOf(this.origin, this.yaw, t.position) - this.widen(t);
   }
 
   /** The beam is done: hide it, free the head, and let the remaining debris fall. */
@@ -218,6 +236,7 @@ export class PlasmaLance implements Ultimate {
     this.fired = this.settled = false;
     this.prevSweep = -Infinity;
     this.marks = [];
+    this.hit.clear();
     this.debris.clear();
     if (keepScar) this.beam.hide();
     else this.beam.clear();

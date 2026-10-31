@@ -49,13 +49,15 @@ import { Progression, expToNext } from './systems/Progression';
 import { regen } from './monster/vitals';
 import { DebugOverlay } from './systems/DebugOverlay';
 import type { Ultimate, UltimateId } from './systems/ultimate';
-import { Abilities, armSlamCounts, cameraFollowsWalk, ultimateBlocked, untouchable, type AbilityView, type ActiveId } from './systems/abilities';
+import { Abilities, armSlamCounts, autoStrikes, cameraFollowsWalk, ultimateBlocked, untouchable, type AbilityView, type ActiveId } from './systems/abilities';
 import { Shockwave } from './systems/Shockwave';
 import { LevelUpMoment, levelUpNow } from './systems/levelUpMoment';
 import { Devour } from './monsters/wendigo/DevourSequence';
 import { BLOOD_ATMOSPHERE, devourWorldLength } from './monsters/wendigo/devour';
 import { InkStorm } from './monsters/kraken/InkStormSequence';
 import { STORM_ATMOSPHERE } from './monsters/kraken/inkStorm';
+import { PlasmaLance } from './monsters/kaiju/PlasmaLanceSequence';
+import { LANCE_ATMOSPHERE } from './monsters/kaiju/plasmaLance';
 import { LevelUpAura } from './systems/LevelUpAura';
 import { ShieldFx } from './systems/ShieldFx';
 import { InkFx } from './monsters/kraken/InkFx';
@@ -129,6 +131,8 @@ export class GameScene {
   private groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
   private tmpV = new THREE.Vector3();
   private tmpV2 = new THREE.Vector3();
+  /** Where Plasma Lance points the Kaiju's head (kept, so the monster's lookAt can hold it). */
+  private lanceLook = new THREE.Vector3();
   private particles: Particles;
   private splasher: Splasher;
   private inkFx: InkFx;
@@ -314,6 +318,41 @@ export class GameScene {
         this.particles.ring('dust', at, 90, 10);
         this.particles.emit('debris', this.tmpV2.copy(at).setY(at.y + 10), 8, 1.2);
         this.splasher.at(at);
+      },
+    });
+    const L = CONFIG.kaiju.ultimate;
+    this.ultimates.plasmaLance = new PlasmaLance(this.scene, {
+      enemies: () => this.enemyTargets(),
+      buildingsWithin: (c, r) => {
+        const out: Target[] = [];
+        this.city.forEachStandingInRadius(c, r, (t) => out.push(t));
+        return out;
+      },
+      // Cut down where it stands, with the usual explosion (or collapse).
+      destroy: (t) => t.applyDamage(1e9),
+      hurtBoss: (t, dmg) => t.applyDamage(dmg),
+      facing: () => this.monster.yaw,
+      jaws: (out) => this.monster.rangedOrigin(out),
+      aim: (at) => {
+        this.monster.lookAt = at ? this.lanceLook.copy(at) : null;
+      },
+      hold: (brace, blaze) => this.monster.hold(0, brace, blaze),
+      release: () => this.monster.hold(null),
+      sky: (k) => this.city.blendAtmosphere(LANCE_ATMOSPHERE, k),
+      camera: (k, yaw) => this.rig.pull(k, this.rig.orbit.pitch, CONFIG.camera.defaultDistance * L.cameraDistanceMult, yaw),
+      shake: (a) => this.rig.addTrauma(a),
+      flash: (k) => {
+        this.lighting.hemi.intensity += k * 3;
+      },
+      burst: (at, kind) => {
+        if (kind === 'vapor') {
+          this.particles.emit('spark', at, 5, 0.8);
+          this.particles.emit('plasma', at, 4, 0.8);
+          return;
+        }
+        this.particles.emit('fire', at, 4, 1.2);
+        this.particles.emit('debris', at, 3, 1.2);
+        this.particles.emit('spark', at, 4, 1.2);
       },
     });
     this.rotRing = new RotRing(this.scene);
@@ -844,7 +883,8 @@ export class GameScene {
         // The head turns to the breath's aim; the breath fires once the head is on target.
         // (The Insect aims its tail at its ranged target the same way.)
         const aim = this.spikeAim?.isAlive() ? this.spikeAim.position : null;
-        this.monster.lookAt = this.breath.busy ? this.breath.aimPoint : (this.gazeLook() ?? aim);
+        // While an ultimate runs it aims the head itself (Plasma Lance's sweep).
+        if (!this.ultimateActive) this.monster.lookAt = this.breath.busy ? this.breath.aimPoint : (this.gazeLook() ?? aim);
         const headOnTarget = this.monster.aimError() < CONFIG.kaiju.neck.aimTolerance;
         this.breath.update(dt, this.monster.rangedOrigin(this.jaws), this.monster.position, this.ms.rangedRange, headOnTarget, this.onBreathFire);
         this.monster.charge = this.breath.charge;
@@ -966,6 +1006,9 @@ export class GameScene {
     this.order = null;
     this.markers.setTarget(null);
     this.abilities.cancelAim();
+    // No Plasma Breath charging or firing through it.
+    this.breath.clear();
+    this.monster.charge = 0;
     u.start(this.monster.position, this.dmgMult());
     switch (this.monster.kind.ultimate?.id) {
       case 'devour':
@@ -1129,7 +1172,7 @@ export class GameScene {
   private tailSweep(cdDt: number): void {
     this.tailCd = Math.max(0, this.tailCd - cdDt);
     const m = this.monster;
-    if (!m.kind.tailSweep || this.tailCd > 0 || m.airborne || m.tailSweeping || !m.alive) return;
+    if (!m.kind.tailSweep || this.tailCd > 0 || m.airborne || m.tailSweeping || !m.alive || !autoStrikes(this.ultimateActive)) return;
     const TS = CONFIG.kaiju.tail;
     const from = { x: m.position.x, z: m.position.z };
     const target = tailSweepTarget(from, m.yaw, this.enemyTargets(), TS.reach, TS.rearHalf);
@@ -1184,7 +1227,7 @@ export class GameScene {
   /** Anti-Air (once picked): the tail lashes at the nearest flyers near the head on a rank-based cooldown (`cdDt`: cooldown time). */
   private tailSwat(cdDt: number): void {
     this.swatCd = Math.max(0, this.swatCd - cdDt);
-    if (this.swatCd > 0 || this.monster.airborne || this.monster.swatting) return;
+    if (this.swatCd > 0 || this.monster.airborne || this.monster.swatting || !autoStrikes(this.ultimateActive)) return;
     const sw = this.passives.swat();
     if (!sw) return;
     const head = this.bodyPoint(this.ms.headHeight);

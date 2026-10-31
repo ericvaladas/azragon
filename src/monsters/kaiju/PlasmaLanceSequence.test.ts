@@ -93,6 +93,27 @@ describe('PlasmaLance', () => {
     expect(behind.isAlive()).toBe(true);
   });
 
+  it('a moving target is cut where it is when the beam reaches it, not where it was', () => {
+    const heli = unit(0.9, 700, 300, { radius: 5 });
+    const r = rig([heli]);
+    r.s.start(new THREE.Vector3(), 1);
+    r.run(T.fire + 0.05);
+    heli.position.set(Math.sin(-0.5) * 700, 300, Math.cos(-0.5) * 700);
+    r.run(T.end + 0.1);
+    expect(r.log.destroyed).toHaveLength(1);
+    expect(Math.abs(r.log.destroyed[0]![1] - sweepReaches(-0.5))).toBeLessThan(0.05);
+  });
+
+  it('a target that moves into the wedge after the beam fires is still cut as it passes', () => {
+    const tank = unit(1.6, 600, 0, { radius: 5 });
+    const r = rig([tank]);
+    r.s.start(new THREE.Vector3(), 1);
+    r.run(T.fire + 0.05);
+    tank.position.set(Math.sin(0.3) * 600, 0, Math.cos(0.3) * 600);
+    r.run(T.end + 0.1);
+    expect(tank.isAlive()).toBe(false);
+  });
+
   it('buildings in the wedge collapse as it passes; outside ones stand', () => {
     const a = unit(-0.5, 900, 0, { kind: 'building' });
     const b = unit(0.6, 300, 0, { kind: 'building' });
