@@ -41,6 +41,7 @@ function rig(enemies: Target[], buildings: Target[] = [], facing = 0) {
     releases: 0,
     vapor: 0,
     impact: 0,
+    glints: [] as [THREE.Vector3, number][],
   };
   const host: PlasmaLanceHost = {
     enemies: () => enemies,
@@ -62,8 +63,9 @@ function rig(enemies: Target[], buildings: Target[] = [], facing = 0) {
     camera: (k) => log.camera.push(k),
     shake: () => {},
     flash: (k) => log.flash.push(k),
-    burst: (_at, kind) => {
+    burst: (at, kind) => {
       if (kind === 'vapor') log.vapor++;
+      else if (kind === 'glint') log.glints.push([at.clone(), now]);
       else log.impact++;
     },
   };
@@ -227,6 +229,30 @@ describe('PlasmaLance', () => {
     expect(aims[0]![0]).toBeCloseTo(0, 1);
     // The eased turn peaks near 0.05 rad a frame; firing used to jump a full halfAngle (1.05 rad) in one.
     for (let i = 1; i < aims.length; i++) expect(Math.abs(aims[i]![0] - aims[i - 1]![0])).toBeLessThan(0.1);
+  });
+
+  it('the floating debris sparkles: glints from live pieces in the air, a few a second, none once it ends', () => {
+    const r = rig([]);
+    const debris = r.s['debris'];
+    let fromLive = true;
+    r.s.start(new THREE.Vector3(), 1);
+    const glintsBefore = () => r.log.glints.length;
+    let seen = 0;
+    while (r.at() < T.roarTo) {
+      r.run(r.at() + 1 / 60);
+      for (const [p] of r.log.glints.slice(seen)) {
+        const i = debris.positions().findIndex((q) => q.distanceTo(p) < 1e-6);
+        if (i < 0 || !debris.alive(i) || p.y <= 0) fromLive = false;
+      }
+      seen = glintsBefore();
+    }
+    expect(fromLive).toBe(true);
+    const during = r.log.glints.filter(([, t]) => t > T.liftFrom + 0.3 && t <= T.roarTo).length;
+    const expected = U.debrisSparkle * (T.roarTo - T.liftFrom - 0.3);
+    expect(during).toBeGreaterThan(expected * 0.5);
+    expect(during).toBeLessThan(expected * 1.5);
+    r.run(T.end + 1);
+    expect(r.log.glints.filter(([, t]) => t > T.end + 0.02)).toHaveLength(0);
   });
 
   it('aims the head along the sweep and lets go after', () => {
