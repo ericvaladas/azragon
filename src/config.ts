@@ -295,7 +295,7 @@ export const CONFIG = {
       range: 1400, halfAngle: 1.047, timeScale: 0.25, cameraDistanceMult: 2.0,
       debris: 120, debrisLift: 260, debrisSize: [8, 20], debrisNear: 120, debrisRange: 900,
       beamCore: 18, beamEdge: 55, scarWidth: 50, scarLife: 2.5, scars: 1000, scarSpacing: 60, scarFrom: 150,
-      t: { easeIn: 0.2, sky: 2.0, liftFrom: 0.2, glowFrom: 0.3, glowTo: 2.5, roarUp: 1.4, roarDown: 1.7, roarTo: 2.0, fire: 2.5, sweepTo: 5.0, outroFrom: 5.0, end: 6.5 },
+      t: { easeIn: 0.2, sky: 2.0, liftFrom: 0.1, glowFrom: 0.3, glowTo: 2.5, roarUp: 1.4, roarDown: 1.7, roarTo: 2.0, fire: 2.5, sweepTo: 5.0, outroFrom: 5.0, end: 6.5 },
       hemiIntensity: 0.5, sunIntensity: 0.45,
     },
     colors: {

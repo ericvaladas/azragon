@@ -44,7 +44,7 @@ export type LancePhase = {
   camera: number;
   /** The Kaiju's roar 0..1: building slowly from Q, holding, easing off before it turns to aim. */
   roar: number;
-  /** How far the debris has climbed 0..1: slowly at first, during the roar, still climbing through the sweep. */
+  /** How far the debris has climbed 0..1: steadily from just after Q, through the roar and the sweep. */
   lift: number;
   /** The plates' and vents' blaze 0..1. */
   blaze: number;
@@ -65,7 +65,7 @@ export function lancePhase(t: number): LancePhase {
     sky: Math.min(smooth(t / T.sky), outro(t)),
     camera: Math.min(easeInOutCubic(t / T.fire), easeInOutCubic(outro(t))),
     roar: smooth(ramp(t, 0, T.roarUp)) * (1 - smooth(ramp(t, T.roarDown, T.roarTo))),
-    lift: ramp(t, T.liftFrom, T.sweepTo) ** 2,
+    lift: ramp(t, T.liftFrom, T.sweepTo),
     blaze: Math.min(smooth(ramp(t, T.glowFrom, T.glowTo)), outro(t)),
     beam: t < T.fire ? 0 : 1 - ramp(t, T.sweepTo, T.sweepTo + CUT_OUT),
     sweep: -U.halfAngle + 2 * U.halfAngle * ramp(t, T.fire, T.sweepTo),

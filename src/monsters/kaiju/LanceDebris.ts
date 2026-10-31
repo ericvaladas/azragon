@@ -6,7 +6,7 @@ import type { Vec2 } from '../../util/math';
 const U = CONFIG.kaiju.ultimate;
 const C = CONFIG.kaiju.colors;
 /** How quickly (1/s) a piece closes on its floating height, and how much (±) its height varies from the rest. */
-const RISE_RATE = 1.5;
+const RISE_RATE = 3;
 const HEIGHT_VARY = 0.25;
 /** How brightly the pieces glow in their own grey, so they still read against the night. */
 const GLOW = 0.3;

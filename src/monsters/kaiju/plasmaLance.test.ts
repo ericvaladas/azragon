@@ -56,14 +56,13 @@ describe('lancePhase', () => {
     }
   });
 
-  it('blazes through the build-up; the debris starts rising slowly during the roar and keeps climbing through the sweep', () => {
+  it('blazes through the build-up; the debris rises visibly during the roar and keeps climbing through the sweep', () => {
     expect(lancePhase(T.glowFrom).blaze).toBe(0);
     expect(lancePhase(T.glowTo).blaze).toBe(1);
     expect(lancePhase(T.end).blaze).toBe(0);
     expect(lancePhase(T.liftFrom).lift).toBe(0);
-    const roaring = lancePhase(T.roarTo).lift;
-    expect(roaring).toBeGreaterThan(0);
-    expect(roaring).toBeLessThan(0.3);
+    expect(lancePhase(T.roarUp / 2).lift).toBeGreaterThan(0.1);
+    expect(lancePhase(T.roarTo).lift).toBeGreaterThan(0.35);
     expect(lancePhase(T.fire).lift).toBeLessThan(lancePhase((T.fire + T.sweepTo) / 2).lift);
     expect(lancePhase(T.sweepTo).lift).toBe(1);
   });

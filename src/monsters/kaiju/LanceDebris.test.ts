@@ -31,6 +31,14 @@ describe('LanceDebris', () => {
     expect(behind).toBeGreaterThan(U.debris * 0.3);
   });
 
+  it('keeps close behind its lift: half a second after the lift rises, the pieces are most of the way there', () => {
+    const d = new LanceDebris(new THREE.Scene(), seeded());
+    d.scatter(O);
+    for (let i = 0; i < 30; i++) d.update(1 / 60, 0.4);
+    const ys = d.positions().map((p) => p.y);
+    expect(ys.reduce((a, b) => a + b, 0) / ys.length).toBeGreaterThan(0.75 * 0.4 * U.debrisLift);
+  });
+
   it('rises straight up: no piece drifts sideways', () => {
     const d = new LanceDebris(new THREE.Scene(), seeded());
     d.scatter(O);
