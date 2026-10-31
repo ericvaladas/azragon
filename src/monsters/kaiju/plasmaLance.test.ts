@@ -1,0 +1,80 @@
+import { describe, it, expect } from 'vitest';
+import { CONFIG } from '../../config';
+import { angularSize, bearingOf, crossed, inWedge, lancePhase } from './plasmaLance';
+
+const U = CONFIG.kaiju.ultimate;
+const T = U.t;
+const O = { x: 0, z: 0 };
+const at = (bearing: number, r: number) => ({ x: Math.sin(bearing) * r, z: Math.cos(bearing) * r });
+
+describe('lancePhase', () => {
+  it('slows the world, turns the sky, then sweeps right to left during the sweep beat', () => {
+    expect(lancePhase(0).time).toBe(1);
+    expect(lancePhase(1).time).toBeCloseTo(U.timeScale);
+    expect(lancePhase(T.end).time).toBe(1);
+    expect(lancePhase(T.sky).sky).toBe(1);
+    expect(lancePhase(T.fire - 0.01).beam).toBe(0);
+    const mid = (T.fire + T.sweepTo) / 2;
+    expect(lancePhase(mid).beam).toBe(1);
+    expect(lancePhase(T.fire).sweep).toBeCloseTo(-U.halfAngle);
+    expect(lancePhase(mid).sweep).toBeCloseTo(0);
+    expect(lancePhase(T.sweepTo).sweep).toBeCloseTo(U.halfAngle);
+    let last = -Infinity;
+    for (let t = 0; t <= T.end; t += 0.05) {
+      const s = lancePhase(t).sweep;
+      expect(s).toBeGreaterThanOrEqual(last);
+      last = s;
+    }
+    expect(lancePhase(T.end).done).toBe(true);
+    expect(lancePhase(T.end - 0.01).done).toBe(false);
+  });
+
+  it('rears back before firing, snaps forward on fire, and is upright by the end', () => {
+    const brace = (t: number) => lancePhase(t).brace;
+    expect(brace(T.rearFrom)).toBe(0);
+    expect(brace(T.fire - 0.01)).toBeGreaterThan(0.95);
+    expect(brace(T.fire + 0.2)).toBeCloseTo(0.35);
+    expect(brace(T.end)).toBe(0);
+  });
+
+  it('blazes through the build-up and lifts the debris before the beam', () => {
+    expect(lancePhase(T.glowFrom).blaze).toBe(0);
+    expect(lancePhase(T.glowTo).blaze).toBe(1);
+    expect(lancePhase(T.end).blaze).toBe(0);
+    expect(lancePhase(T.liftFrom).lift).toBe(0);
+    expect(lancePhase(T.fire).lift).toBe(1);
+  });
+});
+
+describe('the wedge', () => {
+  it('bearings are measured from the facing, positive to its left, and wrap', () => {
+    expect(bearingOf(O, 0, { x: -100, z: 100 })).toBeCloseTo(-Math.PI / 4);
+    expect(bearingOf(O, 0, { x: 100, z: 100 })).toBeCloseTo(Math.PI / 4);
+    expect(bearingOf(O, 3.0, { x: Math.sin(3) * 500, z: Math.cos(3) * 500 })).toBeCloseTo(0);
+    expect(Math.abs(bearingOf(O, 3.0, { x: -Math.sin(3) * 500, z: -Math.cos(3) * 500 }))).toBeCloseTo(Math.PI);
+  });
+
+  it("the wedge is the front 120° to its range, widened by a target's size", () => {
+    expect(inWedge(O, 0, { x: 0, z: 1399 }, 0)).toBe(true);
+    expect(inWedge(O, 0, { x: 0, z: 1450 }, 0)).toBe(false);
+    expect(inWedge(O, 0, { x: 0, z: 1450 }, 60)).toBe(true);
+    expect(inWedge(O, 0, at(1.1, 500), 0)).toBe(false);
+    expect(inWedge(O, 0, at(1.1, 500), 60)).toBe(true);
+    expect(inWedge(O, 0, { x: 0, z: -300 }, 0)).toBe(false);
+    expect(inWedge(O, 0, { x: 0, z: -300 }, 60)).toBe(false);
+  });
+
+  it("a target's angular size grows as it gets closer, never past a right angle", () => {
+    expect(angularSize(500, 60)).toBeCloseTo(Math.asin(60 / 500));
+    expect(angularSize(30, 60)).toBeCloseTo(Math.PI / 2);
+    expect(angularSize(500, 0)).toBe(0);
+  });
+
+  it('crossed catches a bearing anywhere the beam passed, however big the step', () => {
+    expect(crossed(-1, -0.9, -0.95, 0)).toBe(true);
+    expect(crossed(-1, 0.5, 0.2, 0)).toBe(true);
+    expect(crossed(-1, -0.9, -0.85, 0)).toBe(false);
+    expect(crossed(-1, -0.9, -0.85, 0.06)).toBe(true);
+    expect(crossed(-0.9, -0.9, -0.9, 0)).toBe(false);
+  });
+});

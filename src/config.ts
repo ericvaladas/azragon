@@ -281,6 +281,19 @@ export const CONFIG = {
     rakeHalfAngle: 0.9,
     /** Plasma Breath: charge (s), beam on-screen time (s), beam half-width (m), visual sweep (rad), fan per extra beam (rad), beam cap, building damage per hit. */
     breath: { charge: 0.4, show: 0.35, halfWidth: 45, sweep: 0.1, fan: 0.12, maxLines: 4, buildingDamage: 120 },
+    /**
+     * Plasma Lance (Q), on real seconds: the beam's range (m) and half the wedge it sweeps (rad, either side of the
+     * facing), the world time scale, the camera pull; the debris (pieces, how high it floats (m), piece sizes (m),
+     * how far past the wedge's edges it lies (rad)); the beam's core and edge radii (m); the scar (disc radius (m),
+     * how long one takes to fade (s), how many at once); the beats (s); and the cyan sky's light intensities.
+     */
+    ultimate: {
+      range: 1400, halfAngle: 1.047, timeScale: 0.25, cameraDistanceMult: 2.0,
+      debris: 90, debrisLift: 60, debrisSize: [6, 18], debrisMargin: 0.3,
+      beamCore: 18, beamEdge: 55, scarWidth: 50, scarLife: 1.5, scars: 64,
+      t: { easeIn: 0.2, sky: 0.8, liftFrom: 0.3, glowFrom: 0.3, glowTo: 2.0, rearFrom: 1.5, fire: 2.0, sweepTo: 4.5, outroFrom: 4.5, end: 6.0 },
+      hemiIntensity: 1.0, sunIntensity: 1.0,
+    },
     colors: {
       scale: 0x3f5f48,
       scaleDark: 0x2b4234,
@@ -290,6 +303,16 @@ export const CONFIG = {
       eye: 0xa8fdff,
       plasma: 0x6ff6ff,
       ember: 0xff9a3c,
+      /** Plasma Lance's cyan sky (zenith, horizon, fog, the two lights), the beam's white core, its scar and the floating debris. */
+      lanceZenith: 0x39d6e8,
+      lanceHorizon: 0xbff6fa,
+      lanceFog: 0xa8e8ee,
+      lanceHemiSky: 0xc8faff,
+      lanceHemiGround: 0x2a5a60,
+      lanceSun: 0xe8ffff,
+      beamCore: 0xffffff,
+      scar: 0x6ff6ff,
+      debris: 0x8a8378,
     },
   },
   /** The Kraken. Stats feed its MonsterKind; arms tune the tentacles; colours its body and effects. */

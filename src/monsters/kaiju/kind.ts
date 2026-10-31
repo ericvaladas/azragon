@@ -20,6 +20,7 @@ export const KAIJU: MonsterKind = {
   antiAir: 'bite',
   leapCrouch: 0.2,
   tailSweep: true,
+  ultimate: { id: 'plasmaLance', label: 'Plasma Lance' },
   signatures: ['storm', 'chitin', 'spines', 'swat', 'nova', 'mortar'],
   abilityText: {
     storm: { desc: (r) => (r === 1 ? 'Plates fire homing plasma every 8s' : '+2 bolts, fires faster') },

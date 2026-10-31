@@ -21,6 +21,9 @@ describe('KAIJU kind', () => {
     expect(KAIJU.ranged).toBe('breath');
     expect(KAIJU.antiAir).toBe('bite');
   });
+  it("the Kaiju's ultimate is Plasma Lance", () => {
+    expect(KAIJU.ultimate).toEqual({ id: 'plasmaLance', label: 'Plasma Lance' });
+  });
   it('has its own descriptions for the signatures under the shared plain names', () => {
     for (const id of KAIJU.signatures) expect(KAIJU.abilityText[id]?.title).toBeUndefined();
     expect(KAIJU.upgradeText.multiShot?.desc).toBe('Breath fires +1 extra beam');
