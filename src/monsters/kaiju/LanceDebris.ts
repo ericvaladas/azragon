@@ -8,8 +8,8 @@ const C = CONFIG.kaiju.colors;
 /** How quickly (1/s) a piece closes on its floating height, and how much (±) its height varies from the rest. */
 const RISE_RATE = 1.5;
 const HEIGHT_VARY = 0.25;
-/** No piece lies closer than this (m) to the Kaiju. */
-const NEAREST = 80;
+/** How brightly the pieces glow, charged in the plasma colour, so they read against the night. */
+const GLOW = 0.35;
 /** Tumble speed range (rad/s); settling pieces fall under this gravity (m/s²), about a second from full height. */
 const SPIN: [number, number] = [0.4, 1.4];
 const GRAVITY = 2 * U.debrisLift;
@@ -22,8 +22,8 @@ const _s = new THREE.Vector3();
 const _m = new THREE.Matrix4();
 
 /**
- * Plasma Lance's floating debris: small rubble scattered across the ground in front of the Kaiju (the wedge, a little
- * wider), drifting up as gravity seems to let go and tumbling slowly, until the beam vaporizes it or, once the beam is
+ * Plasma Lance's floating debris: rubble scattered all around the Kaiju, rising straight up as gravity seems to let go,
+ * tumbling slowly and glowing faintly with its charge, until the beam vaporizes it or, once the beam is
  * done, it falls back down and is gone. One InstancedMesh; everything is pooled.
  */
 export class LanceDebris {
@@ -46,20 +46,20 @@ export class LanceDebris {
     scene: THREE.Scene,
     private rand: () => number = Math.random,
   ) {
-    this.mesh = new THREE.InstancedMesh(faceted(new THREE.DodecahedronGeometry(0.5, 0)), toonMat(C.debris), U.debris);
+    this.mesh = new THREE.InstancedMesh(faceted(new THREE.DodecahedronGeometry(0.5, 0)), toonMat(C.debris, { emissive: C.plasma }), U.debris);
+    (this.mesh.material as THREE.MeshToonMaterial).emissiveIntensity = GLOW;
     this.mesh.frustumCulled = false;
     this.mesh.count = 0;
     this.mesh.visible = false;
     scene.add(this.mesh);
   }
 
-  /** Lay every piece on the ground in front of a Kaiju at `origin` facing `yaw`, unevenly. */
-  scatter(origin: Vec2, yaw: number): void {
-    const spread = U.halfAngle + U.debrisMargin;
+  /** Lay every piece on the ground all around a Kaiju at `origin`, unevenly. */
+  scatter(origin: Vec2): void {
     const [s0, s1] = U.debrisSize;
     for (const p of this.pieces) {
-      const a = yaw + (this.rand() * 2 - 1) * spread;
-      const r = NEAREST + Math.sqrt(this.rand()) * (U.range - NEAREST);
+      const a = this.rand() * Math.PI * 2;
+      const r = U.debrisNear + Math.sqrt(this.rand()) * (U.debrisRange - U.debrisNear);
       p.pos.set(origin.x + Math.sin(a) * r, 0, origin.z + Math.cos(a) * r);
       p.height = 1 + (this.rand() * 2 - 1) * HEIGHT_VARY;
       p.size = s0 + this.rand() * (s1 - s0);

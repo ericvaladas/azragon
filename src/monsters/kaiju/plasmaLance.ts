@@ -42,7 +42,7 @@ export type LancePhase = {
   sky: number;
   /** Camera pull 0..1: out by the time it fires, home by the end. */
   camera: number;
-  /** How far the debris has floated up 0..1. */
+  /** How far the debris has climbed 0..1: slowly at first, during the roar, still climbing through the sweep. */
   lift: number;
   /** The plates' and vents' blaze 0..1. */
   blaze: number;
@@ -62,7 +62,7 @@ export function lancePhase(t: number): LancePhase {
     time: 1 - (1 - U.timeScale) * slow,
     sky: Math.min(smooth(t / T.sky), outro(t)),
     camera: Math.min(easeInOutCubic(t / T.fire), easeInOutCubic(outro(t))),
-    lift: smooth(ramp(t, T.liftFrom, T.fire)),
+    lift: ramp(t, T.liftFrom, T.sweepTo) ** 2,
     blaze: Math.min(smooth(ramp(t, T.glowFrom, T.glowTo)), outro(t)),
     beam: t < T.fire ? 0 : 1 - ramp(t, T.sweepTo, T.sweepTo + CUT_OUT),
     sweep: -U.halfAngle + 2 * U.halfAngle * ramp(t, T.fire, T.sweepTo),

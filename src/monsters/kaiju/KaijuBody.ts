@@ -43,6 +43,9 @@ const TAIL_BASE: readonly THREE.Vector3[] = [
 const BLAZE = 4;
 const BLAZE_JAW = 0.6;
 const ROAR_PITCH = -0.55;
+/** The roar opens the jaws to ROAR_JAW (rad), easing open and shut at ROAR_JAW_RATE (per second of world time). */
+const ROAR_JAW = 0.8;
+const ROAR_JAW_RATE = 3;
 /** Back plates along the spine (body space): x, y, z, length along the spine, height, tilt (rad about X, - = raked back). */
 const PLATES: readonly (readonly [number, number, number, number, number, number])[] = [
   [0, 579, 78, 55, 85, 0],
@@ -135,6 +138,8 @@ export class KaijuBody implements MonsterBody {
   /** Current neck yaw relative to the body, eased toward the breath aim; and how far it still is from it. */
   private neckYaw = 0;
   private neckPitch = 0;
+  /** How far open the roar has the jaws 0..1. */
+  private roarJaw = 0;
   private aimErr = 0;
   /** Back vents projectiles launch from; each flares briefly when used. */
   private vents: THREE.Object3D[] = [];
@@ -295,8 +300,8 @@ export class KaijuBody implements MonsterBody {
     // The roar lifts the head at the neck's own pace.
     if (f.roaring) wantPitch = ROAR_PITCH;
     // Carried by an ultimate, the neck turns faster: Plasma Lance's sweep runs on real time, faster than the neck
-    // normally turns in slowed world time.
-    const rate = f.carried ? N.carriedTurnRate : N.turnRate;
+    // normally turns in slowed world time. The roar keeps the normal pace, so in slow motion it plays slowly.
+    const rate = f.carried && !f.roaring ? N.carriedTurnRate : N.turnRate;
     this.neckYaw = stepNeck(this.neckYaw, wantYaw, rate, f.dt);
     this.neckPitch = stepNeck(this.neckPitch, wantPitch, rate, f.dt);
     if (f.lookAt) this.aimErr += Math.abs(wantYaw - this.neckYaw);
@@ -305,7 +310,9 @@ export class KaijuBody implements MonsterBody {
     let turn = this.neckYaw;
     let reach = 0;
     let jaw = 0.06 + Math.max(0, Math.sin(f.time * 0.7)) * 0.05;
-    if (f.roaring) jaw = 0.8;
+    // The roar's jaws ease open and shut (slowly, in slow motion).
+    this.roarJaw = stepNeck(this.roarJaw, f.roaring ? 1 : 0, ROAR_JAW_RATE, f.dt);
+    jaw = Math.max(jaw, ROAR_JAW * this.roarJaw);
     // Open while it blazes (Plasma Lance), so the jaws don't shut between the roar and the beam.
     jaw = Math.max(jaw, f.charge * 0.45, f.blaze * BLAZE_JAW);
     if (f.antiAir) {

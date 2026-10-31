@@ -105,7 +105,7 @@ export class PlasmaLance implements Ultimate {
     this.origin.z = center.z;
     this.yaw = this.host.facing();
     this.damageMult = damageMult;
-    this.debris.scatter(this.origin, this.yaw);
+    this.debris.scatter(this.origin);
     this.host.shake(0.2);
   }
 
@@ -218,7 +218,9 @@ export class PlasmaLance implements Ultimate {
     }
     const ps = this.debris.positions();
     for (let i = 0; i < ps.length; i++) {
-      if (!this.debris.alive(i) || !crossed(prev, sweep, bearingOf(this.origin, this.yaw, ps[i]!), 0)) continue;
+      // Only the pieces in the wedge: the rest lie all around and settle at the end.
+      if (!this.debris.alive(i) || !inWedge(this.origin, this.yaw, ps[i]!, 0)) continue;
+      if (!crossed(prev, sweep, bearingOf(this.origin, this.yaw, ps[i]!), 0)) continue;
       this.debris.vaporize(i);
       this.host.burst(ps[i]!, 'vapor');
     }

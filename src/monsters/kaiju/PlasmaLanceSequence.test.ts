@@ -175,7 +175,9 @@ describe('PlasmaLance', () => {
     r.run(T.end + 0.1);
     const debris = r.s['debris'];
     for (let i = 0; i < debris.count; i++) expect(debris.alive(i)).toBe(false);
-    expect(r.log.vapor).toBeGreaterThanOrEqual(0.6 * U.debris);
+    // The beam's wedge is a third of the way round: about that share is vaporized, the rest settle.
+    expect(r.log.vapor).toBeGreaterThanOrEqual(0.2 * U.debris);
+    expect(r.log.vapor).toBeLessThan(0.5 * U.debris);
   });
 
   it('the debris left after the sweep is all back down before the end, not cleared in mid-air', () => {

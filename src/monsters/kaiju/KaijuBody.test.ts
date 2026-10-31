@@ -56,6 +56,17 @@ describe('KaijuBody for Plasma Lance', () => {
     for (let i = 30; i < 60; i++) step({ carried: true, lookAt: ahead }, i);
   });
 
+  it("held by an ultimate, the roar plays slowly: the head rises at the neck's normal pace and the jaws ease open", () => {
+    const body = make();
+    const tilt0 = body['neck'].rotation.x;
+    body.animate({ ...base(), carried: true, roaring: true }, () => {});
+    expect(Math.abs(body['neck'].rotation.x - tilt0)).toBeLessThanOrEqual(K.neck.turnRate / 60 + 0.01);
+    expect(body['jaw'].rotation.x).toBeLessThan(0.3);
+    for (let i = 1; i < 40; i++) body.animate({ ...base(), time: i / 60, carried: true, roaring: true }, () => {});
+    expect(body['neck'].rotation.x).toBeLessThan(-0.45);
+    expect(body['jaw'].rotation.x).toBeGreaterThan(0.7);
+  });
+
   it('the jaws stay open while it blazes', () => {
     const body = make();
     body.animate({ ...base(), blaze: 1 }, () => {});
