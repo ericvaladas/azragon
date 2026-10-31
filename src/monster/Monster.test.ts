@@ -147,6 +147,17 @@ describe('Monster frame flags', () => {
 });
 
 describe('Monster.hold', () => {
+  it("passes the hold's blaze to the body, and none once set down", () => {
+    const k = kind();
+    const seen: number[] = [];
+    const m = new Monster(new THREE.Scene(), { ...k, createBody: () => ({ ...stubBody(), animate: (f) => seen.push(f.blaze) }) });
+    m.hold(0, 0, 0.8);
+    m.animate(0.016, 0);
+    m.hold(null);
+    m.animate(0.016, 0);
+    expect(seen).toEqual([0.8, 0]);
+  });
+
   it("passes the hold's brace to the body, and none once set down", () => {
     const k = kind();
     const seen: { carried: boolean; brace: number }[] = [];

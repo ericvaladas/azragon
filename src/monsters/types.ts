@@ -94,6 +94,8 @@ export type BodyFrame = {
   carried: boolean;
   /** How hard a carried body braces against the ground 0..1 (Ink Storm's arms pressing down and pushing off). */
   brace: number;
+  /** How far a carried body's glow is driven past its normal maximum 0..1 (Plasma Lance's blazing plates and vents). */
+  blaze: number;
   dashing: boolean;
   /** Active Tail Sweep: seconds in, which side (+1 = left/+X), its timeline. */
   tailSweep: { t: number; side: number; timing: { windup: number; impact: number; end: number } } | null;
