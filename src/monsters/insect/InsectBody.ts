@@ -48,6 +48,20 @@ const AIM_RATE = 5;
 const AIM_FOLLOW = 8;
 /** Foot offset (model units) for the cocked leg: high and pulled back. */
 const _strikeLift = new THREE.Vector3(0, 420, -80);
+/**
+ * Spike Rain (an ultimate's roar, while carried): reared up the body tips back REAR_PITCH rad more (on top of the
+ * Monster's lean) and lifts REAR_LIFT, standing on the back pair of legs; the front four become arms, beating in at
+ * CHEST (body space) and swinging out to ARM_OUT from their hips, at BEAT_RATE rad/s of world time, alternating sides.
+ */
+const REAR_PITCH = 0.6;
+const REAR_LIFT = 140;
+const BEAT_RATE = 9;
+const CHEST = new THREE.Vector3(0, 520, 260);
+const ARM_OUT = new THREE.Vector3(260, 160, 220);
+/** Which legs are arms when reared, and each one's beat phase: 0 with 3, 1 with 2. */
+const ARM_PHASE = [0, Math.PI, Math.PI, 0];
+const _chest = new THREE.Vector3();
+const _out = new THREE.Vector3();
 
 /** The Insect Titan: six IK legs on a tripod gait, a leg strike, a swatting tail with the stinger. */
 export class InsectBody implements MonsterBody {
@@ -55,6 +69,8 @@ export class InsectBody implements MonsterBody {
   /** The tail's aim: how far on (0..1), and the point (body space) it is easing toward. */
   private aimW = 0;
   private aim = new THREE.Vector3();
+  /** Each leg's foot as last posed (root space). */
+  readonly feet: THREE.Vector3[] = Array.from({ length: 6 }, () => new THREE.Vector3());
 
   get root(): THREE.Group {
     return this.model.root;
@@ -68,12 +84,14 @@ export class InsectBody implements MonsterBody {
     const lp = f.leap ? insectLeap(f.leap.t, f.leap.duration, f.leap.crouch) : STANDING;
     const bob = Math.sin(f.cycle * Math.PI * 4) * 10 * m;
     const breathe = Math.sin(f.time * 1.6) * 5;
-    body.position.y = bob + breathe - f.pose.dip - f.pose.collapse * 230 - lp.sink * LEAP_SINK;
-    body.rotation.x = f.pose.pitch + lp.pitch * 0.6;
+    const rear = f.carried ? f.roar : 0;
+    body.position.y = bob + breathe - f.pose.dip - f.pose.collapse * 230 - lp.sink * LEAP_SINK + rear * REAR_LIFT;
+    body.rotation.x = f.pose.pitch + lp.pitch * 0.6 - rear * REAR_PITCH;
     body.rotation.z = Math.sin(f.cycle * Math.PI * 2) * 0.03 * m;
     root.updateMatrixWorld(true);
 
     const strikeLeg = f.melee ? f.melee.side : -1;
+    if (rear > 0) _chest.copy(CHEST).applyMatrix4(body.matrix);
     for (let i = 0; i < 6; i++) {
       const leg = this.model.legs[i]!;
       const fs = footState(f.cycle, i);
@@ -87,6 +105,13 @@ export class InsectBody implements MonsterBody {
         _gait.copy(_foot);
         strikeFootPose(f.melee.t, CONFIG.monster.meleeWindup, _gait, _strikeLift, _target, _foot);
       }
+      if (rear > 0 && i < 4) {
+        // An arm: swinging between out at its side and in at the chest, alternating, lifted off the ground as it rears.
+        const beat = 0.5 + 0.5 * Math.sin(f.time * BEAT_RATE + ARM_PHASE[i]!);
+        _out.set(leg.side * ARM_OUT.x, ARM_OUT.y, leg.hipLocal.z + ARM_OUT.z).applyMatrix4(body.matrix);
+        _foot.lerp(_out.lerp(_chest, beat), rear);
+      }
+      this.feet[i]!.copy(_foot);
       _pole.copy(_hip).add(_knee.set(leg.side * 120, 700, 0));
       solveTwoBone(_hip, _foot, FEMUR, TIBIA, _pole, _knee);
       placeSegment(leg.femur, _hip, _knee);
