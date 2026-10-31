@@ -39,14 +39,7 @@ const TAIL_BASE: readonly THREE.Vector3[] = [
   new THREE.Vector3(0, 90, -580),
   new THREE.Vector3(0, 55, -680),
 ];
-/**
- * Plasma Lance: reared back (brace 1) the torso lifts REAR_LIFT and tips back REAR_PITCH rad, the head tips back a
- * further REAR_HEAD rad, and the feet spread STANCE_WIDEN wider; a full blaze adds BLAZE to the plates' and vents' glow.
- */
-const REAR_LIFT = 30;
-const REAR_PITCH = 0.3;
-const REAR_HEAD = 0.5;
-const STANCE_WIDEN = 0.4;
+/** Plasma Lance: a full blaze adds this to the plates' and vents' glow. */
 const BLAZE = 4;
 /** Back plates along the spine (body space): x, y, z, length along the spine, height, tilt (rad about X, - = raked back). */
 const PLATES: readonly (readonly [number, number, number, number, number, number])[] = [
@@ -259,15 +252,15 @@ export class KaijuBody implements MonsterBody {
     // Leg 0 (+X) swings while sin(2π·cycle) > 0, so the weight sits toward −X (over leg 1) then, and vice versa.
     const shift = -Math.sin(f.cycle * Math.PI * 2);
     const body = this.body;
-    body.position.set(shift * 16 * m, (1 - Math.abs(shift)) * 10 * m + Math.sin(f.time * 1.3) * 6 - f.pose.dip - f.pose.collapse * 230 - lp.sink * LEAP_SINK + f.brace * REAR_LIFT, 0);
-    body.rotation.set(f.pose.pitch + f.pose.collapse * 0.5 + lp.pitch - f.brace * REAR_PITCH, 0, -shift * 0.05 * m - f.pose.collapse * 0.3);
+    body.position.set(shift * 16 * m, (1 - Math.abs(shift)) * 10 * m + Math.sin(f.time * 1.3) * 6 - f.pose.dip - f.pose.collapse * 230 - lp.sink * LEAP_SINK, 0);
+    body.rotation.set(f.pose.pitch + f.pose.collapse * 0.5 + lp.pitch, 0, -shift * 0.05 * m - f.pose.collapse * 0.3);
     this.root.updateMatrixWorld(true);
 
     for (let i = 0; i < 2; i++) {
       const leg = this.legs[i]!;
       const fs = bipedFoot(f.cycle, i);
       _hip.copy(leg.hip).applyMatrix4(body.matrix);
-      _foot.set(leg.side * FOOT_X * (1 + f.pose.collapse * 0.5 + f.brace * STANCE_WIDEN), fs.lift * LIFT * m + lp.tuck * LEAP_TUCK, fs.stride * (K.stats.strideLength / 2) * m + lp.tuck * 40);
+      _foot.set(leg.side * FOOT_X * (1 + f.pose.collapse * 0.5), fs.lift * LIFT * m + lp.tuck * LEAP_TUCK, fs.stride * (K.stats.strideLength / 2) * m + lp.tuck * 40);
       _pole.copy(_hip).add(_tmp.set(leg.side * 20, 0, 300)); // knees bend forward
       solveTwoBone(_hip, _foot, THIGH, SHIN, _pole, _knee);
       placeSegment(leg.thigh, _hip, _knee);
@@ -312,9 +305,7 @@ export class KaijuBody implements MonsterBody {
       pitch = -0.55;
       jaw = 0.8;
     }
-    jaw = Math.max(jaw, f.charge * 0.45, f.brace * 0.8);
-    // Reared back with nothing to aim at, the head tips up and back.
-    if (!f.lookAt) pitch -= f.brace * REAR_HEAD;
+    jaw = Math.max(jaw, f.charge * 0.45);
     if (f.antiAir) {
       // Snap Bite: the neck turns and stretches toward the flyer, jaws wide.
       const w = Math.max(0, f.antiAir.weight);

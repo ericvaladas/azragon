@@ -6,8 +6,9 @@ const C = CONFIG.kaiju.colors;
 /** How fast (rad/s) and how much (fraction of its width) the beam flickers. */
 const FLICKER_RATE = 47;
 const FLICKER = 0.15;
-/** The scar sits this far (m) above the ground. */
+/** The scar sits this far (m) above the ground; a fresh disc glows at SCAR_GLOW of the scar colour (they overlap and add up). */
 const SCAR_LIFT = 1;
+const SCAR_GLOW = 0.35;
 
 const _dir = new THREE.Vector3();
 const _q = new THREE.Quaternion();
@@ -20,7 +21,7 @@ const FLAT = new THREE.Quaternion();
 
 /**
  * Plasma Lance's beam: a white-hot core inside a plasma-cyan sheath, from the jaws to where it meets the ground,
- * flickering; and the scar it burns into the ground, a pool of glowing discs that fade (additive, so a disc fades by
+ * flickering; and the trench it burns into the ground under its whole length, a pool of glowing discs that fade (additive, so a disc fades by
  * darkening its colour). Three draw calls; everything is pooled.
  */
 export class LanceBeam {
@@ -80,6 +81,13 @@ export class LanceBeam {
     this.scarAge[i] = 0;
   }
 
+  /** Burn a trench of scar discs every U.scarSpacing m along the ground from `from` to `to`. */
+  burn(from: THREE.Vector3, to: THREE.Vector3): void {
+    const len = Math.hypot(to.x - from.x, to.z - from.z);
+    const n = Math.floor(len / U.scarSpacing);
+    for (let i = 0; i <= n; i++) this.scar(_dir.lerpVectors(from, to, len > 0 ? (i * U.scarSpacing) / len : 0));
+  }
+
   /** Age and redraw the scars. */
   update(dt: number): void {
     let n = 0;
@@ -89,7 +97,8 @@ export class LanceBeam {
       if (age >= U.scarLife) continue;
       const k = 1 - age / U.scarLife;
       this.scars.setMatrixAt(n, _m.compose(this.scarAt[i]!, FLAT, _s.set(U.scarWidth, 1, U.scarWidth)));
-      this.scars.setColorAt(n, _c.copy(_scarColor).multiplyScalar(k * k));
+      // Bright where the beam is, dying quickly to embers behind it.
+      this.scars.setColorAt(n, _c.copy(_scarColor).multiplyScalar(SCAR_GLOW * k * k * k));
       n++;
     }
     this.scars.count = n;

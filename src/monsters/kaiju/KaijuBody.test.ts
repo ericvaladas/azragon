@@ -37,13 +37,4 @@ describe('KaijuBody for Plasma Lance', () => {
     free.animate({ ...base(), lookAt: at }, () => {});
     expect(free['neckYaw']).toBeLessThanOrEqual(K.neck.turnRate / 60 + 1e-9);
   });
-
-  it('brace rears it back: the head rises and pitches up', () => {
-    const jaws = (brace: number) => {
-      const body = make();
-      for (let f = 0; f < 30; f++) body.animate({ ...base(), time: f / 60, carried: true, brace }, () => {});
-      return body.rangedOrigin(new THREE.Vector3()).y;
-    };
-    expect(jaws(1)).toBeGreaterThan(jaws(0) + 40);
-  });
 });

@@ -1,4 +1,3 @@
-import { angleDelta } from '../util/math';
 import { describe, it, expect } from 'vitest';
 import { applyDrag, applyZoom, blendOrbit, cameraPose, fovForAspect, type OrbitState, swingBehind } from './orbit';
 import { CONFIG } from '../config';
@@ -80,13 +79,5 @@ describe('blendOrbit', () => {
     const mid = blendOrbit(player, pull, 0.5);
     expect(mid.yaw).toBe(1.2);
     expect(mid.distance).toBeCloseTo(1450);
-  });
-
-  it('swings the yaw the short way round to a given yaw', () => {
-    const player: OrbitState = { yaw: 3.0, pitch: 0.5, distance: 900 };
-    const half = blendOrbit(player, { pitch: 0.5, distance: 900, yaw: -3.0 }, 0.5);
-    expect(half.yaw).toBeCloseTo(3.0 + angleDelta(3.0, -3.0) * 0.5);
-    expect(half.yaw).toBeGreaterThan(3.0);
-    expect(blendOrbit(player, { pitch: 0.5, distance: 900 }, 0.5).yaw).toBe(3.0);
   });
 });

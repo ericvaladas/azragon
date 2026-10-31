@@ -14,7 +14,7 @@ const BOSS_DAMAGE = CONFIG.wendigo.ultimate.bossDamage;
 const REACH = 0.9;
 /** Buildings are gathered this far (m) past the range, so a large one poking into the wedge is found. */
 const BUILDING_SLACK = 200;
-/** A scar and an impact burst every this long (s) while the beam sweeps. */
+/** The trench is burned, with impact bursts at the beam's end and along it, every this long (s) while the beam sweeps. */
 const SCAR_EVERY = 0.05;
 /** Scene light added at full beam (host.flash), and the camera shake fed each frame while it fires. */
 const BEAM_LIGHT = 0.35;
@@ -35,13 +35,13 @@ export type PlasmaLanceHost = {
   jaws(out: THREE.Vector3): THREE.Vector3;
   /** Turn the head toward this world point (null: free). */
   aim(at: THREE.Vector3 | null): void;
-  /** Hold the Kaiju planted, braced (rear) and blazing, 0..1 each. */
-  hold(brace: number, blaze: number): void;
+  /** Hold the Kaiju in place, its plates and vents blazing by `blaze` (0..1). */
+  hold(blaze: number): void;
   /** Set it down and back to normal control. */
   release(): void;
   sky(k: number): void;
-  /** Camera pull 0..1 toward behind `yaw` (0 restores the player's view). */
-  camera(k: number, yaw: number): void;
+  /** Camera pull-back 0..1, keeping the player's angle (0 restores the player's view). */
+  camera(k: number): void;
   shake(amount: number): void;
   flash(k: number): void;
   /** Particles: a debris piece vaporized, or the beam's impact on the ground. */
@@ -53,13 +53,16 @@ type Mark = { target: Target; bearing: number; widen: number };
 
 const _aim = new THREE.Vector3();
 const _jaws = new THREE.Vector3();
+const _near = new THREE.Vector3();
+const _along = new THREE.Vector3();
 
 /**
- * Plasma Lance, the Kaiju's ultimate, on its real-time timeline (lancePhase): the world slows, the camera swings round
- * behind the Kaiju and pulls back, the sky turns cyan and debris drifts up off the ground in front of it while its
- * plates and vents blaze; it rears back, planted, and fires a beam from its jaws that sweeps the wedge in front of it
- * from its right to its left, destroying every unit, aircraft and building it crosses and vaporizing the debris; then
- * the rest of the debris falls, and everything clears. It owns its beam, scar and debris.
+ * Plasma Lance, the Kaiju's ultimate, on its real-time timeline (lancePhase): the world slows, the sky turns to night,
+ * and the Kaiju roars as the camera pulls back (GameScene starts the roar), while debris drifts up off the ground in
+ * front of it and its plates and vents blaze; then it fires a beam from its jaws that sweeps the wedge in front of it
+ * from its right to its left, burning a trench along the ground under its whole length and destroying every unit,
+ * aircraft and building it crosses, vaporizing the debris; then the rest of the debris falls, and everything clears.
+ * It owns its beam, trench and debris.
  */
 export class PlasmaLance implements Ultimate {
   active = false;
@@ -84,7 +87,7 @@ export class PlasmaLance implements Ultimate {
   constructor(
     scene: THREE.Scene,
     private host: PlasmaLanceHost,
-    rand: () => number = Math.random,
+    private rand: () => number = Math.random,
   ) {
     this.beam = new LanceBeam(scene);
     this.debris = new LanceDebris(scene, rand);
@@ -117,8 +120,8 @@ export class PlasmaLance implements Ultimate {
     const ph = lancePhase(this.t);
     this.time = ph.time;
     this.host.sky(ph.sky);
-    this.host.camera(ph.camera, this.yaw);
-    this.host.hold(ph.brace, ph.blaze);
+    this.host.camera(ph.camera);
+    this.host.hold(ph.blaze);
     // On real time, as its other beats: the leftover debris must be down before the end.
     this.debris.update(realDt, ph.lift);
     this.beam.update(realDt);
@@ -137,8 +140,11 @@ export class PlasmaLance implements Ultimate {
       if (realDt > 0) this.host.shake(BEAM_SHAKE);
       while (this.t >= this.nextScar) {
         this.nextScar += SCAR_EVERY;
-        this.beam.scar(_aim);
+        // The ground burns under the beam's whole length, from near the Kaiju out to where it hits.
+        _near.set(this.origin.x + Math.sin(a) * U.scarFrom, 0, this.origin.z + Math.cos(a) * U.scarFrom);
+        this.beam.burn(_near, _aim);
         this.host.burst(_aim, 'impact');
+        this.host.burst(_along.lerpVectors(_near, _aim, this.rand()), 'impact');
       }
       this.sweepTo(ph.sweep);
     } else if (this.fired) {
@@ -150,7 +156,7 @@ export class PlasmaLance implements Ultimate {
     if (!ph.done) return false;
     this.host.release();
     this.host.sky(0);
-    this.host.camera(0, this.yaw);
+    this.host.camera(0);
     this.clear(true);
     return true;
   }
@@ -159,7 +165,7 @@ export class PlasmaLance implements Ultimate {
     if (this.active) {
       this.host.release();
       this.host.sky(0);
-      this.host.camera(0, this.yaw);
+      this.host.camera(0);
       this.host.flash(0);
       this.host.aim(null);
     }

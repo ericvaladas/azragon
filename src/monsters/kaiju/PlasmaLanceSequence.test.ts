@@ -34,9 +34,9 @@ function rig(enemies: Target[], buildings: Target[] = [], facing = 0) {
     bosses: [] as [Target, number][],
     aims: [] as [THREE.Vector3 | null, number][],
     sky: [] as number[],
-    camera: [] as [number, number][],
+    camera: [] as number[],
     flash: [] as number[],
-    holds: [] as [number, number][],
+    holds: [] as number[],
     releases: 0,
     vapor: 0,
     impact: 0,
@@ -52,10 +52,10 @@ function rig(enemies: Target[], buildings: Target[] = [], facing = 0) {
     facing: () => facing,
     jaws: (out) => out.set(0, 340, 60),
     aim: (at) => log.aims.push([at ? at.clone() : null, now]),
-    hold: (brace, blaze) => log.holds.push([brace, blaze]),
+    hold: (blaze) => log.holds.push(blaze),
     release: () => log.releases++,
     sky: (k) => log.sky.push(k),
-    camera: (k, yaw) => log.camera.push([k, yaw]),
+    camera: (k) => log.camera.push(k),
     shake: () => {},
     flash: (k) => log.flash.push(k),
     burst: (_at, kind) => {
@@ -187,6 +187,22 @@ describe('PlasmaLance', () => {
     for (let i = 0; i < debris.count; i++) expect(debris.alive(i)).toBe(false);
   });
 
+  it('burns the ground along the whole length of the beam, from near the Kaiju out to its end', () => {
+    const r = rig([]);
+    r.s.start(new THREE.Vector3(), 1);
+    r.run((T.fire + T.sweepTo) / 2);
+    const scars = r.s['beam']['scars'] as THREE.InstancedMesh;
+    const m = new THREE.Matrix4();
+    const p = new THREE.Vector3();
+    const ds: number[] = [];
+    for (let i = 0; i < scars.count; i++) {
+      p.setFromMatrixPosition((scars.getMatrixAt(i, m), m));
+      ds.push(Math.hypot(p.x, p.z));
+    }
+    expect(Math.min(...ds)).toBeLessThanOrEqual(U.scarFrom + 1);
+    expect(Math.max(...ds)).toBeGreaterThan(0.85 * U.range);
+  });
+
   it('aims the head along the sweep and lets go after', () => {
     const r = rig([]);
     r.s.start(new THREE.Vector3(), 1);
@@ -219,7 +235,7 @@ describe('PlasmaLance', () => {
     r.s.cancel();
     expect(r.log.releases).toBe(1);
     expect(last(r.log.sky)).toBe(0);
-    expect(last(r.log.camera)![0]).toBe(0);
+    expect(last(r.log.camera)).toBe(0);
     expect(last(r.log.flash)).toBe(0);
     expect(last(r.log.aims)![0]).toBeNull();
     expect(r.s.timeScale()).toBe(1);
@@ -236,6 +252,6 @@ describe('PlasmaLance', () => {
     expect(r.ends()).toBe(1);
     expect(r.s.timeScale()).toBe(1);
     expect(r.log.releases).toBe(1);
-    expect(last(r.log.holds)![0]).toBeLessThan(0.05);
+    expect(last(r.log.holds)).toBeLessThan(0.05);
   });
 });

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { CONFIG } from '../../config';
-import { angularSize, bearingOf, crossed, inWedge, lancePhase } from './plasmaLance';
+import { angularSize, bearingOf, crossed, inWedge, lancePhase, lanceRoarWorldLength } from './plasmaLance';
 
 const U = CONFIG.kaiju.ultimate;
 const T = U.t;
@@ -29,12 +29,11 @@ describe('lancePhase', () => {
     expect(lancePhase(T.end - 0.01).done).toBe(false);
   });
 
-  it('rears back before firing, snaps forward on fire, and is upright by the end', () => {
-    const brace = (t: number) => lancePhase(t).brace;
-    expect(brace(T.rearFrom)).toBe(0);
-    expect(brace(T.fire - 0.01)).toBeGreaterThan(0.95);
-    expect(brace(T.fire + 0.2)).toBeCloseTo(0.35);
-    expect(brace(T.end)).toBe(0);
+  it('roars from Q until the beam fires, as the camera pulls out: its length in world (slowed) seconds', () => {
+    const w = lanceRoarWorldLength();
+    expect(w).toBeLessThan(T.fire);
+    expect(w).toBeGreaterThan(T.fire * U.timeScale);
+    expect(lancePhase(T.fire).camera).toBe(1);
   });
 
   it('blazes through the build-up and lifts the debris before the beam', () => {

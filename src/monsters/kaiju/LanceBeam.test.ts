@@ -45,6 +45,23 @@ describe('LanceBeam', () => {
     expect(parts(scene).scars.count).toBe(0);
   });
 
+  it('burns a trench of scars along the whole ground line it is given', () => {
+    const scene = new THREE.Scene();
+    const beam = new LanceBeam(scene);
+    const from = new THREE.Vector3(0, 0, 150);
+    const to = new THREE.Vector3(0, 0, 1260);
+    beam.burn(from, to);
+    beam.update(0.01);
+    const scars = parts(scene).scars;
+    const zs: number[] = [];
+    const m = new THREE.Matrix4();
+    const p = new THREE.Vector3();
+    for (let i = 0; i < scars.count; i++) zs.push(p.setFromMatrixPosition((scars.getMatrixAt(i, m), m)).z);
+    expect(scars.count).toBe(Math.floor((to.z - from.z) / U.scarSpacing) + 1);
+    expect(Math.min(...zs)).toBeCloseTo(from.z);
+    expect(Math.max(...zs)).toBeGreaterThan(to.z - U.scarSpacing);
+  });
+
   it('clear and dispose leave nothing', () => {
     const scene = new THREE.Scene();
     const beam = new LanceBeam(scene);
