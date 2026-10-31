@@ -51,7 +51,8 @@ export function fovForAspect(aspect: number, baseVFovDeg: number, maxHFovDeg: nu
   return (2 * Math.atan(Math.tan((maxHFovDeg * toRad) / 2) / aspect)) / toRad;
 }
 
-/** The orbit `a` blended toward a cinematic `b` by k (yaw kept; pitch and distance exact at 0 and 1). */
-export function blendOrbit(a: OrbitState, b: Pick<OrbitState, 'pitch' | 'distance'>, k: number): OrbitState {
-  return { yaw: a.yaw, pitch: a.pitch * (1 - k) + b.pitch * k, distance: a.distance * (1 - k) + b.distance * k };
+/** The orbit `a` blended toward a cinematic `b` by k (pitch and distance exact at 0 and 1; yaw kept, or turned the short way round to `b.yaw` when given). */
+export function blendOrbit(a: OrbitState, b: Pick<OrbitState, 'pitch' | 'distance'> & { yaw?: number }, k: number): OrbitState {
+  const yaw = b.yaw === undefined ? a.yaw : a.yaw + angleDelta(a.yaw, b.yaw) * k;
+  return { yaw, pitch: a.pitch * (1 - k) + b.pitch * k, distance: a.distance * (1 - k) + b.distance * k };
 }

@@ -12,7 +12,7 @@ export class CameraRig {
   private time = 0;
   /** Cinematic pull-back: how far (0..1) toward `pullTo`; the player's own orbit is never overwritten. */
   private pullK = 0;
-  private pullTo = { pitch: 0, distance: 0 };
+  private pullTo: { pitch: number; distance: number; yaw?: number } = { pitch: 0, distance: 0 };
 
   constructor(readonly camera: THREE.PerspectiveCamera) {
     camera.near = CONFIG.camera.near;
@@ -45,11 +45,12 @@ export class CameraRig {
     this.orbit = swingBehind(this.orbit, yaw, CONFIG.camera.behindLambda, dt);
   }
 
-  /** Pull the camera back toward `pitch` and `distance` by k (0 is exactly the player's orbit). */
-  pull(k: number, pitch: number, distance: number): void {
+  /** Pull the camera back toward `pitch` and `distance` by k (0 is exactly the player's orbit), and round to `yaw` when given. */
+  pull(k: number, pitch: number, distance: number, yaw?: number): void {
     this.pullK = k;
     this.pullTo.pitch = pitch;
     this.pullTo.distance = distance;
+    this.pullTo.yaw = yaw;
   }
 
   /** Trauma in 0..1; shake magnitude is trauma². */
