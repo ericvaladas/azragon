@@ -292,7 +292,7 @@ export const CONFIG = {
      */
     ultimate: {
       range: 1400, halfAngle: 1.047, timeScale: 0.25, cameraDistanceMult: 2.0,
-      debris: 120, debrisLift: 260, debrisSize: [15, 40], debrisNear: 120, debrisRange: 900,
+      debris: 120, debrisLift: 260, debrisSize: [8, 20], debrisNear: 120, debrisRange: 900,
       beamCore: 18, beamEdge: 55, scarWidth: 50, scarLife: 2.5, scars: 1000, scarSpacing: 60, scarFrom: 150,
       t: { easeIn: 0.2, sky: 1.5, liftFrom: 0.2, glowFrom: 0.3, glowTo: 2.0, roarTo: 1.5, fire: 2.0, sweepTo: 4.5, outroFrom: 4.5, end: 6.0 },
       hemiIntensity: 0.5, sunIntensity: 0.45,
@@ -306,7 +306,7 @@ export const CONFIG = {
       eye: 0xa8fdff,
       plasma: 0x6ff6ff,
       ember: 0xff9a3c,
-      /** Plasma Lance's night sky (zenith, horizon, fog, moonlight from the sky and ground, the moon, lit windows), the beam's white core, its scar and the floating debris (it glows faintly in the plasma colour, charged). */
+      /** Plasma Lance's night sky (zenith, horizon, fog, moonlight from the sky and ground, the moon, lit windows), the beam's white core, its scar and the floating grey debris. */
       lanceZenith: 0x05070f,
       lanceHorizon: 0x1a2438,
       lanceFog: 0x121a28,
@@ -316,7 +316,7 @@ export const CONFIG = {
       lanceWindows: 0xffd890,
       beamCore: 0xffffff,
       scar: 0x6ff6ff,
-      debris: 0xb0a898,
+      debris: 0x8c8c8c,
     },
   },
   /** The Kraken. Stats feed its MonsterKind; arms tune the tentacles; colours its body and effects. */

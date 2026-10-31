@@ -67,6 +67,29 @@ describe('KaijuBody for Plasma Lance', () => {
     expect(body['jaw'].rotation.x).toBeGreaterThan(0.7);
   });
 
+  it('the whole roar builds gradually over the roar, not at once: head, jaws, tail and plates together', () => {
+    const body = make();
+    const tail = () => body['tailPts'][body['tailPts'].length - 1]!.y;
+    body.animate({ ...base(), carried: true }, () => {});
+    const tail0 = tail();
+    const plate0 = body['plateMat'].emissiveIntensity;
+    const frame = (i: number) => body.animate({ ...base(), time: i / 60, carried: true, roaring: true }, () => {});
+    frame(1);
+    // One frame in: barely begun.
+    expect(body['jaw'].rotation.x).toBeLessThan(0.15);
+    expect(tail() - tail0).toBeLessThan(10);
+    expect(body['plateMat'].emissiveIntensity - plate0).toBeLessThan(0.3);
+    // Part-way through (0.2 s of world time): about half-way there.
+    for (let i = 2; i <= 12; i++) frame(i);
+    expect(body['jaw'].rotation.x).toBeGreaterThan(0.25);
+    expect(body['jaw'].rotation.x).toBeLessThan(0.65);
+    // By 0.5 s: full roar.
+    for (let i = 13; i <= 30; i++) frame(i);
+    expect(body['jaw'].rotation.x).toBeGreaterThan(0.75);
+    expect(body['neck'].rotation.x).toBeLessThan(-0.45);
+    expect(body['plateMat'].emissiveIntensity - plate0).toBeGreaterThan(2);
+  });
+
   it('the jaws stay open while it blazes', () => {
     const body = make();
     body.animate({ ...base(), blaze: 1 }, () => {});

@@ -8,8 +8,8 @@ const C = CONFIG.kaiju.colors;
 /** How quickly (1/s) a piece closes on its floating height, and how much (±) its height varies from the rest. */
 const RISE_RATE = 1.5;
 const HEIGHT_VARY = 0.25;
-/** How brightly the pieces glow, charged in the plasma colour, so they read against the night. */
-const GLOW = 0.35;
+/** How brightly the pieces glow in their own grey, so they still read against the night. */
+const GLOW = 0.3;
 /** Tumble speed range (rad/s); settling pieces fall under this gravity (m/s²), about a second from full height. */
 const SPIN: [number, number] = [0.4, 1.4];
 const GRAVITY = 2 * U.debrisLift;
@@ -23,7 +23,7 @@ const _m = new THREE.Matrix4();
 
 /**
  * Plasma Lance's floating debris: rubble scattered all around the Kaiju, rising straight up as gravity seems to let go,
- * tumbling slowly and glowing faintly with its charge, until the beam vaporizes it or, once the beam is
+ * tumbling slowly, until the beam vaporizes it or, once the beam is
  * done, it falls back down and is gone. One InstancedMesh; everything is pooled.
  */
 export class LanceDebris {
@@ -46,7 +46,7 @@ export class LanceDebris {
     scene: THREE.Scene,
     private rand: () => number = Math.random,
   ) {
-    this.mesh = new THREE.InstancedMesh(faceted(new THREE.DodecahedronGeometry(0.5, 0)), toonMat(C.debris, { emissive: C.plasma }), U.debris);
+    this.mesh = new THREE.InstancedMesh(faceted(new THREE.DodecahedronGeometry(0.5, 0)), toonMat(C.debris, { emissive: C.debris }), U.debris);
     (this.mesh.material as THREE.MeshToonMaterial).emissiveIntensity = GLOW;
     this.mesh.frustumCulled = false;
     this.mesh.count = 0;

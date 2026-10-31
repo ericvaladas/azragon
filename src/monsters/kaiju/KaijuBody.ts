@@ -43,9 +43,9 @@ const TAIL_BASE: readonly THREE.Vector3[] = [
 const BLAZE = 4;
 const BLAZE_JAW = 0.6;
 const ROAR_PITCH = -0.55;
-/** The roar opens the jaws to ROAR_JAW (rad), easing open and shut at ROAR_JAW_RATE (per second of world time). */
+/** The roar opens the jaws to ROAR_JAW (rad); it builds and fades at ROAR_RATE (of a full roar, per second of world time). */
 const ROAR_JAW = 0.8;
-const ROAR_JAW_RATE = 3;
+const ROAR_RATE = 2.5;
 /** Back plates along the spine (body space): x, y, z, length along the spine, height, tilt (rad about X, - = raked back). */
 const PLATES: readonly (readonly [number, number, number, number, number, number])[] = [
   [0, 579, 78, 55, 85, 0],
@@ -138,8 +138,8 @@ export class KaijuBody implements MonsterBody {
   /** Current neck yaw relative to the body, eased toward the breath aim; and how far it still is from it. */
   private neckYaw = 0;
   private neckPitch = 0;
-  /** How far open the roar has the jaws 0..1. */
-  private roarJaw = 0;
+  /** How far into its roar the Kaiju is 0..1 (it builds and fades gradually). */
+  private roar = 0;
   private aimErr = 0;
   /** Back vents projectiles launch from; each flares briefly when used. */
   private vents: THREE.Object3D[] = [];
@@ -297,8 +297,9 @@ export class KaijuBody implements MonsterBody {
       wantPitch = Math.max(-0.4, Math.min(0.8, -Math.atan2(_tmp.y, Math.hypot(_tmp.x, _tmp.z))));
       this.aimErr = aim.error;
     }
-    // The roar lifts the head at the neck's own pace.
-    if (f.roaring) wantPitch = ROAR_PITCH;
+    // The roar builds and fades gradually (in slow motion, slowly): head, jaws, tail and plates together.
+    this.roar = stepNeck(this.roar, f.roaring ? 1 : 0, ROAR_RATE, f.dt);
+    if (this.roar > 0) wantPitch = Math.min(wantPitch, ROAR_PITCH * this.roar);
     // Carried by an ultimate, the neck turns faster: Plasma Lance's sweep runs on real time, faster than the neck
     // normally turns in slowed world time. The roar keeps the normal pace, so in slow motion it plays slowly.
     const rate = f.carried && !f.roaring ? N.carriedTurnRate : N.turnRate;
@@ -310,9 +311,7 @@ export class KaijuBody implements MonsterBody {
     let turn = this.neckYaw;
     let reach = 0;
     let jaw = 0.06 + Math.max(0, Math.sin(f.time * 0.7)) * 0.05;
-    // The roar's jaws ease open and shut (slowly, in slow motion).
-    this.roarJaw = stepNeck(this.roarJaw, f.roaring ? 1 : 0, ROAR_JAW_RATE, f.dt);
-    jaw = Math.max(jaw, ROAR_JAW * this.roarJaw);
+    jaw = Math.max(jaw, ROAR_JAW * this.roar);
     // Open while it blazes (Plasma Lance), so the jaws don't shut between the roar and the beam.
     jaw = Math.max(jaw, f.charge * 0.45, f.blaze * BLAZE_JAW);
     if (f.antiAir) {
@@ -339,7 +338,7 @@ export class KaijuBody implements MonsterBody {
       const wag = -lagged * TAIL_WAG * Math.pow(k, 1.2) * m;
       this.tailPts[i]!.set(
         base.x + Math.sin(f.time * 1.1 - i * 0.6) * 30 * k + wag,
-        base.y + Math.sin(f.time * 1.7 + i) * 8 * k + Math.abs(lagged) * 18 * k * m + (f.roaring ? 40 * k : 0) + lp.tail * 110 * k,
+        base.y + Math.sin(f.time * 1.7 + i) * 8 * k + Math.abs(lagged) * 18 * k * m + 40 * k * this.roar + lp.tail * 110 * k,
         base.z + Math.abs(wag) * 0.25,
       );
     }
@@ -361,7 +360,7 @@ export class KaijuBody implements MonsterBody {
       if (f.flash) mat.emissive.setHex(0xffffff);
       else mat.emissive.setHex(CONFIG.levelUp.color).multiplyScalar(f.glow);
     }
-    this.plateMat.emissiveIntensity = f.flash ? 3 : 0.35 + 2.2 * (f.roaring ? 1 : f.charge) + BLAZE * f.blaze;
+    this.plateMat.emissiveIntensity = f.flash ? 3 : 0.35 + 2.2 * Math.max(this.roar, f.charge) + BLAZE * f.blaze;
     for (let i = 0; i < this.ventMats.length; i++) {
       this.ventFlash[i] = Math.max(0, this.ventFlash[i]! - f.dt * 5);
       this.ventMats[i]!.emissiveIntensity = f.flash ? 3 : 0.5 + 1.2 * f.charge + 3 * this.ventFlash[i]! + BLAZE * f.blaze;
