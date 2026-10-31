@@ -57,7 +57,7 @@ import { BLOOD_ATMOSPHERE, devourWorldLength } from './monsters/wendigo/devour';
 import { InkStorm } from './monsters/kraken/InkStormSequence';
 import { STORM_ATMOSPHERE } from './monsters/kraken/inkStorm';
 import { PlasmaLance } from './monsters/kaiju/PlasmaLanceSequence';
-import { LANCE_ATMOSPHERE, lanceRoarWorldLength } from './monsters/kaiju/plasmaLance';
+import { LANCE_ATMOSPHERE } from './monsters/kaiju/plasmaLance';
 import { LevelUpAura } from './systems/LevelUpAura';
 import { ShieldFx } from './systems/ShieldFx';
 import { InkFx } from './monsters/kraken/InkFx';
@@ -336,7 +336,7 @@ export class GameScene {
       aim: (at) => {
         this.monster.lookAt = at ? this.lanceLook.copy(at) : null;
       },
-      hold: (blaze) => this.monster.hold(0, 0, blaze),
+      hold: (blaze, roar) => this.monster.hold(0, 0, blaze, roar),
       release: () => this.monster.hold(null),
       sky: (k) => this.city.blendAtmosphere(LANCE_ATMOSPHERE, k),
       camera: (k) => this.rig.pull(k, this.rig.orbit.pitch, CONFIG.camera.defaultDistance * L.cameraDistanceMult),
@@ -1014,10 +1014,6 @@ export class GameScene {
       case 'devour':
         // The Wendigo rears up and holds its howl for the whole sequence (in world time, which runs slowed).
         this.monster.startRoar(devourWorldLength());
-        break;
-      case 'plasmaLance':
-        // The Kaiju roars as the camera pulls out, until the beam fires (in world time, which runs slowed).
-        this.monster.startRoar(lanceRoarWorldLength());
         break;
     }
   }

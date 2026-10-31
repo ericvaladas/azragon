@@ -35,8 +35,8 @@ export type PlasmaLanceHost = {
   jaws(out: THREE.Vector3): THREE.Vector3;
   /** Turn the head toward this world point (null: free). */
   aim(at: THREE.Vector3 | null): void;
-  /** Hold the Kaiju in place, its plates and vents blazing by `blaze` (0..1). */
-  hold(blaze: number): void;
+  /** Hold the Kaiju in place, its plates and vents blazing by `blaze` and roaring by `roar` (0..1 each). */
+  hold(blaze: number, roar: number): void;
   /** Set it down and back to normal control. */
   release(): void;
   sky(k: number): void;
@@ -58,7 +58,7 @@ const _along = new THREE.Vector3();
 
 /**
  * Plasma Lance, the Kaiju's ultimate, on its real-time timeline (lancePhase): the world slows, the sky turns to night,
- * and the Kaiju roars as the camera pulls back (GameScene starts the roar), while debris drifts up off the ground in
+ * and the Kaiju roars as the camera pulls back, while debris drifts up off the ground in
  * front of it and its plates and vents blaze; then it fires a beam from its jaws that sweeps the wedge in front of it
  * from its right to its left, burning a trench along the ground under its whole length and destroying every unit,
  * aircraft and building it crosses, vaporizing the debris; then the rest of the debris falls, and everything clears.
@@ -121,7 +121,7 @@ export class PlasmaLance implements Ultimate {
     this.time = ph.time;
     this.host.sky(ph.sky);
     this.host.camera(ph.camera);
-    this.host.hold(ph.blaze);
+    this.host.hold(ph.blaze, ph.roar);
     // On real time, as its other beats: the leftover debris must be down before the end.
     this.debris.update(realDt, ph.lift);
     this.beam.update(realDt);

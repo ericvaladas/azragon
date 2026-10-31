@@ -96,6 +96,8 @@ export type BodyFrame = {
   brace: number;
   /** How far a carried body's glow is driven past its normal maximum 0..1 (Plasma Lance's blazing plates and vents). */
   blaze: number;
+  /** An ultimate's roar 0..1 while it holds the body (Plasma Lance's, driven on real time); 0 otherwise. */
+  roar: number;
   dashing: boolean;
   /** Active Tail Sweep: seconds in, which side (+1 = left/+X), its timeline. */
   tailSweep: { t: number; side: number; timing: { windup: number; impact: number; end: number } } | null;

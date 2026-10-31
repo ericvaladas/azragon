@@ -8,6 +8,8 @@ import type { BodyFrame, MonsterBody, MonsterKind, MonsterStats, StrikeKind } fr
 
 type MeleeTiming = MonsterStats['meleeTiming'];
 
+/** How far (rad) a roar leans the body back at its height. */
+const ROAR_LEAN = 0.45;
 const FACE_BEFORE_WALK = 1.0; // radians of yaw error allowed while walking
 
 /** Feet that touch down while the monster is held do nothing. */
@@ -59,6 +61,7 @@ export class Monster {
   private heldY: number | null = null;
   private braceW = 0;
   private blazeW = 0;
+  private roarW = 0;
   private dashT = -1;
   private dashDuration = 1;
   private dashFrom = { x: 0, z: 0 };
@@ -87,7 +90,7 @@ export class Monster {
   private strikePoint = new THREE.Vector3();
   private frame: BodyFrame = {
     dt: 0, time: 0, cycle: 0, prevCycle: 0, motion: 0, pose: this.pose,
-    melee: null, antiAir: null, roaring: false, roarDuration: CONFIG.abilities.roar.duration, airborne: false, carried: false, brace: 0, blaze: 0, dashing: false, tailSweep: null, lookAt: null, charge: 0, heat: 0, flash: false, glow: 0,
+    melee: null, antiAir: null, roaring: false, roarDuration: CONFIG.abilities.roar.duration, airborne: false, carried: false, brace: 0, blaze: 0, roar: 0, dashing: false, tailSweep: null, lookAt: null, charge: 0, heat: 0, flash: false, glow: 0,
   };
   private meleeFrame: { t: number; side: number; target: THREE.Vector3; kind?: StrikeKind } = { t: 0, side: 0, target: this.strikePoint };
   /** The running strike's kind, when its starter decided one (the Wendigo's slam or backhand). */
@@ -175,12 +178,14 @@ export class Monster {
 
   /**
    * An ultimate holds the monster at `height` (m) above where it stands: busy, airborne while above the ground, its
-   * feet never landing, its body bracing against the ground by `brace` and its glow blazing by `blaze` (0..1 each);
+   * feet never landing, its body bracing against the ground by `brace`, its glow blazing by `blaze`, and roaring
+   * (leaning back) by `roar` (0..1 each);
    * `null` sets it down on the ground and back to normal control.
    */
-  hold(height: number | null, brace = 0, blaze = 0): void {
+  hold(height: number | null, brace = 0, blaze = 0, roar = 0): void {
     this.braceW = brace;
     this.blazeW = blaze;
+    this.roarW = roar;
     if (height === null && this.heldY !== null) {
       this.position.y = 0;
       this.pose.dip = 60;
@@ -405,6 +410,7 @@ export class Monster {
     f.carried = this.heldY !== null;
     f.brace = this.heldY !== null ? this.braceW : 0;
     f.blaze = this.heldY !== null ? this.blazeW : 0;
+    f.roar = this.heldY !== null ? this.roarW : 0;
     f.dashing = this.dashing;
     if (this.tailT >= 0) {
       this.tailFrame.t = this.tailT;
@@ -423,6 +429,9 @@ export class Monster {
   tick(dt: number): void {
     const L = CONFIG.abilities.leap;
     if (this.heldY !== null) this.position.y = this.heldY;
+    // An ultimate's roar leans the body back by its own amount.
+    const heldRoar = this.heldY !== null && this.roarW > 0;
+    if (heldRoar) this.pose.pitch = -ROAR_LEAN * this.roarW;
     if (this.leapT >= 0) {
       this.leapT += dt;
       const c = this.kind.leapCrouch ?? 0;
@@ -470,13 +479,13 @@ export class Monster {
     if (this.roarT >= 0) {
       this.roarT += dt;
       const k = this.roarT / this.roarD;
-      this.pose.pitch = -0.45 * Math.sin(Math.PI * Math.min(1, k));
+      this.pose.pitch = -ROAR_LEAN * Math.sin(Math.PI * Math.min(1, k));
       if (k >= 1) this.roarT = -1;
     }
     this.meleeCd = Math.max(0, this.meleeCd - dt * this.cooldownRate);
     this.rangedCd = Math.max(0, this.rangedCd - dt * this.cooldownRate);
     if (this.meleeT < 0) {
-      if (this.leapT < 0 && this.roarT < 0) this.pose.pitch *= Math.exp(-10 * dt);
+      if (this.leapT < 0 && this.roarT < 0 && !heldRoar) this.pose.pitch *= Math.exp(-10 * dt);
       this.pose.dip += ((this.crouch ? 35 : 0) - this.pose.dip) * (1 - Math.exp(-10 * dt));
       return;
     }

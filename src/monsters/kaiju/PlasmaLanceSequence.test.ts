@@ -37,6 +37,7 @@ function rig(enemies: Target[], buildings: Target[] = [], facing = 0) {
     camera: [] as number[],
     flash: [] as number[],
     holds: [] as number[],
+    roars: [] as [number, number][],
     releases: 0,
     vapor: 0,
     impact: 0,
@@ -52,7 +53,10 @@ function rig(enemies: Target[], buildings: Target[] = [], facing = 0) {
     facing: () => facing,
     jaws: (out) => out.set(0, 340, 60),
     aim: (at) => log.aims.push([at ? at.clone() : null, now]),
-    hold: (blaze) => log.holds.push(blaze),
+    hold: (blaze, roar) => {
+      log.holds.push(blaze);
+      log.roars.push([roar, now]);
+    },
     release: () => log.releases++,
     sky: (k) => log.sky.push(k),
     camera: (k) => log.camera.push(k),
@@ -203,6 +207,15 @@ describe('PlasmaLance', () => {
     }
     expect(Math.min(...ds)).toBeLessThanOrEqual(U.scarFrom + 1);
     expect(Math.max(...ds)).toBeGreaterThan(0.85 * U.range);
+  });
+
+  it('holds the Kaiju roaring by the timeline, building slowly from Q and done before it turns', () => {
+    const r = rig([]);
+    r.s.start(new THREE.Vector3(), 1);
+    r.run(T.end + 0.1);
+    for (const [roar, t] of r.log.roars) expect(roar).toBeCloseTo(lancePhase(t).roar);
+    expect(Math.max(...r.log.roars.map(([k]) => k))).toBe(1);
+    expect(r.log.roars.find(([, t]) => t >= 0.25)![0]).toBeLessThan(0.2);
   });
 
   it('turns the head round to the right edge before firing, with no jump into the sweep', () => {

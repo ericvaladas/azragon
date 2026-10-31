@@ -147,6 +147,20 @@ describe('Monster frame flags', () => {
 });
 
 describe('Monster.hold', () => {
+  it("an ultimate's roar is passed to the body and leans it back by that much; none once set down", () => {
+    const k = kind();
+    const seen: number[] = [];
+    const m = new Monster(new THREE.Scene(), { ...k, createBody: () => ({ ...stubBody(), animate: (f) => seen.push(f.roar) }) });
+    m.hold(0, 0, 0, 0.6);
+    m.tick(0.016);
+    m.animate(0.016, 0);
+    expect(m.pose.pitch).toBeCloseTo(-0.45 * 0.6);
+    m.hold(null);
+    m.tick(0.016);
+    m.animate(0.016, 0);
+    expect(seen).toEqual([0.6, 0]);
+  });
+
   it("passes the hold's blaze to the body, and none once set down", () => {
     const k = kind();
     const seen: number[] = [];

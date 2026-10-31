@@ -297,12 +297,13 @@ export class KaijuBody implements MonsterBody {
       wantPitch = Math.max(-0.4, Math.min(0.8, -Math.atan2(_tmp.y, Math.hypot(_tmp.x, _tmp.z))));
       this.aimErr = aim.error;
     }
-    // The roar builds and fades gradually (in slow motion, slowly): head, jaws, tail and plates together.
-    this.roar = stepNeck(this.roar, f.roaring ? 1 : 0, ROAR_RATE, f.dt);
+    // The roar builds and fades gradually: head, jaws, tail and plates together. Held by an ultimate it follows the
+    // ultimate's own roar (on real time, so slowly in slow motion).
+    this.roar = f.carried ? f.roar : stepNeck(this.roar, f.roaring ? 1 : 0, ROAR_RATE, f.dt);
     if (this.roar > 0) wantPitch = Math.min(wantPitch, ROAR_PITCH * this.roar);
     // Carried by an ultimate, the neck turns faster: Plasma Lance's sweep runs on real time, faster than the neck
-    // normally turns in slowed world time. The roar keeps the normal pace, so in slow motion it plays slowly.
-    const rate = f.carried && !f.roaring ? N.carriedTurnRate : N.turnRate;
+    // normally turns in slowed world time.
+    const rate = f.carried ? N.carriedTurnRate : N.turnRate;
     this.neckYaw = stepNeck(this.neckYaw, wantYaw, rate, f.dt);
     this.neckPitch = stepNeck(this.neckPitch, wantPitch, rate, f.dt);
     if (f.lookAt) this.aimErr += Math.abs(wantYaw - this.neckYaw);

@@ -7,7 +7,7 @@ import { KaijuBody } from './KaijuBody';
 const K = CONFIG.kaiju;
 const base = (): BodyFrame => ({
   dt: 1 / 60, time: 0, cycle: 0, prevCycle: 0, motion: 0, pose: { dip: 0, pitch: 0, collapse: 0 },
-  melee: null, antiAir: null, roaring: false, roarDuration: 1.2, airborne: false, carried: false, brace: 0, blaze: 0, dashing: false,
+  melee: null, antiAir: null, roaring: false, roarDuration: 1.2, airborne: false, carried: false, brace: 0, blaze: 0, roar: 0, dashing: false,
   tailSweep: null, lookAt: null, charge: 0, heat: 0, flash: false, glow: 0,
 });
 const make = () => {
@@ -50,44 +50,28 @@ describe('KaijuBody for Plasma Lance', () => {
       expect(Math.abs(tilt() - last)).toBeLessThan(K.neck.carriedTurnRate / 60 + 0.01);
       last = tilt();
     };
-    for (let i = 0; i < 30; i++) step({ carried: true, roaring: true }, i);
+    for (let i = 0; i < 30; i++) step({ carried: true, roar: 1 }, i);
     expect(tilt()).toBeLessThan(-0.4);
     const ahead = new THREE.Vector3(0, 0, 1200);
     for (let i = 30; i < 60; i++) step({ carried: true, lookAt: ahead }, i);
   });
 
-  it("held by an ultimate, the roar plays slowly: the head rises at the neck's normal pace and the jaws ease open", () => {
-    const body = make();
-    const tilt0 = body['neck'].rotation.x;
-    body.animate({ ...base(), carried: true, roaring: true }, () => {});
-    expect(Math.abs(body['neck'].rotation.x - tilt0)).toBeLessThanOrEqual(K.neck.turnRate / 60 + 0.01);
-    expect(body['jaw'].rotation.x).toBeLessThan(0.3);
-    for (let i = 1; i < 40; i++) body.animate({ ...base(), time: i / 60, carried: true, roaring: true }, () => {});
-    expect(body['neck'].rotation.x).toBeLessThan(-0.45);
-    expect(body['jaw'].rotation.x).toBeGreaterThan(0.7);
-  });
 
-  it('the whole roar builds gradually over the roar, not at once: head, jaws, tail and plates together', () => {
+
+  it("held by an ultimate, the roar follows the ultimate's own roar amount: head, jaws, tail and plates together", () => {
     const body = make();
     const tail = () => body['tailPts'][body['tailPts'].length - 1]!.y;
     body.animate({ ...base(), carried: true }, () => {});
     const tail0 = tail();
     const plate0 = body['plateMat'].emissiveIntensity;
-    const frame = (i: number) => body.animate({ ...base(), time: i / 60, carried: true, roaring: true }, () => {});
-    frame(1);
-    // One frame in: barely begun.
-    expect(body['jaw'].rotation.x).toBeLessThan(0.15);
-    expect(tail() - tail0).toBeLessThan(10);
-    expect(body['plateMat'].emissiveIntensity - plate0).toBeLessThan(0.3);
-    // Part-way through (0.2 s of world time): about half-way there.
-    for (let i = 2; i <= 12; i++) frame(i);
-    expect(body['jaw'].rotation.x).toBeGreaterThan(0.25);
-    expect(body['jaw'].rotation.x).toBeLessThan(0.65);
-    // By 0.5 s: full roar.
-    for (let i = 13; i <= 30; i++) frame(i);
+    body.animate({ ...base(), carried: true, roar: 0.5 }, () => {});
+    expect(body['jaw'].rotation.x).toBeCloseTo(0.4, 1);
+    expect(tail() - tail0).toBeGreaterThan(10);
+    expect(tail() - tail0).toBeLessThan(30);
+    expect(body['plateMat'].emissiveIntensity - plate0).toBeCloseTo(1.1, 1);
+    for (let i = 0; i < 30; i++) body.animate({ ...base(), time: i / 60, carried: true, roar: 1 }, () => {});
     expect(body['jaw'].rotation.x).toBeGreaterThan(0.75);
     expect(body['neck'].rotation.x).toBeLessThan(-0.45);
-    expect(body['plateMat'].emissiveIntensity - plate0).toBeGreaterThan(2);
   });
 
   it('the jaws stay open while it blazes', () => {

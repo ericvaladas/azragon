@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { CONFIG } from '../../config';
-import { angularSize, bearingOf, crossed, inWedge, lancePhase, lanceRoarWorldLength } from './plasmaLance';
+import { angularSize, bearingOf, crossed, inWedge, lancePhase } from './plasmaLance';
 
 const U = CONFIG.kaiju.ultimate;
 const T = U.t;
@@ -29,11 +29,17 @@ describe('lancePhase', () => {
     expect(lancePhase(T.end - 0.01).done).toBe(false);
   });
 
-  it('roars from Q as the camera pulls out, until it turns to aim: its length in world (slowed) seconds', () => {
-    const w = lanceRoarWorldLength();
-    expect(w).toBeLessThan(T.roarTo);
-    expect(w).toBeGreaterThan(T.roarTo * U.timeScale);
-    expect(T.roarTo).toBeLessThan(T.fire);
+  it('the roar builds slowly on real time as the camera pulls out, holds, and eases off before it turns to aim', () => {
+    const roar = (t: number) => lancePhase(t).roar;
+    expect(roar(0)).toBe(0);
+    expect(roar(0.25)).toBeLessThan(0.2);
+    expect(roar(T.roarUp / 2)).toBeGreaterThan(0.3);
+    expect(roar(T.roarUp / 2)).toBeLessThan(0.7);
+    expect(roar(T.roarUp)).toBe(1);
+    expect(roar(T.roarDown)).toBe(1);
+    expect(roar(T.roarTo)).toBe(0);
+    expect(roar(T.fire)).toBe(0);
+    expect(T.roarUp).toBeGreaterThanOrEqual(0.9);
   });
 
   it('after the roar the head eases round to the right edge, then follows the beam, with no jump', () => {

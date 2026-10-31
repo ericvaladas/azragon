@@ -42,6 +42,8 @@ export type LancePhase = {
   sky: number;
   /** Camera pull 0..1: out by the time it fires, home by the end. */
   camera: number;
+  /** The Kaiju's roar 0..1: building slowly from Q, holding, easing off before it turns to aim. */
+  roar: number;
   /** How far the debris has climbed 0..1: slowly at first, during the roar, still climbing through the sweep. */
   lift: number;
   /** The plates' and vents' blaze 0..1. */
@@ -62,6 +64,7 @@ export function lancePhase(t: number): LancePhase {
     time: 1 - (1 - U.timeScale) * slow,
     sky: Math.min(smooth(t / T.sky), outro(t)),
     camera: Math.min(easeInOutCubic(t / T.fire), easeInOutCubic(outro(t))),
+    roar: smooth(ramp(t, 0, T.roarUp)) * (1 - smooth(ramp(t, T.roarDown, T.roarTo))),
     lift: ramp(t, T.liftFrom, T.sweepTo) ** 2,
     blaze: Math.min(smooth(ramp(t, T.glowFrom, T.glowTo)), outro(t)),
     beam: t < T.fire ? 0 : 1 - ramp(t, T.sweepTo, T.sweepTo + CUT_OUT),
@@ -69,14 +72,6 @@ export function lancePhase(t: number): LancePhase {
     look: t < T.roarTo || t >= T.sweepTo + CUT_OUT ? null : t < T.fire ? -U.halfAngle * smooth(ramp(t, T.roarTo, T.fire)) : -U.halfAngle + 2 * U.halfAngle * ramp(t, T.fire, T.sweepTo),
     done: t >= T.end,
   };
-}
-
-/** How long the roar lasts in world (slowed) seconds: from Q until roarTo, the integral of the time scale. */
-export function lanceRoarWorldLength(): number {
-  const n = 200;
-  let sum = 0;
-  for (let i = 0; i < n; i++) sum += lancePhase(((i + 0.5) / n) * T.roarTo).time;
-  return (sum / n) * T.roarTo;
 }
 
 /** The bearing of `p` from a body at `origin` facing `yaw` (rad, in (−π, π], + toward its left). */

@@ -6,7 +6,7 @@ import { WendigoBody } from './WendigoBody';
 
 const base = (): BodyFrame => ({
   dt: 1 / 60, time: 0, cycle: 0, prevCycle: 0, motion: 0, pose: { dip: 0, pitch: 0, collapse: 0 },
-  melee: null, antiAir: null, roaring: false, roarDuration: 1.2, airborne: false, carried: false, brace: 0, blaze: 0, dashing: false, tailSweep: null, lookAt: null,
+  melee: null, antiAir: null, roaring: false, roarDuration: 1.2, airborne: false, carried: false, brace: 0, blaze: 0, roar: 0, dashing: false, tailSweep: null, lookAt: null,
   charge: 0, heat: 0, flash: false, glow: 0,
 });
 
