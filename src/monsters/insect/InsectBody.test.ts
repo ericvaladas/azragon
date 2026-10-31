@@ -42,6 +42,22 @@ describe('InsectBody for Spike Rain', () => {
     expect(Math.abs(firstMin(d0) - firstMin(d1)) / 60).toBeGreaterThan(0.15);
   });
 
+  it('its mouth is at the front of the head, between the mandibles, ahead of the stinger curled over its back', () => {
+    const body = new InsectBody();
+    body.animate(base(), () => {});
+    const mouth = body.root.worldToLocal(body.sprayFrom(new THREE.Vector3()));
+    const stinger = body.root.worldToLocal(body.rangedOrigin(new THREE.Vector3()));
+    expect(Math.abs(mouth.x)).toBeLessThan(5);
+    expect(mouth.z).toBeGreaterThan(stinger.z + 100);
+    expect(mouth.y).toBeGreaterThan(100);
+  });
+
+  it('reared up, its mandibles open wide', () => {
+    const body = new InsectBody();
+    body.animate({ ...base(), carried: true, roar: 1 }, () => {});
+    expect(Math.abs(body['model'].mandibles[0]!.rotation.y)).toBeGreaterThanOrEqual(0.5);
+  });
+
   it('not carried, nothing changes', () => {
     const body = new InsectBody();
     for (let i = 0; i < 30; i++) body.animate({ ...base(), time: i / 60, roar: 1 }, () => {});

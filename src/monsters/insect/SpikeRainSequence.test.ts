@@ -31,7 +31,6 @@ function rig(enemies: Target[], buildings: Target[] = [], facing = 0) {
   const log = {
     destroyed: [] as [Target, number][],
     bosses: [] as [Target, number][],
-    aims: [] as [THREE.Vector3 | null, number][],
     sky: [] as number[],
     camera: [] as number[],
     holds: [] as [number, number][],
@@ -48,11 +47,10 @@ function rig(enemies: Target[], buildings: Target[] = [], facing = 0) {
     },
     hurtBoss: (t, d) => log.bosses.push([t, d]),
     facing: () => facing,
-    stinger: (out) => {
+    mouth: (out) => {
       log.launches.push(now);
-      return out.set(0, 420, -200);
+      return out.set(0, 520, 380);
     },
-    aim: (at) => log.aims.push([at ? at.clone() : null, now]),
     hold: (roar) => log.holds.push([roar, now]),
     release: () => log.releases++,
     sky: (k) => log.sky.push(k),
@@ -147,7 +145,7 @@ describe('SpikeRain', () => {
     expect(behind.isAlive()).toBe(true);
   });
 
-  it('launches spikes from the stinger through the volley, and lands them through the rain', () => {
+  it('sprays spikes from the mouth through the volley, and lands them through the rain', () => {
     const r = rig([]);
     r.s.start(new THREE.Vector3(), 1);
     r.run(T.end + 0.1);
@@ -160,18 +158,12 @@ describe('SpikeRain', () => {
     }
   });
 
-  it('rears up and aims the tail high, then lets go', () => {
+  it('rears up by the timeline, and sprays once it is mostly up', () => {
     const r = rig([]);
     r.s.start(new THREE.Vector3(), 1);
     r.run(T.end + 0.1);
     for (const [roar, t] of r.log.holds) expect(roar).toBeCloseTo(rainPhase(t).roar);
-    const high = r.log.aims.filter(([p]) => p);
-    expect(high.length).toBeGreaterThan(30);
-    for (const [p, t] of high) {
-      expect(p!.y).toBeGreaterThanOrEqual(U.aimHeight - 1);
-      expect(rainPhase(t).aim).toBe(true);
-    }
-    expect(last(r.log.aims)![0]).toBeNull();
+    for (const t of r.log.launches) expect(rainPhase(t).roar).toBeGreaterThan(0.7);
   });
 
   it('pauses freeze it', () => {
@@ -194,7 +186,6 @@ describe('SpikeRain', () => {
     expect(r.log.releases).toBe(1);
     expect(last(r.log.sky)).toBe(0);
     expect(last(r.log.camera)).toBe(0);
-    expect(last(r.log.aims)![0]).toBeNull();
     expect(r.s.timeScale()).toBe(1);
     expect(r.s.active).toBe(false);
     expect(r.s['spikes'].flying).toBe(0);

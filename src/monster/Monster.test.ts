@@ -146,7 +146,28 @@ describe('Monster frame flags', () => {
   });
 });
 
+describe('Monster.mouthOrigin', () => {
+  it("is the body's mouth when it has one, else where its ranged attacks leave from", () => {
+    const k = kind();
+    const withMouth = new Monster(new THREE.Scene(), { ...k, createBody: () => ({ ...stubBody(), sprayFrom: (out: THREE.Vector3) => out.set(1, 2, 3), rangedOrigin: (out: THREE.Vector3) => out.set(9, 9, 9) }) });
+    expect(withMouth.mouthOrigin(new THREE.Vector3()).toArray()).toEqual([1, 2, 3]);
+    const without = new Monster(new THREE.Scene(), { ...k, createBody: () => ({ ...stubBody(), rangedOrigin: (out: THREE.Vector3) => out.set(9, 9, 9) }) });
+    expect(without.mouthOrigin(new THREE.Vector3()).toArray()).toEqual([9, 9, 9]);
+  });
+});
+
 describe('Monster.hold', () => {
+  it('an ultimate taking hold cancels a strike already in progress: it never lands', () => {
+    const m = new Monster(new THREE.Scene(), kind());
+    let hits = 0;
+    m.onMeleeImpact = () => hits++;
+    m.startMelee(1, 0, { x: 0, z: 200 });
+    m.tick(0.05);
+    m.hold(0);
+    for (let i = 0; i < 60; i++) m.tick(1 / 60);
+    expect(hits).toBe(0);
+  });
+
   it("an ultimate's roar is passed to the body and leans it back by that much; none once set down", () => {
     const k = kind();
     const seen: number[] = [];

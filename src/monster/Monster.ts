@@ -155,6 +155,11 @@ export class Monster {
     return this.body.siphon ? this.body.siphon(toward, out) : this.body.launchOrigin(out);
   }
 
+  /** World point between the jaws a spray leaves from (Spike Rain), or where ranged attacks leave from. */
+  mouthOrigin(out: THREE.Vector3): THREE.Vector3 {
+    return this.body.sprayFrom ? this.body.sprayFrom(out) : this.body.rangedOrigin(out);
+  }
+
   /** World point ranged attacks leave from (stinger tip, jaws). */
   rangedOrigin(out: THREE.Vector3): THREE.Vector3 {
     return this.body.rangedOrigin(out);
@@ -186,6 +191,8 @@ export class Monster {
     this.braceW = brace;
     this.blazeW = blaze;
     this.roarW = roar;
+    // Taking hold cancels a strike already in progress, as a roar does: the monster cannot act while held.
+    if (height !== null && this.heldY === null) this.meleeT = -1;
     if (height === null && this.heldY !== null) {
       this.position.y = 0;
       this.pose.dip = 60;

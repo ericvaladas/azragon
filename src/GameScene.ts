@@ -58,6 +58,8 @@ import { InkStorm } from './monsters/kraken/InkStormSequence';
 import { STORM_ATMOSPHERE } from './monsters/kraken/inkStorm';
 import { PlasmaLance } from './monsters/kaiju/PlasmaLanceSequence';
 import { LANCE_ATMOSPHERE } from './monsters/kaiju/plasmaLance';
+import { SpikeRain } from './monsters/insect/SpikeRainSequence';
+import { RAIN_ATMOSPHERE } from './monsters/insect/spikeRain';
 import { LevelUpAura } from './systems/LevelUpAura';
 import { ShieldFx } from './systems/ShieldFx';
 import { InkFx } from './monsters/kraken/InkFx';
@@ -355,6 +357,33 @@ export class GameScene {
         this.particles.emit('spark', at, 4, 1.2);
       },
     });
+    const R = CONFIG.insect.ultimate;
+    this.ultimates.spikeRain = new SpikeRain(
+      this.scene,
+      {
+        enemies: () => this.enemyTargets(),
+        buildingsWithin: (c, r) => {
+          const out: Target[] = [];
+          this.city.forEachStandingInRadius(c, r, (t) => out.push(t));
+          return out;
+        },
+        // Hit by a spike: the usual explosion (or collapse).
+        destroy: (t) => t.applyDamage(1e9),
+        hurtBoss: (t, dmg) => t.applyDamage(dmg),
+        facing: () => this.monster.yaw,
+        mouth: (out) => this.monster.mouthOrigin(out),
+        hold: (roar) => this.monster.hold(0, 0, 0, roar),
+        release: () => this.monster.hold(null),
+        sky: (k) => this.city.blendAtmosphere(RAIN_ATMOSPHERE, k),
+        camera: (k) => this.rig.pull(k, this.rig.orbit.pitch, CONFIG.camera.defaultDistance * R.cameraDistanceMult),
+        shake: (a) => this.rig.addTrauma(a),
+        burst: (at) => {
+          this.particles.emit('dust', at, 4, 1);
+          this.particles.emit('debris', at, 3, 1);
+        },
+      },
+      CONFIG.palette.stinger,
+    );
     this.rotRing = new RotRing(this.scene);
     this.projectiles.onTrail = this.onShotTrail;
     this.projectiles.onHit = this.onProjectileHit;

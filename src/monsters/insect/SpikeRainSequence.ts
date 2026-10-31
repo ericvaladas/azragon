@@ -11,8 +11,6 @@ const T = U.t;
 const BOSS_DAMAGE = CONFIG.wendigo.ultimate.bossDamage;
 /** Buildings are gathered this far (m) past the area, so a large one poking into it is found. */
 const BUILDING_SLACK = 200;
-/** The tail aims at a point this far (m) in front, U.aimHeight up. */
-const AIM_AHEAD = 400;
 /** The camera shake each landing adds. */
 const LAND_SHAKE = 0.03;
 
@@ -27,10 +25,8 @@ export type SpikeRainHost = {
   hurtBoss(t: Target, dmg: number): void;
   /** The Insect's facing (yaw, rad) as Q was pressed. */
   facing(): number;
-  /** The stinger tip, world space. */
-  stinger(out: THREE.Vector3): THREE.Vector3;
-  /** Point the tail at this world point (null: free). */
-  aim(at: THREE.Vector3 | null): void;
+  /** The Insect's mouth, world space: the volley sprays from it. */
+  mouth(out: THREE.Vector3): THREE.Vector3;
   /** Hold the Insect in place, reared up by `roar` (0..1). */
   hold(roar: number): void;
   /** Set it down and back to normal control. */
@@ -50,13 +46,12 @@ export type SpikeRainHost = {
 type Planned = { land: number; to: THREE.Vector3; targets: Target[]; slot: number; launched: boolean; landed: boolean };
 
 const _from = new THREE.Vector3();
-const _aim = new THREE.Vector3();
 const noLanding = () => {};
 
 /**
  * Spike Rain, the Insect's ultimate, on its real-time timeline (rainPhase): the world slows, the sky turns purple and
  * the fog closes in, the camera pulls back; the Insect rears up on its back legs and beats its chest with the front
- * four while its tail fires a volley of spikes high into the air; they rain down over the area in front of it, one
+ * four while it sprays a volley of spikes from its mouth high into the air; they rain down over the area in front of it, one
  * on every enemy and building there (following any that move) and the rest scattered over it, destroying what they
  * hit; anything that wandered in late is caught as the rain ends; then it drops back down and everything clears.
  */
@@ -69,7 +64,6 @@ export class SpikeRain implements Ultimate {
   private origin = { x: 0, z: 0 };
   private gathered = false;
   private swept = false;
-  private aiming = false;
   private plan: Planned[] = [];
   /** Next planned spike to launch and to land (the plan is in landing order). */
   private nextLaunch = 0;
@@ -112,14 +106,6 @@ export class SpikeRain implements Ultimate {
     this.host.sky(ph.sky);
     this.host.camera(ph.camera);
     this.host.hold(ph.roar);
-    if (ph.aim) {
-      this.aiming = true;
-      _aim.set(this.origin.x + Math.sin(this.yaw) * AIM_AHEAD, U.aimHeight, this.origin.z + Math.cos(this.yaw) * AIM_AHEAD);
-      this.host.aim(_aim);
-    } else if (this.aiming) {
-      this.aiming = false;
-      this.host.aim(null);
-    }
 
     if (!this.gathered && this.t >= T.volleyFrom) {
       this.gathered = true;
@@ -129,7 +115,7 @@ export class SpikeRain implements Ultimate {
     while (this.nextLaunch < this.plan.length && this.t >= this.plan[this.nextLaunch]!.land - U.flight) {
       const p = this.plan[this.nextLaunch++]!;
       p.launched = true;
-      p.slot = this.spikes.launch(this.host.stinger(_from), p.to);
+      p.slot = this.spikes.launch(this.host.mouth(_from), p.to);
     }
     for (let i = this.nextLand; i < this.nextLaunch; i++) {
       const p = this.plan[i]!;
@@ -161,7 +147,6 @@ export class SpikeRain implements Ultimate {
       this.host.release();
       this.host.sky(0);
       this.host.camera(0);
-      this.host.aim(null);
     }
     this.clear();
   }
@@ -214,7 +199,7 @@ export class SpikeRain implements Ultimate {
     this.active = false;
     this.t = 0;
     this.time = 1;
-    this.gathered = this.swept = this.aiming = false;
+    this.gathered = this.swept = false;
     this.plan = [];
     this.nextLaunch = this.nextLand = 0;
     this.hit.clear();

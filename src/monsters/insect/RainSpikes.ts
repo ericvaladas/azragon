@@ -15,7 +15,7 @@ const _m = new THREE.Matrix4();
 const UP = new THREE.Vector3(0, 1, 0);
 
 /**
- * Spike Rain's spikes: each flies a high ballistic arc from the stinger to its landing point over U.flight real
+ * Spike Rain's spikes: each flies a high ballistic arc from the mouth to its landing point over U.flight real
  * seconds (the game's own projectiles run on slowed world time), nose along its flight. One InstancedMesh, unlit, in
  * the Insect's spike colour; a pool of U.pool.
  */

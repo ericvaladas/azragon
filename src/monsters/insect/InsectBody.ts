@@ -54,6 +54,8 @@ const _strikeLift = new THREE.Vector3(0, 420, -80);
  * CHEST (body space) and swinging out to ARM_OUT from their hips, at BEAT_RATE rad/s of world time, alternating sides.
  */
 const REAR_PITCH = 0.6;
+/** How wide (rad) the mandibles open, reared up. */
+const MOUTH_OPEN = 0.6;
 const REAR_LIFT = 140;
 const BEAT_RATE = 9;
 const CHEST = new THREE.Vector3(0, 520, 260);
@@ -122,7 +124,8 @@ export class InsectBody implements MonsterBody {
       }
     }
 
-    const twitch = f.roaring ? 0.55 : 0.18 + Math.sin(f.time * 7) * 0.08;
+    // Reared up (Spike Rain), the mandibles open wide to spray.
+    const twitch = Math.max(f.roaring ? 0.55 : 0.18 + Math.sin(f.time * 7) * 0.08, rear * MOUTH_OPEN);
     this.model.mandibles[0]!.rotation.y = -twitch;
     this.model.mandibles[1]!.rotation.y = twitch;
     // Ranged aim: the tail eases onto the target (and off again when there is none), following it as it switches.
@@ -140,6 +143,12 @@ export class InsectBody implements MonsterBody {
       if (f.flash) m.emissive.setHex(0xffffff);
       else m.emissive.setHex(CONFIG.levelUp.color).multiplyScalar(f.glow);
     }
+  }
+
+  /** Between the mandibles: where Spike Rain's volley sprays from. */
+  sprayFrom(out: THREE.Vector3): THREE.Vector3 {
+    this.model.mandibles[0]!.getWorldPosition(out);
+    return out.add(this.model.mandibles[1]!.getWorldPosition(_world)).multiplyScalar(0.5);
   }
 
   rangedOrigin(out: THREE.Vector3): THREE.Vector3 {

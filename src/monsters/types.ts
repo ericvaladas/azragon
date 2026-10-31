@@ -122,6 +122,8 @@ export interface MonsterBody {
   aimError(): number;
   /** World point the monster's own projectiles (storm, mortar, interceptors) launch from. */
   launchOrigin(out: THREE.Vector3): THREE.Vector3;
+  /** World point between the jaws a spray leaves from (the Insect's mandibles). Optional; rangedOrigin when absent. */
+  sprayFrom?(out: THREE.Vector3): THREE.Vector3;
   /** World point on the body's side facing `toward` that ink squirts from (Kraken siphon). Optional; launchOrigin when absent. */
   siphon?(toward: THREE.Vector3, out: THREE.Vector3): THREE.Vector3;
   /** Per-tentacle strike state (Kraken); absent for single-strike bodies. */

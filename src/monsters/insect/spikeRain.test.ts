@@ -13,15 +13,25 @@ const seeded = () => {
 };
 
 describe('rainPhase', () => {
-  it('slows the world, turns the sky and closes the fog', () => {
+  it('slows the world and turns the sky', () => {
     expect(rainPhase(0).time).toBe(1);
     expect(rainPhase(1).time).toBeCloseTo(U.timeScale);
     expect(rainPhase(T.end).time).toBe(1);
     expect(rainPhase(T.sky).sky).toBe(1);
     expect(rainPhase(T.end).sky).toBe(0);
-    expect(RAIN_ATMOSPHERE.fogFar!).toBeLessThan(CONFIG.fog.far / 1.5);
     expect(rainPhase(T.end - 0.01).done).toBe(false);
     expect(rainPhase(T.end).done).toBe(true);
+  });
+
+  it("closes the fog in well past the city's own, yet the Insect and the area stay in view from the pulled-back camera", () => {
+    const near = RAIN_ATMOSPHERE.fogNear!;
+    const far = RAIN_ATMOSPHERE.fogFar!;
+    expect(near).toBeLessThan(CONFIG.fog.near * 0.6);
+    expect(far).toBeLessThan(CONFIG.fog.far * 0.8);
+    // The camera, pulled back, sits this far behind the Insect.
+    const cam = CONFIG.camera.defaultDistance * U.cameraDistanceMult;
+    expect(cam).toBeLessThan(near + (far - near) * 0.35);
+    expect(cam + (U.near + U.far) / 2).toBeLessThan(far);
   });
 
   it('rears up slowly, holds through the volley and the rain, then drops back', () => {
@@ -34,12 +44,6 @@ describe('rainPhase', () => {
     expect(T.rearUp).toBeGreaterThanOrEqual(1.2);
   });
 
-  it('aims the tail high from just before the volley until it ends', () => {
-    expect(rainPhase(T.volleyFrom - 0.4).aim).toBe(false);
-    expect(rainPhase(T.volleyFrom).aim).toBe(true);
-    expect(rainPhase(T.volleyTo - 0.01).aim).toBe(true);
-    expect(rainPhase(T.volleyTo + 0.1).aim).toBe(false);
-  });
 });
 
 describe('the area', () => {

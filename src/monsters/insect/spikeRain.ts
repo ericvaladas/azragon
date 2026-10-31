@@ -35,8 +35,6 @@ const easeInOutCubic = (x: number) => {
 const ramp = (t: number, a: number, b: number) => clamp01((t - a) / (b - a));
 /** 1 until the outro, falling to 0 at the end. */
 const outro = (t: number) => 1 - ramp(t, T.outroFrom, T.end);
-/** The tail starts aiming high this long (s) before the volley. */
-const AIM_LEAD = 0.3;
 /** The Insect drops back onto all six legs over this long (s) from the outro. */
 const DROP = 1;
 
@@ -49,8 +47,6 @@ export type RainPhase = {
   camera: number;
   /** The rear-up 0..1: rising slowly from Q, held through the volley and the rain, dropping back in the outro. */
   roar: number;
-  /** The tail points high in front, firing. */
-  aim: boolean;
   done: boolean;
 };
 
@@ -62,7 +58,6 @@ export function rainPhase(t: number): RainPhase {
     sky: Math.min(smooth(t / T.sky), outro(t)),
     camera: Math.min(easeInOutCubic(t / T.rainFrom), easeInOutCubic(outro(t))),
     roar: smooth(ramp(t, 0, T.rearUp)) * (1 - smooth(ramp(t, T.outroFrom, T.outroFrom + DROP))),
-    aim: t >= T.volleyFrom - AIM_LEAD && t < T.volleyTo,
     done: t >= T.end,
   };
 }
