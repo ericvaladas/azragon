@@ -50,6 +50,8 @@ export type LancePhase = {
   beam: number;
   /** The beam's bearing from the facing (rad, + toward the Kaiju's left): its right edge until it fires, to its left edge. */
   sweep: number;
+  /** Where the head looks (bearing from the facing, rad), or null: after the roar it eases round from straight ahead to the right edge, then follows the beam until it cuts out. */
+  look: number | null;
   done: boolean;
 };
 
@@ -64,16 +66,17 @@ export function lancePhase(t: number): LancePhase {
     blaze: Math.min(smooth(ramp(t, T.glowFrom, T.glowTo)), outro(t)),
     beam: t < T.fire ? 0 : 1 - ramp(t, T.sweepTo, T.sweepTo + CUT_OUT),
     sweep: -U.halfAngle + 2 * U.halfAngle * ramp(t, T.fire, T.sweepTo),
+    look: t < T.roarTo || t >= T.sweepTo + CUT_OUT ? null : t < T.fire ? -U.halfAngle * smooth(ramp(t, T.roarTo, T.fire)) : -U.halfAngle + 2 * U.halfAngle * ramp(t, T.fire, T.sweepTo),
     done: t >= T.end,
   };
 }
 
-/** How long the roar lasts in world (slowed) seconds: from Q until the beam fires, the integral of the time scale. */
+/** How long the roar lasts in world (slowed) seconds: from Q until roarTo, the integral of the time scale. */
 export function lanceRoarWorldLength(): number {
   const n = 200;
   let sum = 0;
-  for (let i = 0; i < n; i++) sum += lancePhase(((i + 0.5) / n) * T.fire).time;
-  return (sum / n) * T.fire;
+  for (let i = 0; i < n; i++) sum += lancePhase(((i + 0.5) / n) * T.roarTo).time;
+  return (sum / n) * T.roarTo;
 }
 
 /** The bearing of `p` from a body at `origin` facing `yaw` (rad, in (−π, π], + toward its left). */

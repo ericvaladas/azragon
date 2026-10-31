@@ -269,9 +269,10 @@ export const CONFIG = {
     },
     /**
      * Neck aiming for Plasma Breath: reach either side of the body (rad), turn speed (rad/s), how close the
-     * head must be to fire (rad), and how long a charged breath waits for the head before giving up (s).
+     * head must be to fire (rad), and how long a charged breath waits for the head before giving up (s). While an
+     * ultimate holds the Kaiju the neck turns at carriedTurnRate (rad/s of world time), fast enough for Plasma Lance's sweep.
      */
-    neck: { limit: 1.6, turnRate: 3.5, aimTolerance: 0.1, maxWait: 1.2 },
+    neck: { limit: 1.6, turnRate: 3.5, aimTolerance: 0.1, maxWait: 1.2, carriedTurnRate: 14 },
     /**
      * Tail Sweep (auto): hits ground targets beside/behind within `reach`, chosen within `rearHalf` (rad) of
      * straight behind; damage lands in a wedge of ±`hitHalf` toward the target. Buildings take buildingMult×.
@@ -287,13 +288,13 @@ export const CONFIG = {
      * how far past the wedge's edges it lies (rad)); the beam's core and edge radii (m); the trench it burns along the
      * ground under its whole length (disc radius (m), how long one takes to fade (s), how many at once, spacing along
      * the beam (m), and how far from the Kaiju it starts (m)); the beats (s); and the night sky's light intensities.
-     * The Kaiju roars from Q until the beam fires, as the camera pulls out.
+     * The Kaiju roars from Q until roarTo, as the camera pulls out, then turns its head round to the right edge by fire.
      */
     ultimate: {
       range: 1400, halfAngle: 1.047, timeScale: 0.25, cameraDistanceMult: 2.0,
       debris: 90, debrisLift: 60, debrisSize: [6, 18], debrisMargin: 0.3,
       beamCore: 18, beamEdge: 55, scarWidth: 50, scarLife: 2.5, scars: 1000, scarSpacing: 60, scarFrom: 150,
-      t: { easeIn: 0.2, sky: 0.8, liftFrom: 0.3, glowFrom: 0.3, glowTo: 2.0, fire: 2.0, sweepTo: 4.5, outroFrom: 4.5, end: 6.0 },
+      t: { easeIn: 0.2, sky: 0.8, liftFrom: 0.3, glowFrom: 0.3, glowTo: 2.0, roarTo: 1.5, fire: 2.0, sweepTo: 4.5, outroFrom: 4.5, end: 6.0 },
       hemiIntensity: 0.5, sunIntensity: 0.45,
     },
     colors: {

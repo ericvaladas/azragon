@@ -130,11 +130,16 @@ export class PlasmaLance implements Ultimate {
       this.fired = true;
       this.gather();
     }
-    if (this.fired && ph.beam > 0) {
-      // The beam meets the ground at its bearing, out near the end of its range.
-      const a = this.yaw + ph.sweep;
+    if (ph.look !== null && !this.settled) {
+      // After the roar the head eases round to the right edge, then the beam follows it.
+      const a = this.yaw + ph.look;
       _aim.set(this.origin.x + Math.sin(a) * U.range * REACH, 0, this.origin.z + Math.cos(a) * U.range * REACH);
       this.host.aim(_aim);
+    }
+    if (this.fired && ph.beam > 0) {
+      // The beam meets the ground at its bearing, out near the end of its range (where the head looks).
+      const a = this.yaw + ph.sweep;
+      _aim.set(this.origin.x + Math.sin(a) * U.range * REACH, 0, this.origin.z + Math.cos(a) * U.range * REACH);
       this.beam.show(this.host.jaws(_jaws), _aim, ph.beam, this.t);
       this.host.flash(BEAM_LIGHT * ph.beam);
       if (realDt > 0) this.host.shake(BEAM_SHAKE);

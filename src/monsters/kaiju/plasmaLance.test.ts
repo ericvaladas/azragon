@@ -29,11 +29,25 @@ describe('lancePhase', () => {
     expect(lancePhase(T.end - 0.01).done).toBe(false);
   });
 
-  it('roars from Q until the beam fires, as the camera pulls out: its length in world (slowed) seconds', () => {
+  it('roars from Q as the camera pulls out, until it turns to aim: its length in world (slowed) seconds', () => {
     const w = lanceRoarWorldLength();
-    expect(w).toBeLessThan(T.fire);
-    expect(w).toBeGreaterThan(T.fire * U.timeScale);
-    expect(lancePhase(T.fire).camera).toBe(1);
+    expect(w).toBeLessThan(T.roarTo);
+    expect(w).toBeGreaterThan(T.roarTo * U.timeScale);
+    expect(T.roarTo).toBeLessThan(T.fire);
+  });
+
+  it('after the roar the head eases round to the right edge, then follows the beam, with no jump', () => {
+    expect(lancePhase(T.roarTo - 0.01).look).toBeNull();
+    expect(lancePhase(T.roarTo).look).toBeCloseTo(0);
+    expect(lancePhase(T.fire).look).toBeCloseTo(-U.halfAngle);
+    expect(lancePhase((T.fire + T.sweepTo) / 2).look).toBeCloseTo(lancePhase((T.fire + T.sweepTo) / 2).sweep);
+    expect(lancePhase(T.sweepTo + 0.2).look).toBeNull();
+    let prev = lancePhase(T.roarTo).look!;
+    for (let t = T.roarTo + 0.01; t <= T.sweepTo; t += 0.01) {
+      const look = lancePhase(t).look!;
+      expect(Math.abs(look - prev)).toBeLessThan(0.05);
+      prev = look;
+    }
   });
 
   it('blazes through the build-up and lifts the debris before the beam', () => {

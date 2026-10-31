@@ -203,6 +203,17 @@ describe('PlasmaLance', () => {
     expect(Math.max(...ds)).toBeGreaterThan(0.85 * U.range);
   });
 
+  it('turns the head round to the right edge before firing, with no jump into the sweep', () => {
+    const r = rig([]);
+    r.s.start(new THREE.Vector3(), 1);
+    r.run(T.end + 0.1);
+    const aims = r.log.aims.filter(([p]) => p).map(([p, t]) => [bearingOf(O, 0, { x: p!.x, z: p!.z }), t] as const);
+    expect(aims[0]![1]).toBeLessThan(T.roarTo + 0.02);
+    expect(aims[0]![0]).toBeCloseTo(0, 1);
+    // The eased turn peaks near 0.05 rad a frame; firing used to jump a full halfAngle (1.05 rad) in one.
+    for (let i = 1; i < aims.length; i++) expect(Math.abs(aims[i]![0] - aims[i - 1]![0])).toBeLessThan(0.1);
+  });
+
   it('aims the head along the sweep and lets go after', () => {
     const r = rig([]);
     r.s.start(new THREE.Vector3(), 1);
