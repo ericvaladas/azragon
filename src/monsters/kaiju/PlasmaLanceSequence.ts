@@ -119,7 +119,8 @@ export class PlasmaLance implements Ultimate {
     this.host.sky(ph.sky);
     this.host.camera(ph.camera, this.yaw);
     this.host.hold(ph.brace, ph.blaze);
-    this.debris.update(realDt * ph.time, ph.lift);
+    // On real time, as its other beats: the leftover debris must be down before the end.
+    this.debris.update(realDt, ph.lift);
     this.beam.update(realDt);
 
     if (!this.fired && this.t >= T.fire) {

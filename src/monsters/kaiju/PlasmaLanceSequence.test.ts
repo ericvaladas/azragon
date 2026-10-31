@@ -178,6 +178,15 @@ describe('PlasmaLance', () => {
     expect(r.log.vapor).toBeGreaterThanOrEqual(0.6 * U.debris);
   });
 
+  it('the debris left after the sweep is all back down before the end, not cleared in mid-air', () => {
+    const r = rig([]);
+    r.s.start(new THREE.Vector3(), 1);
+    r.run(T.end - 0.05);
+    expect(r.s.active).toBe(true);
+    const debris = r.s['debris'];
+    for (let i = 0; i < debris.count; i++) expect(debris.alive(i)).toBe(false);
+  });
+
   it('aims the head along the sweep and lets go after', () => {
     const r = rig([]);
     r.s.start(new THREE.Vector3(), 1);
