@@ -1,0 +1,225 @@
+import * as THREE from 'three';
+import { CONFIG } from '../../config';
+import type { Target } from '../../combat';
+import type { Ultimate } from '../../systems/ultimate';
+import type { Vec2 } from '../../util/math';
+import { LanceBeam } from './LanceBeam';
+import { LanceDebris } from './LanceDebris';
+import { angularSize, bearingOf, crossed, inWedge, lancePhase } from './plasmaLance';
+
+const U = CONFIG.kaiju.ultimate;
+const T = U.t;
+const BOSS_DAMAGE = CONFIG.wendigo.ultimate.bossDamage;
+/** The beam meets the ground this far out (fraction of the range). */
+const REACH = 0.9;
+/** Buildings are gathered this far (m) past the range, so a large one poking into the wedge is found. */
+const BUILDING_SLACK = 200;
+/** A scar and an impact burst every this long (s) while the beam sweeps. */
+const SCAR_EVERY = 0.05;
+/** Scene light added at full beam (host.flash), and the camera shake fed each frame while it fires. */
+const BEAM_LIGHT = 0.35;
+const BEAM_SHAKE = 0.02;
+
+/** What Plasma Lance does to the game, supplied by GameScene. */
+export type PlasmaLanceHost = {
+  /** Live enemy targets. */
+  enemies(): readonly Target[];
+  /** Standing buildings within `r` of `c`. */
+  buildingsWithin(c: Vec2, r: number): Target[];
+  /** Hit by the beam: it dies (or collapses) with the usual explosion. */
+  destroy(t: Target): void;
+  hurtBoss(t: Target, dmg: number): void;
+  /** The Kaiju's facing (yaw, rad) as Q was pressed. */
+  facing(): number;
+  /** The jaws, world space. */
+  jaws(out: THREE.Vector3): THREE.Vector3;
+  /** Turn the head toward this world point (null: free). */
+  aim(at: THREE.Vector3 | null): void;
+  /** Hold the Kaiju planted, braced (rear) and blazing, 0..1 each. */
+  hold(brace: number, blaze: number): void;
+  /** Set it down and back to normal control. */
+  release(): void;
+  sky(k: number): void;
+  /** Camera pull 0..1 toward behind `yaw` (0 restores the player's view). */
+  camera(k: number, yaw: number): void;
+  shake(amount: number): void;
+  flash(k: number): void;
+  /** Particles: a debris piece vaporized, or the beam's impact on the ground. */
+  burst(at: THREE.Vector3, kind: 'vapor' | 'impact'): void;
+};
+
+/** A target in the wedge: its bearing from the facing, how much its size widens it, and whether the beam has hit it. */
+type Mark = { target: Target; bearing: number; widen: number; hit: boolean };
+
+const _aim = new THREE.Vector3();
+const _jaws = new THREE.Vector3();
+
+/**
+ * Plasma Lance, the Kaiju's ultimate, on its real-time timeline (lancePhase): the world slows, the camera swings round
+ * behind the Kaiju and pulls back, the sky turns cyan and debris drifts up off the ground in front of it while its
+ * plates and vents blaze; it rears back, planted, and fires a beam from its jaws that sweeps the wedge in front of it
+ * from its right to its left, destroying every unit, aircraft and building it crosses and vaporizing the debris; then
+ * the rest of the debris falls, and everything clears. It owns its beam, scar and debris.
+ */
+export class PlasmaLance implements Ultimate {
+  active = false;
+  private t = 0;
+  private time = 1;
+  private damageMult = 1;
+  private yaw = 0;
+  private origin = { x: 0, z: 0 };
+  private fired = false;
+  private settled = false;
+  private prevSweep = -Infinity;
+  private nextScar = 0;
+  private marks: Mark[] = [];
+  private beam: LanceBeam;
+  private debris: LanceDebris;
+
+  constructor(
+    scene: THREE.Scene,
+    private host: PlasmaLanceHost,
+    rand: () => number = Math.random,
+  ) {
+    this.beam = new LanceBeam(scene);
+    this.debris = new LanceDebris(scene, rand);
+  }
+
+  /** World time scale while it runs (1 when idle). */
+  timeScale(): number {
+    return this.active ? this.time : 1;
+  }
+
+  start(center: THREE.Vector3, damageMult: number): void {
+    this.clear();
+    this.active = true;
+    this.origin.x = center.x;
+    this.origin.z = center.z;
+    this.yaw = this.host.facing();
+    this.damageMult = damageMult;
+    this.debris.scatter(this.origin, this.yaw);
+    this.host.shake(0.2);
+  }
+
+  /** Advance by real seconds (0 while paused). Returns true on the frame it ends. */
+  update(realDt: number): boolean {
+    if (!this.active) {
+      // The scar keeps fading after control returns.
+      this.beam.update(realDt);
+      return false;
+    }
+    this.t += realDt;
+    const ph = lancePhase(this.t);
+    this.time = ph.time;
+    this.host.sky(ph.sky);
+    this.host.camera(ph.camera, this.yaw);
+    this.host.hold(ph.brace, ph.blaze);
+    this.debris.update(realDt * ph.time, ph.lift);
+    this.beam.update(realDt);
+
+    if (!this.fired && this.t >= T.fire) {
+      this.fired = true;
+      this.gather();
+    }
+    if (this.fired && ph.beam > 0) {
+      // The beam meets the ground at its bearing, out near the end of its range.
+      const a = this.yaw + ph.sweep;
+      _aim.set(this.origin.x + Math.sin(a) * U.range * REACH, 0, this.origin.z + Math.cos(a) * U.range * REACH);
+      this.host.aim(_aim);
+      this.beam.show(this.host.jaws(_jaws), _aim, ph.beam, this.t);
+      this.host.flash(BEAM_LIGHT * ph.beam);
+      if (realDt > 0) this.host.shake(BEAM_SHAKE);
+      while (this.t >= this.nextScar) {
+        this.nextScar += SCAR_EVERY;
+        this.beam.scar(_aim);
+        this.host.burst(_aim, 'impact');
+      }
+      this.sweepTo(ph.sweep);
+    } else if (this.fired) {
+      // A long frame may have jumped past the end of the sweep: finish it first.
+      this.sweepTo(ph.sweep);
+      this.endBeam();
+    }
+
+    if (!ph.done) return false;
+    this.host.release();
+    this.host.sky(0);
+    this.host.camera(0, this.yaw);
+    this.clear(true);
+    return true;
+  }
+
+  cancel(): void {
+    if (this.active) {
+      this.host.release();
+      this.host.sky(0);
+      this.host.camera(0, this.yaw);
+      this.host.flash(0);
+      this.host.aim(null);
+    }
+    this.clear();
+  }
+
+  dispose(): void {
+    this.beam.dispose();
+    this.debris.dispose();
+  }
+
+  /** Everything the beam can reach, fixed as it fires: enemies at any altitude and standing buildings in the wedge. */
+  private gather(): void {
+    this.marks = [];
+    const add = (t: Target) => {
+      if (!t.isAlive() || !inWedge(this.origin, this.yaw, t.position, t.radius)) return;
+      const d = Math.hypot(t.position.x - this.origin.x, t.position.z - this.origin.z);
+      this.marks.push({ target: t, bearing: bearingOf(this.origin, this.yaw, t.position), widen: angularSize(d, t.radius), hit: false });
+    };
+    for (const t of this.host.enemies()) add(t);
+    for (const t of this.host.buildingsWithin(this.origin, U.range + BUILDING_SLACK)) add(t);
+    // In sweep order, so a long frame still takes them right to left.
+    this.marks.sort((a, b) => a.bearing - a.widen - (b.bearing - b.widen));
+    this.prevSweep = -Infinity;
+    this.nextScar = this.t;
+  }
+
+  /** Take everything the beam passed over since last frame, and vaporize the debris it crossed. */
+  private sweepTo(sweep: number): void {
+    const prev = this.prevSweep;
+    if (sweep <= prev) return;
+    for (const m of this.marks) {
+      if (m.hit || !crossed(prev, sweep, m.bearing, m.widen) || !m.target.isAlive()) continue;
+      m.hit = true;
+      if (m.target.boss) this.host.hurtBoss(m.target, BOSS_DAMAGE * this.damageMult);
+      else this.host.destroy(m.target);
+    }
+    const ps = this.debris.positions();
+    for (let i = 0; i < ps.length; i++) {
+      if (!this.debris.alive(i) || !crossed(prev, sweep, bearingOf(this.origin, this.yaw, ps[i]!), 0)) continue;
+      this.debris.vaporize(i);
+      this.host.burst(ps[i]!, 'vapor');
+    }
+    this.prevSweep = sweep;
+  }
+
+  /** The beam is done: hide it, free the head, and let the remaining debris fall. */
+  private endBeam(): void {
+    if (this.settled) return;
+    this.settled = true;
+    this.beam.hide();
+    this.host.flash(0);
+    this.host.aim(null);
+    this.debris.settle();
+  }
+
+  /** Reset to idle; `keepScar` leaves the scar to fade (the natural end). */
+  private clear(keepScar = false): void {
+    this.active = false;
+    this.t = 0;
+    this.time = 1;
+    this.fired = this.settled = false;
+    this.prevSweep = -Infinity;
+    this.marks = [];
+    this.debris.clear();
+    if (keepScar) this.beam.hide();
+    else this.beam.clear();
+  }
+}
