@@ -39,6 +39,33 @@ describe('LanceDebris', () => {
     expect(ys.reduce((a, b) => a + b, 0) / ys.length).toBeGreaterThan(0.75 * 0.4 * U.debrisLift);
   });
 
+  it('draws the pieces as tiny glints: unlit, additive, about a pixel of the pixel-art view across', () => {
+    const scene = new THREE.Scene();
+    new LanceDebris(scene, seeded());
+    const m = mesh(scene);
+    expect(m.material).toBeInstanceOf(THREE.MeshBasicMaterial);
+    expect((m.material as THREE.MeshBasicMaterial).blending).toBe(THREE.AdditiveBlending);
+    expect(U.debrisSize[1]).toBeLessThanOrEqual(12);
+  });
+
+  it('each glint twinkles on its own: brightness changes over time and differs between pieces', () => {
+    const scene = new THREE.Scene();
+    const d = new LanceDebris(scene, seeded());
+    d.scatter(O);
+    const c = new THREE.Color();
+    const bright = (i: number) => (mesh(scene).getColorAt(i, c), c.r + c.g + c.b);
+    const seen = new Set<number>();
+    // When each of the first ten pieces is brightest: they flare at different moments.
+    const peak = Array.from({ length: 10 }, () => ({ at: -1, b: -1 }));
+    for (let f = 0; f < 120; f++) {
+      d.update(1 / 60, 0.5);
+      seen.add(Math.round(bright(0) * 20));
+      for (let i = 0; i < 10; i++) if (bright(i) > peak[i]!.b) peak[i] = { at: f, b: bright(i) };
+    }
+    expect(seen.size).toBeGreaterThan(5);
+    expect(new Set(peak.map((p) => Math.floor(p.at / 5))).size).toBeGreaterThan(3);
+  });
+
   it('rises straight up: no piece drifts sideways', () => {
     const d = new LanceDebris(new THREE.Scene(), seeded());
     d.scatter(O);

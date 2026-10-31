@@ -44,8 +44,8 @@ export type PlasmaLanceHost = {
   camera(k: number): void;
   shake(amount: number): void;
   flash(k: number): void;
-  /** Particles: a debris piece vaporized, the beam's impact on the ground, or a glint off a floating piece. */
-  burst(at: THREE.Vector3, kind: 'vapor' | 'impact' | 'glint'): void;
+  /** Particles: a glint vaporized, or the beam's impact on the ground. */
+  burst(at: THREE.Vector3, kind: 'vapor' | 'impact'): void;
 };
 
 /** A building in the wedge: its bearing from the facing and how much its size widens it. */
@@ -58,11 +58,11 @@ const _along = new THREE.Vector3();
 
 /**
  * Plasma Lance, the Kaiju's ultimate, on its real-time timeline (lancePhase): the world slows, the sky turns to night,
- * and the Kaiju roars as the camera pulls back, while debris drifts up off the ground in
- * front of it and its plates and vents blaze; then it fires a beam from its jaws that sweeps the wedge in front of it
- * from its right to its left, burning a trench along the ground under its whole length and destroying every unit,
- * aircraft and building it crosses, vaporizing the debris; then the rest of the debris falls, and everything clears.
- * It owns its beam, trench and debris.
+ * and the Kaiju roars as the camera pulls back, while glints of light rise all around it and its plates and vents
+ * blaze; then it fires a beam from its jaws that sweeps the wedge in front of it from its right to its left, burning a
+ * trench along the ground under its whole length and destroying every unit, aircraft and building it crosses,
+ * vaporizing the glints; then the rest of the glints drift down, and everything clears. It owns its beam, trench and
+ * glints.
  */
 export class PlasmaLance implements Ultimate {
   active = false;
@@ -75,8 +75,6 @@ export class PlasmaLance implements Ultimate {
   private settled = false;
   private prevSweep = -Infinity;
   private nextScar = 0;
-  /** Glints owed to the floating debris (U.debrisSparkle a second). */
-  private sparkle = 0;
   private marks: Mark[] = [];
   /** Everything the beam has hit, so nothing is hit twice. */
   private hit = new Set<Target>();
@@ -126,7 +124,6 @@ export class PlasmaLance implements Ultimate {
     this.host.hold(ph.blaze, ph.roar);
     // On real time, as its other beats: the leftover debris must be down before the end.
     this.debris.update(realDt, ph.lift);
-    this.glint(realDt);
     this.beam.update(realDt);
 
     if (!this.fired && this.t >= T.fire) {
@@ -235,17 +232,6 @@ export class PlasmaLance implements Ultimate {
     return bearingOf(this.origin, this.yaw, t.position) - this.widen(t);
   }
 
-  /** The floating debris sparkles: now and then a random piece in the air gives off a glint. */
-  private glint(realDt: number): void {
-    this.sparkle += realDt * U.debrisSparkle;
-    const ps = this.debris.positions();
-    while (this.sparkle >= 1) {
-      this.sparkle -= 1;
-      const i = Math.floor(this.rand() * ps.length);
-      if (this.debris.alive(i) && ps[i]!.y > 1) this.host.burst(ps[i]!, 'glint');
-    }
-  }
-
   /** The beam is done: hide it, free the head, and let the remaining debris fall. */
   private endBeam(): void {
     if (this.settled) return;
@@ -262,7 +248,6 @@ export class PlasmaLance implements Ultimate {
     this.t = 0;
     this.time = 1;
     this.fired = this.settled = false;
-    this.sparkle = 0;
     this.prevSweep = -Infinity;
     this.marks = [];
     this.hit.clear();

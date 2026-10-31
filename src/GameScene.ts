@@ -350,10 +350,6 @@ export class GameScene {
           this.particles.emit('plasma', at, 4, 0.8);
           return;
         }
-        if (kind === 'glint') {
-          this.particles.emit('spark', at, 1, 0.3);
-          return;
-        }
         this.particles.emit('fire', at, 4, 1.2);
         this.particles.emit('debris', at, 3, 1.2);
         this.particles.emit('spark', at, 4, 1.2);

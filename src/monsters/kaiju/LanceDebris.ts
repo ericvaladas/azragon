@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 import { CONFIG } from '../../config';
-import { faceted, toonMat } from '../../render/toon';
 import type { Vec2 } from '../../util/math';
 
 const U = CONFIG.kaiju.ultimate;
@@ -8,22 +7,25 @@ const C = CONFIG.kaiju.colors;
 /** How quickly (1/s) a piece closes on its floating height, and how much (±) its height varies from the rest. */
 const RISE_RATE = 3;
 const HEIGHT_VARY = 0.25;
-/** How brightly the pieces glow in their own grey, so they still read against the night. */
-const GLOW = 0.3;
+/** A glint's dimmest (fraction of full), and how sharply it flares (higher: briefer flashes). */
+const TWINKLE_LOW = 0.25;
+const TWINKLE_SHARP = 6;
 /** Tumble speed range (rad/s); settling pieces fall under this gravity (m/s²), about a second from full height. */
 const SPIN: [number, number] = [0.4, 1.4];
 const GRAVITY = 2 * U.debrisLift;
 
-/** A piece: where it lies, how high it floats (fraction of the lift), its size and tumble, and whether it is falling. */
-type Piece = { pos: THREE.Vector3; height: number; size: number; axis: THREE.Vector3; spin: number; angle: number; alive: boolean; falling: boolean; vy: number };
+/** A glint: where it is, how high it floats (fraction of the lift), its size, tumble and twinkle, and whether it is falling. */
+type Piece = { pos: THREE.Vector3; height: number; size: number; axis: THREE.Vector3; spin: number; angle: number; twinkle: number; phase: number; alive: boolean; falling: boolean; vy: number };
 
 const _q = new THREE.Quaternion();
 const _s = new THREE.Vector3();
 const _m = new THREE.Matrix4();
+const _c = new THREE.Color();
+const _glint = new THREE.Color(C.glint);
 
 /**
- * Plasma Lance's floating debris: rubble scattered all around the Kaiju, rising straight up as gravity seems to let go,
- * tumbling slowly, until the beam vaporizes it or, once the beam is
+ * Plasma Lance's rising glints: tiny sparks of light scattered all around the Kaiju, rising straight up as gravity seems
+ * to let go, each twinkling on its own, until the beam vaporizes it or, once the beam is
  * done, it falls back down and is gone. One InstancedMesh; everything is pooled.
  */
 export class LanceDebris {
@@ -35,19 +37,26 @@ export class LanceDebris {
     axis: new THREE.Vector3(0, 1, 0),
     spin: 0,
     angle: 0,
+    twinkle: 0,
+    phase: 0,
     alive: false,
     falling: false,
     vy: 0,
   }));
   private posView: THREE.Vector3[] = this.pieces.map((p) => p.pos);
   private mesh: THREE.InstancedMesh;
+  private time = 0;
 
   constructor(
     scene: THREE.Scene,
     private rand: () => number = Math.random,
   ) {
-    this.mesh = new THREE.InstancedMesh(faceted(new THREE.DodecahedronGeometry(0.5, 0)), toonMat(C.debris, { emissive: C.debris }), U.debris);
-    (this.mesh.material as THREE.MeshToonMaterial).emissiveIntensity = GLOW;
+    this.mesh = new THREE.InstancedMesh(
+      new THREE.OctahedronGeometry(0.5, 0),
+      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }),
+      U.debris,
+    );
+    for (let i = 0; i < U.debris; i++) this.mesh.setColorAt(i, _c.copy(_glint));
     this.mesh.frustumCulled = false;
     this.mesh.count = 0;
     this.mesh.visible = false;
@@ -66,14 +75,17 @@ export class LanceDebris {
       p.axis.set(this.rand() - 0.5, this.rand() - 0.5, this.rand() - 0.5).normalize();
       p.spin = SPIN[0] + this.rand() * (SPIN[1] - SPIN[0]);
       p.angle = this.rand() * Math.PI * 2;
+      p.twinkle = U.debrisTwinkle[0] + this.rand() * (U.debrisTwinkle[1] - U.debrisTwinkle[0]);
+      p.phase = this.rand() * Math.PI * 2;
       p.alive = true;
       p.falling = false;
       p.vy = 0;
     }
   }
 
-  /** Float the pieces toward `lift` (0..1) of their height, or let the settling ones fall; then redraw. */
+  /** Float the glints toward `lift` (0..1) of their height, or let the settling ones fall; then redraw them twinkling. */
   update(dt: number, lift: number): void {
+    this.time += dt;
     const k = 1 - Math.exp(-RISE_RATE * dt);
     let n = 0;
     for (const p of this.pieces) {
@@ -89,11 +101,14 @@ export class LanceDebris {
         p.pos.y += (U.debrisLift * p.height * lift - p.pos.y) * k;
       }
       p.angle += p.spin * dt;
+      const flare = Math.max(0, Math.sin(this.time * p.twinkle + p.phase)) ** TWINKLE_SHARP;
+      this.mesh.setColorAt(n, _c.copy(_glint).multiplyScalar(TWINKLE_LOW + (1 - TWINKLE_LOW) * flare));
       this.mesh.setMatrixAt(n++, _m.compose(p.pos, _q.setFromAxisAngle(p.axis, p.angle), _s.setScalar(p.size)));
     }
     this.mesh.count = n;
     this.mesh.visible = n > 0;
     this.mesh.instanceMatrix.needsUpdate = true;
+    if (this.mesh.instanceColor) this.mesh.instanceColor.needsUpdate = true;
   }
 
   /** Every piece's position (world space), alive or not. */
@@ -116,6 +131,7 @@ export class LanceDebris {
 
   clear(): void {
     for (const p of this.pieces) p.alive = false;
+    this.time = 0;
     this.mesh.count = 0;
     this.mesh.visible = false;
   }

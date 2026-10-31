@@ -284,8 +284,8 @@ export const CONFIG = {
     breath: { charge: 0.4, show: 0.35, halfWidth: 45, sweep: 0.1, fan: 0.12, maxLines: 4, buildingDamage: 120 },
     /**
      * Plasma Lance (Q), on real seconds: the beam's range (m) and half the wedge it sweeps (rad, either side of the
-     * facing), the world time scale, the camera pull; the debris (pieces, how high it climbs (m), piece sizes (m), and
-     * the ring around the Kaiju it lies in (m), and how many glints a second sparkle off it); the beam's core and edge radii (m); the trench it burns along the
+     * facing), the world time scale, the camera pull; the rising glints (how many, how high they climb (m), their
+     * sizes (m), the ring around the Kaiju they start in (m), and how fast they twinkle (rad/s)); the beam's core and edge radii (m); the trench it burns along the
      * ground under its whole length (disc radius (m), how long one takes to fade (s), how many at once, spacing along
      * the beam (m), and how far from the Kaiju it starts (m)); the beats (s); and the night sky's light intensities.
      * The Kaiju's roar builds from Q to roarUp as the camera pulls out (on real time, so slowly), holds until roarDown,
@@ -293,7 +293,7 @@ export const CONFIG = {
      */
     ultimate: {
       range: 1400, halfAngle: 1.047, timeScale: 0.25, cameraDistanceMult: 2.0,
-      debris: 120, debrisLift: 260, debrisSize: [8, 20], debrisNear: 120, debrisRange: 900, debrisSparkle: 12,
+      debris: 200, debrisLift: 260, debrisSize: [6, 12], debrisNear: 120, debrisRange: 900, debrisTwinkle: [3, 7],
       beamCore: 18, beamEdge: 55, scarWidth: 50, scarLife: 2.5, scars: 1000, scarSpacing: 60, scarFrom: 150,
       t: { easeIn: 0.2, sky: 2.0, liftFrom: 0.1, glowFrom: 0.3, glowTo: 2.5, roarUp: 1.4, roarDown: 1.7, roarTo: 2.0, fire: 2.5, sweepTo: 5.0, outroFrom: 5.0, end: 6.5 },
       hemiIntensity: 0.5, sunIntensity: 0.45,
@@ -307,7 +307,7 @@ export const CONFIG = {
       eye: 0xa8fdff,
       plasma: 0x6ff6ff,
       ember: 0xff9a3c,
-      /** Plasma Lance's night sky (zenith, horizon, fog, moonlight from the sky and ground, the moon, lit windows), the beam's white core, its scar and the floating grey debris. */
+      /** Plasma Lance's night sky (zenith, horizon, fog, moonlight from the sky and ground, the moon, lit windows), the beam's white core, its scar and the rising glints. */
       lanceZenith: 0x05070f,
       lanceHorizon: 0x1a2438,
       lanceFog: 0x121a28,
@@ -317,7 +317,7 @@ export const CONFIG = {
       lanceWindows: 0xffd890,
       beamCore: 0xffffff,
       scar: 0x6ff6ff,
-      debris: 0x8c8c8c,
+      glint: 0xe8f4ff,
     },
   },
   /** The Kraken. Stats feed its MonsterKind; arms tune the tentacles; colours its body and effects. */
