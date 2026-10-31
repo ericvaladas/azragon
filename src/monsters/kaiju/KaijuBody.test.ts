@@ -74,6 +74,15 @@ describe('KaijuBody for Plasma Lance', () => {
     expect(body['neck'].rotation.x).toBeLessThan(-0.45);
   });
 
+  it("held by an ultimate, the roar leans the Kaiju back by the ultimate's amount", () => {
+    const body = make();
+    body.animate({ ...base(), carried: true, roar: 1 }, () => {});
+    const leaned = body['body'].rotation.x;
+    const upright = make();
+    upright.animate({ ...base(), carried: true, roar: 0 }, () => {});
+    expect(leaned).toBeLessThan(upright['body'].rotation.x - 0.4);
+  });
+
   it('the jaws stay open while it blazes', () => {
     const body = make();
     body.animate({ ...base(), blaze: 1 }, () => {});

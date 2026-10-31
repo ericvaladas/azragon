@@ -325,12 +325,12 @@ export const CONFIG = {
     /**
      * Spike Rain (Q), on real seconds: the area the spikes rain on (from `near` to `far` m in front, `halfAngle` rad
      * either side of the facing), the world time scale, the camera pull; the spikes (the pool, how many fall at least,
-     * each one's flight (s), arc height (m), length and width (m)); the purple fog's near and
+     * each one's flight in a straight line from the mouth (s), length and width (m)); the purple fog's near and
      * far (m); the purple sky's light intensities; and the beats (s).
      */
     ultimate: {
       near: 250, far: 1400, halfAngle: 0.873, timeScale: 0.25, cameraDistanceMult: 2.0,
-      pool: 256, spikes: 160, flight: 1.0, arc: 600, spikeLength: 45, spikeWidth: 7,
+      pool: 256, spikes: 160, flight: 1.0, spikeLength: 45, spikeWidth: 7,
       fogNear: 1200, fogFar: 3600, hemiIntensity: 0.45, sunIntensity: 0.4,
       t: { easeIn: 0.2, sky: 1.5, rearUp: 1.5, volleyFrom: 1.0, volleyTo: 3.0, rainFrom: 2.0, rainTo: 4.0, outroFrom: 4.0, end: 5.5 },
     },

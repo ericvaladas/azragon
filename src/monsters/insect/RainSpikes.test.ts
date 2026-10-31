@@ -25,33 +25,39 @@ describe('RainSpikes', () => {
     expect(s.flying).toBe(0);
   });
 
-  it('a spike flies a high arc and lands once, at its point, after the flight time', () => {
+  it('a spike flies in a straight line and lands once, at its point, after the flight time', () => {
     const scene = new THREE.Scene();
     const s = new RainSpikes(scene, 0xffffff);
+    const from = new THREE.Vector3(0, 400, 0);
+    const to = new THREE.Vector3(0, 0, 900);
     const lands: [number, THREE.Vector3, number][] = [];
     let t = 0;
-    s.launch(new THREE.Vector3(0, 400, 0), new THREE.Vector3(0, 0, 900));
-    let midY = 0;
+    s.launch(from, to);
+    const line = new THREE.Line3(from, to);
+    const onLine = new THREE.Vector3();
     while (t < U.flight + 0.2) {
       t += 1 / 60;
       s.update(1 / 60, (i, at) => lands.push([i, at.clone(), t]));
-      if (Math.abs(t - U.flight / 2) < 1 / 120) midY = pose(meshOf(scene)).pos.y;
+      if (s.flying > 0) {
+        const p = pose(meshOf(scene)).pos;
+        expect(p.distanceTo(line.closestPointToPoint(p, true, onLine))).toBeLessThan(1e-3);
+      }
     }
-    expect(midY).toBeGreaterThan(400 + 0.5 * U.arc);
     expect(lands).toHaveLength(1);
     expect(Math.abs(lands[0]![2] - U.flight)).toBeLessThanOrEqual(1 / 60 + 1e-9);
-    expect(lands[0]![1].distanceTo(new THREE.Vector3(0, 0, 900))).toBeLessThan(1e-6);
+    expect(lands[0]![1].distanceTo(to)).toBeLessThan(1e-6);
     expect(s.flying).toBe(0);
   });
 
-  it('points along its flight: nose up rising, nose down falling', () => {
+  it('points along its line all the way', () => {
     const scene = new THREE.Scene();
     const s = new RainSpikes(scene, 0xffffff);
-    s.launch(new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, 900));
-    s.update(U.flight * 0.1, () => {});
-    expect(pose(meshOf(scene)).nose.y).toBeGreaterThan(0.3);
-    s.update(U.flight * 0.8, () => {});
-    expect(pose(meshOf(scene)).nose.y).toBeLessThan(-0.3);
+    const dir = new THREE.Vector3(0, -400, 900).normalize();
+    s.launch(new THREE.Vector3(0, 400, 0), new THREE.Vector3(0, 0, 900));
+    for (const dt of [U.flight * 0.1, U.flight * 0.7]) {
+      s.update(dt, () => {});
+      expect(pose(meshOf(scene)).nose.dot(dir)).toBeGreaterThan(0.999);
+    }
   });
 
   it('aimAt moves where it lands', () => {

@@ -158,7 +158,7 @@ describe('SpikeRain', () => {
     }
   });
 
-  it('rears up by the timeline, and sprays once it is mostly up', () => {
+  it('holds the display by the timeline, and shoots once the arms are mostly up', () => {
     const r = rig([]);
     r.s.start(new THREE.Vector3(), 1);
     r.run(T.end + 0.1);

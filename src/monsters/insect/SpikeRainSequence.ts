@@ -27,7 +27,7 @@ export type SpikeRainHost = {
   facing(): number;
   /** The Insect's mouth, world space: the volley sprays from it. */
   mouth(out: THREE.Vector3): THREE.Vector3;
-  /** Hold the Insect in place, reared up by `roar` (0..1). */
+  /** Hold the Insect in place, beating its chest by `roar` (0..1). */
   hold(roar: number): void;
   /** Set it down and back to normal control. */
   release(): void;
@@ -50,8 +50,8 @@ const noLanding = () => {};
 
 /**
  * Spike Rain, the Insect's ultimate, on its real-time timeline (rainPhase): the world slows, the sky turns purple and
- * the fog closes in, the camera pulls back; the Insect rears up on its back legs and beats its chest with the front
- * four while it sprays a volley of spikes from its mouth high into the air; they rain down over the area in front of it, one
+ * the fog closes in, the camera pulls back; the Insect stands on its back legs and beats its chest with the front four
+ * while it shoots a volley of spikes straight out of its mouth across the area in front of it, one
  * on every enemy and building there (following any that move) and the rest scattered over it, destroying what they
  * hit; anything that wandered in late is caught as the rain ends; then it drops back down and everything clears.
  */

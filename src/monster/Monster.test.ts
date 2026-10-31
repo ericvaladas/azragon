@@ -168,14 +168,14 @@ describe('Monster.hold', () => {
     expect(hits).toBe(0);
   });
 
-  it("an ultimate's roar is passed to the body and leans it back by that much; none once set down", () => {
+  it("an ultimate's roar is passed to the body (which decides how to show it); none once set down", () => {
     const k = kind();
     const seen: number[] = [];
     const m = new Monster(new THREE.Scene(), { ...k, createBody: () => ({ ...stubBody(), animate: (f) => seen.push(f.roar) }) });
     m.hold(0, 0, 0, 0.6);
     m.tick(0.016);
     m.animate(0.016, 0);
-    expect(m.pose.pitch).toBeCloseTo(-0.45 * 0.6);
+    expect(m.pose.pitch).toBeCloseTo(0);
     m.hold(null);
     m.tick(0.016);
     m.animate(0.016, 0);

@@ -34,7 +34,7 @@ describe('rainPhase', () => {
     expect(cam + (U.near + U.far) / 2).toBeLessThan(far);
   });
 
-  it('rears up slowly, holds through the volley and the rain, then drops back', () => {
+  it('lifts its arms slowly, holds through the volley and the rain, then settles', () => {
     const roar = (t: number) => rainPhase(t).roar;
     expect(roar(0)).toBe(0);
     expect(roar(0.25)).toBeLessThan(0.2);

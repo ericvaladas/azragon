@@ -49,14 +49,11 @@ const AIM_FOLLOW = 8;
 /** Foot offset (model units) for the cocked leg: high and pulled back. */
 const _strikeLift = new THREE.Vector3(0, 420, -80);
 /**
- * Spike Rain (an ultimate's roar, while carried): reared up the body tips back REAR_PITCH rad more (on top of the
- * Monster's lean) and lifts REAR_LIFT, standing on the back pair of legs; the front four become arms, beating in at
- * CHEST (body space) and swinging out to ARM_OUT from their hips, at BEAT_RATE rad/s of world time, alternating sides.
+ * Spike Rain (an ultimate's roar, while carried): the body stays level, standing on the back pair of legs; the front
+ * four lift off as arms, beating in at CHEST (body space) and swinging out to ARM_OUT from their hips, at BEAT_RATE
+ * rad/s of world time, alternating sides; the mandibles open MOUTH_OPEN rad to shoot.
  */
-const REAR_PITCH = 0.6;
-/** How wide (rad) the mandibles open, reared up. */
 const MOUTH_OPEN = 0.6;
-const REAR_LIFT = 140;
 const BEAT_RATE = 9;
 const CHEST = new THREE.Vector3(0, 520, 260);
 const ARM_OUT = new THREE.Vector3(260, 160, 220);
@@ -86,9 +83,10 @@ export class InsectBody implements MonsterBody {
     const lp = f.leap ? insectLeap(f.leap.t, f.leap.duration, f.leap.crouch) : STANDING;
     const bob = Math.sin(f.cycle * Math.PI * 4) * 10 * m;
     const breathe = Math.sin(f.time * 1.6) * 5;
+    // Spike Rain's display (an ultimate's roar while held): arms beating, mandibles open.
     const rear = f.carried ? f.roar : 0;
-    body.position.y = bob + breathe - f.pose.dip - f.pose.collapse * 230 - lp.sink * LEAP_SINK + rear * REAR_LIFT;
-    body.rotation.x = f.pose.pitch + lp.pitch * 0.6 - rear * REAR_PITCH;
+    body.position.y = bob + breathe - f.pose.dip - f.pose.collapse * 230 - lp.sink * LEAP_SINK;
+    body.rotation.x = f.pose.pitch + lp.pitch * 0.6;
     body.rotation.z = Math.sin(f.cycle * Math.PI * 2) * 0.03 * m;
     root.updateMatrixWorld(true);
 
@@ -108,7 +106,7 @@ export class InsectBody implements MonsterBody {
         strikeFootPose(f.melee.t, CONFIG.monster.meleeWindup, _gait, _strikeLift, _target, _foot);
       }
       if (rear > 0 && i < 4) {
-        // An arm: swinging between out at its side and in at the chest, alternating, lifted off the ground as it rears.
+        // An arm: swinging between out at its side and in at the chest, alternating, lifted off the ground.
         const beat = 0.5 + 0.5 * Math.sin(f.time * BEAT_RATE + ARM_PHASE[i]!);
         _out.set(leg.side * ARM_OUT.x, ARM_OUT.y, leg.hipLocal.z + ARM_OUT.z).applyMatrix4(body.matrix);
         _foot.lerp(_out.lerp(_chest, beat), rear);
@@ -124,7 +122,7 @@ export class InsectBody implements MonsterBody {
       }
     }
 
-    // Reared up (Spike Rain), the mandibles open wide to spray.
+    // Held for Spike Rain, the mandibles open wide to shoot.
     const twitch = Math.max(f.roaring ? 0.55 : 0.18 + Math.sin(f.time * 7) * 0.08, rear * MOUTH_OPEN);
     this.model.mandibles[0]!.rotation.y = -twitch;
     this.model.mandibles[1]!.rotation.y = twitch;

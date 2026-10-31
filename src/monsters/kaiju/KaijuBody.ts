@@ -43,6 +43,8 @@ const TAIL_BASE: readonly THREE.Vector3[] = [
 const BLAZE = 4;
 const BLAZE_JAW = 0.6;
 const ROAR_PITCH = -0.55;
+/** How far (rad) an ultimate's roar leans the body back at its height. */
+const ROAR_LEAN = 0.45;
 /** The roar opens the jaws to ROAR_JAW (rad); it builds and fades at ROAR_RATE (of a full roar, per second of world time). */
 const ROAR_JAW = 0.8;
 const ROAR_RATE = 2.5;
@@ -260,7 +262,9 @@ export class KaijuBody implements MonsterBody {
     const shift = -Math.sin(f.cycle * Math.PI * 2);
     const body = this.body;
     body.position.set(shift * 16 * m, (1 - Math.abs(shift)) * 10 * m + Math.sin(f.time * 1.3) * 6 - f.pose.dip - f.pose.collapse * 230 - lp.sink * LEAP_SINK, 0);
-    body.rotation.set(f.pose.pitch + f.pose.collapse * 0.5 + lp.pitch, 0, -shift * 0.05 * m - f.pose.collapse * 0.3);
+    // Held by an ultimate, its roar leans the body back.
+    const lean = f.carried ? -ROAR_LEAN * f.roar : 0;
+    body.rotation.set(f.pose.pitch + f.pose.collapse * 0.5 + lp.pitch + lean, 0, -shift * 0.05 * m - f.pose.collapse * 0.3);
     this.root.updateMatrixWorld(true);
 
     for (let i = 0; i < 2; i++) {

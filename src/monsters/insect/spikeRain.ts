@@ -45,7 +45,7 @@ export type RainPhase = {
   sky: number;
   /** Camera pull-back 0..1: out by the time the rain starts, home by the end. */
   camera: number;
-  /** The rear-up 0..1: rising slowly from Q, held through the volley and the rain, dropping back in the outro. */
+  /** The display 0..1 (arms up and beating, mandibles open): rising slowly from Q, held through the volley and the rain, settling in the outro. */
   roar: number;
   done: boolean;
 };

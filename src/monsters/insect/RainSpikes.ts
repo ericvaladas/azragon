@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 import { CONFIG } from '../../config';
-import { ballistic } from '../../systems/projectileMath';
 
 const U = CONFIG.insect.ultimate;
 
@@ -15,8 +14,8 @@ const _m = new THREE.Matrix4();
 const UP = new THREE.Vector3(0, 1, 0);
 
 /**
- * Spike Rain's spikes: each flies a high ballistic arc from the mouth to its landing point over U.flight real
- * seconds (the game's own projectiles run on slowed world time), nose along its flight. One InstancedMesh, unlit, in
+ * Spike Rain's spikes: each shoots in a straight line from the mouth to its landing point over U.flight real seconds
+ * (the game's own projectiles run on slowed world time), nose along its line. One InstancedMesh, unlit, in
  * the Insect's spike colour; a pool of U.pool.
  */
 export class RainSpikes {
@@ -64,12 +63,8 @@ export class RainSpikes {
         onLand(i, s.to);
         continue;
       }
-      const k = s.t / U.flight;
-      ballistic(s.from, s.to, U.arc, k, _p);
-      // Its velocity: the straight line plus the arc's lift, rising then falling.
-      _v.subVectors(s.to, s.from);
-      _v.y += U.arc * 4 * (1 - 2 * k);
-      _q.setFromUnitVectors(UP, _v.normalize());
+      _p.lerpVectors(s.from, s.to, s.t / U.flight);
+      _q.setFromUnitVectors(UP, _v.subVectors(s.to, s.from).normalize());
       this.mesh.setMatrixAt(n++, _m.compose(_p, _q, _s.set(U.spikeWidth, U.spikeLength, U.spikeWidth)));
     }
     this.mesh.count = n;

@@ -12,7 +12,7 @@ const base = (): BodyFrame => ({
 const chest = (body: InsectBody) => new THREE.Vector3(0, 520, 260).applyMatrix4(body['model'].body.matrix);
 
 describe('InsectBody for Spike Rain', () => {
-  it('reared up, it stands on its back legs: the body pitches up and the front four feet leave the ground', () => {
+  it('held for Spike Rain it stays level, its front four feet lifting off to beat at its chest', () => {
     const pose = (roar: number) => {
       const body = new InsectBody();
       for (let i = 0; i < 30; i++) body.animate({ ...base(), time: i / 60, carried: true, roar }, () => {});
@@ -20,7 +20,7 @@ describe('InsectBody for Spike Rain', () => {
     };
     const up = pose(1);
     const down = pose(0);
-    expect(up['model'].body.rotation.x).toBeLessThan(down['model'].body.rotation.x - 0.5);
+    expect(Math.abs(up['model'].body.rotation.x - down['model'].body.rotation.x)).toBeLessThan(0.05);
     for (let i = 0; i < 4; i++) expect(up.feet[i]!.y).toBeGreaterThanOrEqual(150);
     expect(Math.abs(up.feet[4]!.y)).toBeLessThan(10);
     expect(Math.abs(up.feet[5]!.y)).toBeLessThan(10);
@@ -52,7 +52,7 @@ describe('InsectBody for Spike Rain', () => {
     expect(mouth.y).toBeGreaterThan(100);
   });
 
-  it('reared up, its mandibles open wide', () => {
+  it('held for Spike Rain, its mandibles open wide', () => {
     const body = new InsectBody();
     body.animate({ ...base(), carried: true, roar: 1 }, () => {});
     expect(Math.abs(body['model'].mandibles[0]!.rotation.y)).toBeGreaterThanOrEqual(0.5);

@@ -183,8 +183,8 @@ export class Monster {
 
   /**
    * An ultimate holds the monster at `height` (m) above where it stands: busy, airborne while above the ground, its
-   * feet never landing, its body bracing against the ground by `brace`, its glow blazing by `blaze`, and roaring
-   * (leaning back) by `roar` (0..1 each);
+   * feet never landing, its body bracing against the ground by `brace`, its glow blazing by `blaze`, and roaring by
+   * `roar` (0..1 each; the body decides how each shows);
    * `null` sets it down on the ground and back to normal control.
    */
   hold(height: number | null, brace = 0, blaze = 0, roar = 0): void {
@@ -436,9 +436,6 @@ export class Monster {
   tick(dt: number): void {
     const L = CONFIG.abilities.leap;
     if (this.heldY !== null) this.position.y = this.heldY;
-    // An ultimate's roar leans the body back by its own amount.
-    const heldRoar = this.heldY !== null && this.roarW > 0;
-    if (heldRoar) this.pose.pitch = -ROAR_LEAN * this.roarW;
     if (this.leapT >= 0) {
       this.leapT += dt;
       const c = this.kind.leapCrouch ?? 0;
@@ -492,7 +489,7 @@ export class Monster {
     this.meleeCd = Math.max(0, this.meleeCd - dt * this.cooldownRate);
     this.rangedCd = Math.max(0, this.rangedCd - dt * this.cooldownRate);
     if (this.meleeT < 0) {
-      if (this.leapT < 0 && this.roarT < 0 && !heldRoar) this.pose.pitch *= Math.exp(-10 * dt);
+      if (this.leapT < 0 && this.roarT < 0) this.pose.pitch *= Math.exp(-10 * dt);
       this.pose.dip += ((this.crouch ? 35 : 0) - this.pose.dip) * (1 - Math.exp(-10 * dt));
       return;
     }
