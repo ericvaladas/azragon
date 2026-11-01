@@ -63,6 +63,8 @@ export interface WorldContext {
   snareMonster(duration: number): void;
   fireShell(from: THREE.Vector3, to: THREE.Vector3, damage: number): void;
   fireRocket(from: THREE.Vector3, to: THREE.Vector3, damage: number): void;
+  /** The boss mech's black cannon shell: flies and hits like a rocket, with no flame or trail. */
+  fireCannon(from: THREE.Vector3, to: THREE.Vector3, damage: number): void;
   /** The Schwerer Gustav's huge shell: always hits, trails smoke. */
   fireGustavShell(from: THREE.Vector3, to: THREE.Vector3, damage: number): void;
   /** Spray where something hits the ground; does nothing unless the point is water. */

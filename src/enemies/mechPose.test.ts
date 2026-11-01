@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import { CONFIG } from '../config';
-import { MECH_LEGS, MECH_PIVOTS as PV } from './mechModel';
+import { HIP_FRAME_D, HIP_FRAME_T, HIP_FRAME_W, MECH_LEGS, MECH_PIVOTS as PV, mechLauncher, mechParts } from './mechModel';
 import { hipOf, restPose, solveLeg, targetPose, type LegAngles, type MechPose, type MechPoseInput } from './mechPose';
 
 const input = (o: Partial<MechPoseInput> = {}): MechPoseInput => ({ stride: 0, gait: 0, action: 'walk', actT: 0, dashing: false, stabLeg: 0, alive: true, dying: 0, wrecked: false, recoil: 0, ...o });
@@ -23,6 +23,36 @@ function kneeAt(p: MechPose, i: number): THREE.Vector3 {
 
 /** How far leg `i`'s knee rises above its hip. */
 const kneeRise = (p: MechPose, i: number) => kneeAt(p, i).y - hipOf(i, p, new THREE.Vector3()).y;
+
+/** Leg `i`'s hip, knee and foot in the body's own frame, `n` samples along each segment. */
+function legInBody(p: MechPose, i: number, n = 24): THREE.Vector3[] {
+  const rearZ = MECH_LEGS[2]!.z;
+  const body = new THREE.Matrix4()
+    .makeTranslation(0, PV.bodyY + p.lift, rearZ + p.shift)
+    .multiply(new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(p.pitch, 0, p.roll)))
+    .multiply(new THREE.Matrix4().makeTranslation(0, 0, -rearZ));
+  const inv = body.invert();
+  const hip = hipOf(i, p, new THREE.Vector3());
+  const knee = kneeAt(p, i);
+  const foot = new THREE.Vector3(p.feet[i * 3]!, p.feet[i * 3 + 1]!, p.feet[i * 3 + 2]!);
+  const out: THREE.Vector3[] = [];
+  for (let k = 0; k <= n; k++) {
+    out.push(hip.clone().lerp(knee, k / n).applyMatrix4(inv));
+    out.push(knee.clone().lerp(foot, k / n).applyMatrix4(inv));
+  }
+  return out;
+}
+
+const WINDUPS = (): [string, MechPose][] => {
+  const mv = CONFIG.mech.moves;
+  return [
+    ['stab left', targetPose(input({ action: 'punch', actT: mv.punch.windup * 0.99, stabLeg: 0 }), restPose())],
+    ['stab right', targetPose(input({ action: 'punch', actT: mv.punch.windup * 0.99, stabLeg: 1 }), restPose())],
+    ['stomp', targetPose(input({ action: 'slam', actT: mv.slam.windup * 0.99 }), restPose())],
+    ['rest', restPose()],
+    ['walk', targetPose(input({ gait: 1, stride: 0.6 }), restPose())],
+  ];
+};
 
 describe('mech pose', () => {
   it('the rest pose needs no bend: each leg pivots on the hip frame and yaws to its splay', () => {
@@ -52,6 +82,22 @@ describe('mech pose', () => {
     }
   });
 
+  it('the wind-ups lift the blades well above their old heights while the knees stay apart', () => {
+    for (const [name, p] of WINDUPS()) {
+      if (name === 'stab left') {
+        expect(p.feet[1]).toBeGreaterThan(0.18 + 0.08);
+        expect(kneeRise(p, 0)).toBeLessThan(0.15);
+      } else if (name === 'stab right') {
+        expect(p.feet[4]).toBeGreaterThan(0.18 + 0.08);
+        expect(kneeRise(p, 1)).toBeLessThan(0.15);
+      } else if (name === 'stomp') {
+        expect(p.feet[1]).toBeGreaterThan(0.24 + 0.08);
+        expect(p.feet[4]).toBeGreaterThan(0.24 + 0.08);
+      }
+      expect(kneeAt(p, 0).x - kneeAt(p, 1).x).toBeGreaterThan(0.5);
+    }
+  });
+
   it('walking, diagonal pairs step together and the planted pair stays on the ground', () => {
     const p = targetPose(input({ stride: Math.PI / 2 + 0.3, gait: 1 }), restPose());
     // Front-left and rear-right are mid-plant (on the ground); front-right and rear-left swing (lifted).
@@ -61,10 +107,30 @@ describe('mech pose', () => {
     expect(p.feet[7]).toBeGreaterThan(0);
   });
 
+  it('no leg passes through the hull, the launcher or the hip frame', () => {
+    const parts = mechParts();
+    const box = (g: THREE.BufferGeometry) => new THREE.Box3().setFromBufferAttribute(g.getAttribute('position') as THREE.BufferAttribute);
+    const hull = box(parts.hull).expandByScalar(0.02);
+    const launcher = box(mechLauncher()).expandByScalar(0.03);
+    // Outside the drum at the hip, the leg stays clear of the frame plate.
+    const frame = new THREE.Box3(new THREE.Vector3(-HIP_FRAME_W / 2, -HIP_FRAME_T / 2, -HIP_FRAME_D / 2), new THREE.Vector3(HIP_FRAME_W / 2, HIP_FRAME_T / 2, HIP_FRAME_D / 2));
+    for (const [, p] of WINDUPS()) {
+      for (let i = 0; i < 4; i++) {
+        const hip = new THREE.Vector3(MECH_LEGS[i]!.x, 0, MECH_LEGS[i]!.z);
+        for (const q of legInBody(p, i)) {
+          const local = q.clone().setY(q.y - PV.bodyY);
+          expect(hull.containsPoint(local)).toBe(false);
+          expect(launcher.containsPoint(local)).toBe(false);
+          if (local.distanceTo(hip) > 0.08) expect(frame.containsPoint(local)).toBe(false);
+        }
+      }
+    }
+  });
+
   it('the stab rears a front leg up in the wind-up, then spikes it forward', () => {
     const mv = CONFIG.mech.moves.punch;
     const up = targetPose(input({ action: 'punch', actT: mv.windup * 0.99, stabLeg: 1 }), restPose());
-    expect(up.feet[4]).toBeGreaterThan(0.12);
+    expect(up.feet[4]).toBeGreaterThan(0.26);
     expect(up.pitch).toBeLessThan(0);
     expect(kneeRise(up, 1)).toBeLessThan(0.15);
     const out = targetPose(input({ action: 'punch', actT: mv.windup + 0.01, stabLeg: 1 }), restPose());
@@ -76,8 +142,8 @@ describe('mech pose', () => {
 
   it('the stomp rears up with both front legs high; the dash wind-up crouches; the wreck splays flat', () => {
     const slam = targetPose(input({ action: 'slam', actT: CONFIG.mech.moves.slam.windup * 0.99 }), restPose());
-    expect(slam.feet[1]).toBeGreaterThan(0.15);
-    expect(slam.feet[4]).toBeGreaterThan(0.15);
+    expect(slam.feet[1]).toBeGreaterThan(0.32);
+    expect(slam.feet[4]).toBeGreaterThan(0.32);
     // The front knees stay low, and far apart.
     expect(kneeRise(slam, 0)).toBeLessThan(0.15);
     expect(kneeRise(slam, 1)).toBeLessThan(0.15);

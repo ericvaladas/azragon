@@ -5,8 +5,11 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { faceted, painted } from '../render/toon';
 import { ballistic } from './projectileMath';
 
-/** `wisp`: a Hungry Ghost (homes like a spike). `shard`: a cosmetic Bone Ward shard. `gustav`: the Schwerer Gustav's huge shell. */
-export type ShotKind = 'spike' | 'shell' | 'rocket' | 'glob' | 'chunk' | 'wisp' | 'shard' | 'gustav';
+/**
+ * `wisp`: a Hungry Ghost (homes like a spike). `shard`: a cosmetic Bone Ward shard. `gustav`: the Schwerer Gustav's huge
+ * shell. `cannon`: the boss mech's black shell, a rocket's flight with no trail.
+ */
+export type ShotKind = 'spike' | 'shell' | 'rocket' | 'glob' | 'chunk' | 'wisp' | 'shard' | 'gustav' | 'cannon';
 /** An enemy shell or rocket in flight, as seen by Spine Shield. */
 export type InFlight = { readonly kind: ShotKind; readonly pos: THREE.Vector3 };
 export type Hit = { kind: ShotKind; point: THREE.Vector3; target: Target | null; damage: number };
@@ -54,11 +57,22 @@ function gustavShellGeometry(): THREE.BufferGeometry {
   return g;
 }
 
+/** The mech's cannon shell along +Y in a unit box: a black body and a gunmetal nose (drawn pointing along its flight). */
+function cannonShellGeometry(): THREE.BufferGeometry {
+  const P = CONFIG.palette;
+  const g = mergeGeometries([
+    painted(faceted(new THREE.CylinderGeometry(0.5, 0.5, 0.7, 6).translate(0, -0.15, 0)), P.cannonShell),
+    painted(faceted(new THREE.ConeGeometry(0.5, 0.3, 6).translate(0, 0.35, 0)), P.cannonShellNose),
+  ]);
+  if (!g) throw new Error('Projectiles: cannon shell merge failed');
+  return g;
+}
+
 /** Pooled projectiles drawn with one InstancedMesh per kind. */
 export class Projectiles {
   onHit: (h: Hit) => void = () => {};
   /**
-   * Called every TRAIL_EVERY s for each shot in flight except tank shells, globs, hurled chunks and shards; for a Gustav shell, every
+   * Called every TRAIL_EVERY s for each shot in flight except tank shells, cannon shells, globs, hurled chunks and shards; for a Gustav shell, every
    * CONFIG.gustav.trailSpacing m, with `hold` the seconds until it lands (so its whole trail can fade together).
    */
   onTrail: (p: THREE.Vector3, kind: ShotKind, hold?: number) => void = () => {};
@@ -76,6 +90,7 @@ export class Projectiles {
     wisp: [30, 42, 30],
     shard: [18, 64, 18],
     gustav: [CONFIG.gustav.shellDiameter, CONFIG.gustav.shellLength, CONFIG.gustav.shellDiameter],
+    cannon: [10, 36, 10],
   };
 
   constructor(scene: THREE.Scene) {
@@ -97,6 +112,7 @@ export class Projectiles {
       wisp: make('shot-wisp', faceted(new THREE.IcosahedronGeometry(0.5, 0)), CONFIG.wendigo.colors.ghost, 64),
       shard: make('shot-shard', faceted(new THREE.ConeGeometry(0.5, 1, 4)), CONFIG.wendigo.colors.boneShard, 48),
       gustav: make('shot-gustav', gustavShellGeometry(), 0xffffff, 16),
+      cannon: make('shot-cannon', cannonShellGeometry(), 0xffffff, 32),
     };
   }
 
@@ -177,9 +193,9 @@ export class Projectiles {
     s.dur = Math.min(0.25, Math.max(0.08, from.distanceTo(to) / SHARD_SPEED));
   }
 
-  /** Enemy shells (tank and Gustav) and rockets in flight. */
+  /** Enemy shells (tank, Gustav and the mech's cannon) and rockets in flight. */
   incoming(): readonly InFlight[] {
-    return this.shots.filter((s) => s.kind === 'shell' || s.kind === 'rocket' || s.kind === 'gustav');
+    return this.shots.filter((s) => s.kind === 'shell' || s.kind === 'rocket' || s.kind === 'gustav' || s.kind === 'cannon');
   }
 
   /** Destroy an in-flight shot without it hitting anything. Returns false if it was already gone. */
@@ -193,6 +209,12 @@ export class Projectiles {
 
   fireRocket(from: THREE.Vector3, to: THREE.Vector3, damage: number): void {
     const s = this.alloc('rocket', from, to, damage, null);
+    s.dur = Math.max(0.2, from.distanceTo(to) / CONFIG.jet.rocketSpeed);
+  }
+
+  /** The mech's cannon shell: a rocket's straight flight, black, with no trail. */
+  fireCannon(from: THREE.Vector3, to: THREE.Vector3, damage: number): void {
+    const s = this.alloc('cannon', from, to, damage, null);
     s.dur = Math.max(0.2, from.distanceTo(to) / CONFIG.jet.rocketSpeed);
   }
 
@@ -223,7 +245,7 @@ export class Projectiles {
       }
       if (s.kind === 'gustav') this.chemtrail(s);
       else s.trailT += dt;
-      const trails = s.kind !== 'shell' && s.kind !== 'glob' && s.kind !== 'chunk' && s.kind !== 'shard' && s.kind !== 'gustav' && (s.kind !== 'spike' || this.spikeTrail);
+      const trails = s.kind !== 'shell' && s.kind !== 'glob' && s.kind !== 'chunk' && s.kind !== 'shard' && s.kind !== 'gustav' && s.kind !== 'cannon' && (s.kind !== 'spike' || this.spikeTrail);
       if (trails && s.trailT >= TRAIL_EVERY) {
         s.trailT = 0;
         this.onTrail(s.pos, s.kind);
@@ -249,7 +271,7 @@ export class Projectiles {
   }
 
   private draw(): void {
-    const counts: Record<ShotKind, number> = { spike: 0, shell: 0, rocket: 0, glob: 0, chunk: 0, wisp: 0, shard: 0, gustav: 0 };
+    const counts: Record<ShotKind, number> = { spike: 0, shell: 0, rocket: 0, glob: 0, chunk: 0, wisp: 0, shard: 0, gustav: 0, cannon: 0 };
     for (const s of this.shots) {
       const mesh = this.meshes[s.kind];
       const i = counts[s.kind]++;

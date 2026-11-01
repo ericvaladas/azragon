@@ -224,6 +224,8 @@ export class GameScene {
   private ultimateActive = false;
   /** Each kind's ultimate, by id; the current kind's is `ultimate()`. */
   private ultimates: Partial<Record<UltimateId, Ultimate>> = {};
+  /** The boss is beaten and the music calms as soon as its wreck has gone. */
+  private pendingCalm = false;
   /** Set while Devour takes a victim: its death skips the usual explosion. */
   private quietKill = false;
   private shieldFx: ShieldFx;
@@ -627,6 +629,7 @@ export class GameScene {
     this.abilities.reset();
     this.cycle.reset();
     this.meteor.clear();
+    this.pendingCalm = false;
     this.music.fight();
     this.ultimateUnlocked = CONFIG.ultimate.startUnlocked;
     this.abilities.setRank('ultimate', this.monster.kind.ultimate && this.ultimateUnlocked ? 1 : 0);
@@ -917,6 +920,7 @@ export class GameScene {
       if (this.state === 'playing') {
         this.runTime += dt;
         for (const ev of this.cycle.update(dt)) this.onCycle(ev);
+        this.updateBossMusic();
         // Cooldowns recover on their own clock, sped up by Haste When Hurt.
         const cdRate = this.cdRate();
         const cdDt = dt * cdRate;
@@ -1111,8 +1115,11 @@ export class GameScene {
   private onCycle(ev: CycleEvent): void {
     switch (ev) {
       case 'retreat':
-      case 'recover':
         this.music.calm();
+        break;
+      case 'recover':
+        // The boss track holds through the mech's death and wreck; updateBossMusic calms it once the wreck is gone.
+        this.pendingCalm = true;
         break;
       case 'cutscene': {
         const M = CONFIG.meteor;
@@ -1140,9 +1147,17 @@ export class GameScene {
         this.music.boss();
         break;
       case 'army':
+        this.pendingCalm = false;
         this.music.fight();
         break;
     }
+  }
+
+  /** Calms the music, as the recover phase asked, once the mech's wreck has sunk and left the field. */
+  private updateBossMusic(): void {
+    if (!this.pendingCalm || this.mech.count() > 0) return;
+    this.pendingCalm = false;
+    this.music.calm();
   }
 
   /** Drops a tap-ordered attack on an enemy, and the Insect's tail aim, whose target is no longer alive (dismissed units are dead). */
@@ -1611,6 +1626,7 @@ export class GameScene {
         this.projectiles.fireRocket(from, to, damage);
         this.particles.emit('fire', from, 2, 0.3);
       },
+      fireCannon: (from, to, damage) => this.projectiles.fireCannon(from, to, damage),
       fireGustavShell: (from, to, damage) => {
         this.projectiles.fireGustavShell(from, to, damage);
         this.particles.explosion(from, 0.8);

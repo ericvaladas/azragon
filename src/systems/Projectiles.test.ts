@@ -1,7 +1,37 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
-import { Projectiles } from './Projectiles';
+import { Projectiles, type Hit, type ShotKind } from './Projectiles';
 import { CONFIG } from '../config';
+
+describe('Projectiles.fireCannon', () => {
+  it('flies a straight line at rocket speed with no trail, counts as incoming, and lands as a cannon hit with its damage', () => {
+    const p = new Projectiles(new THREE.Scene());
+    const hits: Hit[] = [];
+    const trails: ShotKind[] = [];
+    p.onHit = (h) => hits.push(h);
+    p.onTrail = (_at, kind) => trails.push(kind);
+    const from = new THREE.Vector3(0, 400, 0);
+    const to = new THREE.Vector3(0, 400, CONFIG.jet.rocketSpeed * 0.5);
+    p.fireCannon(from, to, 6);
+    expect(p.incoming().map((s) => s.kind)).toEqual(['cannon']);
+    for (let i = 0; i < 29; i++) p.update(1 / 60);
+    expect(hits).toEqual([]);
+    p.update(2 / 60);
+    expect(hits.length).toBe(1);
+    expect(hits[0]!.kind).toBe('cannon');
+    expect(hits[0]!.damage).toBe(6);
+    expect(hits[0]!.point.distanceTo(to)).toBeLessThan(1e-6);
+    expect(trails).toEqual([]);
+  });
+
+  it('draws a black shell', () => {
+    const scene = new THREE.Scene();
+    new Projectiles(scene);
+    const mesh = scene.children.find((c) => c.name === 'shot-cannon') as THREE.InstancedMesh;
+    const colors = mesh.geometry.getAttribute('color') as THREE.BufferAttribute;
+    expect(Math.max(...Array.from(colors.array).slice(0, 18))).toBeLessThan(0.1);
+  });
+});
 
 describe('Projectiles.setTheme', () => {
   it('recolours the monster\'s spikes and globs only', () => {

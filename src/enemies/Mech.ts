@@ -3,7 +3,7 @@ import { CONFIG } from '../config';
 import type { Target } from '../combat';
 import { angleDelta, damp, type Vec2 } from '../util/math';
 import { shellProgress, strikeFill, strikeHits, strikePoints } from './artilleryMath';
-import { ballistic } from '../systems/projectileMath';
+import { launchArc } from '../systems/projectileMath';
 import { faceted } from '../render/toon';
 import { chooseAction, movePhase, punchHits, slamHits, type MechAction, type MechMind, type MechMove } from './mechMath';
 import { LEG_REACH, MECH_LEGS, MECH_TUBES } from './mechModel';
@@ -17,8 +17,6 @@ const MAX_STRIKES = 16;
 const SPARK_EVERY = 0.12;
 const POSE_RATE = 22;
 const FALL_RATE = 5;
-/** How fast the cannons' recoil settles (1/s). */
-const RECOIL_RATE = 6;
 /**
  * The barrage missiles leave the launcher tubes this many seconds apart, each flying the rest of its circle's fill so
  * it lands as the circle fills; a smoke puff every TRAIL_EVERY s marks its arc, and the glowing missile is this big (m).
@@ -27,6 +25,7 @@ const LAUNCH_GAP = 0.08;
 const TRAIL_EVERY = 0.025;
 const MISSILE_SIZE = 22;
 const _p = new THREE.Vector3();
+const _dir = new THREE.Vector3();
 const _land = new THREE.Vector3();
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
@@ -69,9 +68,9 @@ class MechBody implements Target {
 
 /**
  * A barrage circle at `at`, painted `t` s ago, and its missile: launched from launcher tube `tube` at `from` (set at
- * launch), flying for the last `flight` s of the fill.
+ * launch), heading along the ground direction (fx, fz) it faced at launch, flying for the last `flight` s of the fill.
  */
-type Strike = { at: Vec2; t: number; tube: number; flight: number; from: THREE.Vector3; launched: boolean; trailT: number };
+type Strike = { at: Vec2; t: number; tube: number; flight: number; from: THREE.Vector3; fx: number; fz: number; launched: boolean; trailT: number };
 
 /** Scratch target pose and its input, rebuilt every draw. */
 const _target = restPose();
@@ -81,7 +80,7 @@ const _poseIn: MechPoseInput = { stride: 0, gait: 0, action: 'walk', actT: 0, da
  * The boss mech: one giant four-legged spider tank, summoned by the cycle (never by the spawn director). It walks in
  * toward the monster, crushing buildings underfoot, and fights it with telegraphed front-leg stabs (the punch) and
  * rearing stomps (the slam), a gap-closing dash once it has engaged (come within dashTrigger, or engageAfter s after
- * its summoning), jet rocket volleys from its twin cannons and an occasional barrage of marked strike circles from its
+ * its summoning), black shell volleys from its twin cannons and an occasional barrage of marked strike circles from its
  * box launcher. Dead, it sparks and flickers, blows apart, its legs splay and it sinks. Drawn by a MechRig.
  */
 export class Mech implements EnemySystem {
@@ -112,7 +111,7 @@ export class Mech implements EnemySystem {
   private stride = 0;
   private gait = 0;
   private flashT = 0;
-  /** The cannons' recoil, 1 as a rocket leaves, settling to 0. */
+  /** The cannons' recoil, 1 as a shell leaves, settling to 0 over cannonRecoilTime. */
   private recoil = 0;
   /** Seconds since it died (sparking), and since it blew apart (the wreck); the wreck starts at null. */
   private dyingT = 0;
@@ -226,7 +225,7 @@ export class Mech implements EnemySystem {
     const b = this.body;
     if (!b) return;
     this.flashT = Math.max(0, this.flashT - dt);
-    this.recoil = Math.max(0, this.recoil - RECOIL_RATE * dt);
+    this.recoil = Math.max(0, this.recoil - dt / M.cannonRecoilTime);
     if (b.alive) this.think(dt, ctx);
     else if (!this.die(dt, ctx)) return;
     this.draw(dt);
@@ -341,9 +340,9 @@ export class Mech implements EnemySystem {
       }
     }
     if (a === 'rockets' && fired) {
-      // The volley's rockets go out evenly through the strike.
+      // The volley's shells go out evenly through the strike, one barrel then the other.
       const due = Math.min(M.rocketsPerVolley, Math.floor(((this.actT - mv.windup) / Math.max(mv.strike, 1e-6)) * M.rocketsPerVolley) + 1);
-      while (this.rocketsFired < due) this.rocket(ctx, this.rocketsFired++ % 2);
+      while (this.rocketsFired < due) this.cannonShot(ctx, this.rocketsFired++ % 2);
     }
     if (movePhase(a, this.actT) !== 'done') return;
     if (a === 'punch' || a === 'slam') this.meleeCd = M.meleeCooldown;
@@ -380,15 +379,22 @@ export class Mech implements EnemySystem {
     ctx.shake(0.2);
   }
 
-  /** One jet rocket from a cannon muzzle (0 upper, 1 lower) at the monster's upper body, with a little scatter. */
-  private rocket(ctx: WorldContext, barrel: number): void {
+  /**
+   * One black shell from a cannon muzzle (0 upper, 1 lower) at the monster's upper body, with a little scatter: a flash
+   * at the muzzle, smoke vented backward out of the breech, the barrels kicked back and a shake.
+   */
+  private cannonShot(ctx: WorldContext, barrel: number): void {
     const from = this.rig.muzzle(barrel, new THREE.Vector3());
+    this.rig.barrelDir(_dir);
     this.recoil = 1;
     const r = ctx.rng;
     const aim = ctx.monster.position.clone().add(new THREE.Vector3((r() - 0.5) * 200, (250 + r() * 250) * CONFIG.monster.scale, (r() - 0.5) * 200));
-    ctx.fireRocket(from, aim, M.rocketDamage);
-    ctx.particles.emit('fire', from, 3, 0.4);
-    ctx.particles.emit('smoke', from, 3, 0.6);
+    ctx.fireCannon(from, aim, M.rocketDamage);
+    ctx.particles.vent('muzzleFlash', from, _dir.x, _dir.y, _dir.z, 160, M.cannonFlash);
+    ctx.particles.emit('spark', from, M.cannonSparks, 0.8);
+    ctx.particles.vent('ventSmoke', this.rig.breech(barrel, _p), -_dir.x, -_dir.y, -_dir.z, M.cannonSmokeSpeed, M.cannonSmoke);
+    const dist = Math.hypot(ctx.monster.position.x - this.x, ctx.monster.position.z - this.z);
+    ctx.shake(M.cannonShake * Math.max(0.25, 1 - dist / CONFIG.fog.far));
   }
 
   /** Paints barrageCount strike circles around the monster (one on it); a missile for each leaves the launcher in turn. */
@@ -396,12 +402,12 @@ export class Mech implements EnemySystem {
     const m = ctx.monster.position;
     strikePoints(m, M.barrageCount, M.barrageSpread, ctx.rng).forEach((at, k) => {
       if (this.strikes.length >= MAX_STRIKES) return;
-      this.strikes.push({ at, t: 0, tube: k % MECH_TUBES.length, flight: M.barrageFill - k * LAUNCH_GAP, from: new THREE.Vector3(), launched: false, trailT: 0 });
+      this.strikes.push({ at, t: 0, tube: k % MECH_TUBES.length, flight: M.barrageFill - k * LAUNCH_GAP, from: new THREE.Vector3(), fx: 0, fz: 1, launched: false, trailT: 0 });
     });
   }
 
   /**
-   * Fills the barrage circles and flies their missiles out of the launcher on an arc down onto them; each lands when
+   * Fills the barrage circles and flies their missiles level out of the launcher's front, over and down onto them; each lands when
    * its circle is full and hits the monster if it is still inside.
    */
   private updateStrikes(dt: number, ctx: WorldContext): void {
@@ -416,6 +422,8 @@ export class Mech implements EnemySystem {
           // It leaves its tube with a flash and a puff of smoke.
           s.launched = true;
           this.rig.tube(s.tube, s.from);
+          s.fx = Math.sin(this.heading);
+          s.fz = Math.cos(this.heading);
           ctx.particles.emit('fire', s.from, 3, 0.4);
           ctx.particles.emit('smoke', s.from, 4, 0.8);
         }
@@ -490,6 +498,8 @@ export class Mech implements EnemySystem {
     s.wrecked = this.wreckT !== null;
     s.recoil = this.recoil;
     dampPose(this.pose, targetPose(s, _target), b.alive ? POSE_RATE : FALL_RATE, dt);
+    // The barrels' kick is instant; only the body's jolt eases in with the pose.
+    this.pose.recoil = this.recoil;
     this.rig.apply(this.pose);
     this.root.position.set(this.x, 0, this.z);
     this.root.rotation.y = this.heading;
@@ -519,7 +529,7 @@ export class Mech implements EnemySystem {
 
   /** Where a strike's missile is, `k` (0..1) through its flight from the tube to the circle. */
   private missilePos(s: Strike, k: number): THREE.Vector3 {
-    return ballistic(s.from, _land.set(s.at.x, 0, s.at.z), M.barrageArc, k, _p);
+    return launchArc(s.from, s.fx, s.fz, _land.set(s.at.x, 0, s.at.z), M.barrageRunOut, M.barrageArc, k, _p);
   }
 
   private drawStrikes(): void {

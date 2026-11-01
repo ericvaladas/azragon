@@ -6,7 +6,7 @@ import { faceted, painted } from '../render/toon';
 /**
  * The boss mech, a four-legged spider tank, in units of its standing height (1 tall, ground at y = 0, facing +Z, +X
  * its left). The body parts (hip frame, hull, turret, visor, cannons, glow) share one origin, the body pivot at bodyY
- * on the centre line. The four legs mount on the hip frame, a thin black pelvis plate at the body pivot's height; the
+ * on the centre line. The four legs mount on the hip frame, a compact black pelvis plate at the body pivot's height; the
  * white hull sits on a short neck above it, carrying the turret, the launcher and the cannons. Each leg is two shared
  * parts drawn four times: the upper segment (origin at the hip, with its armoured hip drum) and the lower blade (origin
  * at the knee, ending in a spike foot). A leg part is built in its own vertical plane: +Z points out along the leg, +Y
@@ -21,6 +21,9 @@ export const TORSO_BASE = 0.085;
 const RISE = 0.155;
 /** The hip frame plate's thickness, centred on the body pivot's height. */
 export const HIP_FRAME_T = 0.035;
+/** The hip frame plate's width (x) and depth (z): a compact core under the hull, smaller than it both ways. */
+export const HIP_FRAME_W = 0.15;
+export const HIP_FRAME_D = 0.3;
 
 /**
  * The box launcher: `rows` rows of two tube caps (radius capR, rows pitch apart, columns ±capDX) on a dark face that
@@ -34,7 +37,7 @@ export const MECH_PIVOTS = {
   /** The body pivot's height; the hips and the hip frame sit at this height too. */
   bodyY: 0.45,
   /** The knee, from the hip, in the leg's plane at rest: out along the leg (z) and up (y). */
-  kneeZ: 0.26,
+  kneeZ: 0.32,
   kneeY: -0.02,
   /** The foot (the spike's tip), from the knee, in the leg's plane at rest. */
   footZ: 0.18,
@@ -43,9 +46,11 @@ export const MECH_PIVOTS = {
   muzzleX: -0.1,
   muzzleY: [0.275 + RISE, 0.205 + RISE] as readonly number[],
   muzzleZ: 0.5,
+  /** The back of the cannon mount, from the body pivot, where each shot vents its smoke. */
+  breechZ: -0.07,
   /** The top of the box launcher, from the body pivot. */
   launcherX: 0.1,
-  launcherY: 0.397 + RISE,
+  launcherY: 0.297 + RISE,
   launcherZ: -0.02,
 } as const;
 
@@ -60,14 +65,17 @@ export const MECH_TUBES: readonly { x: number; y: number; z: number }[] = Array.
 
 /** Each leg's hip on the hip frame (x, z, from the body pivot) and its splay at rest (rad about +Y; 0 faces +Z). */
 export type MechLeg = { x: number; z: number; splay: number };
-const SPLAY_FRONT = 0.75;
-const SPLAY_BACK = Math.PI - 0.75;
+const SPLAY_FRONT = 0.85;
+const SPLAY_BACK = Math.PI - SPLAY_FRONT;
+/** The hips' offsets from the body pivot, inside the hip frame's corners. */
+const HIP_X = 0.065;
+const HIP_Z = 0.12;
 /** Front-left, front-right, rear-left, rear-right. Diagonal pairs (0 with 3, 1 with 2) step together. */
 export const MECH_LEGS: readonly MechLeg[] = [
-  { x: 0.14, z: 0.13, splay: SPLAY_FRONT },
-  { x: -0.14, z: 0.13, splay: -SPLAY_FRONT },
-  { x: 0.14, z: -0.13, splay: SPLAY_BACK },
-  { x: -0.14, z: -0.13, splay: -SPLAY_BACK },
+  { x: HIP_X, z: HIP_Z, splay: SPLAY_FRONT },
+  { x: -HIP_X, z: HIP_Z, splay: -SPLAY_FRONT },
+  { x: HIP_X, z: -HIP_Z, splay: SPLAY_BACK },
+  { x: -HIP_X, z: -HIP_Z, splay: -SPLAY_BACK },
 ];
 
 /** How far out from its hip a standing foot rests (the knee's and the foot's reach out along the leg). */
@@ -125,21 +133,20 @@ function merge(parts: Part[]): Part {
 }
 
 /**
- * The hip frame at the body pivot's height: a flat gunmetal-black pelvis plate with a raised rim and a socket under each
- * hip drum, a gunmetal neck up to the hull's base, and the coolant canister cradles beneath (the glowing canisters are
- * in the glow part).
+ * The hip frame at the body pivot's height: a flat gunmetal-black pelvis plate with a raised rim, narrower and shorter
+ * than the hull, with a hip drum over each corner; a gunmetal neck up to the hull's base, and the coolant canister
+ * cradles beneath (the glowing canisters are in the glow part).
  */
 function hips(): Part {
   const P = CONFIG.palette;
   const T = HIP_FRAME_T;
   const parts: Part[] = [
-    box(0.42, T, 0.38, 0, 0, 0, P.mechFrame),
-    box(0.36, 0.012, 0.32, 0, T / 2 + 0.006, 0, P.mechDark),
-    cyl(0.06, TORSO_BASE - T / 2, 12, 'y', 0, (TORSO_BASE + T / 2) / 2, 0, P.mechMetal),
-    box(0.1, 0.02, 0.17, 0, TORSO_BASE - 0.01, 0, P.mechFrame),
+    box(HIP_FRAME_W, T, HIP_FRAME_D, 0, 0, 0, P.mechFrame),
+    box(HIP_FRAME_W - 0.04, 0.012, HIP_FRAME_D - 0.05, 0, T / 2 + 0.006, 0, P.mechDark),
+    cyl(0.045, TORSO_BASE - T / 2, 12, 'y', 0, (TORSO_BASE + T / 2) / 2, 0, P.mechMetal),
+    box(0.08, 0.02, 0.15, 0, TORSO_BASE - 0.01, 0, P.mechFrame),
   ];
-  for (const leg of MECH_LEGS) parts.push(cyl(0.05, T + 0.02, 10, 'y', leg.x, 0, leg.z, P.mechMetal));
-  for (const sx of [-1, 1]) parts.push(box(0.02, 0.04, 0.1, sx * 0.03, -T / 2 - 0.02, 0.02, P.mechMetal));
+  for (const sx of [-1, 1]) parts.push(box(0.016, 0.035, 0.1, sx * 0.025, -T / 2 - 0.0175, 0.02, P.mechMetal));
   return merge(parts);
 }
 
@@ -206,8 +213,8 @@ function turret(): Part {
     cyl(0.03, 0.03, 10, 'z', 0.02, 0.17, 0.17, P.mechMetal),
     cyl(0.016, 0.03, 8, 'z', -0.035, 0.155, 0.17, P.mechMetal),
     box(0.006, 0.12, 0.006, -0.04, 0.28, -0.08, P.mechMetal),
-    // The launcher arm.
-    box(0.04, 0.05, 0.08, 0.06, 0.215, -0.02, P.mechDark),
+    // The launcher arm, low on the turret ring's side.
+    box(0.04, 0.05, 0.08, 0.06, 0.115, -0.02, P.mechDark),
   ];
   return merge([merge(parts).translate(0, RISE, 0), mechLauncher()]);
 }
@@ -233,7 +240,7 @@ function glow(): Part {
   const parts: Part[] = [];
   for (const t of MECH_TUBES) parts.push(cyl(LAUNCHER.capR, 0.01, 8, 'z', t.x, t.y, t.z, P.mechGlow));
   for (const sx of [-1, 1]) {
-    parts.push(cyl(0.028, 0.1, 8, 'z', sx * 0.06, -HIP_FRAME_T / 2 - 0.03, 0.02, P.mechGlow));
+    parts.push(cyl(0.022, 0.1, 8, 'z', sx * 0.045, -HIP_FRAME_T / 2 - 0.025, 0.02, P.mechGlow));
     // On the side armour of the scaled-up hull.
     parts.push(box(0.004, 0.012, 0.2, sx * 0.106, 0.017 + RISE, 0, P.mechGlow));
   }
@@ -246,9 +253,9 @@ function legUpper(): Part {
   const P = CONFIG.palette;
   const V = MECH_PIVOTS;
   return merge([
-    cyl(0.07, 0.1, 12, 'x', 0, 0, 0, P.mech),
-    cyl(0.04, 0.12, 10, 'x', 0, 0, 0, P.mechMetal),
-    box(0.104, 0.012, 0.11, 0, 0.0, 0, P.mechDark),
+    cyl(0.05, 0.07, 12, 'x', 0, 0, 0, P.mech),
+    cyl(0.03, 0.09, 10, 'x', 0, 0, 0, P.mechMetal),
+    box(0.074, 0.01, 0.08, 0, 0.0, 0, P.mechDark),
     beam(0, 0, V.kneeY, V.kneeZ, 0.07, 0.07, P.mech, 0.85),
     beam(-0.03, 0.02, V.kneeY - 0.03, V.kneeZ, 0.074, 0.025, P.mechDark),
     // A hydraulic ram under the beam.

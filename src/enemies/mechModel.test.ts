@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
-import { HIP_FRAME_T, LAUNCHER, LEG_REACH, LOWER_LEN, MECH_LEGS, MECH_PIVOTS, MECH_TUBES, TORSO_BASE, mechLauncher, mechParts, type MechLeg, type MechParts } from './mechModel';
+import { HIP_FRAME_D, HIP_FRAME_T, HIP_FRAME_W, LAUNCHER, LEG_REACH, LOWER_LEN, MECH_LEGS, MECH_PIVOTS, MECH_TUBES, TORSO_BASE, mechLauncher, mechParts, type MechLeg, type MechParts } from './mechModel';
 
 const P = MECH_PIVOTS;
 const bounds = (g: THREE.BufferGeometry) => new THREE.Box3().setFromBufferAttribute(g.getAttribute('position') as THREE.BufferAttribute);
@@ -33,7 +33,8 @@ describe('mech model', () => {
   it('stands one unit tall on the ground and about 0.9 wide', () => {
     const all = wholeMech(mechParts());
     expect(all.min.y).toBeCloseTo(0, 2);
-    expect(all.max.y).toBeGreaterThan(0.98);
+    // The antennas top it out, with the launcher mounted below them.
+    expect(all.max.y).toBeGreaterThan(0.93);
     expect(all.max.y).toBeLessThan(1.02);
     // Its splayed legs span about 0.9 of its height across (CONFIG.mech.width).
     expect(all.max.x - all.min.x).toBeGreaterThan(0.7);
@@ -78,7 +79,8 @@ describe('mech model', () => {
     expect(cannons.max.z).toBeGreaterThan(hull.max.z);
     const turret = placedBody(parts.turret);
     expect(turret.max.x).toBeGreaterThan(0.15);
-    expect(turret.max.y).toBeCloseTo(P.bodyY + P.launcherY, 3);
+    expect(placedBody(mechLauncher()).max.y).toBeCloseTo(P.bodyY + P.launcherY + 0.001, 2);
+    expect(turret.max.y).toBeGreaterThan(P.launcherY + P.bodyY);
   });
 
   it('the chest is narrow, and the launcher, cannons and sensor head stay attached to its sides', () => {
@@ -100,6 +102,8 @@ describe('mech model', () => {
     // Nothing floats far outboard of the chest: the launcher and cannons reach out less than a launcher's width.
     expect(launcher.max.x - hull.max.x).toBeLessThan(LAUNCHER.width);
     expect(hull.min.x - cannons.min.x).toBeLessThan(LAUNCHER.width);
+    // The breech vent is the back of the cannon mount.
+    expect(cannons.min.z).toBeCloseTo(P.breechZ, 3);
     // The tube mouths and muzzles sit within the launcher and cannon extents.
     for (const t of MECH_TUBES) expect(t.x).toBeGreaterThan(launcher.min.x);
     for (const t of MECH_TUBES) expect(t.x).toBeLessThan(launcher.max.x);
@@ -150,6 +154,44 @@ describe('mech model', () => {
     expect(hull.min.y).toBeCloseTo(P.bodyY + TORSO_BASE, 3);
     expect(hull.min.y).toBeGreaterThan(frameTop);
     for (const leg of MECH_LEGS) expect(hull.min.y).toBeGreaterThan(placedLeg(parts, leg).upper.max.y);
+  });
+
+  it('the hip frame is a compact core, smaller than the chest both ways, with the hips on it', () => {
+    const parts = mechParts();
+    const hips = bounds(parts.hips);
+    const hull = bounds(parts.hull);
+    const chestW = hull.max.x - hull.min.x;
+    const chestD = hull.max.z - hull.min.z;
+    expect(hips.max.x - hips.min.x).toBeCloseTo(HIP_FRAME_W, 6);
+    expect(hips.max.z - hips.min.z).toBeCloseTo(HIP_FRAME_D, 6);
+    expect(HIP_FRAME_W).toBeLessThan(chestW * 0.8);
+    expect(HIP_FRAME_D).toBeLessThan(chestD * 0.75);
+    for (const leg of MECH_LEGS) {
+      expect(Math.abs(leg.x)).toBeLessThan(HIP_FRAME_W / 2);
+      expect(Math.abs(leg.z)).toBeLessThan(HIP_FRAME_D / 2);
+    }
+  });
+
+  it('the feet keep their stance and stand on the ground', () => {
+    const parts = mechParts();
+    MECH_LEGS.forEach((leg) => {
+      expect(placedLeg(parts, leg).lower.min.y).toBeCloseTo(0, 3);
+      // The stance corner is about 0.44 out to the side and 0.45 fore or aft.
+      expect(Math.abs(leg.x + Math.sin(leg.splay) * LEG_REACH)).toBeCloseTo(0.44, 1);
+      expect(Math.abs(leg.z + Math.cos(leg.splay) * LEG_REACH)).toBeCloseTo(0.45, 1);
+    });
+  });
+
+  it('the lowered launcher sits on the hull beside the turret, its arm joining it to the turret ring', () => {
+    const parts = mechParts();
+    const launcher = bounds(mechLauncher());
+    const hull = bounds(parts.hull);
+    const turretRingBase = 0.08 + 0.155;
+    const hullPlateTop = TORSO_BASE + 0.06 * 1.12 + 0.085 * 1.12;
+    expect(launcher.min.y).toBeLessThan(hullPlateTop + 0.01);
+    expect(launcher.min.y).toBeGreaterThan(turretRingBase);
+    expect(launcher.max.y).toBeLessThan(hull.max.y);
+    expect(MECH_TUBES.every((t) => t.y > launcher.min.y && t.y < launcher.max.y)).toBe(true);
   });
 
   it('every part has a color attribute', () => {

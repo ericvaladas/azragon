@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { CONFIG } from '../config';
 import { faceted } from '../render/toon';
 
-export type ParticleKind = 'dust' | 'debris' | 'fire' | 'smoke' | 'spark' | 'acid' | 'plasma' | 'trail' | 'ink' | 'rot' | 'shade' | 'mist' | 'bone' | 'wisp' | 'hexfire' | 'hexember' | 'wraith' | 'billow' | 'veil' | 'splash' | 'napalm' | 'ember' | 'contrail' | 'spikeDust' | 'beacon' | 'beaconSpark';
+export type ParticleKind = 'dust' | 'debris' | 'fire' | 'smoke' | 'spark' | 'acid' | 'plasma' | 'trail' | 'ink' | 'rot' | 'shade' | 'mist' | 'bone' | 'wisp' | 'hexfire' | 'hexember' | 'wraith' | 'billow' | 'veil' | 'splash' | 'napalm' | 'ember' | 'contrail' | 'spikeDust' | 'beacon' | 'beaconSpark' | 'muzzleFlash' | 'ventSmoke';
 
 /**
  * `stretch`: drawn upright and this many times taller than wide, flickering (flame tongues) instead of tumbling.
@@ -58,6 +58,10 @@ export const PRESETS: Record<ParticleKind, Preset> = {
   beacon: { color: P.meteor, life: 2.6, size0: 12, size1: 4, speed: 25, up: 190, gravity: 0, drag: 0.2 },
   /** White pinpricks rising with the beacon glow. */
   beaconSpark: { color: P.meteorGlow, life: 2.2, size0: 8, size1: 3, speed: 20, up: 230, gravity: 0, drag: 0.2 },
+  /** A cannon's muzzle flash: big, white-hot and gone in a blink. */
+  muzzleFlash: { color: P.mechMuzzle, life: 0.14, size0: 90, size1: 24, speed: 40, up: 10, gravity: 0, drag: 3 },
+  /** Dark smoke vented hard out of a cannon's breech, slowing fast and swelling as it thins. */
+  ventSmoke: { color: P.smoke, life: 1.1, size0: 26, size1: 90, speed: 30, up: 20, gravity: -20, drag: 2.4, grows: true, fadeFrom: 0.35, fadeAlpha: true },
   ink: { color: CONFIG.kraken.colors.ink, life: 1.1, size0: 30, size1: 70, speed: 120, up: 50, gravity: -10, drag: 2 },
 };
 
@@ -75,7 +79,7 @@ const HIDDEN = new THREE.Matrix4().makeScale(0, 0, 0);
 /** `trail` holds contrails on their own, so a long chemtrail never crowds out footfall and impact dust. */
 const LAYER_OPACITY = { solid: 1, dust: 0.65, smoke: 0.35, murk: 0.85, cloud: 0.6, splash: 1, trail: 0.8 } as const;
 type LayerName = keyof typeof LAYER_OPACITY;
-const LAYER_OF: Record<ParticleKind, LayerName> = { dust: 'dust', smoke: 'smoke', debris: 'solid', fire: 'solid', spark: 'solid', acid: 'solid', plasma: 'solid', trail: 'dust', ink: 'smoke', rot: 'solid', shade: 'murk', mist: 'murk', bone: 'solid', wisp: 'dust', hexfire: 'solid', hexember: 'solid', wraith: 'murk', billow: 'dust', veil: 'cloud', splash: 'splash', napalm: 'solid', ember: 'solid', contrail: 'trail', spikeDust: 'dust', beacon: 'solid', beaconSpark: 'solid' };
+const LAYER_OF: Record<ParticleKind, LayerName> = { dust: 'dust', smoke: 'smoke', debris: 'solid', fire: 'solid', spark: 'solid', acid: 'solid', plasma: 'solid', trail: 'dust', ink: 'smoke', rot: 'solid', shade: 'murk', mist: 'murk', bone: 'solid', wisp: 'dust', hexfire: 'solid', hexember: 'solid', wraith: 'murk', billow: 'dust', veil: 'cloud', splash: 'splash', napalm: 'solid', ember: 'solid', contrail: 'trail', spikeDust: 'dust', beacon: 'solid', beaconSpark: 'solid', muzzleFlash: 'solid', ventSmoke: 'smoke' };
 const LAYER_MAX: Record<LayerName, number> = { solid: 500, dust: 600, smoke: 500, murk: 400, cloud: 160, splash: 200, trail: 300 };
 
 /** One pooled InstancedMesh: swap-remove on death, no per-frame allocation. */
@@ -234,6 +238,20 @@ export class Particles {
       const a = Math.random() * Math.PI * 2;
       const s = p.speed * spread * (0.4 + Math.random() * 0.6);
       layer.spawn(kind, at.x, at.y, at.z, Math.cos(a) * s, p.up * (0.5 + Math.random()), Math.sin(a) * s, hold);
+    }
+  }
+
+  /**
+   * A jet along the unit direction (dx, dy, dz) at about `speed` m/s (a cannon's breech smoke, its flash), scattered by
+   * the preset's own speed and rise.
+   */
+  vent(kind: ParticleKind, at: THREE.Vector3, dx: number, dy: number, dz: number, speed: number, count: number): void {
+    const p = PRESETS[kind];
+    const layer = this.layers[LAYER_OF[kind]];
+    for (let k = 0; k < count && !layer.full(); k++) {
+      const a = Math.random() * Math.PI * 2;
+      const v = speed * (0.6 + Math.random() * 0.6);
+      layer.spawn(kind, at.x, at.y, at.z, dx * v + Math.cos(a) * p.speed, dy * v + p.up * Math.random(), dz * v + Math.sin(a) * p.speed);
     }
   }
 

@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import { CONFIG } from '../config';
 import { Mech } from './Mech';
+import { MECH_PIVOTS as PV } from './mechModel';
+import type { MechRig } from './mechPose';
 import { mulberry32 } from '../util/rng';
 import type { WorldContext } from './types';
 import type { DamageSource, Target } from '../combat';
@@ -17,6 +19,9 @@ const IN_REACH = CONTACT + M.punchReach - 20;
 function makeCtx(opts: { hpMult?: number; rng?: () => number } = {}) {
   const hits: { amount: number; source: DamageSource }[] = [];
   const rockets: { from: THREE.Vector3; to: THREE.Vector3; damage: number }[] = [];
+  const cannons: { from: THREE.Vector3; to: THREE.Vector3; damage: number }[] = [];
+  const shakes: number[] = [];
+  const vents: { kind: string; at: THREE.Vector3; dir: THREE.Vector3 }[] = [];
   const crushes: { p: Vec2; r: number; amount: number }[] = [];
   const destroyed: { t: Target; exp: number }[] = [];
   const monster = { position: new THREE.Vector3(0, 0, 0), yaw: 0, alive: true, airborne: false, bodyRadius: CONFIG.monster.bodyRadius, height: CONFIG.monster.height, width: 200, leapTo: null, surface: () => 0 };
@@ -27,15 +32,16 @@ function makeCtx(opts: { hpMult?: number; rng?: () => number } = {}) {
     rng: opts.rng ?? mulberry32(7),
     // The mech always arrives from +X.
     spawnDir: () => ({ x: 1, z: 0 }),
-    particles: { ring: () => {}, explosion: () => {}, emit: () => {} },
+    particles: { ring: () => {}, explosion: () => {}, emit: () => {}, vent: (kind: string, at: THREE.Vector3, dx: number, dy: number, dz: number) => vents.push({ kind, at: at.clone(), dir: new THREE.Vector3(dx, dy, dz) }) },
     roads: { nearest: (p: Vec2) => p, nearestLand: (p: Vec2) => p, path: (_a: Vec2, b: Vec2) => [b] },
     damageMonster: (amount: number, source: DamageSource) => hits.push({ amount, source }),
     damageBuildings: (p: Vec2, r: number, amount: number) => crushes.push({ p: { ...p }, r, amount }),
     fireRocket: (from: THREE.Vector3, to: THREE.Vector3, damage: number) => rockets.push({ from: from.clone(), to: to.clone(), damage }),
-    shake: () => {},
+    fireCannon: (from: THREE.Vector3, to: THREE.Vector3, damage: number) => cannons.push({ from: from.clone(), to: to.clone(), damage }),
+    shake: (amount: number) => shakes.push(amount),
     onDestroyed: (t: Target, exp: number) => destroyed.push({ t, exp }),
   } as unknown as WorldContext;
-  return { ctx, hits, rockets, crushes, destroyed, monster };
+  return { ctx, hits, rockets, cannons, shakes, vents, crushes, destroyed, monster };
 }
 
 function run(mech: Mech, c: ReturnType<typeof makeCtx>, seconds: number, each?: () => void): void {
@@ -192,7 +198,7 @@ describe('Mech', () => {
     expect(firstDash!).toBeLessThanOrEqual(M.engageAfter + 3);
   });
 
-  it('fires rocket volleys and barrages over time', () => {
+  it('fires cannon volleys and barrages over time', () => {
     const mech = new Mech(new THREE.Scene());
     const c = makeCtx();
     faceOff(mech, c, 1200);
@@ -202,8 +208,9 @@ describe('Mech', () => {
       const d = distTo(mech, c.monster.position);
       if (d < 1100) c.monster.position.set(p.x - 1200, 0, p.z);
     });
-    expect(c.rockets.length).toBeGreaterThanOrEqual(M.rocketsPerVolley);
-    expect(c.rockets[0]!.damage).toBe(M.rocketDamage);
+    expect(c.cannons.length).toBeGreaterThanOrEqual(M.rocketsPerVolley);
+    expect(c.cannons[0]!.damage).toBe(M.rocketDamage);
+    expect(c.rockets).toEqual([]);
     expect(c.hits.some((h) => h.source === 'artillery' && h.amount === M.barrageDamage)).toBe(true);
   });
 
@@ -226,6 +233,72 @@ describe('Mech', () => {
     expect(first.at.y).toBeLessThan(M.height * 2);
     // Later puffs come down near the ground, far out by the monster.
     expect(trails.some((t) => t.at.y < M.height * 0.5 && Math.hypot(t.at.x - t.mech.x, t.at.z - t.mech.z) > 600)).toBe(true);
+  });
+
+  it('each barrage missile leaves level along its facing and lands on its circle as it fills', () => {
+    const mech = new Mech(new THREE.Scene());
+    const c = makeCtx();
+    const launches: THREE.Vector3[] = [];
+    const puffs: THREE.Vector3[] = [];
+    let heading = 0;
+    (c.ctx.particles as { emit: unknown }).emit = (kind: string, at: THREE.Vector3) => {
+      if (kind === 'smoke' && launches.length === 0) {
+        launches.push(at.clone());
+        heading = mech.yaw();
+      }
+      if (kind === 'trail') puffs.push(at.clone());
+    };
+    faceOff(mech, c, 1200);
+    run(mech, c, 30, () => {
+      if (distTo(mech, c.monster.position) < 1100) c.monster.position.set(body(mech).position.x - 1200, 0, body(mech).position.z);
+    });
+    const from = launches[0]!;
+    const first = puffs[0]!.clone().sub(from);
+    const ahead = first.x * Math.sin(heading) + first.z * Math.cos(heading);
+    expect(ahead).toBeGreaterThan(0);
+    expect(Math.abs(first.y)).toBeLessThan(ahead * 0.25);
+  });
+
+  it('a cannon volley alternates the barrels, each shot flashing, venting backward, kicking and shaking', () => {
+    const mech = new Mech(new THREE.Scene());
+    const c = makeCtx();
+    const rig = (mech as unknown as { rig: MechRig }).rig;
+    faceOff(mech, c, 1200);
+    let kicked = 0;
+    let shots = 0;
+    let heading = 0;
+    // One update per step: right after a shot the barrels sit fully back.
+    for (let t = 0; t < 12 && c.cannons.length < M.rocketsPerVolley; t += DT) {
+      const p = body(mech).position;
+      if (distTo(mech, c.monster.position) < 1100) c.monster.position.set(p.x - 1200, 0, p.z);
+      mech.update(DT, c.ctx);
+      if (c.cannons.length > shots) {
+        shots = c.cannons.length;
+        kicked = rig.barrelOffset;
+        heading = mech.yaw();
+      }
+    }
+    expect(c.cannons.length).toBeGreaterThanOrEqual(2);
+    expect(c.rockets).toEqual([]);
+    // Upper barrel then lower, each near the top of the mech, the shell leaving far ahead of its body centre.
+    const a = c.cannons[0]!;
+    const b = c.cannons[1]!;
+    const drop = (PV.muzzleY[0]! - PV.muzzleY[1]!) * M.height;
+    expect(a.from.y - b.from.y).toBeGreaterThan(drop * 0.5);
+    expect(a.from.y).toBeGreaterThan((PV.bodyY + PV.muzzleY[1]!) * M.height * 0.9);
+    expect(kicked).toBeGreaterThan(M.cannonRecoil * 0.5);
+    const smoke = c.vents.filter((v) => v.kind === 'ventSmoke');
+    const flash = c.vents.filter((v) => v.kind === 'muzzleFlash');
+    expect(smoke.length).toBe(c.cannons.length);
+    expect(flash.length).toBe(c.cannons.length);
+    const back = smoke[0]!.dir;
+    expect(back.x * Math.sin(heading) + back.z * Math.cos(heading)).toBeLessThan(-0.9);
+    // The breech sits behind the muzzle.
+    expect(smoke[0]!.at.distanceTo(a.from)).toBeGreaterThan((PV.muzzleZ - PV.breechZ) * M.height * 0.8);
+    expect(c.shakes.length).toBeGreaterThanOrEqual(c.cannons.length);
+    // The barrels ease home after the volley.
+    run(mech, c, M.cannonRecoilTime + 2 * DT);
+    expect(rig.barrelOffset).toBe(0);
   });
 
   it('reports its death exactly once', () => {

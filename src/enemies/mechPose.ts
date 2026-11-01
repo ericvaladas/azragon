@@ -15,8 +15,6 @@ const BOB = 0.012;
 const GALLOP = 1.4;
 /** The hull pitches and rolls about the line through the rear hips, so the rear feet stay put as it rears up. */
 const REAR_Z = MECH_LEGS[2]!.z;
-/** How far the cannons slide back at full recoil (model units). */
-const RECOIL = 0.05;
 /** The leg's upper and lower segments' rest angles in its plane (rad up from straight out). */
 const UPPER_REST = Math.atan2(PV.kneeY, PV.kneeZ);
 const LOWER_REST = Math.atan2(PV.footY, PV.footZ);
@@ -118,8 +116,8 @@ function moveFoot(p: MechPose, i: number, out: number, up: number, fwd: number, 
 /**
  * The pose the mech's state asks for, written into `out`. Walking, diagonal pairs step together (front-left with
  * rear-right) and the hull bobs as each pair plants. The stab rocks the hull back and draws one front blade up and
- * back, then spikes it forward; the stomp pitches the hull up with both front blades lifted, then crashes them down; the dash crouches low on all four
- * legs, then gallops. Dying it sags; wrecked, its legs splay flat and the hull drops.
+ * back, then spikes it forward; the stomp pitches the hull up with both front blades lifted, then crashes them down; the dash crouches low on all
+ * four legs, then gallops. Dying it sags; wrecked, its legs splay flat and the hull drops.
  */
 export function targetPose(s: MechPoseInput, out: MechPose): MechPose {
   restPose(out);
@@ -161,10 +159,10 @@ export function targetPose(s: MechPoseInput, out: MechPose): MechPose {
     const side = MECH_LEGS[i]!.x > 0 ? 1 : -1;
     if (ph === 'windup') {
       // Rears back on its haunches, the blade drawn up and back, the knee kept low and out.
-      out.pitch = -0.14 * u;
+      out.pitch = -0.26 * u;
       out.lift = 0.03 * u;
       out.shift = -0.03 * u;
-      moveFoot(out, i, 0.06, 0.18, -0.14, u);
+      moveFoot(out, i, 0.12, 0.29, -0.14, u);
     } else {
       // Spikes the blade forward and down into the target, leaning in.
       out.pitch = 0.08 * back;
@@ -178,10 +176,10 @@ export function targetPose(s: MechPoseInput, out: MechPose): MechPose {
   } else if (a === 'slam') {
     if (ph === 'windup') {
       // Rears up on its back legs, the hull pitched high and both front blades lifted, knees low and apart.
-      out.pitch = -0.32 * u;
+      out.pitch = -0.46 * u;
       out.lift = 0.04 * u;
-      moveFoot(out, 0, 0.04, 0.24, -0.06, u);
-      moveFoot(out, 1, 0.04, 0.24, -0.06, u);
+      moveFoot(out, 0, 0.1, 0.35, -0.06, u);
+      moveFoot(out, 1, 0.1, 0.35, -0.06, u);
     } else {
       // Crashes down, front feet planted a little ahead.
       out.pitch = 0.06 * back;
@@ -206,8 +204,9 @@ export function targetPose(s: MechPoseInput, out: MechPose): MechPose {
       MECH_LEGS.forEach((leg, i) => nudge(out, i, Math.sin(leg.splay) * 0.04 * k, 0, Math.cos(leg.splay) * 0.04 * k));
     }
   } else {
-    // Ranged moves rock back a little to fire.
-    out.pitch = (a === 'barrage' ? -0.08 : -0.03) * (ph === 'windup' ? u : back);
+    // Ranged moves rock back a little to fire; each cannon shot jolts the body back further.
+    out.pitch = (a === 'barrage' ? -0.08 : -0.03) * (ph === 'windup' ? u : back) - CONFIG.mech.cannonJoltPitch * s.recoil;
+    out.shift = -CONFIG.mech.cannonJoltShift * s.recoil;
   }
   return out;
 }
@@ -277,7 +276,7 @@ export class MechRig {
   apply(p: MechPose): void {
     this.pivot.position.set(0, PV.bodyY + p.lift, REAR_Z + p.shift);
     this.pivot.rotation.set(p.pitch, 0, p.roll);
-    this.cannons.position.z = -p.recoil * RECOIL;
+    this.cannons.position.z = -this.barrelKick(p.recoil);
     for (let i = 0; i < 4; i++) {
       hipOf(i, p, _hip);
       const a = solveLeg(_hip, p.feet[i * 3]!, p.feet[i * 3 + 1]!, p.feet[i * 3 + 2]!, MECH_LEGS[i]!.splay, _angles);
@@ -286,6 +285,11 @@ export class MechRig {
       this.uppers[i]!.rotation.x = a.upper;
       this.lowers[i]!.rotation.x = a.knee;
     }
+  }
+
+  /** How far back the barrels sit (model units) at recoil `r`: fast off the kick, easing home. */
+  private barrelKick(r: number): number {
+    return CONFIG.mech.cannonRecoil * r * r;
   }
 
   /** The hit flash swaps in a pre-tinted material. */
@@ -307,6 +311,23 @@ export class MechRig {
   muzzle(k: number, out: THREE.Vector3): THREE.Vector3 {
     this.root.updateMatrixWorld(true);
     return out.set(PV.muzzleX, PV.muzzleY[k]!, PV.muzzleZ + this.cannons.position.z).applyMatrix4(this.body.matrixWorld);
+  }
+
+  /** Cannon `k`'s breech (0 the upper cannon, 1 the lower), behind the mount, in world space; written into `out`. */
+  breech(k: number, out: THREE.Vector3): THREE.Vector3 {
+    this.root.updateMatrixWorld(true);
+    return out.set(PV.muzzleX, PV.muzzleY[k]!, PV.breechZ + this.cannons.position.z).applyMatrix4(this.body.matrixWorld);
+  }
+
+  /** The unit direction the barrels point in world space; written into `out`. */
+  barrelDir(out: THREE.Vector3): THREE.Vector3 {
+    this.root.updateMatrixWorld(true);
+    return out.set(0, 0, 1).transformDirection(this.body.matrixWorld);
+  }
+
+  /** How far back the barrels sit right now (model units). */
+  get barrelOffset(): number {
+    return -this.cannons.position.z;
   }
 
   /** Launcher tube `k`'s mouth (MECH_TUBES order) in world space; written into `out`. */
