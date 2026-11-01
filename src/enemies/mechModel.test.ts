@@ -77,8 +77,35 @@ describe('mech model', () => {
     expect(cannons.max.z).toBeCloseTo(P.muzzleZ, 3);
     expect(cannons.max.z).toBeGreaterThan(hull.max.z);
     const turret = placedBody(parts.turret);
-    expect(turret.max.x).toBeGreaterThan(0.18);
+    expect(turret.max.x).toBeGreaterThan(0.15);
     expect(turret.max.y).toBeCloseTo(P.bodyY + P.launcherY, 3);
+  });
+
+  it('the chest is narrow, and the launcher, cannons and sensor head stay attached to its sides', () => {
+    const parts = mechParts();
+    const hull = bounds(parts.hull);
+    // About half the earlier 0.376 across, and as deep as before.
+    expect(hull.max.x - hull.min.x).toBeGreaterThan(0.17);
+    expect(hull.max.x - hull.min.x).toBeLessThan(0.22);
+    expect(hull.max.z - hull.min.z).toBeGreaterThan(0.4);
+    // The turret block, ring and sensor head stay over the hull's width.
+    const turretOnly = bounds(mechParts().turret);
+    const launcher = bounds(mechLauncher());
+    const cannons = bounds(parts.cannons);
+    // The launcher's inner side meets the turret block (half-width 0.05), and the cannon mount's inner side does too.
+    expect(launcher.min.x).toBeLessThanOrEqual(0.05);
+    expect(launcher.min.x).toBeGreaterThan(0.02);
+    expect(cannons.max.x).toBeGreaterThanOrEqual(-0.05 - 1e-6);
+    expect(cannons.max.x).toBeLessThan(-0.03);
+    // Nothing floats far outboard of the chest: the launcher and cannons reach out less than a launcher's width.
+    expect(launcher.max.x - hull.max.x).toBeLessThan(LAUNCHER.width);
+    expect(hull.min.x - cannons.min.x).toBeLessThan(LAUNCHER.width);
+    // The tube mouths and muzzles sit within the launcher and cannon extents.
+    for (const t of MECH_TUBES) expect(t.x).toBeGreaterThan(launcher.min.x);
+    for (const t of MECH_TUBES) expect(t.x).toBeLessThan(launcher.max.x);
+    expect(P.muzzleX).toBeGreaterThan(cannons.min.x);
+    expect(P.muzzleX).toBeLessThan(cannons.max.x);
+    expect(turretOnly.max.x).toBeGreaterThan(launcher.min.x);
   });
 
   it('the launcher fits its rows of tube caps, the caps evenly filling its face', () => {

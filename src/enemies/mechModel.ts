@@ -40,11 +40,11 @@ export const MECH_PIVOTS = {
   footZ: 0.18,
   footY: -0.43,
   /** The cannon muzzles, from the body pivot (the upper barrel at muzzleY[0], the lower at muzzleY[1]). */
-  muzzleX: -0.15,
+  muzzleX: -0.1,
   muzzleY: [0.275 + RISE, 0.205 + RISE] as readonly number[],
   muzzleZ: 0.5,
   /** The top of the box launcher, from the body pivot. */
-  launcherX: 0.15,
+  launcherX: 0.1,
   launcherY: 0.397 + RISE,
   launcherZ: -0.02,
 } as const;
@@ -135,8 +135,8 @@ function hips(): Part {
   const parts: Part[] = [
     box(0.42, T, 0.38, 0, 0, 0, P.mechFrame),
     box(0.36, 0.012, 0.32, 0, T / 2 + 0.006, 0, P.mechDark),
-    cyl(0.075, TORSO_BASE - T / 2, 12, 'y', 0, (TORSO_BASE + T / 2) / 2, 0, P.mechMetal),
-    box(0.17, 0.02, 0.17, 0, TORSO_BASE - 0.01, 0, P.mechFrame),
+    cyl(0.06, TORSO_BASE - T / 2, 12, 'y', 0, (TORSO_BASE + T / 2) / 2, 0, P.mechMetal),
+    box(0.1, 0.02, 0.17, 0, TORSO_BASE - 0.01, 0, P.mechFrame),
   ];
   for (const leg of MECH_LEGS) parts.push(cyl(0.05, T + 0.02, 10, 'y', leg.x, 0, leg.z, P.mechMetal));
   for (const sx of [-1, 1]) parts.push(box(0.02, 0.04, 0.1, sx * 0.03, -T / 2 - 0.02, 0.02, P.mechMetal));
@@ -147,25 +147,25 @@ function hips(): Part {
 function hull(): Part {
   const P = CONFIG.palette;
   const parts: Part[] = [
-    box(0.3, 0.12, 0.34, 0, 0, 0, P.mechDark),
-    box(0.26, 0.03, 0.28, 0, 0.07, -0.01, P.mech),
+    box(0.15, 0.12, 0.34, 0, 0, 0, P.mechDark),
+    box(0.13, 0.03, 0.28, 0, 0.07, -0.01, P.mech),
     // Sloped white glacis and a dark sensor slot across the nose.
-    beam(-0.04, 0.17, 0.06, 0.13, 0.24, 0.04, P.mech),
-    box(0.16, 0.012, 0.02, 0, 0.005, 0.18, P.mechMetal),
+    beam(-0.04, 0.17, 0.06, 0.13, 0.12, 0.04, P.mech),
+    box(0.08, 0.012, 0.02, 0, 0.005, 0.18, P.mechMetal),
     // A rear engine block with vents.
-    box(0.2, 0.09, 0.06, 0, 0.0, -0.19, P.mechMetal),
-    box(0.16, 0.01, 0.062, 0, 0.02, -0.19, P.mechDark),
-    box(0.16, 0.01, 0.062, 0, -0.01, -0.19, P.mechDark),
+    box(0.1, 0.09, 0.06, 0, 0.0, -0.19, P.mechMetal),
+    box(0.08, 0.01, 0.062, 0, 0.02, -0.19, P.mechDark),
+    box(0.08, 0.01, 0.062, 0, -0.01, -0.19, P.mechDark),
     // Panel lines on the top plate.
-    box(0.006, 0.032, 0.24, 0.06, 0.071, -0.01, P.mechDark),
-    box(0.006, 0.032, 0.24, -0.06, 0.071, -0.01, P.mechDark),
+    box(0.006, 0.032, 0.24, 0.03, 0.071, -0.01, P.mechDark),
+    box(0.006, 0.032, 0.24, -0.03, 0.071, -0.01, P.mechDark),
   ];
   for (const sx of [-1, 1]) {
     // White side armour with a dark band, and two antennas at the back.
-    parts.push(box(0.02, 0.1, 0.3, sx * 0.158, 0.0, 0, P.mech));
-    parts.push(box(0.022, 0.012, 0.3, sx * 0.158, -0.025, 0, P.mechDark));
-    parts.push(box(0.008, 0.2, 0.008, sx * 0.11, 0.17, -0.16, P.mechMetal));
-    parts.push(box(0.016, 0.02, 0.016, sx * 0.11, 0.08, -0.16, P.mechDark));
+    parts.push(box(0.02, 0.1, 0.3, sx * 0.083, 0.0, 0, P.mech));
+    parts.push(box(0.022, 0.012, 0.3, sx * 0.083, -0.025, 0, P.mechDark));
+    parts.push(box(0.008, 0.2, 0.008, sx * 0.055, 0.17, -0.16, P.mechMetal));
+    parts.push(box(0.016, 0.02, 0.016, sx * 0.055, 0.08, -0.16, P.mechDark));
   }
   return merge(parts);
 }
@@ -196,18 +196,18 @@ export function mechLauncher(): Part {
 function turret(): Part {
   const P = CONFIG.palette;
   const parts: Part[] = [
-    cyl(0.1, 0.04, 14, 'y', 0, 0.1, 0, P.mechMetal),
-    box(0.18, 0.1, 0.22, 0, 0.17, -0.02, P.mech),
-    box(0.19, 0.015, 0.2, 0, 0.115, -0.02, P.mechDark),
-    box(0.12, 0.02, 0.14, 0, 0.23, -0.04, P.mechDark),
+    cyl(0.07, 0.04, 14, 'y', 0, 0.1, 0, P.mechMetal),
+    box(0.1, 0.1, 0.22, 0, 0.17, -0.02, P.mech),
+    box(0.11, 0.015, 0.2, 0, 0.115, -0.02, P.mechDark),
+    box(0.07, 0.02, 0.14, 0, 0.23, -0.04, P.mechDark),
     // Sensor head: a dark block, a white brow and a lens barrel round the eye.
-    box(0.12, 0.07, 0.09, -0.01, 0.17, 0.12, P.mechDark),
-    box(0.13, 0.025, 0.1, -0.01, 0.215, 0.12, P.mech),
+    box(0.08, 0.07, 0.09, -0.01, 0.17, 0.12, P.mechDark),
+    box(0.09, 0.025, 0.1, -0.01, 0.215, 0.12, P.mech),
     cyl(0.03, 0.03, 10, 'z', 0.02, 0.17, 0.17, P.mechMetal),
     cyl(0.016, 0.03, 8, 'z', -0.035, 0.155, 0.17, P.mechMetal),
-    box(0.006, 0.12, 0.006, -0.05, 0.28, -0.08, P.mechMetal),
+    box(0.006, 0.12, 0.006, -0.04, 0.28, -0.08, P.mechMetal),
     // The launcher arm.
-    box(0.05, 0.05, 0.08, 0.09, 0.215, -0.02, P.mechDark),
+    box(0.04, 0.05, 0.08, 0.06, 0.215, -0.02, P.mechDark),
   ];
   return merge([merge(parts).translate(0, RISE, 0), mechLauncher()]);
 }
@@ -217,7 +217,7 @@ function cannons(): Part {
   const P = CONFIG.palette;
   const V = MECH_PIVOTS;
   const x = V.muzzleX;
-  const parts: Part[] = [box(0.06, 0.13, 0.14, x + 0.01, 0.24 + RISE, 0.0, P.mechDark), box(0.04, 0.04, 0.06, -0.09, 0.22 + RISE, 0.0, P.mechMetal)];
+  const parts: Part[] = [box(0.07, 0.13, 0.14, x + 0.015, 0.24 + RISE, 0.0, P.mechDark), box(0.04, 0.04, 0.06, -0.07, 0.22 + RISE, 0.0, P.mechMetal)];
   for (const y of V.muzzleY) {
     parts.push(box(0.05, 0.05, 0.2, x, y, 0.17, P.mech));
     parts.push(box(0.052, 0.012, 0.2, x, y - 0.012, 0.17, P.mechDark));
@@ -235,7 +235,7 @@ function glow(): Part {
   for (const sx of [-1, 1]) {
     parts.push(cyl(0.028, 0.1, 8, 'z', sx * 0.06, -HIP_FRAME_T / 2 - 0.03, 0.02, P.mechGlow));
     // On the side armour of the scaled-up hull.
-    parts.push(box(0.004, 0.012, 0.2, sx * 0.19, 0.017 + RISE, 0, P.mechGlow));
+    parts.push(box(0.004, 0.012, 0.2, sx * 0.106, 0.017 + RISE, 0, P.mechGlow));
   }
   parts.push(box(0.01, 0.01, 0.06, -0.12, 0.265 + RISE, 0.0, P.mechGlow));
   return merge(parts);
