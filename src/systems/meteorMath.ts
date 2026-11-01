@@ -43,6 +43,12 @@ export function cutsceneK(t: number): number {
 const _fall = new THREE.Vector3();
 
 /** The falling gem t seconds after release: a straight slant from `to + slant` at `startHeight` to the ground at `to`. Returns a shared vector. */
+/** How far the gem leans from upright while falling (rad, about Z): its top points back up the slanted path, toward +X. */
+export function fallTilt(): number {
+  const m = CONFIG.meteor;
+  return -Math.atan2(m.slant, m.startHeight);
+}
+
 export function fallPosition(to: Vec2, t: number): THREE.Vector3 {
   const m = CONFIG.meteor;
   const u = Math.min(1, Math.max(0, t / m.fallTime));

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { CONFIG } from '../config';
 import type { Vec2 } from '../util/math';
 import { meteorGeometry } from './meteorModel';
-import { cutsceneK, cutsceneTotal, fallPosition } from './meteorMath';
+import { cutsceneK, cutsceneTotal, fallPosition, fallTilt } from './meteorMath';
 import type { Particles } from './Particles';
 
 export type MeteorEvent = 'landed' | 'collected';
@@ -37,6 +37,8 @@ export class Meteor {
     this.mesh = new THREE.Mesh(meteorGeometry(), new THREE.MeshBasicMaterial({ vertexColors: true }));
     this.mesh.name = 'meteor-gem';
     this.mesh.scale.setScalar(CONFIG.meteor.size);
+    // Spins about its own long axis, then leans (rotation.z) along the fall.
+    this.mesh.rotation.order = 'ZYX';
     this.mesh.visible = false;
     this.mesh.frustumCulled = false;
     scene.add(this.mesh);
@@ -112,6 +114,7 @@ export class Meteor {
         this.pillar.position.set(this.position.x, 0, this.position.z);
         this.pillar.visible = true;
         this.mesh.position.set(this.position.x, m.size * 0.45, this.position.z);
+        this.mesh.rotation.z = 0;
         this.look.copy(this.position);
         this.crater.position.set(this.position.x, 0.6, this.position.z);
         this.crater.visible = true;
@@ -122,6 +125,7 @@ export class Meteor {
       this.mesh.visible = true;
       this.mesh.position.copy(p);
       this.mesh.rotation.y += dt * 6;
+      this.mesh.rotation.z = fallTilt();
       this.look.copy(p);
       this.particles.emit('plasma', p, 3, 1.5);
       this.particles.emit('spark', p, 2, 2);

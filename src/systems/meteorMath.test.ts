@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
+import * as THREE from 'three';
 import { CONFIG } from '../config';
-import { cutsceneK, cutsceneTotal, fallPosition, landTime, fallbackSite, pickLandSite } from './meteorMath';
+import { cutsceneK, cutsceneTotal, fallPosition, fallTilt, landTime, fallbackSite, pickLandSite } from './meteorMath';
 
 const M = CONFIG.meteor;
 const total = cutsceneTotal();
@@ -63,5 +64,13 @@ describe('fallPosition', () => {
     expect(Math.hypot(a.x - 100, a.z - 200)).toBeCloseTo(M.slant);
     const b = fallPosition({ x: 100, z: 200 }, M.fallTime + 5);
     expect([b.x, b.y, b.z]).toEqual([100, 0, 200]);
+  });
+
+  it('fallTilt leans the gem top back along the fall path', () => {
+    const a = fallPosition({ x: 0, z: 0 }, 0).clone();
+    const b = fallPosition({ x: 0, z: 0 }, CONFIG.meteor.fallTime).clone();
+    const back = a.sub(b).normalize();
+    const top = new THREE.Vector3(0, 1, 0).applyAxisAngle(new THREE.Vector3(0, 0, 1), fallTilt());
+    expect(top.distanceTo(back)).toBeLessThan(1e-6);
   });
 });
