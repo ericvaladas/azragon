@@ -53,7 +53,7 @@ import { Progression, expToNext } from './systems/Progression';
 import { regen } from './monster/vitals';
 import { DebugOverlay } from './systems/DebugOverlay';
 import type { Ultimate, UltimateId } from './systems/ultimate';
-import { Abilities, armSlamCounts, autoStrikes, cameraFollowsWalk, ultimateBlocked, untouchable, type AbilityView, type ActiveId } from './systems/abilities';
+import { Abilities, armSlamCounts, autoStrikes, cameraFollowsWalk, dashDamage, ultimateBlocked, untouchable, type AbilityView, type ActiveId } from './systems/abilities';
 import { Shockwave } from './systems/Shockwave';
 import { LevelUpMoment, levelUpNow } from './systems/levelUpMoment';
 import { Devour } from './monsters/wendigo/DevourSequence';
@@ -172,6 +172,8 @@ export class GameScene {
   private cheatLevels = 0;
   private chevrons: Chevrons;
   private abilities = new Abilities();
+  /** Bosses already hit by the current dash; cleared when a dash starts. */
+  private dashHitBosses = new Set<Target>();
   private shockwave: Shockwave;
   private moment = new LevelUpMoment();
   private aura: LevelUpAura;
@@ -1207,6 +1209,7 @@ export class GameScene {
     if (m.busy || !this.abilities.trigger('dash')) return;
     const to = dashTarget({ x: m.position.x, z: m.position.z }, m.yaw, CONFIG.abilities.dash.range);
     m.crouch = false;
+    this.dashHitBosses.clear();
     m.startDash(to, this.progression.stats.moveSpeedMult);
     this.order = null;
     this.markers.setTarget(null);
@@ -1214,12 +1217,16 @@ export class GameScene {
     this.rig.addTrauma(0.3);
   }
 
-  /** Dash flattens everything on the ground around the monster as it charges. */
+  /** Dash flattens everything on the ground around the monster as it charges; a boss takes one hit of bossDamage per dash. */
   private dashCrush(): void {
     const p = this.monster.position;
     const r = CONFIG.abilities.dash.crushRadius;
     this.city.forEachStandingInRadius({ x: p.x, z: p.z }, r, (t) => t.applyDamage(1e9));
-    for (const t of footTargets({ x: p.x, z: p.z }, r, this.enemyTargets())) t.applyDamage(1e9);
+    const bossDamage = CONFIG.abilities.dash.bossDamage * this.dmgMult();
+    for (const t of footTargets({ x: p.x, z: p.z }, r, this.enemyTargets())) {
+      const dmg = dashDamage(t, t.boss === true, this.dashHitBosses, bossDamage);
+      if (dmg > 0) t.applyDamage(dmg);
+    }
     this.particles.emit('dust', p.clone().setY(10), 2, 0.8);
   }
 

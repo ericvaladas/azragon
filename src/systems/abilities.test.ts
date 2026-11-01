@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { Abilities, armSlamCounts, autoStrikes, cameraFollowsWalk, ultimateBlocked, untouchable } from './abilities';
+import { Abilities, armSlamCounts, autoStrikes, cameraFollowsWalk, dashDamage, ultimateBlocked, untouchable } from './abilities';
 import { CONFIG } from '../config';
 
 const A = CONFIG.abilities;
@@ -153,5 +153,27 @@ describe('Abilities', () => {
     expect(cameraFollowsWalk(false, false)).toBe(true);
     expect(cameraFollowsWalk(true, false)).toBe(false);
     expect(cameraFollowsWalk(false, true)).toBe(false);
+  });
+});
+
+describe('dashDamage', () => {
+  it('kills an ordinary target outright', () => {
+    expect(dashDamage({}, false, new Set(), 500)).toBe(1e9);
+  });
+
+  it('hits a boss once per dash however many frames it overlaps', () => {
+    const boss = {};
+    const hit = new Set<object>();
+    let total = 0;
+    for (let i = 0; i < 60; i++) total += dashDamage(boss, true, hit, 500 * 2);
+    expect(total).toBe(1000);
+  });
+
+  it('hits the boss again on a new dash', () => {
+    const boss = {};
+    const hit = new Set<object>();
+    expect(dashDamage(boss, true, hit, 500)).toBe(500);
+    hit.clear();
+    expect(dashDamage(boss, true, hit, 500)).toBe(500);
   });
 });

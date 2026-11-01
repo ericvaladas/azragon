@@ -120,3 +120,15 @@ export function armSlamCounts(ultimateRunning: boolean): boolean {
 export function cameraFollowsWalk(pointerHeld: boolean, ultimateRunning: boolean): boolean {
   return !pointerHeld && !ultimateRunning;
 }
+
+/**
+ * Damage a Dash deals to one target under the monster's feet this frame. Ordinary targets die at once; a boss takes
+ * `bossDamage` once per dash (it is added to `hitBosses`, which the caller clears when a dash starts), so a long
+ * overlap does not stack hits. Returns 0 for a boss already hit.
+ */
+export function dashDamage<T>(target: T, isBoss: boolean, hitBosses: Set<T>, bossDamage: number): number {
+  if (!isBoss) return 1e9;
+  if (hitBosses.has(target)) return 0;
+  hitBosses.add(target);
+  return bossDamage;
+}
