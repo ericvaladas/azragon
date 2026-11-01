@@ -15,13 +15,13 @@ export type MechLaserPhase = 'charge' | 'aim' | 'lock' | 'fire' | 'recover' | 'd
 export type MechMind = { dist: number; contact: number; engaged: boolean; meleeCd: number; dashCd: number; rocketCd: number; barrageCd: number; evadeCd: number; laserCd: number; roll: number; evadeRoll: number };
 
 /**
- * The next move, by priority: a dash when engaged, far and ready; a slam (roll < slamChance) or punch when within
+ * The next move, by priority: a dash when engaged, ready, beyond dashTrigger and beyond where a dash stops; a slam (roll < slamChance) or punch when within
  * punchReach past contact and melee is ready; the laser when engaged, ready and within laserRange; an evade (a hopback for the lowest hopChance of the evade rolls, otherwise
  * a sidestep) when engaged, in that reach, with melee cooling down, evadeCd spent and evadeRoll < evadeChance; a barrage when ready; rockets when ready and in range; otherwise walk.
  */
 export function chooseAction(m: MechMind): MechAction {
   const M = CONFIG.mech;
-  if (m.engaged && m.dist > M.dashTrigger && m.dashCd <= 0) return 'dash';
+  if (m.engaged && m.dist > Math.max(M.dashTrigger, m.contact + M.stopGap + M.dashStopShort) && m.dashCd <= 0) return 'dash';
   const inReach = m.dist <= m.contact + M.punchReach;
   if (inReach && m.meleeCd <= 0) return m.roll < M.slamChance ? 'slam' : 'punch';
   if (m.engaged && m.laserCd <= 0 && m.dist <= M.laserRange) return 'laser';

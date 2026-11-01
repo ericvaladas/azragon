@@ -29,6 +29,12 @@ describe('mech brain', () => {
     expect(chooseAction({ ...idle, dist: M.dashTrigger + 1, dashCd: 0 })).toBe('dash');
   });
 
+  it('never dashes from inside where a dash stops', () => {
+    const big = M.dashTrigger - M.stopGap;
+    expect(chooseAction({ ...idle, dist: M.dashTrigger + 1, dashCd: 0, contact: big })).toBe('walk');
+    expect(chooseAction({ ...idle, dist: big + M.stopGap + M.dashStopShort + 1, dashCd: 0, contact: big })).toBe('dash');
+  });
+
   it('never dashes on cooldown', () => {
     expect(chooseAction({ ...idle, dist: M.dashTrigger + 1, dashCd: 0.1 })).toBe('walk');
   });

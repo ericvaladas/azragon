@@ -762,7 +762,7 @@ export const CONFIG = {
    * walks in at approachSpeed, then at walkSpeed, turning at turnRate rad/s, and stands stopGap past contact. Melee: a
    * punch reaches punchReach past contact within punchArc rad of its facing; a slam (picked with slamChance) hits
    * within slamRadius past contact, all round; either then waits meleeCooldown. Dash: once engaged, beyond dashTrigger,
-   * it charges at dashSpeed and stops stopGap past contact, every dashCooldown at most. Every building within
+   * it charges at dashSpeed and stops dashStopShort m short of where a walk stops (stopGap past contact), then walks the rest, every dashCooldown at most. Every building within
    * crushRadius of a foot (or of it, dashing) takes crushDps. Rockets: a volley of rocketsPerVolley cannon shells fired together, flying cannonShellSpeed m/s, within
    * rocketRange every rocketCooldown, fired as black cannon shells that alternate between its two barrels. A volley
    * shakes once by cannonShake (less far off); each shot flashes cannonFlash puffs and cannonSparks sparks at the muzzle, vents
@@ -798,7 +798,7 @@ export const CONFIG = {
     punchReach: 0.3 * MONSTER_HEIGHT, punchArc: 0.7, punchDamage: 88,
     slamRadius: 0.35 * MONSTER_HEIGHT, slamDamage: 156, slamChance: 0.35, meleeCooldown: 2.6,
     /** It engages (and may dash) once within dashTrigger m of the monster, or engageAfter s after its summoning, whichever comes first. */
-    dashTrigger: 1600, engageAfter: 25, dashSpeed: 900, dashCooldown: 9, crushRadius: 0.25 * MONSTER_HEIGHT, crushDps: 600,
+    dashTrigger: 1600, engageAfter: 25, dashSpeed: 900, dashCooldown: 9, dashStopShort: 220, crushRadius: 0.25 * MONSTER_HEIGHT, crushDps: 600,
     rocketCooldown: 4, rocketsPerVolley: 2, rocketDamage: 10.5, rocketRange: 2200, cannonShellSpeed: 1040,
     cannonRecoil: 0.08, cannonRecoilTime: 0.35, cannonJoltShift: 0.014, cannonJoltPitch: 0.035,
     cannonFlash: 4, cannonSparks: 6, cannonSmoke: 6, cannonSmokeSpeed: 420, cannonShake: 0.1,

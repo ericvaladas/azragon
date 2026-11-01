@@ -507,7 +507,7 @@ export class Mech implements EnemySystem {
   private act(a: Exclude<MechMove, 'sidestep' | 'hopback'>, dt: number, ctx: WorldContext, aim: number, dist: number): void {
     const mv = M.moves[a];
     if (a === 'dash' && this.dashing) {
-      this.dash(dt, ctx, M.radius + ctx.monster.bodyRadius + M.stopGap);
+      this.dash(dt, ctx, M.radius + ctx.monster.bodyRadius + M.stopGap + M.dashStopShort);
       return;
     }
     this.actT += dt;
@@ -548,7 +548,7 @@ export class Mech implements EnemySystem {
     this.action = 'walk';
   }
 
-  /** Charges at dashSpeed until `stand` m from the monster (centre to centre), flattening buildings on the way, then recovers. */
+  /** Charges at dashSpeed until `stand` m from the monster (centre to centre), flattening buildings on the way, then recovers and walks the rest of the way in. */
   private dash(dt: number, ctx: WorldContext, stand: number): void {
     const m = ctx.monster.position;
     const dx = m.x - this.x;
@@ -569,6 +569,7 @@ export class Mech implements EnemySystem {
     this.stride += (Math.PI * step) / (2 * STEP * H);
     if (left - step > 1) return;
     this.dashing = false;
+    this.chasing = true;
     const mv = M.moves.dash;
     this.actT = mv.windup + mv.strike;
     ctx.particles.ring('dust', _p.set(this.x, 0, this.z), M.crushRadius * 1.5, 16);

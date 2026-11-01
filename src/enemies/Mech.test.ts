@@ -147,11 +147,39 @@ describe('Mech', () => {
     run(mech, c, DT);
     const p = body(mech).position;
     c.monster.position.set(p.x - 2500, 0, p.z);
-    run(mech, c, 6);
-    expect(distTo(mech, c.monster.position)).toBeLessThanOrEqual(CONTACT + M.stopGap + 100);
-    expect(distTo(mech, c.monster.position)).toBeGreaterThanOrEqual(CONTACT);
+    const stops = CONTACT + M.stopGap + M.dashStopShort;
+    let dashed = false;
+    for (let t = 0; t < 6 && !(dashed && !(mech as unknown as { dashing: boolean }).dashing); t += DT) {
+      mech.update(DT, c.ctx);
+      dashed ||= (mech as unknown as { dashing: boolean }).dashing;
+    }
+    expect(dashed).toBe(true);
+    expect(distTo(mech, c.monster.position)).toBeLessThanOrEqual(stops + 2);
+    expect(distTo(mech, c.monster.position)).toBeGreaterThanOrEqual(stops - 1);
+    expect((mech as unknown as { chasing: boolean }).chasing).toBe(true);
+    // It walks the last stretch in.
+    run(mech, c, M.dashStopShort / M.walkSpeed + M.moves.dash.recover + 1);
+    expect(distTo(mech, c.monster.position)).toBeLessThanOrEqual(CONTACT + M.punchReach);
     expect(c.crushes.length).toBeGreaterThan(0);
     expect(c.paid).toEqual([]);
+  });
+
+  it('ends a dash at once when the monster has come inside its stopping point', () => {
+    const mech = new Mech(new THREE.Scene());
+    const c = makeCtx();
+    faceOff(mech, c, 1000);
+    run(mech, c, DT);
+    const p = body(mech).position;
+    c.monster.position.set(p.x - 2500, 0, p.z);
+    const i = mech as unknown as { dashing: boolean; x: number };
+    for (let t = 0; t < 3 && !i.dashing; t += DT) mech.update(DT, c.ctx);
+    expect(i.dashing).toBe(true);
+    const stops = CONTACT + M.stopGap + M.dashStopShort;
+    c.monster.position.set(i.x - (stops - 50), 0, p.z);
+    const x = i.x;
+    mech.update(DT, c.ctx);
+    expect(i.dashing).toBe(false);
+    expect(i.x).toBe(x);
   });
 
   it('holds its ground while the player backs off, then closes the gap after chaseDelay', () => {
