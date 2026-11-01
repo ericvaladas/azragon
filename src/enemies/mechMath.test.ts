@@ -3,8 +3,10 @@ import { CONFIG } from '../config';
 import { chooseAction, movePhase, punchHits, slamHits, type MechMind } from './mechMath';
 
 const M = CONFIG.mech;
+/** Where the surfaces touch, for a monster of radius 100. */
+const contact = M.radius + 100;
 /** Everything on cooldown, engaged, at middle distance: walks. */
-const idle: MechMind = { dist: 800, engaged: true, meleeCd: 1, dashCd: 1, rocketCd: 1, barrageCd: 1, roll: 0.5 };
+const idle: MechMind = { dist: 800, contact, engaged: true, meleeCd: 1, dashCd: 1, rocketCd: 1, barrageCd: 1, roll: 0.5 };
 
 describe('mech brain', () => {
   it('dashes when far and ready', () => {
@@ -20,9 +22,12 @@ describe('mech brain', () => {
   });
 
   it('punches or slams in reach by roll', () => {
-    const near = { ...idle, dist: M.punchReach - 1, meleeCd: 0 };
+    const near = { ...idle, dist: contact + M.punchReach - 1, meleeCd: 0 };
     expect(chooseAction({ ...near, roll: 0.2 })).toBe('slam');
     expect(chooseAction({ ...near, roll: 0.9 })).toBe('punch');
+    // Reach is measured past contact: a bigger monster is punched from further off.
+    expect(chooseAction({ ...near, dist: contact + M.punchReach + 1 })).toBe('walk');
+    expect(chooseAction({ ...near, dist: contact + M.punchReach + 1, contact: contact + 10 })).toBe('punch');
   });
 
   it('barrage before rockets when both ready', () => {
@@ -50,9 +55,10 @@ describe('mech brain', () => {
 
   it('punchHits needs reach and facing', () => {
     const mech = { x: 0, z: 0 };
-    // Facing +Z (yaw 0).
-    expect(punchHits(mech, 0, { x: 0, z: M.punchReach + 40 }, 50)).toBe(true);
-    expect(punchHits(mech, 0, { x: 0, z: M.punchReach + 60 }, 50)).toBe(false);
+    const reach = M.radius + 50 + M.punchReach;
+    // Facing +Z (yaw 0), against a monster of radius 50.
+    expect(punchHits(mech, 0, { x: 0, z: reach - 10 }, 50)).toBe(true);
+    expect(punchHits(mech, 0, { x: 0, z: reach + 10 }, 50)).toBe(false);
     expect(punchHits(mech, 0, { x: 0, z: -100 }, 50)).toBe(false);
     expect(punchHits(mech, Math.PI / 2, { x: 100, z: 0 }, 50)).toBe(true);
     // Off to the side, beyond punchArc.
@@ -62,9 +68,9 @@ describe('mech brain', () => {
   it('slamHits is radial', () => {
     const mech = { x: 10, z: 10 };
     for (const a of [0, 1, 2, 3, 4, 5]) {
-      const r = M.slamRadius + 40;
+      const r = M.radius + M.slamRadius + 40;
       expect(slamHits(mech, { x: 10 + Math.sin(a) * r, z: 10 + Math.cos(a) * r }, 50)).toBe(true);
-      const far = M.slamRadius + 60;
+      const far = M.radius + M.slamRadius + 60;
       expect(slamHits(mech, { x: 10 + Math.sin(a) * far, z: 10 + Math.cos(a) * far }, 50)).toBe(false);
     }
   });

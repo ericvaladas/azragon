@@ -9,6 +9,10 @@ import type { Vec2 } from '../util/math';
 
 const M = CONFIG.mech;
 const DT = 0.05;
+/** Centre-to-centre distance at which the mech's and the test monster's surfaces touch. */
+const CONTACT = M.radius + CONFIG.monster.bodyRadius;
+/** Just inside punch reach. */
+const IN_REACH = CONTACT + M.punchReach - 20;
 
 function makeCtx(opts: { hpMult?: number; rng?: () => number } = {}) {
   const hits: { amount: number; source: DamageSource }[] = [];
@@ -84,7 +88,7 @@ describe('Mech', () => {
     const c = makeCtx();
     mech.summon(c.ctx);
     run(mech, c, 120);
-    expect(distTo(mech, c.monster.position)).toBeLessThanOrEqual(M.stopAt + 50);
+    expect(distTo(mech, c.monster.position)).toBeLessThanOrEqual(CONTACT + M.punchReach);
     // Walking crushes buildings around its feet.
     expect(c.crushes.length).toBeGreaterThan(0);
     expect(c.crushes[0]!.r).toBe(M.crushRadius);
@@ -93,7 +97,7 @@ describe('Mech', () => {
   it('a punch misses an airborne monster', () => {
     const mech = new Mech(new THREE.Scene());
     const c = makeCtx({ rng: () => 0.9 });
-    faceOff(mech, c, M.punchReach - 20);
+    faceOff(mech, c, IN_REACH);
     c.monster.airborne = true;
     run(mech, c, 1);
     expect(c.hits.filter((h) => h.source === 'melee')).toEqual([]);
@@ -102,7 +106,7 @@ describe('Mech', () => {
   it('a punch lands on a grounded monster in front', () => {
     const mech = new Mech(new THREE.Scene());
     const c = makeCtx({ rng: () => 0.9 });
-    faceOff(mech, c, M.punchReach - 20);
+    faceOff(mech, c, IN_REACH);
     run(mech, c, 1);
     expect(c.hits.filter((h) => h.source === 'melee')).toEqual([{ amount: M.punchDamage, source: 'melee' }]);
   });
@@ -110,7 +114,7 @@ describe('Mech', () => {
   it('a slam hits all round', () => {
     const mech = new Mech(new THREE.Scene());
     const c = makeCtx({ rng: () => 0.1 });
-    faceOff(mech, c, M.punchReach - 20);
+    faceOff(mech, c, IN_REACH);
     run(mech, c, 0.2);
     // The monster steps behind it during the wind-up: a slam is radial.
     const p = body(mech).position;
@@ -128,7 +132,35 @@ describe('Mech', () => {
     const p = body(mech).position;
     c.monster.position.set(p.x - 2500, 0, p.z);
     run(mech, c, 6);
-    expect(distTo(mech, c.monster.position)).toBeLessThanOrEqual(M.dashStopShort + 100);
+    expect(distTo(mech, c.monster.position)).toBeLessThanOrEqual(CONTACT + M.stopGap + 100);
+    expect(distTo(mech, c.monster.position)).toBeGreaterThanOrEqual(CONTACT);
+  });
+
+  it('stops with a small gap between the bodies, whatever the monster\'s size', () => {
+    for (const bodyRadius of [60, CONFIG.monster.bodyRadius, 160]) {
+      const mech = new Mech(new THREE.Scene());
+      const c = makeCtx();
+      c.monster.bodyRadius = bodyRadius;
+      // Starts inside dashTrigger, so it walks in (no dash) and then fights where it stopped.
+      faceOff(mech, c, 1000);
+      let minGap = Infinity;
+      run(mech, c, 40, () => {
+        minGap = Math.min(minGap, distTo(mech, c.monster.position) - M.radius - bodyRadius);
+      });
+      const gap = distTo(mech, c.monster.position) - M.radius - bodyRadius;
+      expect(minGap).toBeGreaterThanOrEqual(0);
+      expect(gap).toBeGreaterThanOrEqual(0);
+      expect(gap).toBeLessThanOrEqual(M.stopGap + 1);
+    }
+  });
+
+  it('a punch thrown at a bigger monster lands from further off', () => {
+    const mech = new Mech(new THREE.Scene());
+    const c = makeCtx({ rng: () => 0.9 });
+    c.monster.bodyRadius = 200;
+    faceOff(mech, c, M.radius + 200 + M.punchReach - 20);
+    run(mech, c, 1);
+    expect(c.hits.filter((h) => h.source === 'melee')).toEqual([{ amount: M.punchDamage, source: 'melee' }]);
   });
 
   it('walks in rather than dashing before it has engaged', () => {
@@ -173,7 +205,7 @@ describe('Mech', () => {
   it('a dead mech never attacks', () => {
     const mech = new Mech(new THREE.Scene());
     const c = makeCtx();
-    faceOff(mech, c, M.punchReach - 20);
+    faceOff(mech, c, IN_REACH);
     body(mech).applyDamage(1e9);
     run(mech, c, 5);
     expect(c.hits).toEqual([]);
@@ -192,6 +224,19 @@ describe('Mech', () => {
     expect(mech.count()).toBe(0);
     expect(mech.current()).toBeNull();
     expect(scene.children.every((o) => !o.visible || o.type !== 'Group')).toBe(true);
+  });
+
+  it('a stale reference from an earlier mech cannot hurt the next one', () => {
+    const mech = new Mech(new THREE.Scene());
+    const c = makeCtx();
+    mech.summon(c.ctx);
+    const old = body(mech);
+    mech.clear();
+    expect(old.isAlive()).toBe(false);
+    mech.summon(c.ctx);
+    old.applyDamage(500);
+    expect(mech.current()).toEqual({ hp: M.hp, maxHp: M.hp });
+    expect(c.destroyed).toEqual([]);
   });
 
   it('clear removes it at once', () => {

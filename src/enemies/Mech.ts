@@ -4,7 +4,7 @@ import type { Target } from '../combat';
 import { toonMat } from '../render/toon';
 import { angleDelta, damp, type Vec2 } from '../util/math';
 import { strikeFill, strikeHits, strikePoints } from './artilleryMath';
-import { chooseAction, movePhase, punchHits, slamHits, type MechAction, type MechMove } from './mechMath';
+import { chooseAction, movePhase, punchHits, slamHits, type MechAction, type MechMind, type MechMove } from './mechMath';
 import { MECH_PIVOTS as PV, mechParts } from './mechModel';
 import type { EnemySystem, WorldContext } from './types';
 
@@ -24,6 +24,12 @@ const _p = new THREE.Vector3();
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
 const _s = new THREE.Vector3();
+/** Scratch ground points (a foot, the mech's own spot) and the brain's input, reused every frame. */
+const _foot: Vec2 = { x: 0, z: 0 };
+const _here: Vec2 = { x: 0, z: 0 };
+const _mind: MechMind = { dist: 0, contact: 0, engaged: false, meleeCd: 0, dashCd: 0, rocketCd: 0, barrageCd: 0, roll: 0 };
+/** Left (+1) and right (−1). */
+const SIDES = [1, -1] as const;
 
 /** Turns `from` toward `to` by at most `step` rad. */
 const turn = (from: number, to: number, step: number) => from + Math.max(-step, Math.min(step, angleDelta(from, to)));
@@ -40,7 +46,7 @@ class MechBody implements Target {
 
   constructor(
     readonly maxHp: number,
-    private onDamage: (amount: number) => void,
+    private onDamage: (b: MechBody, amount: number) => void,
   ) {
     this.hp = maxHp;
   }
@@ -50,7 +56,7 @@ class MechBody implements Target {
   }
 
   applyDamage(amount: number): void {
-    this.onDamage(amount);
+    this.onDamage(this, amount);
   }
 }
 
@@ -59,7 +65,13 @@ type Strike = { at: Vec2; t: number };
 
 /** Joint angles and offsets the meshes are drawn with; each frame eases toward a target pose. */
 type Pose = { legL: number; legR: number; armL: number; armR: number; torso: number; crouch: number };
-const restPose = (): Pose => ({ legL: 0, legR: 0, armL: 0, armR: 0, torso: 0, crouch: 0 });
+const POSE_KEYS: readonly (keyof Pose)[] = ['legL', 'legR', 'armL', 'armR', 'torso', 'crouch'];
+const restPose = (out: Pose = { legL: 0, legR: 0, armL: 0, armR: 0, torso: 0, crouch: 0 }): Pose => {
+  for (const k of POSE_KEYS) out[k] = 0;
+  return out;
+};
+/** Scratch target pose, rebuilt every draw. */
+const _target = restPose();
 
 /**
  * The boss mech: one giant bipedal walker, summoned by the cycle (never by the spawn director). It walks in toward the
@@ -172,6 +184,8 @@ export class Mech implements EnemySystem {
   }
 
   clear(): void {
+    // A cleared mech is gone for good: hits through an old reference do nothing.
+    if (this.body) this.body.alive = false;
     this.body = null;
     this.strikes = [];
     this.root.visible = false;
@@ -204,15 +218,14 @@ export class Mech implements EnemySystem {
     this.stride = this.gait = this.flashT = 0;
     this.dyingT = this.sparkT = 0;
     this.wreckT = null;
-    this.pose = restPose();
+    restPose(this.pose);
     this.root.visible = true;
     this.root.rotation.x = 0;
     this.draw();
   }
 
-  private damage = (amount: number): void => {
-    const b = this.body;
-    if (!b?.alive) return;
+  private damage = (b: MechBody, amount: number): void => {
+    if (b !== this.body || !b.alive) return;
     b.hp -= amount;
     this.flashT = 0.1;
     if (b.hp > 0) return;
@@ -238,6 +251,8 @@ export class Mech implements EnemySystem {
     const m = ctx.monster.position;
     const dist = Math.hypot(m.x - this.x, m.z - this.z);
     const aim = Math.atan2(m.x - this.x, m.z - this.z);
+    // Where the walk and the dash stop: stopGap between the two bodies' surfaces.
+    const stand = M.radius + ctx.monster.bodyRadius + M.stopGap;
     if (!this.engaged && dist <= M.dashTrigger) this.engaged = true;
     this.meleeCd -= dt;
     this.dashCd -= dt;
@@ -245,11 +260,20 @@ export class Mech implements EnemySystem {
     // The barrage waits until it has come into the fight, so it never fires from beyond the fog.
     if (this.engaged) this.barrageCd -= dt;
     if (this.action === 'walk' && ctx.monster.alive) {
-      const next = chooseAction({ dist, engaged: this.engaged, meleeCd: this.meleeCd, dashCd: this.dashCd, rocketCd: this.rocketCd, barrageCd: this.barrageCd, roll: ctx.rng() });
+      const mind = _mind;
+      mind.dist = dist;
+      mind.contact = M.radius + ctx.monster.bodyRadius;
+      mind.engaged = this.engaged;
+      mind.meleeCd = this.meleeCd;
+      mind.dashCd = this.dashCd;
+      mind.rocketCd = this.rocketCd;
+      mind.barrageCd = this.barrageCd;
+      mind.roll = ctx.rng();
+      const next = chooseAction(mind);
       if (next !== 'walk') this.start(next);
     }
-    this.gait = damp(this.gait, this.action === 'walk' && dist > M.stopAt + 1 ? 1 : 0, 6, dt);
-    if (this.action === 'walk') this.walk(dt, ctx, dist, aim);
+    this.gait = damp(this.gait, this.action === 'walk' && dist > stand + 1 ? 1 : 0, 6, dt);
+    if (this.action === 'walk') this.walk(dt, ctx, dist, aim, stand);
     else this.act(this.action, dt, ctx, aim);
   }
 
@@ -262,37 +286,39 @@ export class Mech implements EnemySystem {
     if (a === 'punch') this.punchArm = -this.punchArm;
   }
 
-  /** Turns toward the monster and strides straight ahead until stopAt, crushing what is underfoot. */
-  private walk(dt: number, ctx: WorldContext, dist: number, aim: number): void {
+  /** Turns toward the monster and strides straight ahead until `stand` m from it (centre to centre), crushing what is underfoot. */
+  private walk(dt: number, ctx: WorldContext, dist: number, aim: number, stand: number): void {
     this.heading = turn(this.heading, aim, M.turnRate * dt);
-    if (!ctx.monster.alive || dist <= M.stopAt) return;
-    const step = Math.min((this.engaged ? M.walkSpeed : M.approachSpeed) * dt, dist - M.stopAt);
+    if (!ctx.monster.alive || dist <= stand) return;
+    const step = Math.min((this.engaged ? M.walkSpeed : M.approachSpeed) * dt, dist - stand);
     this.x += Math.sin(this.heading) * step;
     this.z += Math.cos(this.heading) * step;
     const before = Math.floor(this.stride / Math.PI + 0.5);
     this.stride += (Math.PI * step) / (STEP * H);
-    for (const side of [1, -1]) ctx.damageBuildings(this.foot(side), M.crushRadius, M.crushDps * dt);
+    for (const side of SIDES) ctx.damageBuildings(this.foot(side, _foot), M.crushRadius, M.crushDps * dt);
     if (Math.floor(this.stride / Math.PI + 0.5) === before) return;
     // A footfall: the leg swung furthest forward plants.
-    const foot = this.foot(Math.sin(this.stride) > 0 ? 1 : -1);
+    const foot = this.foot(Math.sin(this.stride) > 0 ? 1 : -1, _foot);
     ctx.particles.ring('dust', _p.set(foot.x, 0, foot.z), M.crushRadius, 8);
     ctx.shake(M.footfallShake * Math.max(0.25, 1 - dist / CONFIG.fog.far));
   }
 
-  /** Where a foot (+1 left, −1 right) is on the ground, with the stride's forward swing. */
-  private foot(side: number): Vec2 {
+  /** Where a foot (+1 left, −1 right) is on the ground, with the stride's forward swing; written into `out`. */
+  private foot(side: number, out: Vec2): Vec2 {
     const s = Math.sin(this.heading);
     const c = Math.cos(this.heading);
-    const out = side * PV.hipX * H;
+    const across = side * PV.hipX * H;
     const fwd = side * Math.sin(this.stride) * LEG_SWING * this.gait * PV.hipY * H;
     // The model's left (+X) is (cos h, −sin h) on the ground.
-    return { x: this.x + c * out + s * fwd, z: this.z - s * out + c * fwd };
+    out.x = this.x + c * across + s * fwd;
+    out.z = this.z - s * across + c * fwd;
+    return out;
   }
 
   private act(a: MechMove, dt: number, ctx: WorldContext, aim: number): void {
     const mv = M.moves[a];
     if (a === 'dash' && this.dashing) {
-      this.dash(dt, ctx);
+      this.dash(dt, ctx, M.radius + ctx.monster.bodyRadius + M.stopGap);
       return;
     }
     this.actT += dt;
@@ -300,14 +326,16 @@ export class Mech implements EnemySystem {
     // Melee holds its facing from the wind-up on, so a dodge to the side works; ranged moves keep turning to aim.
     if (a !== 'punch' && a !== 'slam') this.heading = turn(this.heading, aim, M.turnRate * dt);
     const m = ctx.monster.position;
-    const here = { x: this.x, z: this.z };
+    const here = _here;
+    here.x = this.x;
+    here.z = this.z;
     if (fired && !this.struck) {
       this.struck = true;
       if (a === 'punch' || a === 'slam') {
         const hit = a === 'punch' ? punchHits(here, this.heading, m, ctx.monster.bodyRadius) : slamHits(here, m, ctx.monster.bodyRadius);
         if (!ctx.monster.airborne && hit) ctx.damageMonster(a === 'punch' ? M.punchDamage : M.slamDamage, 'melee', this.body!);
         if (a === 'slam') {
-          ctx.particles.ring('dust', _p.set(this.x, 0, this.z), M.slamRadius, 24);
+          ctx.particles.ring('dust', _p.set(this.x, 0, this.z), M.radius + M.slamRadius, 24);
           ctx.shake(0.25);
         } else if (hit && !ctx.monster.airborne) {
           ctx.particles.emit('debris', _p.set(m.x, ctx.monster.height * 0.5, m.z), 8, 1);
@@ -334,20 +362,22 @@ export class Mech implements EnemySystem {
     this.action = 'walk';
   }
 
-  /** Charges at dashSpeed to dashStopShort short of the monster, flattening buildings on the way, then recovers. */
-  private dash(dt: number, ctx: WorldContext): void {
+  /** Charges at dashSpeed until `stand` m from the monster (centre to centre), flattening buildings on the way, then recovers. */
+  private dash(dt: number, ctx: WorldContext, stand: number): void {
     const m = ctx.monster.position;
     const dx = m.x - this.x;
     const dz = m.z - this.z;
     const d = Math.hypot(dx, dz);
     this.heading = Math.atan2(dx, dz);
-    const left = d - M.dashStopShort;
+    const left = d - stand;
     const step = Math.min(Math.max(0, left), M.dashSpeed * dt);
     if (d > 1e-6) {
       this.x += (dx / d) * step;
       this.z += (dz / d) * step;
     }
-    ctx.damageBuildings({ x: this.x, z: this.z }, M.crushRadius, M.crushDps * dt);
+    _here.x = this.x;
+    _here.z = this.z;
+    ctx.damageBuildings(_here, M.crushRadius, M.crushDps * dt);
     ctx.particles.emit('dust', _p.set(this.x, 0, this.z), 2, 1.5);
     if (left - step > 1) return;
     this.dashing = false;
@@ -379,10 +409,10 @@ export class Mech implements EnemySystem {
   /** Paints barrageCount strike circles around the monster (one on it), launched from both pods. */
   private barrage(ctx: WorldContext): void {
     const m = ctx.monster.position;
-    for (const at of strikePoints({ x: m.x, z: m.z }, M.barrageCount, M.barrageSpread, ctx.rng)) {
+    for (const at of strikePoints(m, M.barrageCount, M.barrageSpread, ctx.rng)) {
       if (this.strikes.length < MAX_STRIKES) this.strikes.push({ at, t: 0 });
     }
-    for (const side of [1, -1]) {
+    for (const side of SIDES) {
       this.pod(side, _p);
       ctx.particles.emit('fire', _p, 6, 0.6);
       ctx.particles.emit('smoke', _p, 8, 1);
@@ -403,7 +433,7 @@ export class Mech implements EnemySystem {
       ctx.particles.explosion(_p, 1.4);
       ctx.particles.ring('dust', _p.setY(0), M.barrageRadius, 10);
       ctx.shake(0.2);
-      if (strikeHits({ x: m.x, z: m.z }, s.at, M.barrageRadius)) ctx.damageMonster(M.barrageDamage, 'artillery', this.body ?? undefined);
+      if (strikeHits(m, s.at, M.barrageRadius)) ctx.damageMonster(M.barrageDamage, 'artillery', this.body ?? undefined);
       this.strikes.splice(i, 1);
     }
     this.drawStrikes();
@@ -450,7 +480,7 @@ export class Mech implements EnemySystem {
 
   /** The pose this frame's action asks for. */
   private targetPose(): Pose {
-    const p = restPose();
+    const p = restPose(_target);
     const swing = Math.sin(this.stride) * this.gait;
     p.legL = -swing * LEG_SWING;
     p.legR = swing * LEG_SWING;
@@ -496,7 +526,7 @@ export class Mech implements EnemySystem {
     if (!b) return;
     const t = this.targetPose();
     const pose = this.pose;
-    for (const k of Object.keys(pose) as (keyof Pose)[]) pose[k] = damp(pose[k], t[k], POSE_RATE, dt);
+    for (const k of POSE_KEYS) pose[k] = damp(pose[k], t[k], POSE_RATE, dt);
     const P = this.parts;
     P.legL.rotation.x = pose.legL;
     P.legR.rotation.x = pose.legR;

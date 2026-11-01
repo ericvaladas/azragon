@@ -729,22 +729,24 @@ export const CONFIG = {
   jet: { hp: 60, speed: 286, altitude: 430 * MONSTER_SCALE, turnRate: 0.9, damage: 10, rocketsPerSalvo: 3, salvoMin: 700, salvoMax: 1600, rocketSpeed: 650, exp: 15, size: 70, hitRadius: 90, exitDistance: 2600 },
   /**
    * The boss mech (world m, s). It stands `height` tall (the standard monster height) and about `width` across; its
-   * target `radius`. Before it has first come within dashTrigger of the monster it walks in at approachSpeed, then at
-   * walkSpeed, turning at turnRate rad/s, and stands at stopAt. Melee: a punch reaches punchReach (+ the monster's body
-   * radius) within punchArc rad of its facing; a slam (picked with slamChance) hits within slamRadius; either then waits
-   * meleeCooldown. Dash: once engaged, beyond dashTrigger, it charges at dashSpeed to dashStopShort short of the
-   * monster, every dashCooldown at most. Every building within crushRadius of a foot (or of it, dashing) takes crushDps.
-   * Rockets: a volley of rocketsPerVolley jet rockets within rocketRange every rocketCooldown. Barrage: barrageCount
-   * marked circles of barrageRadius within barrageSpread of the monster, filling over barrageFill, every
-   * barrageCooldown. Each move runs `moves[move]` windup, strike and recover s. Footfalls shake by footfallShake
-   * (less far off). Dead, it sparks for dyingTime, blows apart, and the wreck sinks over wreckTime.
+   * target `radius`. Ranges marked "past contact" are measured between the body surfaces: contact is this radius plus
+   * the monster's live body radius. Before it has first come within dashTrigger of the monster (centre to centre) it
+   * walks in at approachSpeed, then at walkSpeed, turning at turnRate rad/s, and stands stopGap past contact. Melee: a
+   * punch reaches punchReach past contact within punchArc rad of its facing; a slam (picked with slamChance) hits
+   * within slamRadius past contact, all round; either then waits meleeCooldown. Dash: once engaged, beyond dashTrigger,
+   * it charges at dashSpeed and stops stopGap past contact, every dashCooldown at most. Every building within
+   * crushRadius of a foot (or of it, dashing) takes crushDps. Rockets: a volley of rocketsPerVolley jet rockets within
+   * rocketRange every rocketCooldown. Barrage: barrageCount marked circles of barrageRadius within barrageSpread of the
+   * monster, filling over barrageFill, every barrageCooldown. Each move runs `moves[move]` windup, strike and recover s.
+   * Footfalls shake by footfallShake (less far off). Dead, it sparks for dyingTime, blows apart, and the wreck sinks
+   * over wreckTime.
    */
   mech: {
     height: MONSTER_HEIGHT, width: 0.45 * MONSTER_HEIGHT, radius: 0.3 * MONSTER_HEIGHT,
-    hp: 9000, approachSpeed: 160, walkSpeed: 90, turnRate: 1.2, stopAt: 0.8 * 0.55 * MONSTER_HEIGHT,
-    punchReach: 0.55 * MONSTER_HEIGHT, punchArc: 0.7, punchDamage: 80,
-    slamRadius: 0.6 * MONSTER_HEIGHT, slamDamage: 140, slamChance: 0.35, meleeCooldown: 1.6,
-    dashTrigger: 1600, dashSpeed: 900, dashCooldown: 9, dashStopShort: 0.5 * MONSTER_HEIGHT, crushRadius: 0.25 * MONSTER_HEIGHT, crushDps: 600,
+    hp: 9000, approachSpeed: 160, walkSpeed: 90, turnRate: 1.2, stopGap: 25,
+    punchReach: 0.3 * MONSTER_HEIGHT, punchArc: 0.7, punchDamage: 80,
+    slamRadius: 0.35 * MONSTER_HEIGHT, slamDamage: 140, slamChance: 0.35, meleeCooldown: 1.6,
+    dashTrigger: 1600, dashSpeed: 900, dashCooldown: 9, crushRadius: 0.25 * MONSTER_HEIGHT, crushDps: 600,
     rocketCooldown: 4, rocketsPerVolley: 3, rocketDamage: 10, rocketRange: 2200,
     barrageCooldown: 17, barrageCount: 7, barrageSpread: 450, barrageRadius: 130, barrageFill: 1.6, barrageDamage: 45,
     spawnDistance: 4200, footfallShake: 0.06, dyingTime: 2.5, wreckTime: 6,
