@@ -91,7 +91,7 @@ export class Helicopters implements EnemySystem {
 
   spawn(ctx: WorldContext): void {
     this.ctx = ctx;
-    if (this.count() >= CONFIG.spawns.heli.cap) return;
+    if (this.count() >= Math.max(CONFIG.spawns.heli.cap, CONFIG.cycle.bossEscortCaps.heli)) return;
     const m = ctx.monster.position;
     const d = ctx.spawnDir();
     // Heli bearings put x on cos, z on sin.

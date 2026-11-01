@@ -74,6 +74,19 @@ describe('SpawnDirector', () => {
     expect(halved).toBeLessThan(out.length);
   });
 
+  it('a caps override replaces the usual cap', () => {
+    const alive = { ...zero(), heli: CONFIG.spawns.heli.cap };
+    const usual = new SpawnDirector(mulberry32(9));
+    const raised = new SpawnDirector(mulberry32(9));
+    const count = (d: SpawnDirector, caps: Partial<Record<EnemyKind, number>>) => {
+      let n = 0;
+      for (let t = 0; t < 60; t += 0.05) n += d.update(0.05, alive, 12, ['heli'], 1, caps).length;
+      return n;
+    };
+    expect(count(usual, {})).toBe(0);
+    expect(count(raised, { heli: CONFIG.spawns.heli.cap + 1 })).toBeGreaterThan(0);
+  });
+
   it('reset clears the clock and budget', () => {
     const dir = new SpawnDirector(mulberry32(6));
     run(dir, 30, 5);

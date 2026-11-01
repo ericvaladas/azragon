@@ -987,7 +987,7 @@ export class GameScene {
       }
       // No new enemies arrive while an ultimate runs or outside the army phase (the director's budget waits too, so none pile up for after).
       const escorting = this.cycle.escorting;
-      this.enemies.update(dt, this.ctx, this.state === 'playing' && !this.ultimateActive && (this.cycle.spawning || escorting), escorting ? CONFIG.cycle.bossEscorts : ENEMY_KINDS, escorting ? CONFIG.cycle.bossEscortRate : 1);
+      this.enemies.update(dt, this.ctx, this.state === 'playing' && !this.ultimateActive && (this.cycle.spawning || escorting), escorting ? CONFIG.cycle.bossEscorts : ENEMY_KINDS, escorting ? CONFIG.cycle.bossEscortRate : 1, escorting ? CONFIG.cycle.bossEscortCaps : undefined);
       const met = this.meteor.update(dt, this.monster.position, this.ms.bodyRadius, this.monster.airborne);
       if (met === 'landed') this.onMeteorLanded();
       else if (met === 'collected') this.onMeteorCollected();

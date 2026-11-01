@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { Target } from '../combat';
 import { SpawnDirector } from './SpawnDirector';
+import type { SpawnCaps } from './spawnTable';
 import { ENEMY_KINDS, type EnemyKind, type EnemySystem, type WorldContext } from './types';
 
 const _at = new THREE.Vector3();
@@ -32,10 +33,10 @@ export class EnemyRegistry {
     return out;
   }
 
-  /** Spawns (when `spawning`, from `kinds` with the rate scaled by `rateMult`), then updates every system. */
-  update(dt: number, ctx: WorldContext, spawning: boolean, kinds: readonly EnemyKind[] = ENEMY_KINDS, rateMult = 1): void {
+  /** Spawns (when `spawning`, from `kinds` with the rate scaled by `rateMult` and `caps` replacing the usual caps), then updates every system. */
+  update(dt: number, ctx: WorldContext, spawning: boolean, kinds: readonly EnemyKind[] = ENEMY_KINDS, rateMult = 1, caps: SpawnCaps = {}): void {
     if (spawning) {
-      for (const kind of this.director.update(dt, this.counts(), ctx.level, kinds, rateMult)) {
+      for (const kind of this.director.update(dt, this.counts(), ctx.level, kinds, rateMult, caps)) {
         if (this.systems.get(kind)?.spawn(ctx) === false) this.director.refund(kind);
       }
     }

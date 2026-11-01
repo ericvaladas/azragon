@@ -1,5 +1,5 @@
 import { CONFIG } from '../config';
-import { openKinds, pickKind } from './spawnTable';
+import { openKinds, pickKind, type SpawnCaps } from './spawnTable';
 import { ENEMY_KINDS, type EnemyKind } from './types';
 
 /**
@@ -24,8 +24,8 @@ export class SpawnDirector {
     this.budget = Math.min(CONFIG.director.budgetCap, this.budget + CONFIG.spawns[kind].cost);
   }
 
-  /** Spawns for this frame; the spending rate and unlocked kinds follow the player's level, limited to `kinds`, with the rate scaled by `rateMult`. */
-  update(dt: number, alive: Record<EnemyKind, number>, level: number, kinds: readonly EnemyKind[] = ENEMY_KINDS, rateMult = 1): EnemyKind[] {
+  /** Spawns for this frame; the spending rate and unlocked kinds follow the player's level, limited to `kinds`, with the rate scaled by `rateMult` and `caps` replacing the usual caps. */
+  update(dt: number, alive: Record<EnemyKind, number>, level: number, kinds: readonly EnemyKind[] = ENEMY_KINDS, rateMult = 1, caps: SpawnCaps = {}): EnemyKind[] {
     const D = CONFIG.director;
     this.elapsed += dt;
     const rate = (D.baseRate + D.rateGrowthPerLevel * Math.max(0, level - 1)) * rateMult;
@@ -35,10 +35,10 @@ export class SpawnDirector {
     if (this.next !== null && !kinds.includes(this.next)) this.next = null;
     const out: EnemyKind[] = [];
     for (;;) {
-      if (this.next === null) this.next = pickKind(openKinds(level, counts, kinds), this.rng);
+      if (this.next === null) this.next = pickKind(openKinds(level, counts, kinds, caps), this.rng);
       if (this.next === null) break;
       const rule = CONFIG.spawns[this.next];
-      if (counts[this.next] >= rule.cap) {
+      if (counts[this.next] >= (caps[this.next] ?? rule.cap)) {
         this.next = null;
         break;
       }

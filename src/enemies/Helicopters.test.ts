@@ -67,11 +67,11 @@ describe('Helicopters', () => {
     expect(h.targets().length).toBe(0);
   });
 
-  it('never holds more than its cap', () => {
+  it('never holds more than the highest cap it can be given', () => {
     const { ctx } = makeCtx();
     const h = new Helicopters(new THREE.Scene());
-    for (let i = 0; i < CONFIG.spawns.heli.cap + 3; i++) h.spawn(ctx);
-    expect(h.count()).toBe(CONFIG.spawns.heli.cap);
+    for (let i = 0; i < CONFIG.cycle.bossEscortCaps.heli + 3; i++) h.spawn(ctx);
+    expect(h.count()).toBe(CONFIG.cycle.bossEscortCaps.heli);
   });
 
   it('alternates orbit direction between spawns', () => {

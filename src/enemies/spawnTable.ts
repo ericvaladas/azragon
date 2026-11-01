@@ -7,9 +7,12 @@ export function difficulty(level: number): Difficulty {
   return { hpMult: 1 + CONFIG.difficulty.hpPerLevel * l, dmgMult: 1 + CONFIG.difficulty.dmgPerLevel * l };
 }
 
-/** Kinds among `kinds` unlocked at the player's level whose concurrent count is under cap, in `kinds` order. */
-export function openKinds(level: number, alive: Record<EnemyKind, number>, kinds: readonly EnemyKind[] = ENEMY_KINDS): EnemyKind[] {
-  return kinds.filter((k) => level >= CONFIG.spawns[k].unlockLevel && alive[k] < CONFIG.spawns[k].cap);
+/** Per-kind replacements for the usual CONFIG.spawns caps. */
+export type SpawnCaps = Partial<Record<EnemyKind, number>>;
+
+/** Kinds among `kinds` unlocked at the player's level whose concurrent count is under cap (`caps`, else their usual one), in `kinds` order. */
+export function openKinds(level: number, alive: Record<EnemyKind, number>, kinds: readonly EnemyKind[] = ENEMY_KINDS, caps: SpawnCaps = {}): EnemyKind[] {
+  return kinds.filter((k) => level >= CONFIG.spawns[k].unlockLevel && alive[k] < (caps[k] ?? CONFIG.spawns[k].cap));
 }
 
 /** Weighted random pick by CONFIG.spawns[k].weight. */
