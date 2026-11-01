@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { CONFIG } from '../config';
-import { cutsceneK, fallPosition, fallbackSite, pickLandSite } from './meteorMath';
+import { cutsceneK, cutsceneTotal, fallPosition, landTime, fallbackSite, pickLandSite } from './meteorMath';
 
 const M = CONFIG.meteor;
-const total = M.lookUp + M.fallTime + M.hold + M.lookBack;
+const total = cutsceneTotal();
 const sites = [
   { x: 1, z: 1, rubble: false },
   { x: 2, z: 2, rubble: true },
@@ -35,10 +35,24 @@ describe('cutsceneK', () => {
     expect(cutsceneK(M.lookUp / 2)).toBeGreaterThan(0);
     expect(cutsceneK(M.lookUp / 2)).toBeLessThan(1);
     expect(cutsceneK(M.lookUp)).toBe(1);
-    expect(cutsceneK(M.lookUp + M.fallTime + M.hold)).toBe(1);
+    expect(cutsceneK(landTime() + M.hold)).toBe(1);
+    expect(cutsceneK(landTime())).toBe(1);
     expect(cutsceneK(total)).toBe(0);
     expect(cutsceneK(total + 5)).toBe(0);
     expect(cutsceneK(-1)).toBe(0);
+  });
+});
+
+describe('timeline', () => {
+  it('lasts 5 to 7 s, releases the gem during the ease-up and lands after it', () => {
+    expect(total).toBeGreaterThanOrEqual(5);
+    expect(total).toBeLessThanOrEqual(7);
+    expect(M.fallStart).toBeLessThan(M.lookUp);
+    expect(landTime()).toBeGreaterThan(M.lookUp);
+  });
+  it('the camera comes home exactly', () => {
+    expect(cutsceneK(total - 1e-6)).toBeCloseTo(0, 5);
+    expect(cutsceneK(total)).toBe(0);
   });
 });
 

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { CONFIG } from '../config';
 import type { Vec2 } from '../util/math';
 import { meteorGeometry } from './meteorModel';
-import { cutsceneK, fallPosition } from './meteorMath';
+import { cutsceneK, cutsceneTotal, fallPosition } from './meteorMath';
 import type { Particles } from './Particles';
 
 export type MeteorEvent = 'landed' | 'collected';
@@ -12,8 +12,8 @@ type Phase = 'idle' | 'falling' | 'ground' | 'collected';
 const _burst = new THREE.Vector3();
 
 /**
- * The first break's alien diamond: a cutscene timeline (camera blend, slanted fall, impact), then a spinning, bobbing
- * pickup on the ground. Standalone: the caller picks the spot, damages the city and grants the reward.
+ * The first break's alien diamond: a cutscene timeline (camera blend, slanted fall released during the blend, impact), then a
+ * spinning, bobbing pickup on the ground under a rising column of glow and a faint light pillar. Standalone: the caller picks the spot, damages the city and grants the reward.
  */
 export class Meteor {
   /** Where it falls to, then sits (y 0 on the ground; the gem hovers above it). */
@@ -26,12 +26,16 @@ export class Meteor {
   private phase: Phase = 'idle';
   private t = 0;
   private time = 0;
-  private sparkle = 0;
+  /** The faint additive light pillar over the landed gem. */
+  private readonly pillar: THREE.Mesh;
+  private beacon = 0;
+  private beaconSpark = 0;
   private started = false;
 
   constructor(scene: THREE.Scene, private particles: Particles) {
     // Unlit: the gem glows at full vertex colour whatever the light.
     this.mesh = new THREE.Mesh(meteorGeometry(), new THREE.MeshBasicMaterial({ vertexColors: true }));
+    this.mesh.name = 'meteor-gem';
     this.mesh.scale.setScalar(CONFIG.meteor.size);
     this.mesh.visible = false;
     this.mesh.frustumCulled = false;
@@ -46,6 +50,22 @@ export class Meteor {
     this.crater.renderOrder = 2;
     this.crater.visible = false;
     scene.add(this.crater);
+    // An open cylinder, bright at its foot and fading to black at the top (additive, so black is invisible).
+    const m = CONFIG.meteor;
+    const tube = new THREE.CylinderGeometry(m.pillarRadius, m.pillarRadius * 1.6, m.pillarHeight, 12, 1, true).translate(0, m.pillarHeight / 2, 0);
+    const glow = new THREE.Color(CONFIG.palette.meteor);
+    const tint = new Float32Array(tube.getAttribute('position').count * 3);
+    for (let i = 0; i < tint.length / 3; i++) {
+      const f = 1 - tube.getAttribute('position').getY(i) / m.pillarHeight;
+      tint.set([glow.r * f, glow.g * f, glow.b * f], i * 3);
+    }
+    tube.setAttribute('color', new THREE.BufferAttribute(tint, 3));
+    this.pillar = new THREE.Mesh(tube, new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: m.pillarOpacity, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+    this.pillar.name = 'meteor-pillar';
+    this.pillar.renderOrder = 3;
+    this.pillar.frustumCulled = false;
+    this.pillar.visible = false;
+    scene.add(this.pillar);
   }
 
   get onGround(): boolean {
@@ -53,8 +73,7 @@ export class Meteor {
   }
 
   get cutsceneActive(): boolean {
-    const m = CONFIG.meteor;
-    return this.started && this.t < m.lookUp + m.fallTime + m.hold + m.lookBack;
+    return this.started && this.t < cutsceneTotal();
   }
 
   /** Begin the cutscene: the gem will fall to `landAt`. */
@@ -66,9 +85,11 @@ export class Meteor {
     this.started = true;
     this.t = 0;
     this.time = 0;
-    this.sparkle = 0;
+    this.beacon = 0;
+    this.beaconSpark = 0;
     this.mesh.visible = false;
     this.crater.visible = false;
+    this.pillar.visible = false;
   }
 
   update(dt: number, monster: Vec2, monsterRadius: number, airborne: boolean): MeteorEvent | null {
@@ -77,16 +98,19 @@ export class Meteor {
     this.time += dt;
     if (this.started) {
       this.t += dt;
-      if (this.t >= m.lookUp + m.fallTime + m.hold + m.lookBack) this.started = false;
+      if (this.t >= cutsceneTotal()) this.started = false;
     }
 
-    if (this.phase === 'idle' && this.t >= m.lookUp) this.phase = 'falling';
+    if (this.phase === 'idle' && this.t >= m.fallStart) this.phase = 'falling';
 
     if (this.phase === 'falling') {
-      const ft = this.t - m.lookUp;
+      const ft = this.t - m.fallStart;
       if (ft >= m.fallTime) {
         this.phase = 'ground';
-        this.sparkle = 0;
+        this.beacon = 0;
+        this.beaconSpark = 0;
+        this.pillar.position.set(this.position.x, 0, this.position.z);
+        this.pillar.visible = true;
         this.mesh.position.set(this.position.x, m.size * 0.45, this.position.z);
         this.look.copy(this.position);
         this.crater.position.set(this.position.x, 0.6, this.position.z);
@@ -107,15 +131,20 @@ export class Meteor {
     if (this.phase === 'ground') {
       this.mesh.rotation.y += dt * m.spin;
       this.mesh.position.y = m.size * 0.45 + Math.sin(this.time * 2) * m.bob;
-      this.sparkle -= dt;
-      if (this.sparkle <= 0) {
-        this.sparkle = m.sparkleEvery;
-        _burst.set(this.position.x, m.size * 0.5, this.position.z);
-        this.particles.emit('spark', _burst, 2, 1);
-      }
+      // The column leaves from the gem's top, so the gem itself stays in view.
+      _burst.set(this.position.x, m.size * 1.0, this.position.z);
+      this.beacon += dt * m.beaconRate;
+      this.beaconSpark += dt * m.beaconSparkRate;
+      const glow = Math.floor(this.beacon);
+      const sparks = Math.floor(this.beaconSpark);
+      this.beacon -= glow;
+      this.beaconSpark -= sparks;
+      if (glow > 0) this.particles.emit('beacon', _burst, glow, 1);
+      if (sparks > 0) this.particles.emit('beaconSpark', _burst, sparks, 1);
       if (!airborne && Math.hypot(monster.x - this.position.x, monster.z - this.position.z) <= m.pickupRadius + monsterRadius) {
         this.phase = 'collected';
         this.mesh.visible = false;
+        this.pillar.visible = false;
         _burst.set(this.position.x, m.size * 0.5, this.position.z);
         this.particles.explosion(_burst, 2);
         this.particles.emit('plasma', _burst, 24, 3);
@@ -154,5 +183,6 @@ export class Meteor {
     this.t = 0;
     this.mesh.visible = false;
     this.crater.visible = false;
+    this.pillar.visible = false;
   }
 }

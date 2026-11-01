@@ -20,11 +20,21 @@ export function fallbackSite(monster: Vec2, rng: () => number, nearestLand: (p: 
   return nearestLand({ x: monster.x + Math.sin(a) * r, z: monster.z + Math.cos(a) * r });
 }
 
-/** Camera blend toward the sky at cutscene time t: eases up, holds through the fall, eases back; 0 outside the cutscene. */
+/** Cutscene time (s) at which the gem lands. */
+export function landTime(): number {
+  return CONFIG.meteor.fallStart + CONFIG.meteor.fallTime;
+}
+
+/** Whole cutscene length (s): fall release, fall, hold, camera back. */
+export function cutsceneTotal(): number {
+  return landTime() + CONFIG.meteor.hold + CONFIG.meteor.lookBack;
+}
+
+/** Camera blend toward the sky at cutscene time t: eases up while the gem is already falling, holds through the landing, eases back; 0 outside the cutscene. */
 export function cutsceneK(t: number): number {
   const m = CONFIG.meteor;
-  const holdEnd = m.lookUp + m.fallTime + m.hold;
-  if (t <= 0 || t >= holdEnd + m.lookBack) return 0;
+  const holdEnd = landTime() + m.hold;
+  if (t <= 0 || t >= cutsceneTotal()) return 0;
   if (t < m.lookUp) return easeInOutCubic(t / m.lookUp);
   if (t <= holdEnd) return 1;
   return easeInOutCubic(1 - (t - holdEnd) / m.lookBack);

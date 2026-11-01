@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { CONFIG } from '../config';
 import { faceted } from '../render/toon';
 
-export type ParticleKind = 'dust' | 'debris' | 'fire' | 'smoke' | 'spark' | 'acid' | 'plasma' | 'trail' | 'ink' | 'rot' | 'shade' | 'mist' | 'bone' | 'wisp' | 'hexfire' | 'hexember' | 'wraith' | 'billow' | 'veil' | 'splash' | 'napalm' | 'ember' | 'contrail' | 'spikeDust';
+export type ParticleKind = 'dust' | 'debris' | 'fire' | 'smoke' | 'spark' | 'acid' | 'plasma' | 'trail' | 'ink' | 'rot' | 'shade' | 'mist' | 'bone' | 'wisp' | 'hexfire' | 'hexember' | 'wraith' | 'billow' | 'veil' | 'splash' | 'napalm' | 'ember' | 'contrail' | 'spikeDust' | 'beacon' | 'beaconSpark';
 
 /**
  * `stretch`: drawn upright and this many times taller than wide, flickering (flame tongues) instead of tumbling.
@@ -54,6 +54,10 @@ export const PRESETS: Record<ParticleKind, Preset> = {
   splash: { color: 0xf4f8fb, life: 0.9, size0: 18, size1: 6, speed: 90, up: 300, gravity: 520, drag: 0.8 },
   /** Spike Rain's landings: big, green-tinted dust clouds. */
   spikeDust: { color: CONFIG.insect.colors.spikeDust, life: 1.6, size0: 40, size1: 130, speed: 140, up: 50, gravity: -15, drag: 2.2 },
+  /** The landed meteor's beacon: big cyan glow motes that climb a few hundred metres, almost straight up, and shrink away. */
+  beacon: { color: P.meteor, life: 2.6, size0: 34, size1: 10, speed: 25, up: 190, gravity: 0, drag: 0.2 },
+  /** White pinpricks rising with the beacon glow. */
+  beaconSpark: { color: P.meteorGlow, life: 2.2, size0: 22, size1: 6, speed: 20, up: 230, gravity: 0, drag: 0.2 },
   ink: { color: CONFIG.kraken.colors.ink, life: 1.1, size0: 30, size1: 70, speed: 120, up: 50, gravity: -10, drag: 2 },
 };
 
@@ -71,7 +75,7 @@ const HIDDEN = new THREE.Matrix4().makeScale(0, 0, 0);
 /** `trail` holds contrails on their own, so a long chemtrail never crowds out footfall and impact dust. */
 const LAYER_OPACITY = { solid: 1, dust: 0.65, smoke: 0.35, murk: 0.85, cloud: 0.6, splash: 1, trail: 0.8 } as const;
 type LayerName = keyof typeof LAYER_OPACITY;
-const LAYER_OF: Record<ParticleKind, LayerName> = { dust: 'dust', smoke: 'smoke', debris: 'solid', fire: 'solid', spark: 'solid', acid: 'solid', plasma: 'solid', trail: 'dust', ink: 'smoke', rot: 'solid', shade: 'murk', mist: 'murk', bone: 'solid', wisp: 'dust', hexfire: 'solid', hexember: 'solid', wraith: 'murk', billow: 'dust', veil: 'cloud', splash: 'splash', napalm: 'solid', ember: 'solid', contrail: 'trail', spikeDust: 'dust' };
+const LAYER_OF: Record<ParticleKind, LayerName> = { dust: 'dust', smoke: 'smoke', debris: 'solid', fire: 'solid', spark: 'solid', acid: 'solid', plasma: 'solid', trail: 'dust', ink: 'smoke', rot: 'solid', shade: 'murk', mist: 'murk', bone: 'solid', wisp: 'dust', hexfire: 'solid', hexember: 'solid', wraith: 'murk', billow: 'dust', veil: 'cloud', splash: 'splash', napalm: 'solid', ember: 'solid', contrail: 'trail', spikeDust: 'dust', beacon: 'solid', beaconSpark: 'solid' };
 const LAYER_MAX: Record<LayerName, number> = { solid: 500, dust: 600, smoke: 500, murk: 400, cloud: 160, splash: 200, trail: 300 };
 
 /** One pooled InstancedMesh: swap-remove on death, no per-frame allocation. */

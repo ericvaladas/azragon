@@ -164,11 +164,13 @@ export const CONFIG = {
   meteor: {
     cutsceneDelay: 3, graceTime: 25, bossDelay: 3,
     /** Landing spot: distance band from the monster (m); fall: start height, sideways slant (m) and time (s). */
-    landMin: 900, landMax: 1300, startHeight: 3500, slant: 1800, fallTime: 2.2,
-    /** Camera blend toward the sky: ease up, hold after the fall starts, ease back (s); extra camera height at full blend (m). */
-    lookUp: 1.2, hold: 1.2, lookBack: 1.2, cameraLift: 400,
-    /** Gem size (m), monster pickup radius and building-flattening radius at impact (m), spin (rad/s), bob (m), sparkle interval (s). */
-    size: 100, pickupRadius: 120, impactRadius: 160, spin: 0.6, bob: 8, sparkleEvery: 0.15,
+    landMin: 900, landMax: 1300, startHeight: 3500, slant: 1800, fallTime: 2.6,
+    /** Camera blend toward the sky: ease up (s), the fall's release time (s into the cutscene, inside the ease-up so the gem is already streaking down as the camera settles), hold after impact, ease back (s); extra camera height at full blend (m). */
+    lookUp: 1.4, fallStart: 0.5, hold: 1.6, lookBack: 1.3, cameraLift: 400,
+    /** Gem size (m), monster pickup radius and building-flattening radius at impact (m), spin (rad/s), bob (m). */
+    size: 100, pickupRadius: 120, impactRadius: 160, spin: 0.6, bob: 8,
+    /** Beacon column over the landed gem: glow and white-spark particles per second, and the light pillar's height and radius (m). */
+    beaconRate: 22, beaconSparkRate: 12, pillarHeight: 700, pillarRadius: 9, pillarOpacity: 0.2,
   },
   camera: {
     near: 5,
