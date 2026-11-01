@@ -360,6 +360,7 @@ export class GameScene {
     const R = CONFIG.insect.ultimate;
     this.ultimates.spikeRain = new SpikeRain(
       this.scene,
+      this.camera,
       {
         enemies: () => this.enemyTargets(),
         buildingsWithin: (c, r) => {
@@ -377,8 +378,11 @@ export class GameScene {
         sky: (k) => this.city.blendAtmosphere(RAIN_ATMOSPHERE, k),
         camera: (k) => this.rig.pull(k, this.rig.orbit.pitch, CONFIG.camera.defaultDistance * R.cameraDistanceMult),
         shake: (a) => this.rig.addTrauma(a),
-        burst: (at) => {
-          this.particles.emit('dust', at, 4, 1);
+        flash: (k) => {
+          this.lighting.hemi.intensity += k * 3;
+        },
+        burst: (at, kind) => {
+          this.particles.emit('dust', at, kind === 'bolt' ? 8 : 4, kind === 'bolt' ? 1.2 : 1);
           this.particles.emit('debris', at, 3, 1);
         },
       },

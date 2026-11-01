@@ -326,13 +326,15 @@ export const CONFIG = {
      * Spike Rain (Q), on real seconds: the area the spikes rain on (from `near` to `far` m in front, `halfAngle` rad
      * either side of the facing), the world time scale, the camera pull; the spikes (the pool, how many fall at least,
      * each one's flight in a straight line from the mouth (s), length and width (m)); the purple fog's near and
-     * far (m); the purple sky's light intensities; and the beats (s).
+     * far (m); the purple sky's light intensities; green lightning striking every boltEvery[0]..[1] s from boltsFrom to
+     * boltsTo, up to boltRange (m) around the Insect; and the beats (s).
      */
     ultimate: {
       near: 250, far: 1400, halfAngle: 0.873, timeScale: 0.25, cameraDistanceMult: 2.0,
       pool: 256, spikes: 160, flight: 1.0, spikeLength: 45, spikeWidth: 7,
       fogNear: 1200, fogFar: 3600, hemiIntensity: 0.45, sunIntensity: 0.4,
-      t: { easeIn: 0.2, sky: 1.5, rearUp: 1.5, volleyFrom: 1.0, volleyTo: 3.0, rainFrom: 2.0, rainTo: 4.0, outroFrom: 4.0, end: 5.5 },
+      boltEvery: [0.9, 1.6], boltRange: 1200,
+      t: { easeIn: 0.2, sky: 1.5, rearUp: 1.5, volleyFrom: 1.0, volleyTo: 3.0, rainFrom: 2.0, rainTo: 4.0, boltsFrom: 0.3, boltsTo: 4.0, outroFrom: 4.0, end: 5.5 },
     },
     /** Spike Rain's purple sky (zenith, horizon, fog, the two lights). */
     colors: {
@@ -342,6 +344,10 @@ export const CONFIG = {
       rainHemiSky: 0x9a6ac8,
       rainHemiGround: 0x1a0c24,
       rainSun: 0xc8a0f0,
+      /** Spike Rain's green lightning: its pale core, acid-green edge and the scorch it leaves. */
+      boltCore: 0xf0ffe8,
+      boltEdge: 0x5cff3a,
+      boltScorch: 0x142010,
     },
   },
   /** The Kraken. Stats feed its MonsterKind; arms tune the tentacles; colours its body and effects. */

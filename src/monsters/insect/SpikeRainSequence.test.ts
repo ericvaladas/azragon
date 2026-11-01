@@ -37,6 +37,7 @@ function rig(enemies: Target[], buildings: Target[] = [], facing = 0) {
     releases: 0,
     bursts: [] as [THREE.Vector3, number][],
     launches: [] as number[],
+    flash: [] as number[],
   };
   const host: SpikeRainHost = {
     enemies: () => enemies,
@@ -56,10 +57,13 @@ function rig(enemies: Target[], buildings: Target[] = [], facing = 0) {
     sky: (k) => log.sky.push(k),
     camera: (k) => log.camera.push(k),
     shake: () => {},
-    burst: (at) => log.bursts.push([at.clone(), now]),
+    flash: (k) => log.flash.push(k),
+    burst: (at, kind) => {
+      if (kind === 'spike') log.bursts.push([at.clone(), now]);
+    },
   };
   let seed = 17;
-  const s = new SpikeRain(new THREE.Scene(), host, 0xffffff, () => (seed = (seed * 16807) % 2147483647) / 2147483647);
+  const s = new SpikeRain(new THREE.Scene(), new THREE.PerspectiveCamera(), host, 0xffffff, () => (seed = (seed * 16807) % 2147483647) / 2147483647);
   let ends = 0;
   const run = (until: number, step = 1 / 60) => {
     while (now < until - 1e-9) {
@@ -166,6 +170,30 @@ describe('SpikeRain', () => {
     for (const t of r.log.launches) expect(rainPhase(t).roar).toBeGreaterThan(0.7);
   });
 
+  it('strikes green lightning now and then through the storm, around the Insect, flashing the scene', () => {
+    const r = rig([]);
+    const struck: [THREE.Vector3, number][] = [];
+    const lightning = r.s['lightning'];
+    const strike = lightning.strike.bind(lightning);
+    lightning.strike = (at: THREE.Vector3) => {
+      struck.push([at.clone(), r.at()]);
+      strike(at);
+    };
+    r.s.start(new THREE.Vector3(), 1);
+    r.run(T.end + 0.1);
+    const span = T.boltsTo - T.boltsFrom;
+    expect(struck.length).toBeGreaterThanOrEqual(Math.floor(span / U.boltEvery[1]));
+    expect(struck.length).toBeLessThanOrEqual(Math.ceil(span / U.boltEvery[0]) + 1);
+    for (const [at, t] of struck) {
+      expect(t).toBeGreaterThanOrEqual(T.boltsFrom - 1e-9);
+      expect(t).toBeLessThanOrEqual(T.boltsTo + 1 / 60);
+      expect(at.y).toBe(0);
+      expect(Math.hypot(at.x, at.z)).toBeLessThanOrEqual(U.boltRange);
+    }
+    expect(Math.max(...r.log.flash)).toBeGreaterThan(0.5);
+    expect(last(r.log.flash)).toBe(0);
+  });
+
   it('pauses freeze it', () => {
     const r = rig([unit(0, 700)]);
     r.s.start(new THREE.Vector3(), 1);
@@ -189,6 +217,7 @@ describe('SpikeRain', () => {
     expect(r.s.timeScale()).toBe(1);
     expect(r.s.active).toBe(false);
     expect(r.s['spikes'].flying).toBe(0);
+    expect(last(r.log.flash)).toBe(0);
   });
 
   it('ends once, with time scale 1', () => {

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { CONFIG } from '../../config';
 import type { Target } from '../../combat';
+import { Lightning } from '../../systems/Lightning';
 import type { Ultimate } from '../../systems/ultimate';
 import type { Vec2 } from '../../util/math';
 import { RainSpikes } from './RainSpikes';
@@ -8,6 +9,7 @@ import { inArea, landingTimes, rainPhase, scatterPoints } from './spikeRain';
 
 const U = CONFIG.insect.ultimate;
 const T = U.t;
+const C = CONFIG.insect.colors;
 const BOSS_DAMAGE = CONFIG.wendigo.ultimate.bossDamage;
 /** Buildings are gathered this far (m) past the area, so a large one poking into it is found. */
 const BUILDING_SLACK = 200;
@@ -35,8 +37,10 @@ export type SpikeRainHost = {
   /** Camera pull-back 0..1, keeping the player's angle (0 restores the player's view). */
   camera(k: number): void;
   shake(amount: number): void;
-  /** A spike's impact on the ground. */
-  burst(at: THREE.Vector3): void;
+  /** A lightning flash on the scene light, 0..1. */
+  flash(k: number): void;
+  /** A spike's or a lightning bolt's impact on the ground. */
+  burst(at: THREE.Vector3, kind: 'spike' | 'bolt'): void;
 };
 
 /**
@@ -46,6 +50,7 @@ export type SpikeRainHost = {
 type Planned = { land: number; to: THREE.Vector3; targets: Target[]; slot: number; launched: boolean; landed: boolean };
 
 const _from = new THREE.Vector3();
+const _bolt = new THREE.Vector3();
 const noLanding = () => {};
 
 /**
@@ -70,16 +75,24 @@ export class SpikeRain implements Ultimate {
   private nextLand = 0;
   private hit = new Set<Target>();
   private spikes: RainSpikes;
+  private lightning: Lightning;
+  private nextBolt = 0;
   private points: Vec2[] = [];
   private times: number[] = [];
 
   constructor(
     scene: THREE.Scene,
+    camera: THREE.Camera,
     private host: SpikeRainHost,
     spikeColor: number,
     private rand: () => number = Math.random,
   ) {
     this.spikes = new RainSpikes(scene, spikeColor);
+    // Dust and a jolt land with each return stroke.
+    this.lightning = new Lightning(scene, camera, { core: C.boltCore, edge: C.boltEdge, scorch: C.boltScorch }, rand, (at) => {
+      this.host.burst(at, 'bolt');
+      this.host.shake(0.04);
+    });
   }
 
   /** World time scale while it runs (1 when idle). */
@@ -106,6 +119,14 @@ export class SpikeRain implements Ultimate {
     this.host.sky(ph.sky);
     this.host.camera(ph.camera);
     this.host.hold(ph.roar);
+    // Green lightning now and then through the storm, around the Insect.
+    while (this.t >= this.nextBolt && this.t <= T.boltsTo) {
+      const a = this.rand() * Math.PI * 2;
+      const r = Math.sqrt(this.rand()) * U.boltRange;
+      this.lightning.strike(_bolt.set(this.origin.x + Math.sin(a) * r, 0, this.origin.z + Math.cos(a) * r));
+      this.nextBolt += U.boltEvery[0] + this.rand() * (U.boltEvery[1] - U.boltEvery[0]);
+    }
+    this.host.flash(this.lightning.update(realDt));
 
     if (!this.gathered && this.t >= T.volleyFrom) {
       this.gathered = true;
@@ -138,6 +159,7 @@ export class SpikeRain implements Ultimate {
     this.host.release();
     this.host.sky(0);
     this.host.camera(0);
+    this.host.flash(0);
     this.clear();
     return true;
   }
@@ -147,12 +169,14 @@ export class SpikeRain implements Ultimate {
       this.host.release();
       this.host.sky(0);
       this.host.camera(0);
+      this.host.flash(0);
     }
     this.clear();
   }
 
   dispose(): void {
     this.spikes.dispose();
+    this.lightning.dispose();
   }
 
   /**
@@ -182,7 +206,7 @@ export class SpikeRain implements Ultimate {
   /** A spike lands: an impact, and every target it was meant for is hit. */
   private land(p: Planned): void {
     p.landed = true;
-    this.host.burst(p.to);
+    this.host.burst(p.to, 'spike');
     this.host.shake(LAND_SHAKE);
     for (const t of p.targets) this.strike(t);
   }
@@ -204,5 +228,7 @@ export class SpikeRain implements Ultimate {
     this.nextLaunch = this.nextLand = 0;
     this.hit.clear();
     this.spikes.clear();
+    this.lightning.clear();
+    this.nextBolt = T.boltsFrom;
   }
 }
