@@ -3,6 +3,7 @@ import { CONFIG } from '../config';
 import type { Target } from '../combat';
 import { toonMat } from '../render/toon';
 import type { EnemySystem, WorldContext } from './types';
+import { escaped, fleePoint } from './retreat';
 import { heliPosition, newHeliState, orbitDir, stepHeli, type HeliState } from './heliMath';
 import { MAIN_ROTOR, PODS, TAIL_ROTOR, bodyGeometry, mainRotorGeometry, rotorDiscGeometry, tailRotorGeometry } from './heliModel';
 
@@ -50,7 +51,7 @@ class Heli implements Target {
   }
 }
 
-/** Attack helicopters: fly in from the map edge, circle the monster and fire rocket volleys at it. */
+/** Attack helicopters: fly in from the map edge, circle the monster and fire rocket volleys at it. While the army retreats they fly out instead. */
 export class Helicopters implements EnemySystem {
   readonly kind = 'heli' as const;
   private ctx: WorldContext | null = null;
@@ -159,6 +160,13 @@ export class Helicopters implements EnemySystem {
           this.helis.splice(i, 1);
           continue;
         }
+      } else if (ctx.retreating === true) {
+        if (escaped(h.position, monster)) {
+          this.scene.remove(h.group);
+          this.helis.splice(i, 1);
+          continue;
+        }
+        this.flyOff(h, monster, dt);
       } else {
         const rockets = stepHeli(s, monster, dt);
         const p = heliPosition(s);
@@ -169,6 +177,18 @@ export class Helicopters implements EnemySystem {
       h.rotor.rotation.y += h.rotorSpeed * dt;
       h.tail.rotation.x += H.tailRotorSpin * dt;
     }
+  }
+
+  /** Flies at approach speed straight away from the monster, firing nothing, nosed down and rolled level. */
+  private flyOff(h: Heli, monster: THREE.Vector3, dt: number): void {
+    const s = h.state;
+    const away = fleePoint(h.position, monster, CONFIG.cycle.exitDistance + 200);
+    s.heading = Math.atan2(away.x - h.position.x, away.z - h.position.z);
+    h.position.x += Math.sin(s.heading) * H.approachSpeed * dt;
+    h.position.z += Math.cos(s.heading) * H.approachSpeed * dt;
+    h.position.y += (H.altitude - h.position.y) * (1 - Math.exp(-1.5 * dt));
+    s.bank += (0 - s.bank) * (1 - Math.exp(-3 * dt));
+    s.pitch = H.pitchMax;
   }
 
   private volley(h: Heli, rockets: number, ctx: WorldContext): void {

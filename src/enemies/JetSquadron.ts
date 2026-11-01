@@ -5,6 +5,7 @@ import type { EnemySystem, WorldContext } from './types';
 import { toonMat } from '../render/toon';
 import { burnerGeometry, jetGeometry } from './jetModel';
 import { steerToward } from './steer';
+import { escaped, fleePoint } from './retreat';
 
 type Mode = 'attack' | 'exit' | 'crashing';
 const _desired = new THREE.Vector3();
@@ -44,7 +45,10 @@ class Jet implements Target {
   }
 }
 
-/** Jets fly strafing passes: attack run past the monster's head, fire a salvo, exit, loop back. */
+/**
+ * Jets fly strafing passes: attack run past the monster's head, fire a salvo, exit, loop back. While the army
+ * retreats they fire nothing and fly out of the map.
+ */
 export class JetSquadron implements EnemySystem {
   readonly kind = 'jet' as const;
   private ctx: WorldContext | null = null;
@@ -107,6 +111,7 @@ export class JetSquadron implements EnemySystem {
     this.ctx = ctx;
     const monster = ctx.monster.position;
     const J = CONFIG.jet;
+    const retreating = ctx.retreating === true;
     for (let i = this.jets.length - 1; i >= 0; i--) {
       const j = this.jets[i]!;
       j.flashT = Math.max(0, j.flashT - dt);
@@ -134,8 +139,17 @@ export class JetSquadron implements EnemySystem {
           this.jets.splice(i, 1);
           continue;
         }
+      } else if (retreating && escaped(j.position, monster)) {
+        this.scene.remove(j.group);
+        this.jets.splice(i, 1);
+        continue;
       } else {
-        if (j.mode === 'attack') {
+        if (retreating) {
+          // Out of the map: no salvo, and the exit waypoint is never reached for a loop back.
+          j.mode = 'exit';
+          const away = fleePoint(j.position, monster, CONFIG.cycle.exitDistance + 200);
+          j.waypoint.set(away.x, J.altitude, away.z);
+        } else if (j.mode === 'attack') {
           j.waypoint.copy(monster).add(j.offset).setY(J.altitude + j.offset.y);
           const dm = j.position.distanceTo(monster);
           if (!j.salvoFired && dm >= J.salvoMin && dm <= J.salvoMax) {

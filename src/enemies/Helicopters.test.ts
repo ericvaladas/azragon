@@ -97,3 +97,34 @@ describe('Helicopters', () => {
     }
   });
 });
+
+describe('Helicopters retreat', () => {
+  const retreatable = (ctx: WorldContext) => ctx as WorldContext & { retreating?: boolean };
+
+  it('stops firing once retreating, having fired with it unset', () => {
+    const { ctx, rockets } = makeCtx();
+    const h = new Helicopters(new THREE.Scene());
+    h.spawn(ctx);
+    for (let i = 0; i < 40 * 20; i++) h.update(0.05, ctx);
+    const before = rockets.length;
+    expect(before).toBeGreaterThan(0);
+    retreatable(ctx).retreating = true;
+    for (let i = 0; i < 20 * 20; i++) h.update(0.05, ctx);
+    expect(rockets.length).toBe(before);
+  });
+
+  it('flies off and is removed past exitDistance without a kill', () => {
+    const { ctx, destroyed } = makeCtx();
+    const h = new Helicopters(new THREE.Scene());
+    h.spawn(ctx);
+    for (let i = 0; i < 40 * 20; i++) h.update(0.05, ctx);
+    retreatable(ctx).retreating = true;
+    const t = h.targets()[0]!;
+    const dist = () => Math.hypot(t.position.x, t.position.z);
+    for (let i = 0; i < 10 * 20; i++) h.update(0.05, ctx);
+    expect(dist()).toBeGreaterThan(CONFIG.heli.radius + 500);
+    for (let i = 0; i < 60 * 20; i++) h.update(0.05, ctx);
+    expect(h.targets().length).toBe(0);
+    expect(destroyed).toEqual([]);
+  });
+});

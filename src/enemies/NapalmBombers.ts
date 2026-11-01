@@ -3,6 +3,7 @@ import { CONFIG } from '../config';
 import type { Target } from '../combat';
 import { toonMat } from '../render/toon';
 import type { EnemySystem, WorldContext } from './types';
+import { escaped, fleePoint } from './retreat';
 import { bombPosition, bombReleases, bomberDone, bomberPosition, impactPoints, newRun, patchAlpha, patchDps, warningAlpha, type BombRelease, type NapalmRun, type Patch } from './napalmMath';
 import { PROPS, bomberGeometry, bombGeometry, propDiscGeometry, propGeometry, splashGeometry } from './napalmModel';
 
@@ -52,6 +53,8 @@ class Bomber implements Target {
   silent = false;
   trailT = 0;
   propSpeed: number = N.propSpin;
+  /** Heading out of the map; the bombing run was dropped when the retreat began. */
+  fleeing = false;
 
   constructor(
     readonly run: NapalmRun,
@@ -83,7 +86,7 @@ type Fire = Patch & { yaw: number; phase: number };
 
 /**
  * Napalm bombers: a propeller bomber flies one straight run over where the monster stood when it spawned,
- * lays a line of bombs centred there, and flies on out of the city. Each bomb leaves a patch of burning
+ * lays a line of bombs centred there, and flies on out of the city. While the army retreats it drops nothing and flies out. Each bomb leaves a patch of burning
  * napalm that hurts the monster while it stands in it.
  */
 export class NapalmBombers implements EnemySystem {
@@ -215,7 +218,7 @@ export class NapalmBombers implements EnemySystem {
     }
     // Bombs already falling still land, and their strip fades out on schedule; shot down before the first
     // release, nothing drops and the strip goes with it.
-    if (b.next > 0) this.strips.push({ run: b.run, t: b.t, mesh: b.strip });
+    if (!b.fleeing && b.next > 0) this.strips.push({ run: b.run, t: b.t, mesh: b.strip });
     else this.dropStrip(b.strip);
     this.ctx?.onDestroyed(b, N.exp);
   };
@@ -232,6 +235,14 @@ export class NapalmBombers implements EnemySystem {
           this.bombers.splice(i, 1);
           continue;
         }
+      } else if (ctx.retreating === true) {
+        if (escaped(b.position, ctx.monster.position)) {
+          this.scene.remove(b.group);
+          this.dropStrip(b.strip);
+          this.bombers.splice(i, 1);
+          continue;
+        }
+        this.flyOff(b, dt, ctx);
       } else {
         b.t += dt;
         const p = bomberPosition(b.run, b.t);
@@ -261,6 +272,18 @@ export class NapalmBombers implements EnemySystem {
     }
     this.updateBombs(dt, ctx);
     this.updateFires(dt, ctx);
+  }
+
+  /** Drops the bombing run (its warning strip goes; bombs already falling still land) and flies straight away from the monster at cruise speed. */
+  private flyOff(b: Bomber, dt: number, ctx: WorldContext): void {
+    if (!b.fleeing) {
+      b.fleeing = true;
+      this.dropStrip(b.strip);
+    }
+    const away = fleePoint(b.position, ctx.monster.position, CONFIG.cycle.exitDistance + 200);
+    b.dir.set(away.x - b.position.x, 0, away.z - b.position.z).normalize();
+    b.position.addScaledVector(b.dir, N.speed * dt);
+    b.bank += (0 - b.bank) * (1 - Math.exp(-3 * dt));
   }
 
   /** Copies the jets' crash: falls, rolls, trails smoke and blows up on the ground. True once it has hit. */

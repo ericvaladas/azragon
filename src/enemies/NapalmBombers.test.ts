@@ -160,3 +160,45 @@ describe('NapalmBombers', () => {
     expect(sys.patches().length).toBe(0);
   });
 });
+
+describe('NapalmBombers retreat', () => {
+  const retreatable = (ctx: WorldContext) => ctx as WorldContext & { retreating?: boolean };
+  const dropsBeforeLanding = (retreating: boolean) => {
+    const { ctx } = makeCtx();
+    const sys = new NapalmBombers(new THREE.Scene());
+    sys.spawn(ctx);
+    retreatable(ctx).retreating = retreating;
+    run(sys, ctx, lastLanding() + 0.2);
+    return sys.bombsDropped();
+  };
+
+  it('attacks nothing while retreating (and does drop bombs with it unset)', () => {
+    expect(dropsBeforeLanding(false)).toBe(N.bombs);
+    expect(dropsBeforeLanding(true)).toBe(0);
+  });
+
+  it('keeps fires already burning, with bombs already falling still landing', () => {
+    const { ctx } = makeCtx();
+    const sys = new NapalmBombers(new THREE.Scene());
+    sys.spawn(ctx);
+    run(sys, ctx, firstRelease() + 0.5);
+    const released = sys.bombsDropped();
+    expect(released).toBeGreaterThan(0);
+    retreatable(ctx).retreating = true;
+    run(sys, ctx, 3);
+    expect(sys.bombsDropped()).toBe(released);
+    expect(sys.patches().length).toBeGreaterThan(0);
+  });
+
+  it('flies off and is removed past exitDistance without a kill', () => {
+    const { ctx, destroyed } = makeCtx();
+    const sys = new NapalmBombers(new THREE.Scene());
+    sys.spawn(ctx);
+    retreatable(ctx).retreating = true;
+    run(sys, ctx, 3);
+    expect(sys.targets().length).toBe(1);
+    run(sys, ctx, 40);
+    expect(sys.targets().length).toBe(0);
+    expect(destroyed).toEqual([]);
+  });
+});

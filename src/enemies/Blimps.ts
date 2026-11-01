@@ -4,6 +4,7 @@ import { CONFIG } from '../config';
 import type { Target } from '../combat';
 import { faceted, toonMat } from '../render/toon';
 import type { EnemySystem, WorldContext } from './types';
+import { escaped, fleePoint } from './retreat';
 
 const B = CONFIG.blimp;
 const MAX = CONFIG.spawns.blimp.cap;
@@ -41,7 +42,7 @@ class Blimp implements Target {
   }
 }
 
-/** Kamikaze blimps: drift to the monster's head and detonate unless shot down first. */
+/** Kamikaze blimps: drift to the monster's head and detonate unless shot down first. While the army retreats they drift away instead. */
 export class Blimps implements EnemySystem {
   readonly kind = 'blimp' as const;
   private blimps: Blimp[] = [];
@@ -116,6 +117,19 @@ export class Blimps implements EnemySystem {
       }
       b.flashT = Math.max(0, b.flashT - dt);
       b.phase += dt;
+      if (ctx.retreating === true) {
+        if (escaped(b.position, m)) {
+          this.blimps.splice(i, 1);
+          continue;
+        }
+        // Turns away from the monster at cruise speed and never detonates.
+        const away = fleePoint(b.position, m, CONFIG.cycle.exitDistance + 200);
+        _s.set(away.x - b.position.x, 0, away.z - b.position.z).normalize();
+        b.position.addScaledVector(_s, B.speed * dt);
+        b.position.y += Math.sin(b.phase * 1.3) * 6 * dt;
+        b.yaw = Math.atan2(_s.x, _s.z);
+        continue;
+      }
       const d = b.position.distanceTo(_aim);
       if (d <= B.triggerDist && ctx.monster.alive) {
         b.alive = false;

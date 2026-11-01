@@ -220,3 +220,51 @@ describe('OspreyNets', () => {
     expect(nets.netModes()).toEqual([]);
   });
 });
+
+describe('OspreyNets retreat', () => {
+  const retreatable = (ctx: WorldContext) => ctx as WorldContext & { retreating?: boolean };
+
+  it('drops no net while retreating, and flies off with it still slung', () => {
+    const { nets, ctx, snares } = spawned();
+    retreatable(ctx).retreating = true;
+    until(nets, ctx, () => false, 12);
+    expect(snares).toEqual([]);
+    expect(nets.netModes().every((m) => m === 'carried')).toBe(true);
+    until(nets, ctx, () => nets.count() === 0, 60);
+    expect(nets.count()).toBe(0);
+    expect(nets.netModes()).toEqual([]);
+    expect(snares).toEqual([]);
+  });
+
+  it('control: with retreating unset the same squad does snare', () => {
+    const { nets, ctx, snares } = spawned();
+    until(nets, ctx, () => snares.length > 0, 40);
+    expect(snares.length).toBe(1);
+  });
+
+  it('keeps the net slung when ospreys are shot down during the retreat', () => {
+    const { nets, ctx, snares } = spawned();
+    retreatable(ctx).retreating = true;
+    kill(nets.targets()[0]!);
+    kill(nets.targets()[1]!);
+    until(nets, ctx, () => nets.count() === 0, 60);
+    expect(nets.netModes()).not.toContain('falling');
+    expect(snares).toEqual([]);
+  });
+
+  it('a net already falling still lands', () => {
+    const { nets, ctx, snares } = spawned();
+    until(nets, ctx, () => nets.netModes()[0] === 'falling');
+    retreatable(ctx).retreating = true;
+    until(nets, ctx, () => snares.length > 0, FALL);
+    expect(snares).toEqual([CONFIG.snare.duration]);
+  });
+
+  it('removes the squad past exitDistance without a kill', () => {
+    const { nets, ctx, destroyed } = spawned();
+    retreatable(ctx).retreating = true;
+    until(nets, ctx, () => nets.count() === 0, 80);
+    expect(nets.targets()).toHaveLength(0);
+    expect(destroyed).toEqual([]);
+  });
+});

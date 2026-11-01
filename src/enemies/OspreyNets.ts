@@ -8,6 +8,7 @@ import {
   NET_N, NET_SEGMENTS, carriedGrid, domeRadius, dropOutcome, gridSegments, newGrid, newSquad, positionDone, slotOffset,
   squadGone, startLeave, stepSquad, type MonsterInfo, type P3, type Squad,
 } from './ospreyMath';
+import { escaped } from './retreat';
 import { PODS, ROTOR_HUB, bodyGeometry, podGeometry, rotorDiscGeometry, rotorGeometry } from './ospreyModel';
 
 const O = CONFIG.osprey;
@@ -85,7 +86,7 @@ class Osprey implements Target {
  * Osprey Net squads: four Ospreys fly in carrying a net between them, track the monster while they sink and spread
  * it open, and drop it on the monster (snaring it) if at least CONFIG.osprey.minToDrop are still flying; with fewer,
  * the net falls to the ground. Then they fly out. The snared net stays draped on the monster until GameScene reports
- * the snare has ended (netTornFree).
+ * the snare has ended (netTornFree). While the army retreats the squad drops no net and flies out with it.
  */
 export class OspreyNets implements EnemySystem {
   readonly kind = 'osprey' as const;
@@ -201,8 +202,8 @@ export class OspreyNets implements EnemySystem {
       this.ctx?.particles.emit('smoke', o.position, 6, 0.8);
     }
     const team = o.team;
-    // Too few left to hold the net up: the drop is off at once.
-    if (team.net?.mode === 'carried' && dropOutcome(this.living(team)) === 'abort') {
+    // Too few left to hold the net up: the drop is off at once. A retreating squad drops nothing.
+    if (this.ctx?.retreating !== true && team.net?.mode === 'carried' && dropOutcome(this.living(team)) === 'abort') {
       const m = this.ctx!.monster.position;
       this.abort(team);
       startLeave(team.squad, { x: m.x, z: m.z });
@@ -215,18 +216,27 @@ export class OspreyNets implements EnemySystem {
     this.clock += dt;
     const info = this.info(ctx);
     const m = ctx.monster.position;
+    const retreating = ctx.retreating === true;
     for (let i = this.teams.length - 1; i >= 0; i--) {
       const team = this.teams[i]!;
+      // Leaving: the net, if still carried, stays slung and goes with the squad.
+      if (retreating && team.squad.phase !== 'leave') startLeave(team.squad, { x: m.x, z: m.z });
       stepSquad(team.squad, dt, info);
-      if (positionDone(team.squad) && team.net?.mode === 'carried') {
+      if (!retreating && positionDone(team.squad) && team.net?.mode === 'carried') {
         if (dropOutcome(this.living(team)) === 'release') this.release(team);
         else this.abort(team);
         startLeave(team.squad, { x: m.x, z: m.z });
       }
       this.placeTeam(team, dt);
       for (const o of team.ospreys) if (o.crashing && !o.gone && this.crash(o, dt, ctx)) this.remove(o);
-      if (squadGone(team.squad, { x: m.x, z: m.z }) || team.ospreys.every((o) => o.gone)) {
+      const gone = retreating ? escaped(team.squad, m) : squadGone(team.squad, { x: m.x, z: m.z });
+      if (gone || team.ospreys.every((o) => o.gone)) {
         for (const o of team.ospreys) if (!o.gone) this.remove(o);
+        // A net still slung leaves with its squad.
+        if (team.net) {
+          this.dropNet(team.net);
+          this.nets = this.nets.filter((n) => n !== team.net);
+        }
         this.teams.splice(i, 1);
       }
     }
