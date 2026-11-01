@@ -67,7 +67,7 @@ export const ABILITIES: Record<AbilityId, { title: string; desc(rank: number): s
   bubble: { title: 'Shield Bubble', desc: (r) => (r === 1 ? 'Button: 3s invincibility (T)' : 'Longer bubble, recharges faster') },
   core: { title: 'Haste When Hurt', desc: (r) => (r === 1 ? 'Faster cooldowns when hurt' : 'Even faster cooldowns when hurt') },
   reflect: { title: 'Reflect Shield', desc: (r) => (r === 1 ? 'Auto: bounce projectiles back at enemies' : 'Longer reflect, shorter cooldown') },
-  overload: { title: 'Laser Absorb', desc: (r) => (r === 1 ? 'Absorb a laser hit and fire it back' : 'Recharges faster') },
+  overload: { title: 'Laser Absorb', desc: (r) => (r === 1 ? 'Absorb a laser to cut your cooldowns' : 'Cuts more, recharges faster') },
 };
 
 const emptyRanks = (): Record<AbilityId, number> => ({ dash: 0, roar: 0, storm: 0, chitin: 0, overload: 0, spines: 0, swat: 0, nova: 0, mortar: 0, bubble: 0, reflect: 0, core: 0 });

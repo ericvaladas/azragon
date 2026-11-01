@@ -49,8 +49,7 @@ export interface WorldContext {
    * ground), and a waypoint route over existing segments (excluding `from`).
    */
   readonly roads: { nearest(p: Vec2): Vec2; nearestLand(p: Vec2): Vec2; path(from: Vec2, to: Vec2): Vec2[] };
-  /** `attacker` is the enemy dealing the hit, when there is one (Overload fires beams back at it). */
-  damageMonster(amount: number, source: DamageSource, attacker?: Target): void;
+  damageMonster(amount: number, source: DamageSource): void;
   damageBuildings(p: Vec2, r: number, amount: number): void;
   /** Damages buildings as damageBuildings does, but a building it brings down pays no EXP. */
   razeBuildings(p: Vec2, r: number, amount: number): void;

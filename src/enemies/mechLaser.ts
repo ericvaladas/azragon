@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 import { CONFIG } from '../config';
-import type { Target } from '../combat';
 import type { Vec2 } from '../util/math';
 import { rotateToward } from './aimMath';
 import { beamHits } from './beamMath';
@@ -94,9 +93,8 @@ export class MechLaser {
 
   /**
    * One frame of `phase`, `t` s into the whole laser move, with the eye at `eye` and the body facing `heading`.
-   * The monster's hit comes last: reflected damage can kill the mech, which hides the laser.
    */
-  update(phase: MechLaserPhase, t: number, dt: number, eye: THREE.Vector3, heading: number, ctx: WorldContext, attacker: Target): void {
+  update(phase: MechLaserPhase, t: number, dt: number, eye: THREE.Vector3, heading: number, ctx: WorldContext): void {
     const entering = phase !== this.phase;
     this.phase = phase;
     this.start.copy(eye);
@@ -127,7 +125,7 @@ export class MechLaser {
       ctx.shake(M.laserShake);
     }
     this.burn(dt, ctx);
-    if (m.alive && beamHits(_body, this.start, this.end, M.laserHitRadius)) ctx.damageMonster(M.laserDps * dt, 'beam', attacker);
+    if (m.alive && beamHits(_body, this.start, this.end, M.laserHitRadius)) ctx.damageMonster(M.laserDps * dt, 'beam');
   }
 
   /** The line's far end: laserLength along the aim, cut short by the ground. */

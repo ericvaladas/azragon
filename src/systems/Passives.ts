@@ -10,18 +10,31 @@ export class Passives {
   private mortarT = 0;
   private interceptBank = 0;
   private overloadCd = 0;
+  /** Seconds left in which beam and orbital hits are absorbed for free. */
+  private absorbT = 0;
   private bubbleT = 0;
   private reflectT = 0;
   private reflectCd = 0;
 
   constructor(private ranks: () => Record<AbilityId, number>) {}
 
-  /** Overload: if taken and off cooldown, absorb this beam/orbital hit (starting the cooldown). */
-  tryOverload(): boolean {
+  /**
+   * Overload, on a beam or orbital hit: 'trigger' absorbs it, starting the cooldown and the absorb window; 'window' absorbs
+   * it free inside that window; null lets it through.
+   */
+  tryOverload(): 'trigger' | 'window' | null {
     const r = this.ranks().overload;
-    if (r <= 0 || this.overloadCd > 0) return false;
+    if (r <= 0) return null;
+    if (this.absorbT > 0) return 'window';
+    if (this.overloadCd > 0) return null;
     this.overloadCd = P.overload.cooldown[r]!;
-    return true;
+    this.absorbT = P.overload.absorbTime;
+    return 'trigger';
+  }
+
+  /** Seconds a triggered Overload cuts from the active abilities' cooldowns. */
+  overloadCut(): number {
+    return P.overload.cooldownCut[this.ranks().overload]!;
   }
 
   deflectChance(): number {
@@ -122,6 +135,7 @@ export class Passives {
       }
     }
     this.overloadCd = Math.max(0, this.overloadCd - cdDt);
+    this.absorbT = Math.max(0, this.absorbT - dt);
     this.bubbleT = Math.max(0, this.bubbleT - dt);
     this.reflectT = Math.max(0, this.reflectT - dt);
     this.reflectCd = Math.max(0, this.reflectCd - cdDt);
@@ -145,7 +159,7 @@ export class Passives {
     this.mortarT = 0;
     this.interceptBank = 0;
     this.bubbleT = this.reflectT = this.reflectCd = 0;
-    this.overloadCd = 0;
+    this.overloadCd = this.absorbT = 0;
   }
 }
 

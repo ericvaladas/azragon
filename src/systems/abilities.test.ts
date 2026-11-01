@@ -5,6 +5,23 @@ import { CONFIG } from '../config';
 const A = CONFIG.abilities;
 
 describe('Abilities', () => {
+  it('cut takes seconds off each active cooldown, down to 0, and leaves the ultimate alone', () => {
+    const a = new Abilities();
+    a.setRank('dash', 1);
+    a.setRank('ultimate', 1);
+    a.trigger('leap');
+    a.trigger('dash');
+    a.cut(A.dash.cooldown * (A.rankCooldown[1] ?? 1) - 1);
+    expect(a.ready('dash')).toBe(false);
+    a.cut(1);
+    expect(a.ready('dash')).toBe(true);
+    a.cut(1e6);
+    expect(a.ready('leap')).toBe(true);
+    expect(a.ready('ultimate')).toBe(false);
+    a.tick(0, CONFIG.ultimate.cooldown - 0.1);
+    expect(a.ready('ultimate')).toBe(false);
+  });
+
   it('starts with only Leap; Dash and Roar come from level-up picks', () => {
     const a = new Abilities();
     expect(a.unlocked('leap')).toBe(true);

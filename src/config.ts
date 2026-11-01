@@ -605,8 +605,12 @@ export const CONFIG = {
     acid: { dps: 30 },
     storm: { interval: 8, intervalStep: 1, spikes: 4, extraSpikes: 2 },
     chitin: { perRank: 0.15 },
-    /** Overload: absorb the next beam/orbital hit and fire it back (truck destroyed; orbital = energy blast). */
-    overload: { cooldown: [0, 20, 15, 11], blastRadius: 450, blastDamage: 250, reflectDamage: 400 },
+    /**
+     * Laser Absorb: a beam or orbital hit is absorbed, cutting every active ability's cooldown but the ultimate's by
+     * cooldownCut s (by rank) and cancelling an orbital strike. For absorbTime s after that, further beam and orbital hits
+     * are absorbed too, with no second cut. It recharges over cooldown s (by rank).
+     */
+    overload: { cooldown: [0, 20, 15, 11], cooldownCut: [0, 4, 6, 8], absorbTime: 1.5 },
     /** Arrays are indexed by rank (0 = not taken). */
     spines: { rate: [0, 2, 3, 4.5], radius: [0, 500, 600, 700] },
     swat: { cooldown: [0, 3.75, 2.85, 1.95], range: [0, 450, 525, 600], damage: [0, 120, 220, 320], targets: [0, 1, 2, 3], headHeight: 380 },

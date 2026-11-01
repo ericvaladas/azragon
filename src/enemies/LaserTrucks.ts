@@ -258,7 +258,7 @@ export class LaserTrucks implements EnemySystem {
           break;
         case 'firing': {
           if (ctx.monster.alive && beamHits(bodyPoint(mp, _body), t.muzzle, t.beamEnd, T.hitRadius)) {
-            ctx.damageMonster(T.dps * dt, 'beam', t);
+            ctx.damageMonster(T.dps * dt, 'beam');
           }
           for (let k = 1; k <= BEAM_SAMPLES; k++) {
             _p.lerpVectors(t.muzzle, t.beamEnd, k / BEAM_SAMPLES);

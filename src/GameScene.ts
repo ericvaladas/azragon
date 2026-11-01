@@ -1444,28 +1444,12 @@ export class GameScene {
     this.monster.startSwat(hits[0]!.position);
   }
 
-  /**
-   * Overload: the absorbed energy fires back. A truck beam returns down the line and blows up the truck;
-   * an orbital strike is cut short and released as a blast around the monster.
-   */
-  private overload(source: DamageSource, attacker?: Target): void {
-    const O = CONFIG.passives.overload;
-    const mult = this.dmgMult();
-    const from = this.bodyPoint(300);
-    if (source === 'beam' && attacker) {
-      for (let k = 0; k <= 10; k++) this.particles.emit('spark', from.clone().lerp(attacker.position, k / 10), 3, 0.4);
-      attacker.applyDamage(O.reflectDamage * mult);
-    } else {
-      this.enemies.get<OrbitalLaser>('laser').cancel();
-      const p = this.monster.position;
-      this.novaWave.start(p, O.blastRadius);
-      this.city.forEachStandingInRadius({ x: p.x, z: p.z }, O.blastRadius, (t) => t.applyDamage(O.blastDamage * mult));
-      for (const t of this.enemyTargets()) {
-        if (Math.hypot(t.position.x - p.x, t.position.z - p.z) <= O.blastRadius + t.radius) t.applyDamage(O.blastDamage * mult);
-      }
-    }
-    this.particles.emit('spark', from, 20, 1.5);
-    this.rig.addTrauma(0.4);
+  /** Overload triggers: the absorbed energy cuts the active abilities' cooldowns, and the buttons show it at once. */
+  private overload(): void {
+    this.abilities.cut(this.passives.overloadCut());
+    this.events.emit('abilities', this.abilityView());
+    this.particles.emit('spark', this.bodyPoint(300), 20, 1.5);
+    this.rig.addTrauma(0.15);
   }
 
   /** Something is about to hit: shells/rockets/missiles or blimps nearby, a laser locking on, or a strike circle underfoot. */
@@ -1626,7 +1610,7 @@ export class GameScene {
         nearestLand: (p) => nearestRoadPoint(this.city.style, p, 3000, { avoidBridges: true }),
         path: (from, to) => planRoadPath(this.city.style, from, to),
       },
-      damageMonster: (amount, source, attacker) => this.damageMonster(amount, source, attacker),
+      damageMonster: (amount, source) => this.damageMonster(amount, source),
       damageBuildings: (p, r, amount) => this.city.forEachStandingInRadius(p, r, (t) => t.applyDamage(amount)),
       razeBuildings: (p, r, amount) => {
         // A collapse reports onTargetDestroyed synchronously, inside applyDamage.
@@ -1662,12 +1646,14 @@ export class GameScene {
   }
 
   /** The only way the monster takes damage. */
-  damageMonster(amount: number, source: DamageSource, attacker?: Target): void {
+  damageMonster(amount: number, source: DamageSource): void {
     const m = this.monster;
     if (!m.alive || this.state !== 'playing') return;
     const shielded = untouchable(this.passives.bubbleActive(), this.ultimateActive);
-    if ((source === 'beam' || source === 'laser') && !shielded && this.passives.tryOverload()) {
-      this.overload(source, attacker);
+    const absorbed = (source === 'beam' || source === 'laser') && !shielded ? this.passives.tryOverload() : null;
+    if (absorbed) {
+      if (source === 'laser') this.enemies.get<OrbitalLaser>('laser').cancel();
+      if (absorbed === 'trigger') this.overload();
       return;
     }
     const r = resolveHit(amount, source, { dmgMult: difficulty(this.progression.level).dmgMult, deflectChance: this.deflectChance(), airborne: m.airborne, invulnerable: shielded }, Math.random());

@@ -9,7 +9,7 @@ const ranks = (r: Partial<Record<AbilityId, number>>) => () => ({ dash: 0, roar:
 describe('Passives', () => {
   it('has no effect at rank 0', () => {
     const p = new Passives(ranks({}));
-    expect(p.tryOverload()).toBe(false);
+    expect(p.tryOverload()).toBeNull();
     expect(p.deflectChance()).toBe(0);
     expect(p.update(100)).toEqual({ storm: 0, nova: 0, mortar: 0, intercepts: 0 });
   });
@@ -137,14 +137,36 @@ describe('Passives', () => {
     expect(p.bubbleActive()).toBe(false);
   });
 
+  it('Overload absorbs follow-up hits inside its window with no second trigger, then the window ends', () => {
+    const p = new Passives(ranks({ overload: 2 }));
+    expect(p.tryOverload()).toBe('trigger');
+    p.update(P.overload.absorbTime - 0.1);
+    expect(p.tryOverload()).toBe('window');
+    expect(p.tryOverload()).toBe('window');
+    p.update(0.2);
+    expect(p.tryOverload()).toBeNull();
+    // Window hits do not restart the recharge: it runs from the trigger.
+    p.update(P.overload.cooldown[2]! - P.overload.absorbTime - 0.1 + 0.05);
+    expect(p.tryOverload()).toBe('trigger');
+  });
+
+  it('Overload cuts by the rank table, and reset clears its window', () => {
+    for (const r of [1, 2, 3]) expect(new Passives(ranks({ overload: r })).overloadCut()).toBe(P.overload.cooldownCut[r]);
+    const p = new Passives(ranks({ overload: 1 }));
+    p.tryOverload();
+    p.reset();
+    expect(p.tryOverload()).toBe('trigger');
+  });
+
   it('Overload absorbs one beam hit, then waits out its rank cooldown', () => {
     const p = new Passives(ranks({ overload: 1 }));
-    expect(p.tryOverload()).toBe(true);
-    expect(p.tryOverload()).toBe(false);
-    p.update(P.overload.cooldown[1]! - 0.1);
-    expect(p.tryOverload()).toBe(false);
+    expect(p.tryOverload()).toBe('trigger');
+    p.update(P.overload.absorbTime);
+    expect(p.tryOverload()).toBeNull();
+    p.update(P.overload.cooldown[1]! - P.overload.absorbTime - 0.1);
+    expect(p.tryOverload()).toBeNull();
     p.update(0.2);
-    expect(p.tryOverload()).toBe(true);
+    expect(p.tryOverload()).toBe('trigger');
   });
 });
 

@@ -275,7 +275,7 @@ export class Mech implements EnemySystem {
     if (b.alive) this.think(dt, ctx);
     else if (!this.die(dt, ctx)) return;
     this.draw(dt);
-    if (b.alive) this.updateLaser(dt, ctx, b);
+    if (b.alive) this.updateLaser(dt, ctx);
   }
 
   private think(dt: number, ctx: WorldContext): void {
@@ -432,12 +432,12 @@ export class Mech implements EnemySystem {
   }
 
   /** Runs the laser for the frame just posed, from where the eye now is; hidden outside the move. */
-  private updateLaser(dt: number, ctx: WorldContext, b: MechBody): void {
+  private updateLaser(dt: number, ctx: WorldContext): void {
     if (this.action !== 'laser') {
       this.laser.hide();
       return;
     }
-    this.laser.update(laserPhase(this.actT), this.actT, dt, this.rig.eye(_eye), this.heading, ctx, b);
+    this.laser.update(laserPhase(this.actT), this.actT, dt, this.rig.eye(_eye), this.heading, ctx);
   }
 
   /** A hopback touches down: a dust ring, a shake, and every building under the body and feet crushed. */
@@ -522,7 +522,7 @@ export class Mech implements EnemySystem {
       this.struck = true;
       if (a === 'punch' || a === 'slam') {
         const hit = a === 'punch' ? punchHits(here, this.heading, m, ctx.monster.bodyRadius) : slamHits(here, m, ctx.monster.bodyRadius);
-        if (!ctx.monster.airborne && hit) ctx.damageMonster(a === 'punch' ? M.punchDamage : M.slamDamage, 'melee', this.body!);
+        if (!ctx.monster.airborne && hit) ctx.damageMonster(a === 'punch' ? M.punchDamage : M.slamDamage, 'melee');
         if (a === 'slam') {
           ctx.particles.ring('dust', _p.set(this.x, 0, this.z), M.radius + M.slamRadius, 24);
           ctx.shake(0.25);
@@ -639,7 +639,7 @@ export class Mech implements EnemySystem {
       ctx.particles.explosion(_p, 1.4);
       ctx.particles.ring('dust', _p.setY(0), M.barrageRadius, 10);
       ctx.shake(0.2);
-      if (strikeHits(m, s.at, M.barrageRadius)) ctx.damageMonster(M.barrageDamage, 'artillery', this.body ?? undefined);
+      if (strikeHits(m, s.at, M.barrageRadius)) ctx.damageMonster(M.barrageDamage, 'artillery');
       this.strikes.splice(i, 1);
     }
     this.drawStrikes();
