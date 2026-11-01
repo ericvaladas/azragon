@@ -145,7 +145,7 @@ describe('Mech', () => {
   it('stops with a small gap between the bodies, whatever the monster\'s size', () => {
     for (const bodyRadius of [60, CONFIG.monster.bodyRadius, 160]) {
       const mech = new Mech(new THREE.Scene());
-      const c = makeCtx();
+      const c = makeCtx({ rng: () => 0.9 });
       c.monster.bodyRadius = bodyRadius;
       // Starts inside dashTrigger, so it walks in (no dash) and then fights where it stopped.
       faceOff(mech, c, 1000);
@@ -299,6 +299,116 @@ describe('Mech', () => {
     // The barrels ease home after the volley.
     run(mech, c, M.cannonRecoilTime + 2 * DT);
     expect(rig.barrelOffset).toBe(0);
+  });
+
+  describe('evading', () => {
+    type Evading = { action: string; heading: number; evadeCd: number; meleeCd: number; x: number; z: number; root: THREE.Group };
+    const inner = (mech: Mech) => mech as unknown as Evading;
+    const hopRoll = M.evadeChance * M.hopChance - 0.01;
+    const stepRoll = M.evadeChance * M.hopChance + 0.01;
+
+    /** Fights at punch reach until it starts `move`, its stand-off held; returns where it stood and its heading. */
+    function fightUntil(mech: Mech, c: ReturnType<typeof makeCtx>, move: string) {
+      faceOff(mech, c, IN_REACH);
+      for (let t = 0; t < 30; t += DT) {
+        const was = { x: inner(mech).x, z: inner(mech).z, heading: inner(mech).heading };
+        mech.update(DT, c.ctx);
+        if (inner(mech).action === move) return was;
+      }
+      throw new Error(`no ${move}`);
+    }
+
+    function finish(mech: Mech, c: ReturnType<typeof makeCtx>, move: string): void {
+      for (let t = 0; inner(mech).action === move && t < 5; t += DT) mech.update(DT, c.ctx);
+    }
+
+    it('a sidestep goes sideways by sidestepDistance, keeping its facing on the monster', () => {
+      const mech = new Mech(new THREE.Scene());
+      const c = makeCtx({ rng: () => stepRoll });
+      const was = fightUntil(mech, c, 'sidestep');
+      finish(mech, c, 'sidestep');
+      const dx = inner(mech).x - was.x;
+      const dz = inner(mech).z - was.z;
+      expect(Math.hypot(dx, dz)).toBeCloseTo(M.sidestepDistance, 0);
+      // All of it across the facing it had.
+      expect(Math.abs(dx * Math.sin(was.heading) + dz * Math.cos(was.heading))).toBeLessThan(1);
+      const aim = Math.atan2(c.monster.position.x - inner(mech).x, c.monster.position.z - inner(mech).z);
+      expect(Math.abs(Math.atan2(Math.sin(aim - inner(mech).heading), Math.cos(aim - inner(mech).heading)))).toBeLessThan(0.5);
+      expect(inner(mech).evadeCd).toBeGreaterThan(0);
+    });
+
+    it('a hopback jumps straight away from the monster, peaks at hopHeight and lands with a crush', () => {
+      const mech = new Mech(new THREE.Scene());
+      const c = makeCtx({ rng: () => hopRoll });
+      const was = fightUntil(mech, c, 'hopback');
+      const before = distTo(mech, c.monster.position);
+      c.crushes.length = 0;
+      let peak = 0;
+      for (let t = 0; inner(mech).action === 'hopback' && t < 5; t += 0.01) {
+        mech.update(0.01, c.ctx);
+        peak = Math.max(peak, inner(mech).root.position.y);
+      }
+      expect(Math.hypot(inner(mech).x - was.x, inner(mech).z - was.z)).toBeCloseTo(M.hopDistance, 0);
+      expect(distTo(mech, c.monster.position)).toBeGreaterThan(before + M.hopDistance * 0.9);
+      expect(peak).toBeGreaterThan(M.hopHeight * 0.95);
+      expect(peak).toBeLessThanOrEqual(M.hopHeight + 1e-6);
+      expect(inner(mech).root.position.y).toBe(0);
+      expect(c.crushes.some((x) => x.amount >= M.crushDps * M.hopCrush)).toBe(true);
+    });
+
+    it('stays a hittable ground target through a hopback', () => {
+      const mech = new Mech(new THREE.Scene());
+      const c = makeCtx({ rng: () => hopRoll });
+      fightUntil(mech, c, 'hopback');
+      expect(body(mech).airborne).toBe(false);
+      const hp = (body(mech) as unknown as { hp: number }).hp;
+      body(mech).applyDamage(10);
+      expect((body(mech) as unknown as { hp: number }).hp).toBe(hp - 10);
+    });
+
+    it('never moves onto blocked ground: it takes another way, or none', () => {
+      const mech = new Mech(new THREE.Scene());
+      const c = makeCtx({ rng: () => hopRoll });
+      // Everything behind the mech (it stands at +X of the monster, facing −X) is blocked, so it sidesteps instead.
+      (c.ctx as { blocked?: (x: number, z: number) => boolean }).blocked = (x) => x > c.monster.position.x + IN_REACH + 10;
+      const was = fightUntil(mech, c, 'sidestep');
+      finish(mech, c, 'sidestep');
+      expect(inner(mech).x).toBeLessThanOrEqual(was.x + 10);
+
+      const stuck = new Mech(new THREE.Scene());
+      const d = makeCtx({ rng: () => hopRoll });
+      (d.ctx as { blocked?: (x: number, z: number) => boolean }).blocked = () => true;
+      faceOff(stuck, d, IN_REACH);
+      for (let t = 0; t < 12; t += DT) {
+        stuck.update(DT, d.ctx);
+        expect(['sidestep', 'hopback']).not.toContain(inner(stuck).action);
+      }
+    });
+
+    it('waits evadeCooldown between evades, in a close fight about one every 8 to 12 s', () => {
+      const mech = new Mech(new THREE.Scene());
+      const c = makeCtx({ rng: mulberry32(11) });
+      faceOff(mech, c, IN_REACH);
+      const starts: number[] = [];
+      const ends: number[] = [];
+      let last = 'walk';
+      const seconds = 600;
+      for (let t = 0; t < seconds; t += DT) {
+        const p = body(mech).position;
+        if (distTo(mech, c.monster.position) > IN_REACH) c.monster.position.set(p.x - IN_REACH, 0, p.z);
+        (body(mech) as unknown as { hp: number }).hp = M.hp;
+        mech.update(DT, c.ctx);
+        const a = inner(mech).action;
+        const evading = a === 'sidestep' || a === 'hopback';
+        if (evading && last !== a) starts.push(t);
+        if (!evading && (last === 'sidestep' || last === 'hopback')) ends.push(t);
+        last = a;
+      }
+      for (let i = 1; i < starts.length; i++) expect(starts[i]! - ends[i - 1]!).toBeGreaterThanOrEqual(M.evadeCooldown - 2 * DT);
+      const every = seconds / starts.length;
+      expect(every).toBeGreaterThan(8);
+      expect(every).toBeLessThan(12);
+    });
   });
 
   it('reports its death exactly once', () => {

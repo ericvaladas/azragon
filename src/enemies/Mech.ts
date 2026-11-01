@@ -22,6 +22,10 @@ const FALL_RATE = 5;
  * it lands as the circle fills; a smoke puff every TRAIL_EVERY s marks its arc, and the glowing missile is this big (m).
  */
 const LAUNCH_GAP = 0.08;
+/** Points checked along an evade's path, and how far past its end it must stay clear of blocked ground (radii). */
+const EVADE_SAMPLES = 4;
+const EVADE_MARGIN = 1;
+const ease = (t: number) => t * t * (3 - 2 * t);
 const TRAIL_EVERY = 0.025;
 const MISSILE_SIZE = 22;
 const _p = new THREE.Vector3();
@@ -33,7 +37,7 @@ const _s = new THREE.Vector3();
 /** Scratch ground points (a foot, the mech's own spot) and the brain's input, reused every frame. */
 const _foot: Vec2 = { x: 0, z: 0 };
 const _here: Vec2 = { x: 0, z: 0 };
-const _mind: MechMind = { dist: 0, contact: 0, engaged: false, meleeCd: 0, dashCd: 0, rocketCd: 0, barrageCd: 0, roll: 0 };
+const _mind: MechMind = { dist: 0, contact: 0, engaged: false, meleeCd: 0, dashCd: 0, rocketCd: 0, barrageCd: 0, evadeCd: 0, roll: 0, evadeRoll: 1 };
 /** The diagonal leg pairs that step together: front-left with rear-right, front-right with rear-left. */
 const PAIRS = [[0, 3], [1, 2]] as const;
 
@@ -74,7 +78,7 @@ type Strike = { at: Vec2; t: number; tube: number; flight: number; from: THREE.V
 
 /** Scratch target pose and its input, rebuilt every draw. */
 const _target = restPose();
-const _poseIn: MechPoseInput = { stride: 0, gait: 0, action: 'walk', actT: 0, dashing: false, stabLeg: 0, alive: true, dying: 0, wrecked: false, recoil: 0 };
+const _poseIn: MechPoseInput = { stride: 0, gait: 0, action: 'walk', actT: 0, dashing: false, stabLeg: 0, evadeSide: 1, alive: true, dying: 0, wrecked: false, recoil: 0 };
 
 /**
  * The boss mech: one giant four-legged spider tank, summoned by the cycle (never by the spawn director). It walks in
@@ -107,6 +111,19 @@ export class Mech implements EnemySystem {
   private dashCd = 0;
   private rocketCd = 0;
   private barrageCd = 0;
+  private evadeCd = 0;
+  /** Seconds until the next evade roll. */
+  private evadeCheck = 0;
+  /** The current evade's start, its unit direction on the ground, and its side (1 its left, −1 its right). */
+  private evadeX = 0;
+  private evadeZ = 0;
+  private evadeDirX = 0;
+  private evadeDirZ = 0;
+  private evadeSide = 1;
+  /** A hopback's touchdown has happened. */
+  private landed = false;
+  /** Height above the ground mid-hopback (m). */
+  private hopY = 0;
   /** Stride phase (rad; one footfall each π) and how far into its stride it is (0 standing .. 1 walking). */
   private stride = 0;
   private gait = 0;
@@ -195,7 +212,7 @@ export class Mech implements EnemySystem {
     this.action = 'walk';
     this.actT = 0;
     this.dashing = false;
-    this.meleeCd = this.dashCd = 0;
+    this.meleeCd = this.dashCd = this.evadeCd = this.evadeCheck = this.hopY = 0;
     this.rocketCd = M.rocketCooldown;
     this.barrageCd = M.barrageCooldown * 0.5;
     this.stride = this.gait = this.flashT = this.recoil = 0;
@@ -245,6 +262,7 @@ export class Mech implements EnemySystem {
     this.rocketCd -= dt;
     // The barrage waits until it has come into the fight, so it never fires from beyond the fog.
     if (this.engaged) this.barrageCd -= dt;
+    this.evadeCd -= dt;
     if (this.action === 'walk' && ctx.monster.alive) {
       const mind = _mind;
       mind.dist = dist;
@@ -254,12 +272,21 @@ export class Mech implements EnemySystem {
       mind.dashCd = this.dashCd;
       mind.rocketCd = this.rocketCd;
       mind.barrageCd = this.barrageCd;
+      mind.evadeCd = this.evadeCd;
       mind.roll = ctx.rng();
+      this.evadeCheck -= dt;
+      mind.evadeRoll = 1;
+      if (this.evadeCheck <= 0) {
+        this.evadeCheck = M.evadeCheck;
+        mind.evadeRoll = ctx.rng();
+      }
       const next = chooseAction(mind);
-      if (next !== 'walk') this.start(next);
+      if (next === 'sidestep' || next === 'hopback') this.startEvade(next, mind.roll < 0.5 ? 1 : -1, ctx);
+      else if (next !== 'walk') this.start(next);
     }
     this.gait = damp(this.gait, this.action === 'walk' && dist > stand + 1 ? 1 : 0, 6, dt);
     if (this.action === 'walk') this.walk(dt, ctx, dist, aim, stand);
+    else if (this.action === 'sidestep' || this.action === 'hopback') this.evade(this.action, dt, ctx, aim, dist);
     else this.act(this.action, dt, ctx, aim);
   }
 
@@ -272,6 +299,78 @@ export class Mech implements EnemySystem {
     if (a === 'punch') this.stabLeg = 1 - this.stabLeg;
   }
 
+  /**
+   * Starts the evade `a` toward `side` (sidesteps only) if its path is clear, else the sidestep to the other side, else
+   * the other evade; with no clear path it stays on its feet and carries on.
+   */
+  private startEvade(a: 'sidestep' | 'hopback', side: number, ctx: WorldContext): void {
+    if (a === 'hopback') this.tryEvade('hopback', side, ctx) || this.tryEvade('sidestep', side, ctx) || this.tryEvade('sidestep', -side, ctx);
+    else this.tryEvade('sidestep', side, ctx) || this.tryEvade('sidestep', -side, ctx) || this.tryEvade('hopback', side, ctx);
+  }
+
+  /** Starts evade `move` toward `side` (sidesteps only) if its path is clear; true if it did. */
+  private tryEvade(move: 'sidestep' | 'hopback', side: number, ctx: WorldContext): boolean {
+    const sin = Math.sin(this.heading);
+    const cos = Math.cos(this.heading);
+    // The model's left (+X) is (cos h, −sin h) on the ground; its back is (−sin h, −cos h).
+    const dx = move === 'sidestep' ? cos * side : -sin;
+    const dz = move === 'sidestep' ? -sin * side : -cos;
+    if (!this.pathClear(dx, dz, move === 'sidestep' ? M.sidestepDistance : M.hopDistance, ctx)) return false;
+    this.start(move);
+    this.evadeX = this.x;
+    this.evadeZ = this.z;
+    this.evadeDirX = dx;
+    this.evadeDirZ = dz;
+    this.evadeSide = side;
+    this.landed = false;
+    return true;
+  }
+
+  /** Nothing along `dist` m in the ground direction (dx, dz), and a body's width past it, is blocked. */
+  private pathClear(dx: number, dz: number, dist: number, ctx: WorldContext): boolean {
+    if (!ctx.blocked) return true;
+    const reach = dist + EVADE_MARGIN * M.radius;
+    for (let i = 1; i <= EVADE_SAMPLES; i++) {
+      const d = (reach * i) / EVADE_SAMPLES;
+      if (ctx.blocked(this.x + dx * d, this.z + dz * d)) return false;
+    }
+    return true;
+  }
+
+  /** One frame of an evade: it keeps facing the monster and slides or jumps along its fixed line, then lands. */
+  private evade(a: 'sidestep' | 'hopback', dt: number, ctx: WorldContext, aim: number, dist: number): void {
+    const mv = M.moves[a];
+    this.actT += dt;
+    this.heading = turn(this.heading, aim, M.turnRate * dt);
+    const k = Math.max(0, Math.min(1, (this.actT - mv.windup) / mv.strike));
+    const px = this.x;
+    const pz = this.z;
+    const along = (a === 'sidestep' ? M.sidestepDistance : M.hopDistance) * (a === 'sidestep' ? ease(k) : k);
+    this.x = this.evadeX + this.evadeDirX * along;
+    this.z = this.evadeZ + this.evadeDirZ * along;
+    if (a === 'sidestep') {
+      this.footfalls(Math.hypot(this.x - px, this.z - pz), dt, ctx, dist);
+    } else {
+      this.hopY = M.hopHeight * 4 * k * (1 - k);
+      if (k >= 1 && !this.landed) this.land(ctx);
+    }
+    if (movePhase(a, this.actT) !== 'done') return;
+    this.evadeCd = M.evadeCooldown;
+    this.action = 'walk';
+  }
+
+  /** A hopback touches down: a dust ring, a shake, and every building under the body and feet crushed. */
+  private land(ctx: WorldContext): void {
+    this.landed = true;
+    _here.x = this.x;
+    _here.z = this.z;
+    const crush = M.crushDps * M.hopCrush;
+    ctx.damageBuildings(_here, M.crushRadius, crush);
+    for (let i = 0; i < 4; i++) ctx.damageBuildings(this.foot(i, _foot), M.crushRadius, crush);
+    ctx.particles.ring('dust', _p.set(this.x, 0, this.z), M.radius, 20);
+    ctx.shake(M.hopShake);
+  }
+
   /** Turns toward the monster and strides straight ahead until `stand` m from it (centre to centre), crushing what is underfoot. */
   private walk(dt: number, ctx: WorldContext, dist: number, aim: number, stand: number): void {
     this.heading = turn(this.heading, aim, M.turnRate * dt);
@@ -279,6 +378,11 @@ export class Mech implements EnemySystem {
     const step = Math.min((this.engaged ? M.walkSpeed : M.approachSpeed) * dt, dist - stand);
     this.x += Math.sin(this.heading) * step;
     this.z += Math.cos(this.heading) * step;
+    this.footfalls(step, dt, ctx, dist);
+  }
+
+  /** Advances the stride by `step` m, crushing what is underfoot; each footfall raises dust and shakes (less far off). */
+  private footfalls(step: number, dt: number, ctx: WorldContext, dist: number): void {
     const before = Math.floor(this.stride / Math.PI + 0.5);
     this.stride += (Math.PI * step) / (STEP * H);
     for (let i = 0; i < 4; i++) ctx.damageBuildings(this.foot(i, _foot), M.crushRadius, M.crushDps * dt);
@@ -305,7 +409,7 @@ export class Mech implements EnemySystem {
     return out;
   }
 
-  private act(a: MechMove, dt: number, ctx: WorldContext, aim: number): void {
+  private act(a: Exclude<MechMove, 'sidestep' | 'hopback'>, dt: number, ctx: WorldContext, aim: number): void {
     const mv = M.moves[a];
     if (a === 'dash' && this.dashing) {
       this.dash(dt, ctx, M.radius + ctx.monster.bodyRadius + M.stopGap);
@@ -493,6 +597,7 @@ export class Mech implements EnemySystem {
     s.actT = this.actT;
     s.dashing = this.dashing;
     s.stabLeg = this.stabLeg;
+    s.evadeSide = this.evadeSide;
     s.alive = b.alive;
     s.dying = Math.min(1, this.dyingT / M.dyingTime);
     s.wrecked = this.wreckT !== null;
@@ -501,7 +606,9 @@ export class Mech implements EnemySystem {
     // The barrels' kick is instant; only the body's jolt eases in with the pose.
     this.pose.recoil = this.recoil;
     this.rig.apply(this.pose);
-    this.root.position.set(this.x, 0, this.z);
+    // Killed in mid-air, it falls back to the ground.
+    if (!b.alive) this.hopY = damp(this.hopY, 0, FALL_RATE, dt);
+    this.root.position.set(this.x, this.hopY, this.z);
     this.root.rotation.y = this.heading;
     const w = this.wreckT;
     if (w !== null) {
@@ -523,7 +630,7 @@ export class Mech implements EnemySystem {
       return r() < 1 - this.dyingT / M.dyingTime ? 'dim' : 'off';
     }
     const a = this.action;
-    if ((a === 'punch' || a === 'slam' || a === 'dash') && movePhase(a, this.actT) === 'windup') return 'bright';
+    if ((a === 'punch' || a === 'slam' || a === 'dash' || a === 'hopback') && movePhase(a, this.actT) === 'windup') return 'bright';
     return 'dim';
   }
 

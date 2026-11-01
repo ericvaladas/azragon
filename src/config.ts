@@ -762,28 +762,36 @@ export const CONFIG = {
    * cannonRecoilTime s and jolts the body back cannonJoltShift (model units) and up cannonJoltPitch rad. Barrage: barrageCount marked circles of barrageRadius within barrageSpread of the
    * monster, filling over barrageFill, every barrageCooldown; their missiles leave its launcher's front level,
    * along its facing, on a curve whose first control point is barrageRunOut m ahead and whose second is barrageArc m above
-   * the circle (peaking at about 4/9 of that), landing as each fills. Each move runs `moves[move]` windup, strike and
+   * the circle (peaking at about 4/9 of that), landing as each fills. Evading: engaged, inside punch reach with melee
+   * cooling down and evadeCd spent, it rolls every evadeCheck s while it walks; under evadeChance it evades, then waits
+   * evadeCooldown. hopChance of its evades are a hopback (a jump hopDistance straight back, peaking hopHeight up, its
+   * landing shaking by hopShake and crushing as hopCrush s of crushDps); the rest are a sidestep of sidestepDistance.
+   * Each move runs `moves[move]` windup, strike and
    * recover s. Footfalls shake by footfallShake (less far off). Dead, it sparks for dyingTime, blows apart, and the wreck sinks
    * over wreckTime.
    */
   mech: {
     height: MONSTER_HEIGHT, width: 0.9 * MONSTER_HEIGHT, radius: 0.4 * MONSTER_HEIGHT,
     hp: 9000, approachSpeed: 160, walkSpeed: 90, turnRate: 1.2, stopGap: 25,
-    punchReach: 0.3 * MONSTER_HEIGHT, punchArc: 0.7, punchDamage: 50,
-    slamRadius: 0.35 * MONSTER_HEIGHT, slamDamage: 90, slamChance: 0.35, meleeCooldown: 2.6,
+    punchReach: 0.3 * MONSTER_HEIGHT, punchArc: 0.7, punchDamage: 70,
+    slamRadius: 0.35 * MONSTER_HEIGHT, slamDamage: 125, slamChance: 0.35, meleeCooldown: 2.6,
     /** It engages (and may dash) once within dashTrigger m of the monster, or engageAfter s after its summoning, whichever comes first. */
     dashTrigger: 1600, engageAfter: 25, dashSpeed: 900, dashCooldown: 9, crushRadius: 0.25 * MONSTER_HEIGHT, crushDps: 600,
-    rocketCooldown: 4, rocketsPerVolley: 3, rocketDamage: 6, rocketRange: 2200,
+    rocketCooldown: 4, rocketsPerVolley: 3, rocketDamage: 8.5, rocketRange: 2200,
     cannonRecoil: 0.08, cannonRecoilTime: 0.35, cannonJoltShift: 0.014, cannonJoltPitch: 0.035,
     cannonFlash: 4, cannonSparks: 6, cannonSmoke: 6, cannonSmokeSpeed: 420, cannonShake: 0.1,
-    barrageCooldown: 17, barrageCount: 7, barrageSpread: 450, barrageRadius: 130, barrageFill: 2.0, barrageDamage: 45, barrageRunOut: 300, barrageArc: 1500,
+    barrageCooldown: 17, barrageCount: 7, barrageSpread: 450, barrageRadius: 130, barrageFill: 2.0, barrageDamage: 63, barrageRunOut: 300, barrageArc: 1500,
     spawnDistance: 4200, footfallShake: 0.06, dyingTime: 2.5, wreckTime: 6,
+    evadeCooldown: 6, evadeCheck: 0.5, evadeChance: 0.35, hopChance: 0.4,
+    sidestepDistance: 0.9 * MONSTER_HEIGHT, hopDistance: 1.3 * MONSTER_HEIGHT, hopHeight: 0.25 * MONSTER_HEIGHT, hopCrush: 0.4, hopShake: 0.2,
     moves: {
       punch: { windup: 0.65, strike: 0.15, recover: 0.4 },
       slam: { windup: 1.0, strike: 0.2, recover: 0.7 },
       dash: { windup: 0.6, strike: 0, recover: 0.4 },
       rockets: { windup: 0.3, strike: 0.4, recover: 0.3 },
       barrage: { windup: 0.7, strike: 0.5, recover: 0.5 },
+      sidestep: { windup: 0.1, strike: 0.55, recover: 0.2 },
+      hopback: { windup: 0.45, strike: 0.6, recover: 0.35 },
     },
   },
   director: {

@@ -6,7 +6,7 @@ const M = CONFIG.mech;
 /** Where the surfaces touch, for a monster of radius 100. */
 const contact = M.radius + 100;
 /** Everything on cooldown, engaged, at middle distance: walks. */
-const idle: MechMind = { dist: 800, contact, engaged: true, meleeCd: 1, dashCd: 1, rocketCd: 1, barrageCd: 1, roll: 0.5 };
+const idle: MechMind = { dist: 800, contact, engaged: true, meleeCd: 1, dashCd: 1, rocketCd: 1, barrageCd: 1, evadeCd: 1, roll: 0.5, evadeRoll: 1 };
 
 describe('mech brain', () => {
   it('dashes when far and ready', () => {
@@ -34,6 +34,37 @@ describe('mech brain', () => {
     expect(chooseAction({ ...idle, barrageCd: 0, rocketCd: 0 })).toBe('barrage');
     expect(chooseAction({ ...idle, rocketCd: 0 })).toBe('rockets');
     expect(chooseAction({ ...idle, rocketCd: 0, dist: M.rocketRange + 1 })).toBe('walk');
+  });
+
+  describe('evades', () => {
+    const near: MechMind = { ...idle, dist: contact + M.punchReach - 1, evadeCd: 0 };
+    const hop = M.evadeChance * M.hopChance;
+
+    it('hops back or sidesteps by the evade roll, in reach with melee cooling down', () => {
+      expect(chooseAction({ ...near, evadeRoll: hop - 0.01 })).toBe('hopback');
+      expect(chooseAction({ ...near, evadeRoll: hop + 0.01 })).toBe('sidestep');
+    });
+
+    it('needs the evade roll under evadeChance', () => {
+      expect(chooseAction({ ...near, evadeRoll: M.evadeChance })).toBe('walk');
+      expect(chooseAction(near)).toBe('walk');
+    });
+
+    it('waits out evadeCooldown', () => {
+      expect(chooseAction({ ...near, evadeRoll: 0, evadeCd: 0.1 })).toBe('walk');
+    });
+
+    it('needs the monster in melee reach', () => {
+      expect(chooseAction({ ...near, evadeRoll: 0, dist: contact + M.punchReach + 1 })).toBe('walk');
+    });
+
+    it('never evades before engaged', () => {
+      expect(chooseAction({ ...near, evadeRoll: 0, engaged: false })).toBe('walk');
+    });
+
+    it('never evades when melee is ready', () => {
+      expect(chooseAction({ ...near, evadeRoll: 0, meleeCd: 0, roll: 0.9 })).toBe('punch');
+    });
   });
 
   it('walks when nothing is ready', () => {

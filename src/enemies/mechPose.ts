@@ -90,6 +90,8 @@ export type MechPoseInput = {
   dashing: boolean;
   /** The front leg the stab uses: 0 its left, 1 its right. */
   stabLeg: number;
+  /** The side a sidestep goes: 1 its left, −1 its right. */
+  evadeSide: number;
   alive: boolean;
   /** 0 .. 1 through the sparking before it blows apart. */
   dying: number;
@@ -117,7 +119,7 @@ function moveFoot(p: MechPose, i: number, out: number, up: number, fwd: number, 
  * The pose the mech's state asks for, written into `out`. Walking, diagonal pairs step together (front-left with
  * rear-right) and the hull bobs as each pair plants. The stab rocks the hull back and draws one front blade up and
  * back, then spikes it forward; the stomp pitches the hull up with both front blades lifted, then crashes them down; the dash crouches low on all
- * four legs, then gallops. Dying it sags; wrecked, its legs splay flat and the hull drops.
+ * four legs, then gallops; the sidestep shuffles the feet across; the hopback crouches, then tucks all four feet in the air. Dying it sags; wrecked, its legs splay flat and the hull drops.
  */
 export function targetPose(s: MechPoseInput, out: MechPose): MechPose {
   restPose(out);
@@ -202,6 +204,26 @@ export function targetPose(s: MechPoseInput, out: MechPose): MechPose {
       out.lift = -0.13 * k;
       out.pitch = 0.04 * k;
       MECH_LEGS.forEach((leg, i) => nudge(out, i, Math.sin(leg.splay) * 0.04 * k, 0, Math.cos(leg.splay) * 0.04 * k));
+    }
+  } else if (a === 'sidestep') {
+    // A fast sideways shuffle: diagonal pairs swap across the line of travel, the hull leaning into it.
+    const k = ph === 'windup' ? u : ph === 'strike' ? 1 : back;
+    out.roll = -0.07 * s.evadeSide * k;
+    for (let i = 0; i < 4; i++) {
+      const legPh = s.stride + (i === 1 || i === 2 ? Math.PI : 0);
+      nudge(out, i, Math.sin(legPh) * HALF_STEP * k * s.evadeSide, Math.max(0, Math.cos(legPh)) * LIFT * k, 0);
+    }
+  } else if (a === 'hopback') {
+    if (ph === 'windup' || ph === 'recover') {
+      // The tell, and the landing's give: a low crouch on all four legs.
+      const k = ph === 'windup' ? u : back;
+      out.lift = -0.15 * k;
+      out.pitch = 0.06 * k;
+    } else if (ph === 'strike') {
+      // In the air: every foot tucked up and in, the nose raised, out to full extent at the peak and back for the landing.
+      const k = Math.sin(Math.PI * Math.min(1, (s.actT - mv.windup) / mv.strike));
+      out.pitch = -0.12 * k;
+      for (let i = 0; i < 4; i++) moveFoot(out, i, -0.1, 0.2, 0, k);
     }
   } else {
     // Ranged moves rock back a little to fire; each cannon shot jolts the body back further.

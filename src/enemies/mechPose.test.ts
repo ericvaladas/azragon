@@ -4,7 +4,7 @@ import { CONFIG } from '../config';
 import { HIP_FRAME_D, HIP_FRAME_T, HIP_FRAME_W, MECH_LEGS, MECH_PIVOTS as PV, mechLauncher, mechParts } from './mechModel';
 import { hipOf, restPose, solveLeg, targetPose, type LegAngles, type MechPose, type MechPoseInput } from './mechPose';
 
-const input = (o: Partial<MechPoseInput> = {}): MechPoseInput => ({ stride: 0, gait: 0, action: 'walk', actT: 0, dashing: false, stabLeg: 0, alive: true, dying: 0, wrecked: false, recoil: 0, ...o });
+const input = (o: Partial<MechPoseInput> = {}): MechPoseInput => ({ stride: 0, gait: 0, action: 'walk', actT: 0, dashing: false, stabLeg: 0, evadeSide: 1, alive: true, dying: 0, wrecked: false, recoil: 0, ...o });
 
 /** Where the IK's angles put the foot: forward kinematics through the leg's yaw, upper turn and knee turn. */
 function footFrom(hip: THREE.Vector3, a: LegAngles): THREE.Vector3 {

@@ -1,24 +1,28 @@
 import { CONFIG } from '../config';
 import { angleDelta, type Vec2 } from '../util/math';
 
-export type MechAction = 'walk' | 'punch' | 'slam' | 'dash' | 'rockets' | 'barrage';
+export type MechAction = 'walk' | 'punch' | 'slam' | 'dash' | 'rockets' | 'barrage' | 'sidestep' | 'hopback';
 export type MechMove = Exclude<MechAction, 'walk'>;
 
 /**
  * What the mech's brain sees: its distance to the monster (centre to centre), the contact distance (its radius plus the
  * monster's body radius, where the surfaces touch), whether it has engaged (been within dashTrigger of it, or
- * spent engageAfter s since its summoning), the time left on each cooldown, and a uniform roll in [0, 1) that picks a slam over a punch.
+ * spent engageAfter s since its summoning), the time left on each cooldown, a uniform roll in [0, 1) that picks a slam over a punch, and `evadeRoll`, a uniform
+ * roll drawn every evadeCheck s and 1 between draws, so that the evade chance does not depend on the frame rate.
  */
-export type MechMind = { dist: number; contact: number; engaged: boolean; meleeCd: number; dashCd: number; rocketCd: number; barrageCd: number; roll: number };
+export type MechMind = { dist: number; contact: number; engaged: boolean; meleeCd: number; dashCd: number; rocketCd: number; barrageCd: number; evadeCd: number; roll: number; evadeRoll: number };
 
 /**
  * The next move, by priority: a dash when engaged, far and ready; a slam (roll < slamChance) or punch when within
- * punchReach past contact and melee is ready; a barrage when ready; rockets when ready and in range; otherwise walk.
+ * punchReach past contact and melee is ready; an evade (a hopback for the lowest hopChance of the evade rolls, otherwise
+ * a sidestep) when engaged, in that reach, with melee cooling down, evadeCd spent and evadeRoll < evadeChance; a barrage when ready; rockets when ready and in range; otherwise walk.
  */
 export function chooseAction(m: MechMind): MechAction {
   const M = CONFIG.mech;
   if (m.engaged && m.dist > M.dashTrigger && m.dashCd <= 0) return 'dash';
-  if (m.dist <= m.contact + M.punchReach && m.meleeCd <= 0) return m.roll < M.slamChance ? 'slam' : 'punch';
+  const inReach = m.dist <= m.contact + M.punchReach;
+  if (inReach && m.meleeCd <= 0) return m.roll < M.slamChance ? 'slam' : 'punch';
+  if (m.engaged && inReach && m.evadeCd <= 0 && m.evadeRoll < M.evadeChance) return m.evadeRoll < M.evadeChance * M.hopChance ? 'hopback' : 'sidestep';
   if (m.barrageCd <= 0) return 'barrage';
   if (m.rocketCd <= 0 && m.dist <= M.rocketRange) return 'rockets';
   return 'walk';
