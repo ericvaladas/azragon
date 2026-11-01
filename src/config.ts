@@ -138,6 +138,10 @@ export const CONFIG = {
     reflectRim: 0xe2c2ff,
   },
   fog: { near: 2200, far: 4700 },
+  /** The army / retreat / boss / recover loop (s). exitDistance (m) sits beyond fog.far, where retreating units leave. */
+  cycle: { armyTime: 180, breakTime: 20, recoverTime: 10, retreatTimeout: 12, exitDistance: 5000 },
+  /** First-break meteor timing (s after the retreat starts, or after the meteor lands or is collected). */
+  meteor: { cutsceneDelay: 3, graceTime: 25, bossDelay: 3 },
   camera: {
     near: 5,
     far: 12000,
