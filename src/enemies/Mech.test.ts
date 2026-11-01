@@ -207,6 +207,27 @@ describe('Mech', () => {
     expect(c.hits.some((h) => h.source === 'artillery' && h.amount === M.barrageDamage)).toBe(true);
   });
 
+  it('the barrage missiles leave its launcher and come down on their circles', () => {
+    const mech = new Mech(new THREE.Scene());
+    const c = makeCtx();
+    // Each smoke puff along a missile's arc, and where the mech stood as it was laid.
+    const trails: { at: THREE.Vector3; mech: THREE.Vector3 }[] = [];
+    (c.ctx.particles as { emit: unknown }).emit = (kind: string, at: THREE.Vector3) => {
+      if (kind === 'trail') trails.push({ at: at.clone(), mech: body(mech).position.clone() });
+    };
+    faceOff(mech, c, 1200);
+    run(mech, c, 30, () => {
+      if (distTo(mech, c.monster.position) < 1100) c.monster.position.set(body(mech).position.x - 1200, 0, body(mech).position.z);
+    });
+    expect(c.hits.some((h) => h.source === 'artillery')).toBe(true);
+    // The first puff of the first missile is up on the mech, near its launcher, not high over the target.
+    const first = trails[0]!;
+    expect(Math.hypot(first.at.x - first.mech.x, first.at.z - first.mech.z)).toBeLessThan(M.height);
+    expect(first.at.y).toBeLessThan(M.height * 2);
+    // Later puffs come down near the ground, far out by the monster.
+    expect(trails.some((t) => t.at.y < M.height * 0.5 && Math.hypot(t.at.x - t.mech.x, t.at.z - t.mech.z) > 600)).toBe(true);
+  });
+
   it('reports its death exactly once', () => {
     const mech = new Mech(new THREE.Scene());
     const c = makeCtx();

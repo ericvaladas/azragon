@@ -1,26 +1,33 @@
 import * as THREE from 'three';
 import { CONFIG } from '../config';
 import type { Target } from '../combat';
-import { toonMat } from '../render/toon';
 import { angleDelta, damp, type Vec2 } from '../util/math';
-import { strikeFill, strikeHits, strikePoints } from './artilleryMath';
+import { shellProgress, strikeFill, strikeHits, strikePoints } from './artilleryMath';
+import { ballistic } from '../systems/projectileMath';
+import { faceted } from '../render/toon';
 import { chooseAction, movePhase, punchHits, slamHits, type MechAction, type MechMind, type MechMove } from './mechMath';
-import { MECH_PIVOTS as PV, mechParts } from './mechModel';
+import { LEG_REACH, MECH_LEGS, MECH_TUBES } from './mechModel';
+import { MechRig, STEP, dampPose, restPose, targetPose, type MechPoseInput, type VisorState } from './mechPose';
 import type { EnemySystem, WorldContext } from './types';
 
 const M = CONFIG.mech;
 const H = M.height;
 const MAX_STRIKES = 16;
-/** Ground covered per step (one footfall), in model units, and the legs' swing either way at full stride (rad). */
-const STEP = 0.4;
-const LEG_SWING = 0.45;
-/** Seconds between sparks while it dies, and how snappily the pose follows its target (1/s). */
+/** Seconds between sparks while it dies, and how snappily the pose follows its target, alive and dead (1/s). */
 const SPARK_EVERY = 0.12;
 const POSE_RATE = 22;
-/** The incoming barrage missiles show as a falling trail for the last this-many seconds of each circle's fill, from this high (m). */
-const DROP_TIME = 0.5;
-const DROP_FROM = 1100;
+const FALL_RATE = 5;
+/** How fast the cannons' recoil settles (1/s). */
+const RECOIL_RATE = 6;
+/**
+ * The barrage missiles leave the launcher tubes this many seconds apart, each flying the rest of its circle's fill so
+ * it lands as the circle fills; a smoke puff every TRAIL_EVERY s marks its arc, and the glowing missile is this big (m).
+ */
+const LAUNCH_GAP = 0.08;
+const TRAIL_EVERY = 0.025;
+const MISSILE_SIZE = 22;
 const _p = new THREE.Vector3();
+const _land = new THREE.Vector3();
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
 const _s = new THREE.Vector3();
@@ -28,8 +35,8 @@ const _s = new THREE.Vector3();
 const _foot: Vec2 = { x: 0, z: 0 };
 const _here: Vec2 = { x: 0, z: 0 };
 const _mind: MechMind = { dist: 0, contact: 0, engaged: false, meleeCd: 0, dashCd: 0, rocketCd: 0, barrageCd: 0, roll: 0 };
-/** Left (+1) and right (−1). */
-const SIDES = [1, -1] as const;
+/** The diagonal leg pairs that step together: front-left with rear-right, front-right with rear-left. */
+const PAIRS = [[0, 3], [1, 2]] as const;
 
 /** Turns `from` toward `to` by at most `step` rad. */
 const turn = (from: number, to: number, step: number) => from + Math.max(-step, Math.min(step, angleDelta(from, to)));
@@ -60,25 +67,22 @@ class MechBody implements Target {
   }
 }
 
-/** A barrage circle at `at`, painted `t` s ago. */
-type Strike = { at: Vec2; t: number };
+/**
+ * A barrage circle at `at`, painted `t` s ago, and its missile: launched from launcher tube `tube` at `from` (set at
+ * launch), flying for the last `flight` s of the fill.
+ */
+type Strike = { at: Vec2; t: number; tube: number; flight: number; from: THREE.Vector3; launched: boolean; trailT: number };
 
-/** Joint angles and offsets the meshes are drawn with; each frame eases toward a target pose. */
-type Pose = { legL: number; legR: number; armL: number; armR: number; torso: number; crouch: number };
-const POSE_KEYS: readonly (keyof Pose)[] = ['legL', 'legR', 'armL', 'armR', 'torso', 'crouch'];
-const restPose = (out: Pose = { legL: 0, legR: 0, armL: 0, armR: 0, torso: 0, crouch: 0 }): Pose => {
-  for (const k of POSE_KEYS) out[k] = 0;
-  return out;
-};
-/** Scratch target pose, rebuilt every draw. */
+/** Scratch target pose and its input, rebuilt every draw. */
 const _target = restPose();
+const _poseIn: MechPoseInput = { stride: 0, gait: 0, action: 'walk', actT: 0, dashing: false, stabLeg: 0, alive: true, dying: 0, wrecked: false, recoil: 0 };
 
 /**
- * The boss mech: one giant bipedal walker, summoned by the cycle (never by the spawn director). It walks in toward the
- * monster, crushing buildings underfoot, and fights it with telegraphed punches and ground slams, a gap-closing dash
- * once it has engaged (come within dashTrigger, or engageAfter s after its summoning), jet rocket volleys from its shoulder pods and an occasional barrage of marked strike circles.
- * Dead, it sparks and flickers, blows apart, collapses and sinks. Drawn as a small group of meshes (legs, pelvis,
- * torso, head, visor, arms) posed at their pivots, the body on one vertex-coloured toon material.
+ * The boss mech: one giant four-legged spider tank, summoned by the cycle (never by the spawn director). It walks in
+ * toward the monster, crushing buildings underfoot, and fights it with telegraphed front-leg stabs (the punch) and
+ * rearing stomps (the slam), a gap-closing dash once it has engaged (come within dashTrigger, or engageAfter s after
+ * its summoning), jet rocket volleys from its twin cannons and an occasional barrage of marked strike circles from its
+ * box launcher. Dead, it sparks and flickers, blows apart, its legs splay and it sinks. Drawn by a MechRig.
  */
 export class Mech implements EnemySystem {
   readonly kind = 'mech' as const;
@@ -98,8 +102,8 @@ export class Mech implements EnemySystem {
   private rocketsFired = 0;
   /** Mid-dash: moving to its stopping point, the move's clock held at the end of the wind-up. */
   private dashing = false;
-  /** Which arm the next punch uses (+1 left, −1 right); it alternates. */
-  private punchArm = 1;
+  /** Which front leg the next stab uses (0 left, 1 right); it alternates. */
+  private stabLeg = 0;
   private meleeCd = 0;
   private dashCd = 0;
   private rocketCd = 0;
@@ -108,48 +112,21 @@ export class Mech implements EnemySystem {
   private stride = 0;
   private gait = 0;
   private flashT = 0;
+  /** The cannons' recoil, 1 as a rocket leaves, settling to 0. */
+  private recoil = 0;
   /** Seconds since it died (sparking), and since it blew apart (the wreck); the wreck starts at null. */
   private dyingT = 0;
   private sparkT = 0;
   private wreckT: number | null = null;
   private strikes: Strike[] = [];
   private pose = restPose();
-  private readonly root = new THREE.Group();
-  private readonly upper = new THREE.Group();
-  private readonly meshes: THREE.Mesh[] = [];
-  private readonly parts: Record<'legL' | 'legR' | 'pelvis' | 'torso' | 'head' | 'visor' | 'armL' | 'armR', THREE.Mesh>;
-  private readonly bodyMat = toonMat(0xffffff, { vertexColors: true });
-  private readonly flashMat = toonMat(CONFIG.palette.mechFlash, { vertexColors: true });
-  private readonly visorDim = new THREE.MeshBasicMaterial({ color: CONFIG.palette.mechVisor });
-  private readonly visorBright = new THREE.MeshBasicMaterial({ color: CONFIG.palette.mechVisorBright });
-  private readonly visorOff = new THREE.MeshBasicMaterial({ color: CONFIG.palette.mechDark });
-  private flashing = false;
+  private readonly rig = new MechRig();
+  private readonly root = this.rig.root;
   private ringMesh: THREE.InstancedMesh;
   private fillMesh: THREE.InstancedMesh;
+  private missileMesh: THREE.InstancedMesh;
 
   constructor(scene: THREE.Scene) {
-    const g = mechParts();
-    const mk = (geo: THREE.BufferGeometry, parent: THREE.Object3D, x: number, y: number, mat: THREE.Material = this.bodyMat) => {
-      const mesh = new THREE.Mesh(geo, mat);
-      mesh.position.set(x, y, 0);
-      mesh.castShadow = true;
-      mesh.frustumCulled = false;
-      parent.add(mesh);
-      if (mat === this.bodyMat) this.meshes.push(mesh);
-      return mesh;
-    };
-    const legL = mk(g.legL, this.root, PV.hipX, PV.hipY);
-    const legR = mk(g.legR, this.root, -PV.hipX, PV.hipY);
-    this.root.add(this.upper);
-    const pelvis = mk(g.pelvis, this.upper, 0, PV.hipY);
-    const torso = mk(g.torso, this.upper, 0, PV.waistY);
-    const head = mk(g.head, torso, 0, PV.neckY - PV.waistY);
-    const visor = mk(g.visor, head, 0, 0, this.visorDim);
-    const armL = mk(g.armL, torso, PV.shoulderX, PV.shoulderY - PV.waistY);
-    const armR = mk(g.armR, torso, -PV.shoulderX, PV.shoulderY - PV.waistY);
-    this.parts = { legL, legR, pelvis, torso, head, visor, armL, armR };
-    // Yaw about the world vertical, then tip about its own left-right axis when the wreck falls.
-    this.root.rotation.order = 'YXZ';
     this.root.scale.setScalar(H);
     this.root.visible = false;
     scene.add(this.root);
@@ -163,6 +140,10 @@ export class Mech implements EnemySystem {
     }
     this.fillMesh.renderOrder = 2;
     this.ringMesh.renderOrder = 10;
+    this.missileMesh = new THREE.InstancedMesh(faceted(new THREE.IcosahedronGeometry(0.5, 0)), new THREE.MeshBasicMaterial({ color: P.mechGlow, fog: false }), MAX_STRIKES);
+    this.missileMesh.frustumCulled = false;
+    this.missileMesh.count = 0;
+    scene.add(this.missileMesh);
   }
 
   targets(): readonly Target[] {
@@ -218,7 +199,7 @@ export class Mech implements EnemySystem {
     this.meleeCd = this.dashCd = 0;
     this.rocketCd = M.rocketCooldown;
     this.barrageCd = M.barrageCooldown * 0.5;
-    this.stride = this.gait = this.flashT = 0;
+    this.stride = this.gait = this.flashT = this.recoil = 0;
     this.dyingT = this.sparkT = 0;
     this.wreckT = null;
     restPose(this.pose);
@@ -245,6 +226,7 @@ export class Mech implements EnemySystem {
     const b = this.body;
     if (!b) return;
     this.flashT = Math.max(0, this.flashT - dt);
+    this.recoil = Math.max(0, this.recoil - RECOIL_RATE * dt);
     if (b.alive) this.think(dt, ctx);
     else if (!this.die(dt, ctx)) return;
     this.draw(dt);
@@ -288,7 +270,7 @@ export class Mech implements EnemySystem {
     this.struck = false;
     this.rocketsFired = 0;
     this.dashing = false;
-    if (a === 'punch') this.punchArm = -this.punchArm;
+    if (a === 'punch') this.stabLeg = 1 - this.stabLeg;
   }
 
   /** Turns toward the monster and strides straight ahead until `stand` m from it (centre to centre), crushing what is underfoot. */
@@ -300,20 +282,24 @@ export class Mech implements EnemySystem {
     this.z += Math.cos(this.heading) * step;
     const before = Math.floor(this.stride / Math.PI + 0.5);
     this.stride += (Math.PI * step) / (STEP * H);
-    for (const side of SIDES) ctx.damageBuildings(this.foot(side, _foot), M.crushRadius, M.crushDps * dt);
+    for (let i = 0; i < 4; i++) ctx.damageBuildings(this.foot(i, _foot), M.crushRadius, M.crushDps * dt);
     if (Math.floor(this.stride / Math.PI + 0.5) === before) return;
-    // A footfall: the leg swung furthest forward plants.
-    const foot = this.foot(Math.sin(this.stride) > 0 ? 1 : -1, _foot);
-    ctx.particles.ring('dust', _p.set(foot.x, 0, foot.z), M.crushRadius, 8);
+    // A footfall: the diagonal pair swung furthest forward plants, raising dust under each foot.
+    for (const i of PAIRS[Math.sin(this.stride) > 0 ? 0 : 1]) {
+      const foot = this.foot(i, _foot);
+      ctx.particles.ring('dust', _p.set(foot.x, 0, foot.z), M.crushRadius, 8);
+    }
     ctx.shake(M.footfallShake * Math.max(0.25, 1 - dist / CONFIG.fog.far));
   }
 
-  /** Where a foot (+1 left, −1 right) is on the ground, with the stride's forward swing; written into `out`. */
-  private foot(side: number, out: Vec2): Vec2 {
+  /** Where foot `i` (MECH_LEGS order) is on the ground, with the stride's forward swing; written into `out`. */
+  private foot(i: number, out: Vec2): Vec2 {
     const s = Math.sin(this.heading);
     const c = Math.cos(this.heading);
-    const across = side * PV.hipX * H;
-    const fwd = side * Math.sin(this.stride) * LEG_SWING * this.gait * PV.hipY * H;
+    const leg = MECH_LEGS[i]!;
+    const phase = this.stride + (i === 1 || i === 2 ? Math.PI : 0);
+    const across = (leg.x + Math.sin(leg.splay) * LEG_REACH) * H;
+    const fwd = (leg.z + Math.cos(leg.splay) * LEG_REACH + Math.sin(phase) * (STEP / 2) * this.gait) * H;
     // The model's left (+X) is (cos h, −sin h) on the ground.
     out.x = this.x + c * across + s * fwd;
     out.z = this.z - s * across + c * fwd;
@@ -357,7 +343,7 @@ export class Mech implements EnemySystem {
     if (a === 'rockets' && fired) {
       // The volley's rockets go out evenly through the strike.
       const due = Math.min(M.rocketsPerVolley, Math.floor(((this.actT - mv.windup) / Math.max(mv.strike, 1e-6)) * M.rocketsPerVolley) + 1);
-      while (this.rocketsFired < due) this.rocket(ctx, this.rocketsFired++ % 2 ? -1 : 1);
+      while (this.rocketsFired < due) this.rocket(ctx, this.rocketsFired++ % 2);
     }
     if (movePhase(a, this.actT) !== 'done') return;
     if (a === 'punch' || a === 'slam') this.meleeCd = M.meleeCooldown;
@@ -384,6 +370,8 @@ export class Mech implements EnemySystem {
     _here.z = this.z;
     ctx.damageBuildings(_here, M.crushRadius, M.crushDps * dt);
     ctx.particles.emit('dust', _p.set(this.x, 0, this.z), 2, 1.5);
+    // The legs gallop through the lunge.
+    this.stride += (Math.PI * step) / (2 * STEP * H);
     if (left - step > 1) return;
     this.dashing = false;
     const mv = M.moves.dash;
@@ -392,18 +380,10 @@ export class Mech implements EnemySystem {
     ctx.shake(0.2);
   }
 
-  /** A pod's launch face in world space (+1 left pod, −1 right). */
-  private pod(side: number, out: THREE.Vector3): THREE.Vector3 {
-    const s = Math.sin(this.heading);
-    const c = Math.cos(this.heading);
-    const lx = side * PV.podX * H;
-    const lz = PV.podZ * H;
-    return out.set(this.x + c * lx + s * lz, (PV.waistY + PV.podY) * H - this.pose.crouch * PV.hipY * H, this.z - s * lx + c * lz);
-  }
-
-  /** One jet rocket from a pod at the monster's upper body, with a little scatter. */
-  private rocket(ctx: WorldContext, side: number): void {
-    const from = this.pod(side, new THREE.Vector3());
+  /** One jet rocket from a cannon muzzle (0 upper, 1 lower) at the monster's upper body, with a little scatter. */
+  private rocket(ctx: WorldContext, barrel: number): void {
+    const from = this.rig.muzzle(barrel, new THREE.Vector3());
+    this.recoil = 1;
     const r = ctx.rng;
     const aim = ctx.monster.position.clone().add(new THREE.Vector3((r() - 0.5) * 200, (250 + r() * 250) * CONFIG.monster.scale, (r() - 0.5) * 200));
     ctx.fireRocket(from, aim, M.rocketDamage);
@@ -411,28 +391,40 @@ export class Mech implements EnemySystem {
     ctx.particles.emit('smoke', from, 3, 0.6);
   }
 
-  /** Paints barrageCount strike circles around the monster (one on it), launched from both pods. */
+  /** Paints barrageCount strike circles around the monster (one on it); a missile for each leaves the launcher in turn. */
   private barrage(ctx: WorldContext): void {
     const m = ctx.monster.position;
-    for (const at of strikePoints(m, M.barrageCount, M.barrageSpread, ctx.rng)) {
-      if (this.strikes.length < MAX_STRIKES) this.strikes.push({ at, t: 0 });
-    }
-    for (const side of SIDES) {
-      this.pod(side, _p);
-      ctx.particles.emit('fire', _p, 6, 0.6);
-      ctx.particles.emit('smoke', _p, 8, 1);
-    }
+    strikePoints(m, M.barrageCount, M.barrageSpread, ctx.rng).forEach((at, k) => {
+      if (this.strikes.length >= MAX_STRIKES) return;
+      this.strikes.push({ at, t: 0, tube: k % MECH_TUBES.length, flight: M.barrageFill - k * LAUNCH_GAP, from: new THREE.Vector3(), launched: false, trailT: 0 });
+    });
   }
 
-  /** Fills the barrage circles; each lands when full and hits the monster if it is still inside. */
+  /**
+   * Fills the barrage circles and flies their missiles out of the launcher on an arc down onto them; each lands when
+   * its circle is full and hits the monster if it is still inside.
+   */
   private updateStrikes(dt: number, ctx: WorldContext): void {
     if (this.strikes.length === 0) return;
     const m = ctx.monster.position;
     for (let i = this.strikes.length - 1; i >= 0; i--) {
       const s = this.strikes[i]!;
       s.t += dt;
-      const k = (s.t - (M.barrageFill - DROP_TIME)) / DROP_TIME;
-      if (k >= 0 && k < 1) ctx.particles.emit('trail', _p.set(s.at.x, (1 - k) * DROP_FROM, s.at.z), 1, 0.05);
+      const k = shellProgress(s.t, M.barrageFill, s.flight);
+      if (k !== null) {
+        if (!s.launched) {
+          // It leaves its tube with a flash and a puff of smoke.
+          s.launched = true;
+          this.rig.tube(s.tube, s.from);
+          ctx.particles.emit('fire', s.from, 3, 0.4);
+          ctx.particles.emit('smoke', s.from, 4, 0.8);
+        }
+        s.trailT += dt;
+        if (s.trailT >= TRAIL_EVERY && k < 1) {
+          s.trailT = 0;
+          ctx.particles.emit('trail', this.missilePos(s, k), 1, 0.05);
+        }
+      }
       if (s.t < M.barrageFill) continue;
       _p.set(s.at.x, 10, s.at.z);
       ctx.particles.explosion(_p, 1.4);
@@ -476,101 +468,70 @@ export class Mech implements EnemySystem {
     return false;
   }
 
-  /** A random point on the body (world m): within its width, between hip and head height. */
+  /** A random point on the hull and turret (world m): within a third of its width, between belly and launcher top. */
   private bodyPoint(r: () => number, out: THREE.Vector3): THREE.Vector3 {
     const a = r() * Math.PI * 2;
-    const d = r() * M.width * 0.4;
-    return out.set(this.x + Math.cos(a) * d, H * (PV.hipY + r() * (PV.neckY - PV.hipY)), this.z + Math.sin(a) * d);
-  }
-
-  /** The pose this frame's action asks for. */
-  private targetPose(): Pose {
-    const p = restPose(_target);
-    const swing = Math.sin(this.stride) * this.gait;
-    p.legL = -swing * LEG_SWING;
-    p.legR = swing * LEG_SWING;
-    p.armL = swing * 0.25;
-    p.armR = -swing * 0.25;
-    if (!this.body?.alive) {
-      // Slumping as it dies.
-      p.torso = 0.3;
-      p.crouch = 0.04;
-      p.armL = p.armR = 0.2;
-      return p;
-    }
-    const a = this.action;
-    if (a === 'walk') return p;
-    const mv = M.moves[a];
-    const ph = movePhase(a, this.actT);
-    const u = Math.min(1, this.actT / mv.windup);
-    const back = ph === 'recover' ? 1 - (this.actT - mv.windup - mv.strike) / mv.recover : 1;
-    if (a === 'punch') {
-      // One arm cocks back, then drives straight forward.
-      const arm = ph === 'windup' ? 0.9 * u : -1.5 * back;
-      if (this.punchArm > 0) p.armL = arm;
-      else p.armR = arm;
-      p.torso = ph === 'windup' ? -0.08 * u : 0.15 * back;
-    } else if (a === 'slam') {
-      // Both arms rise overhead, then hammer down.
-      p.armL = p.armR = ph === 'windup' ? -2.8 * u : -0.9 * back;
-      p.torso = ph === 'windup' ? -0.15 * u : 0.3 * back;
-      p.crouch = ph === 'windup' ? 0 : 0.05 * back;
-    } else if (a === 'dash') {
-      // The tell: it crouches (the pelvis drops 8%) and leans in; dashing, it leans into the run, arms back.
-      p.crouch = this.dashing ? 0.05 : ph === 'windup' ? 0.08 * u : 0.08 * back;
-      p.torso = this.dashing ? 0.35 : 0.25 * (ph === 'windup' ? u : back);
-      if (this.dashing) p.armL = p.armR = 0.6;
-    } else {
-      p.torso = (a === 'barrage' ? -0.2 : -0.08) * (ph === 'windup' ? u : back);
-    }
-    return p;
+    const d = r() * M.width * 0.3;
+    return out.set(this.x + Math.cos(a) * d, H * (0.45 + r() * 0.45), this.z + Math.sin(a) * d);
   }
 
   private draw(dt = 1): void {
     const b = this.body;
     if (!b) return;
-    const t = this.targetPose();
-    const pose = this.pose;
-    for (const k of POSE_KEYS) pose[k] = damp(pose[k], t[k], POSE_RATE, dt);
-    const P = this.parts;
-    P.legL.rotation.x = pose.legL;
-    P.legR.rotation.x = pose.legR;
-    P.armL.rotation.x = pose.armL;
-    P.armR.rotation.x = pose.armR;
-    P.torso.rotation.x = pose.torso;
-    this.upper.position.y = -pose.crouch * PV.hipY;
+    const s = _poseIn;
+    s.stride = this.stride;
+    s.gait = this.gait;
+    s.action = this.action;
+    s.actT = this.actT;
+    s.dashing = this.dashing;
+    s.stabLeg = this.stabLeg;
+    s.alive = b.alive;
+    s.dying = Math.min(1, this.dyingT / M.dyingTime);
+    s.wrecked = this.wreckT !== null;
+    s.recoil = this.recoil;
+    dampPose(this.pose, targetPose(s, _target), b.alive ? POSE_RATE : FALL_RATE, dt);
+    this.rig.apply(this.pose);
     this.root.position.set(this.x, 0, this.z);
     this.root.rotation.y = this.heading;
     const w = this.wreckT;
     if (w !== null) {
-      // Topples onto its face over the first second, then sinks.
-      const fall = Math.min(1, w);
-      this.root.rotation.x = fall * fall * Math.PI * 0.48;
+      // Settles with a slight tilt, then sinks.
+      this.root.rotation.x = Math.min(1, w) * 0.08;
       this.root.position.y = -(w / M.wreckTime) * 0.4 * H;
     }
-    b.position.set(this.x, H * 0.68, this.z);
-    // The hit flash swaps in a pre-tinted material.
-    const flashing = this.flashT > 0;
-    if (flashing !== this.flashing) {
-      this.flashing = flashing;
-      for (const m of this.meshes) m.material = flashing ? this.flashMat : this.bodyMat;
-    }
-    P.visor.material = this.visorMaterial();
+    b.position.set(this.x, H * 0.6, this.z);
+    this.rig.setFlash(this.flashT > 0);
+    this.rig.setVisor(this.visorState());
+    this.rig.setGlow(w === null);
   }
 
   /** Bright while it winds up a telegraphed move; flickering out as it dies; dark on the wreck. */
-  private visorMaterial(): THREE.Material {
-    if (this.wreckT !== null) return this.visorOff;
+  private visorState(): VisorState {
+    if (this.wreckT !== null) return 'off';
     if (!this.body?.alive) {
       const r = this.ctx?.rng ?? Math.random;
-      return r() < 1 - this.dyingT / M.dyingTime ? this.visorDim : this.visorOff;
+      return r() < 1 - this.dyingT / M.dyingTime ? 'dim' : 'off';
     }
     const a = this.action;
-    if ((a === 'punch' || a === 'slam' || a === 'dash') && movePhase(a, this.actT) === 'windup') return this.visorBright;
-    return this.visorDim;
+    if ((a === 'punch' || a === 'slam' || a === 'dash') && movePhase(a, this.actT) === 'windup') return 'bright';
+    return 'dim';
+  }
+
+  /** Where a strike's missile is, `k` (0..1) through its flight from the tube to the circle. */
+  private missilePos(s: Strike, k: number): THREE.Vector3 {
+    return ballistic(s.from, _land.set(s.at.x, 0, s.at.z), M.barrageArc, k, _p);
   }
 
   private drawStrikes(): void {
+    let missiles = 0;
+    for (const s of this.strikes) {
+      const k = shellProgress(s.t, M.barrageFill, s.flight);
+      if (k === null || !s.launched) continue;
+      _m.compose(this.missilePos(s, k), _q.identity(), _s.setScalar(MISSILE_SIZE));
+      this.missileMesh.setMatrixAt(missiles++, _m);
+    }
+    this.missileMesh.count = missiles;
+    this.missileMesh.instanceMatrix.needsUpdate = true;
     this.strikes.forEach((s, i) => {
       _m.compose(_p.set(s.at.x, 3, s.at.z), _q.identity(), _s.setScalar(M.barrageRadius));
       this.ringMesh.setMatrixAt(i, _m);

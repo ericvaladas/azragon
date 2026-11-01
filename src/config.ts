@@ -139,16 +139,16 @@ export const CONFIG = {
     gustavHazard: 0xf2c230,
     gustavHazardDark: 0x1e1e1e,
     /**
-     * The boss mech: military olive armour, darker olive panels and panel lines, gunmetal joints, launcher tubes and
-     * rivets, a hot amber visor slit (mechVisorBright while it winds up a strike), red warning lights, and the warm
-     * tint it flashes when hit. Its hazard stripes reuse gustavHazard / gustavHazardDark.
+     * The boss mech: white armour plates over a gunmetal-black frame, gunmetal joints, barrels and rams, a red sensor
+     * eye (mechVisorBright while it winds up a strike), the cyan glow of its launcher tube caps, coolant canisters and
+     * light strips, and the warm tint it flashes when hit.
      */
-    mech: 0x5f6b48,
-    mechDark: 0x3a4230,
-    mechMetal: 0x44484b,
-    mechVisor: 0xff9a1f,
-    mechVisorBright: 0xfff0b8,
-    mechLight: 0xff2a1a,
+    mech: 0xe6eaee,
+    mechDark: 0x24282e,
+    mechMetal: 0x50565e,
+    mechVisor: 0xff2a1a,
+    mechVisorBright: 0xffe0d0,
+    mechGlow: 0x3ccfff,
     mechFlash: 0xffd0a0,
     /** Shield Bubble: the cyan dome's fill and the triangle lattice over it. Reflect Shield's patches are violet. */
     bubbleFill: 0x6fe7ff,
@@ -751,19 +751,20 @@ export const CONFIG = {
    * it charges at dashSpeed and stops stopGap past contact, every dashCooldown at most. Every building within
    * crushRadius of a foot (or of it, dashing) takes crushDps. Rockets: a volley of rocketsPerVolley jet rockets within
    * rocketRange every rocketCooldown. Barrage: barrageCount marked circles of barrageRadius within barrageSpread of the
-   * monster, filling over barrageFill, every barrageCooldown. Each move runs `moves[move]` windup, strike and recover s.
-   * Footfalls shake by footfallShake (less far off). Dead, it sparks for dyingTime, blows apart, and the wreck sinks
+   * monster, filling over barrageFill, every barrageCooldown; their missiles leave its launcher and arc barrageArc m
+   * above the straight line down onto them, landing as each fills. Each move runs `moves[move]` windup, strike and
+   * recover s. Footfalls shake by footfallShake (less far off). Dead, it sparks for dyingTime, blows apart, and the wreck sinks
    * over wreckTime.
    */
   mech: {
-    height: MONSTER_HEIGHT, width: 0.45 * MONSTER_HEIGHT, radius: 0.3 * MONSTER_HEIGHT,
+    height: MONSTER_HEIGHT, width: 0.9 * MONSTER_HEIGHT, radius: 0.4 * MONSTER_HEIGHT,
     hp: 9000, approachSpeed: 160, walkSpeed: 90, turnRate: 1.2, stopGap: 25,
     punchReach: 0.3 * MONSTER_HEIGHT, punchArc: 0.7, punchDamage: 50,
     slamRadius: 0.35 * MONSTER_HEIGHT, slamDamage: 90, slamChance: 0.35, meleeCooldown: 2.6,
     /** It engages (and may dash) once within dashTrigger m of the monster, or engageAfter s after its summoning, whichever comes first. */
     dashTrigger: 1600, engageAfter: 25, dashSpeed: 900, dashCooldown: 9, crushRadius: 0.25 * MONSTER_HEIGHT, crushDps: 600,
     rocketCooldown: 4, rocketsPerVolley: 3, rocketDamage: 6, rocketRange: 2200,
-    barrageCooldown: 17, barrageCount: 7, barrageSpread: 450, barrageRadius: 130, barrageFill: 2.0, barrageDamage: 45,
+    barrageCooldown: 17, barrageCount: 7, barrageSpread: 450, barrageRadius: 130, barrageFill: 2.0, barrageDamage: 45, barrageArc: 700,
     spawnDistance: 4200, footfallShake: 0.06, dyingTime: 2.5, wreckTime: 6,
     moves: {
       punch: { windup: 0.65, strike: 0.15, recover: 0.4 },

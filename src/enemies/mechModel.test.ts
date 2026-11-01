@@ -1,57 +1,84 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
-import { MECH_PIVOTS, mechParts, type MechParts } from './mechModel';
+import { LEG_REACH, LOWER_LEN, MECH_LEGS, MECH_PIVOTS, mechParts, type MechLeg, type MechParts } from './mechModel';
 
+const P = MECH_PIVOTS;
 const bounds = (g: THREE.BufferGeometry) => new THREE.Box3().setFromBufferAttribute(g.getAttribute('position') as THREE.BufferAttribute);
 
-/** Where each part's origin sits on the standing mech. */
-function pivotOf(name: keyof MechParts): THREE.Vector3 {
-  const P = MECH_PIVOTS;
-  switch (name) {
-    case 'legL': return new THREE.Vector3(P.hipX, P.hipY, 0);
-    case 'legR': return new THREE.Vector3(-P.hipX, P.hipY, 0);
-    case 'pelvis': return new THREE.Vector3(0, P.hipY, 0);
-    case 'torso': return new THREE.Vector3(0, P.waistY, 0);
-    case 'head':
-    case 'visor': return new THREE.Vector3(0, P.neckY, 0);
-    case 'armL': return new THREE.Vector3(P.shoulderX, P.shoulderY, 0);
-    case 'armR': return new THREE.Vector3(-P.shoulderX, P.shoulderY, 0);
-  }
+/** A body part (its origin at the body pivot) as it stands. */
+const placedBody = (g: THREE.BufferGeometry) => bounds(g).translate(new THREE.Vector3(0, P.bodyY, 0));
+
+/** One leg's upper and lower segments as they stand at rest: yawed by the leg's splay, at its hip and knee. */
+function placedLeg(parts: MechParts, leg: MechLeg): { upper: THREE.Box3; lower: THREE.Box3 } {
+  const yaw = new THREE.Matrix4().makeRotationY(leg.splay);
+  const hip = new THREE.Matrix4().makeTranslation(leg.x, P.bodyY, leg.z).multiply(yaw);
+  const knee = hip.clone().multiply(new THREE.Matrix4().makeTranslation(0, P.kneeY, P.kneeZ));
+  return {
+    upper: bounds(parts.legUpper.clone().applyMatrix4(hip)),
+    lower: bounds(parts.legLower.clone().applyMatrix4(knee)),
+  };
 }
 
-const placed = (parts: MechParts, name: keyof MechParts) => bounds(parts[name]).translate(pivotOf(name));
+function wholeMech(parts: MechParts): THREE.Box3 {
+  const all = new THREE.Box3();
+  for (const name of ['hull', 'turret', 'visor', 'cannons', 'glow'] as const) all.union(placedBody(parts[name]));
+  for (const leg of MECH_LEGS) {
+    const l = placedLeg(parts, leg);
+    all.union(l.upper).union(l.lower);
+  }
+  return all;
+}
 
 describe('mech model', () => {
-  it('parts are vertex-coloured and stand one unit tall', () => {
-    const parts = mechParts();
-    const all = new THREE.Box3();
-    for (const name of Object.keys(parts) as (keyof MechParts)[]) all.union(placed(parts, name));
+  it('stands one unit tall on the ground and about 0.9 wide', () => {
+    const all = wholeMech(mechParts());
     expect(all.min.y).toBeCloseTo(0, 2);
     expect(all.max.y).toBeGreaterThan(0.98);
     expect(all.max.y).toBeLessThan(1.02);
-    // About 0.45 of its height across (CONFIG.mech.width), and much less deep than tall.
-    expect(all.max.x - all.min.x).toBeGreaterThan(0.38);
-    expect(all.max.x - all.min.x).toBeLessThan(0.52);
-    expect(all.max.z - all.min.z).toBeLessThan(0.5);
+    // Its splayed legs span about 0.9 of its height across (CONFIG.mech.width).
+    expect(all.max.x - all.min.x).toBeGreaterThan(0.7);
+    expect(all.max.x - all.min.x).toBeLessThan(1);
   });
 
-  it('fists reach below the hips and in front of the torso', () => {
+  it('the four spike feet stand on the ground at the corners', () => {
     const parts = mechParts();
-    const torso = placed(parts, 'torso');
-    for (const arm of ['armL', 'armR'] as const) {
-      const b = placed(parts, arm);
-      expect(b.min.y).toBeLessThan(MECH_PIVOTS.hipY);
-      expect(b.max.z).toBeGreaterThan(torso.max.z);
-    }
-    // The left arm hangs on the model's left (+X), the right arm on its right.
-    expect(placed(parts, 'armL').min.x).toBeGreaterThan(0);
-    expect(placed(parts, 'armR').max.x).toBeLessThan(0);
+    const feet = MECH_LEGS.map((leg) => placedLeg(parts, leg).lower);
+    for (const f of feet) expect(f.min.y).toBeCloseTo(0, 3);
+    // Each foot is out past the hull, at its corner: front-left, front-right, rear-left, rear-right (+X is the left).
+    const centre = (b: THREE.Box3) => b.getCenter(new THREE.Vector3());
+    const [fl, fr, rl, rr] = feet.map(centre) as [THREE.Vector3, THREE.Vector3, THREE.Vector3, THREE.Vector3];
+    expect(fl.x).toBeGreaterThan(0.25);
+    expect(rl.x).toBeGreaterThan(0.25);
+    expect(fr.x).toBeLessThan(-0.25);
+    expect(rr.x).toBeLessThan(-0.25);
+    expect(fl.z).toBeGreaterThan(0.2);
+    expect(fr.z).toBeGreaterThan(0.2);
+    expect(rl.z).toBeLessThan(-0.2);
+    expect(rr.z).toBeLessThan(-0.2);
+    // The rest foot sits LEG_REACH out from its hip along the splay.
+    MECH_LEGS.forEach((leg, i) => {
+      const tipX = leg.x + Math.sin(leg.splay) * LEG_REACH;
+      const tipZ = leg.z + Math.cos(leg.splay) * LEG_REACH;
+      expect(feet[i]!.min.x).toBeLessThanOrEqual(tipX + 1e-6);
+      expect(feet[i]!.max.x).toBeGreaterThanOrEqual(tipX - 1e-6);
+      expect(feet[i]!.min.z).toBeLessThanOrEqual(tipZ + 1e-6);
+      expect(feet[i]!.max.z).toBeGreaterThanOrEqual(tipZ - 1e-6);
+    });
   });
 
-  it('feet stand on the ground under the hips', () => {
+  it('the knees sit about level with the hips, the launcher is on the left and the cannons on the right, aimed forward', () => {
     const parts = mechParts();
-    for (const leg of ['legL', 'legR'] as const) expect(placed(parts, leg).min.y).toBeCloseTo(0, 3);
-    expect(placed(parts, 'legL').min.x).toBeGreaterThan(0);
+    const hull = placedBody(parts.hull);
+    // A shallow bend: the upper leg runs out about level with the hip, under the hull top, and the lower leg stays short.
+    for (const leg of MECH_LEGS) expect(placedLeg(parts, leg).upper.max.y).toBeLessThan(P.bodyY + 0.12);
+    expect(LOWER_LEN).toBeLessThan(0.6);
+    const cannons = placedBody(parts.cannons);
+    expect(cannons.max.x).toBeLessThan(0);
+    expect(cannons.max.z).toBeCloseTo(P.muzzleZ, 3);
+    expect(cannons.max.z).toBeGreaterThan(hull.max.z);
+    const turret = placedBody(parts.turret);
+    expect(turret.max.x).toBeGreaterThan(0.18);
+    expect(turret.max.y).toBeCloseTo(P.bodyY + P.launcherY, 3);
   });
 
   it('every part has a color attribute', () => {
