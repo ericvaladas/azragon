@@ -42,6 +42,10 @@ export const MECH_PIVOTS = {
   /** The foot (the spike's tip), from the knee, in the leg's plane at rest. */
   footZ: 0.18,
   footY: -0.43,
+  /** The front of the red sensor eye, from the body pivot. */
+  eyeX: 0.02,
+  eyeY: 0.17 + RISE,
+  eyeZ: 0.194,
   /** The cannon muzzles, from the body pivot (the upper barrel at muzzleY[0], the lower at muzzleY[1]). */
   muzzleX: -0.1,
   muzzleY: [0.275 + RISE, 0.205 + RISE] as readonly number[],
@@ -315,7 +319,7 @@ export function mechParts(): MechParts {
     // hip frame.
     hull: hull().scale(1.12, 1.12, 1.12).translate(0, TORSO_BASE + 0.06 * 1.12, 0),
     turret: turret(),
-    visor: cyl(0.02, 0.012, 10, 'z', 0.02, 0.17 + RISE, 0.188, P.mechVisor),
+    visor: cyl(0.02, 0.012, 10, 'z', MECH_PIVOTS.eyeX, MECH_PIVOTS.eyeY, MECH_PIVOTS.eyeZ - 0.006, P.mechVisor),
     cannons: cannons(),
     glow: glow(),
     legUpper: legUpper(),

@@ -56,6 +56,10 @@ function run(mech: Mech, c: ReturnType<typeof makeCtx>, seconds: number, each?: 
 }
 
 const body = (mech: Mech) => mech.targets()[0]!;
+/** Keeps the laser sequence out of a long fight that is testing something else. */
+const noLaser = (mech: Mech) => {
+  (mech as unknown as { laserCd: number }).laserCd = Infinity;
+};
 const distTo = (mech: Mech, p: THREE.Vector3) => Math.hypot(body(mech).position.x - p.x, body(mech).position.z - p.z);
 
 /** Summons the mech, then puts the monster `d` m straight in front of it. */
@@ -97,6 +101,7 @@ describe('Mech', () => {
     const mech = new Mech(new THREE.Scene());
     const c = makeCtx();
     mech.summon(c.ctx);
+    noLaser(mech);
     run(mech, c, 120);
     expect(distTo(mech, c.monster.position)).toBeLessThanOrEqual(CONTACT + M.punchReach);
     // Walking crushes buildings around its feet.
@@ -176,6 +181,7 @@ describe('Mech', () => {
       c.monster.bodyRadius = bodyRadius;
       // Starts inside dashTrigger, so it walks in (no dash) and then fights where it stopped.
       faceOff(mech, c, 1000);
+      noLaser(mech);
       let minGap = Infinity;
       run(mech, c, 40, () => {
         minGap = Math.min(minGap, distTo(mech, c.monster.position) - M.radius - bodyRadius);
@@ -447,6 +453,7 @@ describe('Mech', () => {
       const c = makeCtx({ rng: mulberry32(11) });
       faceOff(mech, c, IN_REACH);
       const starts: number[] = [];
+      noLaser(mech);
       const ends: number[] = [];
       let last = 'walk';
       const seconds = 600;
@@ -559,5 +566,241 @@ describe('Mech', () => {
     expect(mech.count()).toBe(0);
     expect(mech.current()).toBeNull();
     expect(mech.targets()).toEqual([]);
+  });
+
+  describe('laser', () => {
+    type Lasering = {
+      action: string; actT: number; x: number; z: number; heading: number; laserCd: number; engaged: boolean; meleeCd: number; barrageCd: number; rocketCd: number; rig: MechRig;
+      laser: { phase: string | null; aim: THREE.Vector3; start: THREE.Vector3; end: THREE.Vector3; visible: boolean; streaks: THREE.LineSegments };
+    };
+    const inner = (mech: Mech) => mech as unknown as Lasering;
+    const label = (mech: Mech) => (inner(mech).action === 'laser' ? inner(mech).laser.phase ?? 'charge' : inner(mech).action);
+    const START = 700;
+
+    /** Faces the monster off START m ahead with the laser ready and nothing else, and steps once so it starts. */
+    function ready(c: ReturnType<typeof makeCtx>): Mech {
+      const mech = new Mech(new THREE.Scene());
+      faceOff(mech, c, START);
+      const i = inner(mech);
+      i.engaged = true;
+      i.laserCd = 0;
+      i.barrageCd = i.rocketCd = 99;
+      mech.update(DT, c.ctx);
+      expect(i.action).toBe('hopback');
+      return mech;
+    }
+
+    /** Steps until the laser reaches `phase`. */
+    function until(mech: Mech, c: ReturnType<typeof makeCtx>, phase: string): void {
+      for (let t = 0; t < 20; t += DT) {
+        if (label(mech) === phase) return;
+        mech.update(DT, c.ctx);
+      }
+      throw new Error(`no ${phase}`);
+    }
+
+    /** Moves the monster off the mech's line, so the aim has to turn toward it. */
+    const sideStep = (c: ReturnType<typeof makeCtx>, d: number) => c.monster.position.setZ(c.monster.position.z + d);
+
+    it('waits laserFirst s after engaging', () => {
+      const c = makeCtx();
+      const mech = new Mech(new THREE.Scene());
+      faceOff(mech, c, START);
+      const i = inner(mech);
+      i.engaged = true;
+      i.barrageCd = i.rocketCd = i.meleeCd = 999;
+      mech.update(DT, c.ctx);
+      expect(i.laserCd).toBeGreaterThan(M.laserFirst - 1);
+      expect(i.laserCd).toBeLessThanOrEqual(M.laserFirst);
+    });
+
+    it('hops twice, then charges, aims, locks, fires and recovers, and walks again on cooldown', () => {
+      const c = makeCtx();
+      const mech = ready(c);
+      const seen: string[] = [];
+      let lastT = -1;
+      for (let t = 0; t < 20 && inner(mech).action !== 'walk'; t += DT) {
+        const l = label(mech);
+        if (seen[seen.length - 1] !== l || inner(mech).actT < lastT) seen.push(l);
+        lastT = inner(mech).actT;
+        mech.update(DT, c.ctx);
+      }
+      expect(seen).toEqual(['hopback', 'hopback', 'charge', 'aim', 'lock', 'fire', 'recover']);
+      expect(inner(mech).laserCd).toBeGreaterThan(M.laserCooldown - 1);
+    });
+
+    it('backs off about two hop lengths and stays put from then on', () => {
+      const c = makeCtx();
+      const mech = ready(c);
+      const x0 = inner(mech).x;
+      until(mech, c, 'charge');
+      expect(distTo(mech, c.monster.position)).toBeGreaterThan(START + M.hopDistance * 1.9);
+      const x = inner(mech).x;
+      expect(x - x0).toBeCloseTo(M.hopDistance * 2, -1);
+      until(mech, c, 'recover');
+      expect(inner(mech).x).toBe(x);
+    });
+
+    it('skips a blocked hop and carries on', () => {
+      const c = makeCtx();
+      // Clear for one hop from the start, blocked beyond it (the mech backs away toward +X).
+      const mech = new Mech(new THREE.Scene());
+      faceOff(mech, c, START);
+      const i = inner(mech);
+      const limit = i.x + M.hopDistance * 1.5;
+      (c.ctx as { blocked?: (x: number, z: number) => boolean }).blocked = (x) => x > limit;
+      i.engaged = true;
+      i.laserCd = 0;
+      i.barrageCd = i.rocketCd = 99;
+      const x0 = i.x;
+      mech.update(DT, c.ctx);
+      until(mech, c, 'charge');
+      expect(i.x - x0).toBeCloseTo(M.hopDistance, 0);
+    });
+
+    it('deals no damage before firing, then laserDps to a grounded monster on the line, as a beam', () => {
+      const c = makeCtx();
+      const mech = ready(c);
+      until(mech, c, 'lock');
+      c.shakes.length = 0;
+      while (label(mech) === 'lock') {
+        expect(c.hits).toEqual([]);
+        mech.update(DT, c.ctx);
+      }
+      until(mech, c, 'recover');
+      const total = c.hits.reduce((a, h) => a + h.amount, 0);
+      expect(c.hits.every((h) => h.source === 'beam')).toBe(true);
+      expect(c.hits[0]!.amount).toBeCloseTo(M.laserDps * DT, 6);
+      expect(total).toBeGreaterThan(240);
+      expect(total).toBeLessThan(310);
+      expect(Math.max(...c.shakes)).toBeGreaterThanOrEqual(M.laserShake);
+    });
+
+    it('misses a monster that left the locked line, and one that leapt over it', () => {
+      for (const leave of [(c: ReturnType<typeof makeCtx>) => sideStep(c, M.laserHitRadius * 2), (c: ReturnType<typeof makeCtx>) => c.monster.position.setY(CONFIG.abilities.leap.peak)]) {
+        const c = makeCtx();
+        const mech = ready(c);
+        until(mech, c, 'lock');
+        leave(c);
+        until(mech, c, 'recover');
+        expect(c.hits).toEqual([]);
+      }
+    });
+
+    it('tracks at laserTrackRate while aiming, and the line holds still through the lock', () => {
+      const c = makeCtx();
+      const mech = ready(c);
+      until(mech, c, 'aim');
+      mech.update(DT, c.ctx);
+      const was = inner(mech).laser.aim.clone();
+      sideStep(c, 900);
+      mech.update(DT, c.ctx);
+      const turned = inner(mech).laser.aim.angleTo(was);
+      expect(turned).toBeGreaterThan(0);
+      expect(turned).toBeLessThanOrEqual(M.laserTrackRate * DT + 1e-6);
+      until(mech, c, 'lock');
+      const locked = inner(mech).laser.aim.clone();
+      const end = inner(mech).laser.end.clone();
+      sideStep(c, 900);
+      until(mech, c, 'fire');
+      expect(inner(mech).laser.aim.equals(locked)).toBe(true);
+      expect(inner(mech).laser.end.distanceTo(end)).toBeLessThan(5);
+    });
+
+    it('starts the line at the eye and reaches laserLength at most', () => {
+      const c = makeCtx();
+      const mech = ready(c);
+      until(mech, c, 'aim');
+      mech.update(DT, c.ctx);
+      const l = inner(mech).laser;
+      const eye = inner(mech).rig.eye(new THREE.Vector3());
+      expect(l.start.distanceTo(eye)).toBeLessThan(1e-6);
+      expect(l.end.distanceTo(l.start)).toBeLessThanOrEqual(M.laserLength + 1e-6);
+      expect(l.end.y).toBeGreaterThanOrEqual(-1e-6);
+    });
+
+    it('burns buildings along the beam with razeBuildings, paying no EXP', () => {
+      const c = makeCtx();
+      const mech = ready(c);
+      until(mech, c, 'fire');
+      c.crushes.length = 0;
+      mech.update(DT, c.ctx);
+      expect(c.crushes.some((x) => x.amount === M.laserBuildingDps * DT)).toBe(true);
+      expect(c.paid).toEqual([]);
+    });
+
+    it('stops at once when it dies or is cleared mid-beam', () => {
+      for (const stop of [(m: Mech) => body(m).applyDamage(1e9), (m: Mech) => m.clear()]) {
+        const c = makeCtx();
+        const mech = ready(c);
+        until(mech, c, 'fire');
+        expect(inner(mech).laser.visible).toBe(true);
+        stop(mech);
+        expect(inner(mech).laser.visible).toBe(false);
+        c.hits.length = 0;
+        mech.update(DT, c.ctx);
+        expect(inner(mech).laser.visible).toBe(false);
+        expect(c.hits).toEqual([]);
+      }
+    });
+
+    it('flags a locked or firing line on the monster as a threat', () => {
+      const c = makeCtx();
+      const mech = ready(c);
+      until(mech, c, 'aim');
+      expect(mech.laserThreat(c.monster.position)).toBe(false);
+      until(mech, c, 'lock');
+      expect(mech.laserThreat(c.monster.position)).toBe(true);
+    });
+
+    it('draws streaks only during the charge, running in toward the eye', () => {
+      const c = makeCtx();
+      const mech = ready(c);
+      const s = inner(mech).laser.streaks;
+      expect(s.visible).toBe(false);
+      until(mech, c, 'charge');
+      mech.update(DT, c.ctx);
+      expect(s.visible).toBe(true);
+      expect(s.geometry.drawRange.count / 2).toBeGreaterThanOrEqual(M.laserStreaks[0]);
+      expect(s.geometry.drawRange.count / 2).toBeLessThanOrEqual(M.laserStreaks[1]);
+      // A streak's head (vertex 2i) and tail (vertex 2i + 1), relative to the eye.
+      const pos = s.geometry.getAttribute('position') as THREE.BufferAttribute;
+      const reach = (v: number) => Math.hypot(pos.getX(v), pos.getY(v), pos.getZ(v));
+      const tick = 0.01;
+      let closed = 0;
+      for (let k = 0; k < 8; k++) {
+        const heads = Array.from({ length: M.laserStreaks[0] }, (_, i) => reach(i * 2));
+        mech.update(tick, c.ctx);
+        heads.forEach((h, i) => {
+          if (reach(i * 2) < h) closed++;
+          else if (reach(i * 2) > h + 1e-3) closed--;
+        });
+      }
+      // Only a streak that expires and respawns further out may ever step away from the eye.
+      expect(closed).toBeGreaterThan(M.laserStreaks[0] * 4);
+      expect(s.position.distanceTo(inner(mech).rig.eye(new THREE.Vector3()))).toBeLessThan(1e-6);
+      until(mech, c, 'aim');
+      expect(s.visible).toBe(false);
+    });
+
+    it('clears the streaks on death', () => {
+      const c = makeCtx();
+      const mech = ready(c);
+      until(mech, c, 'charge');
+      mech.update(DT, c.ctx);
+      body(mech).applyDamage(1e9);
+      expect(inner(mech).laser.streaks.visible).toBe(false);
+    });
+
+    it('gives up when the monster dies before the beam fires', () => {
+      const c = makeCtx();
+      const mech = ready(c);
+      until(mech, c, 'aim');
+      c.monster.alive = false;
+      mech.update(DT, c.ctx);
+      expect(inner(mech).action).toBe('walk');
+      expect(inner(mech).laser.visible).toBe(false);
+      expect(inner(mech).laserCd).toBeGreaterThan(0);
+    });
   });
 });

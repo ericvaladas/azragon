@@ -1,14 +1,30 @@
 import { describe, it, expect } from 'vitest';
 import { CONFIG } from '../config';
-import { chooseAction, movePhase, punchHits, slamHits, type MechMind } from './mechMath';
+import { chooseAction, laserPhase, movePhase, punchHits, slamHits, type MechMind } from './mechMath';
 
 const M = CONFIG.mech;
 /** Where the surfaces touch, for a monster of radius 100. */
 const contact = M.radius + 100;
 /** Everything on cooldown, engaged, at middle distance: walks. */
-const idle: MechMind = { dist: 800, contact, engaged: true, meleeCd: 1, dashCd: 1, rocketCd: 1, barrageCd: 1, evadeCd: 1, roll: 0.5, evadeRoll: 1 };
+const idle: MechMind = { dist: 800, contact, engaged: true, meleeCd: 1, dashCd: 1, rocketCd: 1, barrageCd: 1, evadeCd: 1, laserCd: 1, roll: 0.5, evadeRoll: 1 };
 
 describe('mech brain', () => {
+  it('fires the laser only when engaged, ready and in range', () => {
+    const ready = { ...idle, dist: M.laserRange - 1, laserCd: 0 };
+    expect(chooseAction(ready)).toBe('laser');
+    expect(chooseAction({ ...ready, laserCd: 0.1 })).toBe('walk');
+    expect(chooseAction({ ...ready, engaged: false })).toBe('walk');
+    expect(chooseAction({ ...ready, dist: M.laserRange + 1 })).toBe('walk');
+  });
+
+  it('ranks the laser below melee and the dash, above the barrage and rockets', () => {
+    const ready = { ...idle, dist: M.laserRange - 1, laserCd: 0 };
+    expect(chooseAction({ ...ready, dist: contact, meleeCd: 0, roll: 0.9 })).toBe('punch');
+    expect(M.laserRange).toBeLessThan(M.dashTrigger);
+    expect(chooseAction({ ...ready, dist: M.dashTrigger + 1, dashCd: 0 })).toBe('dash');
+    expect(chooseAction({ ...ready, barrageCd: 0, rocketCd: 0 })).toBe('laser');
+  });
+
   it('dashes when far and ready', () => {
     expect(chooseAction({ ...idle, dist: M.dashTrigger + 1, dashCd: 0 })).toBe('dash');
   });
@@ -104,5 +120,17 @@ describe('mech brain', () => {
       const far = M.radius + M.slamRadius + 60;
       expect(slamHits(mech, { x: 10 + Math.sin(a) * far, z: 10 + Math.cos(a) * far }, 50)).toBe(false);
     }
+  });
+});
+
+describe('laserPhase', () => {
+  it('runs charge, aim, lock, fire, recover, done', () => {
+    let t = 0.01;
+    expect(laserPhase(t)).toBe('charge');
+    expect(laserPhase((t += M.laserCharge))).toBe('aim');
+    expect(laserPhase((t += M.laserAim))).toBe('lock');
+    expect(laserPhase((t += M.laserLock))).toBe('fire');
+    expect(laserPhase((t += M.laserFire))).toBe('recover');
+    expect(laserPhase((t += M.laserRecover))).toBe('done');
   });
 });

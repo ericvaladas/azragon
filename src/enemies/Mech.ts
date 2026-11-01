@@ -4,7 +4,8 @@ import type { Target } from '../combat';
 import { angleDelta, damp, type Vec2 } from '../util/math';
 import { strikeFill, strikeHits, strikePoints } from './artilleryMath';
 import { launchArc } from '../systems/projectileMath';
-import { chooseAction, movePhase, punchHits, slamHits, type MechAction, type MechMind, type MechMove } from './mechMath';
+import { chooseAction, laserPhase, movePhase, punchHits, slamHits, type MechAction, type MechMind, type MechMove } from './mechMath';
+import { MechLaser } from './mechLaser';
 import { LEG_REACH, MECH_LEGS, MECH_TUBES, missileGeometry } from './mechModel';
 import { MechRig, STEP, dampPose, restPose, targetPose, type MechPoseInput, type VisorState } from './mechPose';
 import type { EnemySystem, WorldContext } from './types';
@@ -34,13 +35,14 @@ const _ahead = new THREE.Vector3();
 const _p = new THREE.Vector3();
 const _dir = new THREE.Vector3();
 const _land = new THREE.Vector3();
+const _eye = new THREE.Vector3();
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
 const _s = new THREE.Vector3();
 /** Scratch ground points (a foot, the mech's own spot) and the brain's input, reused every frame. */
 const _foot: Vec2 = { x: 0, z: 0 };
 const _here: Vec2 = { x: 0, z: 0 };
-const _mind: MechMind = { dist: 0, contact: 0, engaged: false, meleeCd: 0, dashCd: 0, rocketCd: 0, barrageCd: 0, evadeCd: 0, roll: 0, evadeRoll: 1 };
+const _mind: MechMind = { dist: 0, contact: 0, engaged: false, meleeCd: 0, dashCd: 0, rocketCd: 0, barrageCd: 0, evadeCd: 0, laserCd: 0, roll: 0, evadeRoll: 1 };
 /** The diagonal leg pairs that step together: front-left with rear-right, front-right with rear-left. */
 const PAIRS = [[0, 3], [1, 2]] as const;
 
@@ -91,7 +93,8 @@ const _poseIn: MechPoseInput = { stride: 0, gait: 0, action: 'walk', actT: 0, da
  * toward the monster, crushing buildings underfoot, and fights it with telegraphed front-leg stabs (the punch) and
  * rearing stomps (the slam), a gap-closing dash once it has engaged (come within dashTrigger, or engageAfter s after
  * its summoning), black shell volleys from its twin cannons and an occasional barrage of marked strike circles from its
- * box launcher. Dead, it sparks and flickers, then blows apart and vanishes inside its dust cloud. Drawn by a MechRig.
+ * box launcher. Dead, it sparks and flickers, then blows apart and vanishes inside its dust cloud. Every so often it hops back twice
+ * and fires a charged laser from its eye (see MechLaser). Drawn by a MechRig.
  */
 export class Mech implements EnemySystem {
   readonly kind = 'mech' as const;
@@ -121,6 +124,10 @@ export class Mech implements EnemySystem {
   private rocketCd = 0;
   private barrageCd = 0;
   private evadeCd = 0;
+  private laserCd = 0;
+  /** Hopbacks left before the laser charges, and whether the laser's hops are under way. */
+  private laserHops = 0;
+  private hoppingToLaser = false;
   /** Seconds until the next evade roll. */
   private evadeCheck = 0;
   /** The current evade's start, its unit direction on the ground, and its side (1 its left, −1 its right). */
@@ -150,11 +157,13 @@ export class Mech implements EnemySystem {
   private ringMesh: THREE.InstancedMesh;
   private fillMesh: THREE.InstancedMesh;
   private missileMesh: THREE.InstancedMesh;
+  private readonly laser: MechLaser;
 
   constructor(scene: THREE.Scene) {
     this.root.scale.setScalar(H);
     this.root.visible = false;
     scene.add(this.root);
+    this.laser = new MechLaser(scene);
     const P = CONFIG.palette;
     this.ringMesh = new THREE.InstancedMesh(new THREE.RingGeometry(0.9, 1, 24).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: P.strike, transparent: true, opacity: 0.9, depthWrite: false, depthTest: false, fog: false }), MAX_STRIKES);
     this.fillMesh = new THREE.InstancedMesh(new THREE.CircleGeometry(1, 24).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: P.strike, transparent: true, opacity: 0.35, depthWrite: false }), MAX_STRIKES);
@@ -191,12 +200,18 @@ export class Mech implements EnemySystem {
     return this.heading;
   }
 
+  /** Its locked or firing laser lies on the monster at `monster`. */
+  laserThreat(monster: THREE.Vector3): boolean {
+    return this.laser.threatening(monster);
+  }
+
   clear(): void {
     // A cleared mech is gone for good: hits through an old reference do nothing.
     if (this.body) this.body.alive = false;
     this.body = null;
     this.strikes = [];
     this.root.visible = false;
+    this.laser.hide();
     this.drawStrikes();
   }
 
@@ -226,6 +241,9 @@ export class Mech implements EnemySystem {
     this.meleeCd = this.dashCd = this.evadeCd = this.evadeCheck = this.hopY = 0;
     this.rocketCd = M.rocketCooldown;
     this.barrageCd = M.barrageCooldown * 0.5;
+    this.laserCd = M.laserFirst;
+    this.laserHops = 0;
+    this.hoppingToLaser = false;
     this.stride = this.gait = this.flashT = this.recoil = 0;
     this.dyingT = this.sparkT = 0;
     this.wreckT = null;
@@ -240,9 +258,10 @@ export class Mech implements EnemySystem {
     this.flashT = 0.1;
     if (b.hp > 0) return;
     b.alive = false;
-    // Its painted barrage dies with it.
+    // Its painted barrage and its laser die with it.
     this.strikes = [];
     this.drawStrikes();
+    this.laser.hide();
     this.ctx?.onDestroyed(b, 0);
   };
 
@@ -256,6 +275,7 @@ export class Mech implements EnemySystem {
     if (b.alive) this.think(dt, ctx);
     else if (!this.die(dt, ctx)) return;
     this.draw(dt);
+    if (b.alive) this.updateLaser(dt, ctx, b);
   }
 
   private think(dt: number, ctx: WorldContext): void {
@@ -271,7 +291,10 @@ export class Mech implements EnemySystem {
     this.dashCd -= dt;
     this.rocketCd -= dt;
     // The barrage waits until it has come into the fight, so it never fires from beyond the fog.
-    if (this.engaged) this.barrageCd -= dt;
+    if (this.engaged) {
+      this.barrageCd -= dt;
+      this.laserCd -= dt;
+    }
     this.evadeCd -= dt;
     if (this.action === 'walk' && ctx.monster.alive) {
       const mind = _mind;
@@ -283,6 +306,7 @@ export class Mech implements EnemySystem {
       mind.rocketCd = this.rocketCd;
       mind.barrageCd = this.barrageCd;
       mind.evadeCd = this.evadeCd;
+      mind.laserCd = this.laserCd;
       mind.roll = ctx.rng();
       this.evadeCheck -= dt;
       mind.evadeRoll = 1;
@@ -292,16 +316,19 @@ export class Mech implements EnemySystem {
       }
       const next = chooseAction(mind);
       if (next === 'sidestep' || next === 'hopback') this.startEvade(next, mind.roll < 0.5 ? 1 : -1, ctx);
+      else if (next === 'laser') this.beginLaser(ctx);
       else if (next !== 'walk') this.start(next);
     }
-    this.updateChase(dt, dist - stand);
+    // The laser sequence holds its ground; the chase picks up from where it was once it ends.
+    if (this.action !== 'laser' && !this.hoppingToLaser) this.updateChase(dt, dist - stand);
     this.gait = damp(this.gait, this.action === 'walk' && this.chasing && dist > stand + 1 ? 1 : 0, 6, dt);
     if (this.action === 'walk') this.walk(dt, ctx, dist, aim, stand);
     else if (this.action === 'sidestep' || this.action === 'hopback') this.evade(this.action, dt, ctx, aim, dist);
+    else if (this.action === 'laser') this.chargeLaser(dt, ctx, aim);
     else this.act(this.action, dt, ctx, aim, dist);
   }
 
-  private start(a: MechMove): void {
+  private start(a: MechMove | 'laser'): void {
     this.action = a;
     this.actT = 0;
     this.struck = false;
@@ -367,6 +394,50 @@ export class Mech implements EnemySystem {
     if (movePhase(a, this.actT) !== 'done') return;
     this.evadeCd = M.evadeCooldown;
     this.action = 'walk';
+    if (this.hoppingToLaser) this.nextLaserStep(ctx);
+  }
+
+  /** Starts the laser sequence: laserHops hopbacks, then the charge. */
+  private beginLaser(ctx: WorldContext): void {
+    this.hoppingToLaser = true;
+    this.laserHops = M.laserHops;
+    this.nextLaserStep(ctx);
+  }
+
+  /** The next hop whose path is clear (blocked ones are skipped); with none left, the charge. A dead monster ends it. */
+  private nextLaserStep(ctx: WorldContext): void {
+    if (ctx.monster.alive) {
+      while (this.laserHops > 0) {
+        this.laserHops--;
+        if (this.tryEvade('hopback', 1, ctx)) return;
+      }
+      this.start('laser');
+    } else {
+      this.laserCd = M.laserCooldown;
+    }
+    this.hoppingToLaser = false;
+  }
+
+  /** The laser move's clock: it turns to the monster through the charge, then faces along the line until it is done. */
+  private chargeLaser(dt: number, ctx: WorldContext, aim: number): void {
+    this.actT += dt;
+    const phase = laserPhase(this.actT);
+    if (phase === 'charge') this.heading = turn(this.heading, aim, M.turnRate * dt);
+    // The line exists once the laser itself has entered the aim phase, a frame after this clock.
+    else if (phase === 'aim' && this.laser.phase === 'aim') this.heading = Math.atan2(this.laser.aim.x, this.laser.aim.z);
+    const gaveUp = !ctx.monster.alive && (phase === 'charge' || phase === 'aim' || phase === 'lock');
+    if (phase !== 'done' && !gaveUp) return;
+    this.laserCd = M.laserCooldown;
+    this.action = 'walk';
+  }
+
+  /** Runs the laser for the frame just posed, from where the eye now is; hidden outside the move. */
+  private updateLaser(dt: number, ctx: WorldContext, b: MechBody): void {
+    if (this.action !== 'laser') {
+      this.laser.hide();
+      return;
+    }
+    this.laser.update(laserPhase(this.actT), this.actT, dt, this.rig.eye(_eye), this.heading, ctx, b);
   }
 
   /** A hopback touches down: a dust ring, a shake, and every building under the body and feet crushed. */
@@ -667,6 +738,7 @@ export class Mech implements EnemySystem {
     }
     const a = this.action;
     if ((a === 'punch' || a === 'slam' || a === 'dash' || a === 'hopback') && movePhase(a, this.actT) === 'windup') return 'bright';
+    if (a === 'laser' && laserPhase(this.actT) !== 'recover') return 'bright';
     return 'dim';
   }
 

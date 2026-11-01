@@ -1479,6 +1479,7 @@ export class GameScene {
     const m = this.monster.position;
     if ((laser.phase === 'locked' || laser.phase === 'firing') && Math.hypot(laser.x - m.x, laser.z - m.z) <= CONFIG.laser.radius * 1.5) return true;
     if (this.enemies.get<LaserTrucks>('truck').threatening(m)) return true;
+    if (this.mech.laserThreat(m)) return true;
     return this.enemies.get<Artillery>('artillery').strikeNear({ x: m.x, z: m.z });
   }
 

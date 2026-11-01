@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { CONFIG } from '../config';
 import { toonMat } from '../render/toon';
 import { damp } from '../util/math';
-import { movePhase, type MechAction } from './mechMath';
+import { laserPhase, movePhase, type MechAction } from './mechMath';
 import { LEG_REACH, LOWER_LEN, MECH_LEGS, MECH_PIVOTS as PV, MECH_TUBES, UPPER_LEN, mechParts } from './mechModel';
 
 /** Ground covered per footfall (model units). A planted foot slides back half of it either side of its rest spot. */
@@ -119,7 +119,7 @@ function moveFoot(p: MechPose, i: number, out: number, up: number, fwd: number, 
  * The pose the mech's state asks for, written into `out`. Walking, diagonal pairs step together (front-left with
  * rear-right) and the hull bobs as each pair plants. The stab rocks the hull back and draws one front blade up and
  * back, then spikes it forward; the stomp pitches the hull up with both front blades lifted, then crashes them down; the dash crouches low on all
- * four legs, then gallops; the sidestep shuffles the feet across; the hopback crouches, then tucks all four feet in the air. Dying it sags; wrecked, its legs splay flat and the hull drops.
+ * four legs, then gallops; the sidestep shuffles the feet across; the hopback crouches, then tucks all four feet in the air; the laser plants low on spread feet. Dying it sags; wrecked, its legs splay flat and the hull drops.
  */
 export function targetPose(s: MechPoseInput, out: MechPose): MechPose {
   restPose(out);
@@ -152,6 +152,17 @@ export function targetPose(s: MechPoseInput, out: MechPose): MechPose {
   }
   const a = s.action;
   if (a === 'walk') return out;
+  if (a === 'laser') {
+    // Planted low on spread feet, the hull shuddering while the beam fires.
+    const M = CONFIG.mech;
+    const ph = laserPhase(s.actT);
+    const fireEnd = M.laserCharge + M.laserAim + M.laserLock + M.laserFire;
+    const k = ph === 'recover' || ph === 'done' ? Math.max(0, 1 - (s.actT - fireEnd) / M.laserRecover) : ease(Math.min(1, s.actT / M.laserCharge));
+    out.lift = -0.06 * k;
+    out.pitch = 0.03 * k + (ph === 'fire' ? 0.008 * Math.sin(s.actT * 45) : 0);
+    MECH_LEGS.forEach((_, i) => moveFoot(out, i, 0.04, 0, 0, k));
+    return out;
+  }
   const mv = CONFIG.mech.moves[a];
   const ph = movePhase(a, s.actT);
   const u = ease(Math.min(1, s.actT / mv.windup));
@@ -348,6 +359,12 @@ export class MechRig {
   /** How far back the barrels sit right now (model units). */
   get barrelOffset(): number {
     return -this.cannons.position.z;
+  }
+
+  /** The front of the red sensor eye in world space; written into `out`. */
+  eye(out: THREE.Vector3): THREE.Vector3 {
+    this.root.updateMatrixWorld(true);
+    return out.set(PV.eyeX, PV.eyeY, PV.eyeZ).applyMatrix4(this.body.matrixWorld);
   }
 
   /** Launcher tube `k`'s mouth (MECH_TUBES order) in world space; written into `out`. */

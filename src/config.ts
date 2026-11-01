@@ -149,6 +149,8 @@ export const CONFIG = {
     mechMetal: 0x50565e,
     mechVisor: 0xff2a1a,
     mechVisorBright: 0xffe0d0,
+    mechBeam: 0xff1a10,
+    mechBeamCore: 0xffd0c0,
     mechGlow: 0x3ccfff,
     mechFlash: 0xffd0a0,
     mechMuzzle: 0xfff4c8,
@@ -772,6 +774,14 @@ export const CONFIG = {
    * cooling down and evadeCd spent, it rolls every evadeCheck s while it walks; under evadeChance it evades, then waits
    * evadeCooldown. hopChance of its evades are a hopback (a jump hopDistance straight back, peaking hopHeight up, its
    * landing shaking by hopShake and crushing as hopCrush s of crushDps); the rest are a sidestep of sidestepDistance.
+   * Laser: once engaged, laserFirst s in and then every laserCooldown, with the monster within laserRange, it makes laserHops
+   * hopbacks in a row (a blocked one is skipped), plants and charges for laserCharge, its eye glow swelling to laserEyeSize m
+   * while laserSpark sparks gather from laserSparkReach m every laserSparkEvery s and laserStreaks [at the start, at full
+   * charge] thin streaks run in from laserStreakReach m in laserStreakLife s, trailing laserStreakLength of their reach. For
+   * laserAim an aim line laserAimWidth wide tracks the monster at laserTrackRate rad/s; it locks for laserLock, laserLockWidth
+   * wide; then a beam laserWidth wide and up to laserLength long fires along it for laserFire, and it recovers for
+   * laserRecover. On the line within laserHitRadius, the monster takes laserDps; buildings along it take laserBuildingDps,
+   * razed. Firing shakes by laserShake, then by laserRumble every laserBurnEvery s as its end burns.
    * Each move runs `moves[move]` windup, strike and
    * recover s. Footfalls shake by footfallShake (less far off). Dead, it sparks for dyingTime, then goes up in wreckBursts
    * explosions of scale wreckBurstScale with a shake of wreckShake, a ring of wreckRing billows and a cloud of wreckVeils
@@ -796,6 +806,12 @@ export const CONFIG = {
     spawnDistance: 4200, footfallShake: 0.06, dyingTime: 2.5, wreckVanish: 0.6, wreckBursts: 8, wreckBurstScale: 2.5, wreckShake: 0.9, wreckRing: 28, wreckVeils: 16, wreckBillows: 24,
     evadeCooldown: 6, evadeCheck: 0.5, evadeChance: 0.35, hopChance: 0.4,
     sidestepDistance: 0.9 * MONSTER_HEIGHT, hopDistance: 1.3 * MONSTER_HEIGHT, hopHeight: 0.25 * MONSTER_HEIGHT, hopCrush: 0.4, hopShake: 0.2,
+    laserHops: 2, laserFirst: 15, laserCooldown: 22, laserRange: 1400,
+    laserCharge: 1.5, laserAim: 1.6, laserTrackRate: 0.08, laserLock: 1, laserFire: 1.6, laserRecover: 0.8,
+    laserDps: 170, laserHitRadius: 100, laserBuildingDps: 500, laserLength: 3000,
+    laserWidth: 70, laserAimWidth: 6, laserLockWidth: 12, laserEyeSize: 50, laserShake: 0.5, laserRumble: 0.03, laserBurnEvery: 0.06,
+    laserSparkEvery: 0.05, laserSparkReach: 70,
+    laserStreaks: [10, 14] as readonly [number, number], laserStreakReach: [60, 120] as readonly [number, number], laserStreakLife: [0.5, 0.3] as readonly [number, number], laserStreakLength: 0.6,
     moves: {
       punch: { windup: 0.65, strike: 0.15, recover: 0.4 },
       slam: { windup: 1.0, strike: 0.2, recover: 0.7 },

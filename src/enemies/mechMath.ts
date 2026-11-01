@@ -1,8 +1,10 @@
 import { CONFIG } from '../config';
 import { angleDelta, type Vec2 } from '../util/math';
 
-export type MechAction = 'walk' | 'punch' | 'slam' | 'dash' | 'rockets' | 'barrage' | 'sidestep' | 'hopback';
-export type MechMove = Exclude<MechAction, 'walk'>;
+export type MechAction = 'walk' | 'punch' | 'slam' | 'dash' | 'rockets' | 'barrage' | 'sidestep' | 'hopback' | 'laser';
+/** The actions timed by CONFIG.mech.moves. */
+export type MechMove = Exclude<MechAction, 'walk' | 'laser'>;
+export type MechLaserPhase = 'charge' | 'aim' | 'lock' | 'fire' | 'recover' | 'done';
 
 /**
  * What the mech's brain sees: its distance to the monster (centre to centre), the contact distance (its radius plus the
@@ -10,11 +12,11 @@ export type MechMove = Exclude<MechAction, 'walk'>;
  * spent engageAfter s since its summoning), the time left on each cooldown, a uniform roll in [0, 1) that picks a slam over a punch, and `evadeRoll`, a uniform
  * roll drawn every evadeCheck s and 1 between draws, so that the evade chance does not depend on the frame rate.
  */
-export type MechMind = { dist: number; contact: number; engaged: boolean; meleeCd: number; dashCd: number; rocketCd: number; barrageCd: number; evadeCd: number; roll: number; evadeRoll: number };
+export type MechMind = { dist: number; contact: number; engaged: boolean; meleeCd: number; dashCd: number; rocketCd: number; barrageCd: number; evadeCd: number; laserCd: number; roll: number; evadeRoll: number };
 
 /**
  * The next move, by priority: a dash when engaged, far and ready; a slam (roll < slamChance) or punch when within
- * punchReach past contact and melee is ready; an evade (a hopback for the lowest hopChance of the evade rolls, otherwise
+ * punchReach past contact and melee is ready; the laser when engaged, ready and within laserRange; an evade (a hopback for the lowest hopChance of the evade rolls, otherwise
  * a sidestep) when engaged, in that reach, with melee cooling down, evadeCd spent and evadeRoll < evadeChance; a barrage when ready; rockets when ready and in range; otherwise walk.
  */
 export function chooseAction(m: MechMind): MechAction {
@@ -22,6 +24,7 @@ export function chooseAction(m: MechMind): MechAction {
   if (m.engaged && m.dist > M.dashTrigger && m.dashCd <= 0) return 'dash';
   const inReach = m.dist <= m.contact + M.punchReach;
   if (inReach && m.meleeCd <= 0) return m.roll < M.slamChance ? 'slam' : 'punch';
+  if (m.engaged && m.laserCd <= 0 && m.dist <= M.laserRange) return 'laser';
   if (m.engaged && inReach && m.evadeCd <= 0 && m.evadeRoll < M.evadeChance) return m.evadeRoll < M.evadeChance * M.hopChance ? 'hopback' : 'sidestep';
   if (m.barrageCd <= 0) return 'barrage';
   if (m.rocketCd <= 0 && m.dist <= M.rocketRange) return 'rockets';
@@ -35,6 +38,17 @@ export function movePhase(action: MechMove, t: number): 'windup' | 'strike' | 'r
   if (t < d.windup + d.strike) return 'strike';
   if (t < d.windup + d.strike + d.recover) return 'recover';
   return 'done';
+}
+
+/** The phase of the laser move `t` s after its charge began. */
+export function laserPhase(t: number): MechLaserPhase {
+  const M = CONFIG.mech;
+  let end = M.laserCharge;
+  if (t < end) return 'charge';
+  if (t < (end += M.laserAim)) return 'aim';
+  if (t < (end += M.laserLock)) return 'lock';
+  if (t < (end += M.laserFire)) return 'fire';
+  return t < end + M.laserRecover ? 'recover' : 'done';
 }
 
 /**
