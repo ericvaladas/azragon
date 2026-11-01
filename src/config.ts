@@ -779,6 +779,11 @@ export const CONFIG = {
   mech: {
     height: MONSTER_HEIGHT, width: 0.9 * MONSTER_HEIGHT, radius: 0.4 * MONSTER_HEIGHT,
     hp: 13500, approachSpeed: 160, walkSpeed: 90, turnRate: 1.2, stopGap: 25,
+    /**
+     * Having reached the monster it stays put until a gap of more than chaseGap m past its stopping point has lasted
+     * chaseDelay s. chaseGap is where punchReach runs out, so it never settles out of its own melee reach.
+     */
+    chaseGap: 0.3 * MONSTER_HEIGHT - 25, chaseDelay: 2,
     punchReach: 0.3 * MONSTER_HEIGHT, punchArc: 0.7, punchDamage: 88,
     slamRadius: 0.35 * MONSTER_HEIGHT, slamDamage: 156, slamChance: 0.35, meleeCooldown: 2.6,
     /** It engages (and may dash) once within dashTrigger m of the monster, or engageAfter s after its summoning, whichever comes first. */

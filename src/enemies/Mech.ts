@@ -102,6 +102,10 @@ export class Mech implements EnemySystem {
   private heading = 0;
   /** It has been within dashTrigger of the monster at least once, or engageAfter s have passed since its summoning. */
   private engaged = false;
+  /** It is walking the monster down; once it has stopped, it stays put until a gap has lasted. */
+  private chasing = true;
+  /** How long the current gap past chaseGap has lasted (s). */
+  private gapT = 0;
   /** Seconds since its summoning. */
   private age = 0;
   private action: MechAction = 'walk';
@@ -213,6 +217,8 @@ export class Mech implements EnemySystem {
     const hp = M.hp * ctx.difficulty.hpMult;
     this.body = new MechBody(hp, this.damage);
     this.engaged = false;
+    this.chasing = true;
+    this.gapT = 0;
     this.age = 0;
     this.action = 'walk';
     this.actT = 0;
@@ -288,7 +294,8 @@ export class Mech implements EnemySystem {
       if (next === 'sidestep' || next === 'hopback') this.startEvade(next, mind.roll < 0.5 ? 1 : -1, ctx);
       else if (next !== 'walk') this.start(next);
     }
-    this.gait = damp(this.gait, this.action === 'walk' && dist > stand + 1 ? 1 : 0, 6, dt);
+    this.updateChase(dt, dist - stand);
+    this.gait = damp(this.gait, this.action === 'walk' && this.chasing && dist > stand + 1 ? 1 : 0, 6, dt);
     if (this.action === 'walk') this.walk(dt, ctx, dist, aim, stand);
     else if (this.action === 'sidestep' || this.action === 'hopback') this.evade(this.action, dt, ctx, aim, dist);
     else this.act(this.action, dt, ctx, aim, dist);
@@ -374,10 +381,24 @@ export class Mech implements EnemySystem {
     ctx.shake(M.hopShake);
   }
 
-  /** Turns toward the monster and strides straight ahead until `stand` m from it (centre to centre), crushing what is underfoot. */
+  /**
+   * Once at the monster it holds its ground, so the player can back off: it sets out again only after a gap past
+   * stand of more than chaseGap m has lasted chaseDelay s, and walks until it is back at stand.
+   */
+  private updateChase(dt: number, gap: number): void {
+    if (gap <= 0) {
+      this.chasing = false;
+      this.gapT = 0;
+    } else if (!this.chasing) {
+      this.gapT = gap > M.chaseGap ? this.gapT + dt : 0;
+      if (this.gapT >= M.chaseDelay) this.chasing = true;
+    }
+  }
+
+  /** Turns toward the monster and, while chasing, strides straight ahead until `stand` m from it (centre to centre), crushing what is underfoot. */
   private walk(dt: number, ctx: WorldContext, dist: number, aim: number, stand: number): void {
     this.heading = turn(this.heading, aim, M.turnRate * dt);
-    if (!ctx.monster.alive || dist <= stand) return;
+    if (!ctx.monster.alive || dist <= stand || !this.chasing) return;
     const step = Math.min((this.engaged ? M.walkSpeed : M.approachSpeed) * dt, dist - stand);
     this.x += Math.sin(this.heading) * step;
     this.z += Math.cos(this.heading) * step;

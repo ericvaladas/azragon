@@ -149,6 +149,26 @@ describe('Mech', () => {
     expect(c.paid).toEqual([]);
   });
 
+  it('holds its ground while the player backs off, then closes the gap after chaseDelay', () => {
+    const mech = new Mech(new THREE.Scene());
+    const c = makeCtx({ rng: () => 0.9 });
+    faceOff(mech, c, 1000);
+    run(mech, c, 25);
+    const stand = M.radius + c.monster.bodyRadius + M.stopGap;
+    const dx = () => body(mech).position.x;
+    // A small gap, inside chaseGap: it never sets out.
+    const x0 = dx();
+    c.monster.position.set(x0 - stand - M.chaseGap * 0.8, 0, body(mech).position.z);
+    run(mech, c, 6);
+    expect(dx()).toBeCloseTo(x0, 3);
+    // Past chaseGap: it waits out chaseDelay, then walks back to stand.
+    c.monster.position.set(x0 - stand - M.chaseGap - 100, 0, body(mech).position.z);
+    run(mech, c, M.chaseDelay - 0.3);
+    expect(dx()).toBeCloseTo(x0, 3);
+    run(mech, c, 12);
+    expect(distTo(mech, c.monster.position)).toBeLessThanOrEqual(stand + 1);
+  });
+
   it('stops with a small gap between the bodies, whatever the monster\'s size', () => {
     for (const bodyRadius of [60, CONFIG.monster.bodyRadius, 160]) {
       const mech = new Mech(new THREE.Scene());
