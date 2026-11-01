@@ -95,12 +95,23 @@ describe('Abilities', () => {
     expect(a.ready('bubble')).toBe(true);
   });
 
-  it('ultimate: owned only once ranked, recharges on plain time, ignoring the cooldown rate', () => {
+  it('a granted ultimate is ready at once', () => {
+    const a = new Abilities();
+    a.setRank('ultimate', 1);
+    expect(a.ready('ultimate')).toBe(false);
+    a.refill('ultimate');
+    expect(a.ready('ultimate')).toBe(true);
+    expect(a.trigger('ultimate')).toBe(true);
+    expect(a.ready('ultimate')).toBe(false);
+  });
+
+  it('ultimate: owned only once ranked, starts on its full cooldown, recharges on plain time, ignoring the cooldown rate', () => {
     const a = new Abilities();
     expect(a.unlocked('ultimate')).toBe(false);
     a.setRank('ultimate', 1);
-    expect(a.ready('ultimate')).toBe(CONFIG.ultimate.startReady);
+    expect(a.ready('ultimate')).toBe(false);
     a.tick(0, CONFIG.ultimate.cooldown);
+    expect(a.ready('ultimate')).toBe(true);
     expect(a.trigger('ultimate')).toBe(true);
     a.tick(1000, CONFIG.ultimate.cooldown - 1);
     expect(a.ready('ultimate')).toBe(false);

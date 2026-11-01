@@ -26,9 +26,9 @@ export class Abilities {
   private cd: Record<ActiveId, number> = Abilities.freshCooldowns();
   private rank: Record<ActiveId, number> = { leap: 1, dash: 0, roar: 0, bubble: 0, ultimate: 0 };
 
-  /** A new run's cooldowns: all clear but the ultimate's, which is full unless CONFIG.ultimate.startReady. */
+  /** A new run's cooldowns: all clear but the ultimate's, which starts on its full cooldown. */
   private static freshCooldowns(): Record<ActiveId, number> {
-    return { leap: 0, dash: 0, roar: 0, bubble: 0, ultimate: CONFIG.ultimate.startReady ? 0 : CONFIG.ultimate.cooldown };
+    return { leap: 0, dash: 0, roar: 0, bubble: 0, ultimate: CONFIG.ultimate.cooldown };
   }
 
   setRank(id: ActiveId, rank: number): void {
@@ -67,6 +67,11 @@ export class Abilities {
 
   cancelAim(): void {
     this.aiming = null;
+  }
+
+  /** Set the ability's cooldown to zero, making it ready. Used to grant the ultimate ready. */
+  refill(id: ActiveId): void {
+    this.cd[id] = 0;
   }
 
   /** Start the ability's cooldown; false (no-op) if not ready. Firing the aimed ability ends aiming. */

@@ -596,10 +596,11 @@ export const CONFIG = {
    */
   snare: { duration: 6, perAttack: 1, minDuration: 2, speedMult: 0.3 },
   /**
-   * The ultimate (Q): its cooldown in seconds of plain game time (no upgrade or Haste When Hurt shortens it), and
-   * whether a run starts with it ready (true while the ultimates are being built; false starts it on its full cooldown).
+   * The ultimate (Q): its cooldown in seconds of plain game time (no upgrade or Haste When Hurt shortens it).
+   * `startUnlocked`: when true, a run starts with the ultimate unlocked and ready, for testing ultimates; when false,
+   * the meteor pickup grants it.
    */
-  ultimate: { cooldown: 100, startReady: true },
+  ultimate: { cooldown: 100, startUnlocked: false },
   abilities: {
     /** Cooldown multiplier by rank (Dash/Roar ranks come from level-up picks; Leap is always rank 1). */
     rankCooldown: [1, 1, 0.8, 0.65],
