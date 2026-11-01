@@ -1,11 +1,14 @@
+import * as THREE from 'three';
 import type { Target } from '../combat';
 import { SpawnDirector } from './SpawnDirector';
 import { ENEMY_KINDS, type EnemyKind, type EnemySystem, type WorldContext } from './types';
 
+const _at = new THREE.Vector3();
+
 /** Owns every enemy system plus the director; caches the live target list once per frame. */
 export class EnemyRegistry {
   readonly director: SpawnDirector;
-  private systems = new Map<EnemyKind, EnemySystem>();
+  private systems = new Map<EnemyKind | 'mech', EnemySystem>();
   private cache: Target[] = [];
   private cacheValid = false;
 
@@ -17,7 +20,7 @@ export class EnemyRegistry {
     this.systems.set(s.kind, s);
   }
 
-  get<T extends EnemySystem>(kind: EnemyKind): T {
+  get<T extends EnemySystem>(kind: EnemyKind | 'mech'): T {
     const s = this.systems.get(kind);
     if (!s) throw new Error(`No enemy system for ${kind}`);
     return s as T;
@@ -48,6 +51,16 @@ export class EnemyRegistry {
       this.cacheValid = true;
     }
     return this.cache;
+  }
+
+  /** Sends the army away at once: a dust ring at each live target, then every system but the mech is cleared. The director is untouched. */
+  dismiss(ctx: WorldContext): void {
+    for (const s of this.systems.values()) {
+      if (s.kind === 'mech') continue;
+      for (const t of s.targets()) if (t.isAlive()) ctx.particles.ring('dust', _at.set(t.position.x, 0, t.position.z), t.radius * 2, 8);
+      s.clear();
+    }
+    this.cacheValid = false;
   }
 
   clear(): void {

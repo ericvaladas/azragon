@@ -194,4 +194,44 @@ describe('LaserTrucks', () => {
     run(sys, ctx, T.aimTime);
     expect([t.aim.x, t.aim.y, t.aim.z, t.beamEnd.x, t.heading].every(Number.isFinite)).toBe(true);
   });
+
+  it('fires nothing while retreating, standing down from an aim in progress', () => {
+    const { ctx, hits } = makeCtx();
+    const { sys, t } = parked(ctx);
+    run(sys, ctx, T.deployTime + 0.5);
+    expect(t.phase).toBe('aiming');
+    (ctx as { retreating?: boolean }).retreating = true;
+    run(sys, ctx, 20);
+    expect(t.phase).not.toBe('firing');
+    expect(hits).toEqual([]);
+  });
+
+  it('lets a beam already firing finish', () => {
+    const { ctx, hits } = makeCtx();
+    const { sys, t } = parked(ctx);
+    run(sys, ctx, T.deployTime + T.aimTime + T.lockTime + 0.1);
+    expect(t.phase).toBe('firing');
+    (ctx as { retreating?: boolean }).retreating = true;
+    run(sys, ctx, T.fireTime);
+    expect(hits.length).toBeGreaterThan(0);
+    expect(t.phase).toBe('cooldown');
+  });
+
+  it('drives away and is removed past exitDistance without a kill', () => {
+    const destroyed: unknown[] = [];
+    const { ctx } = makeCtx();
+    (ctx as { onDestroyed: unknown }).onDestroyed = (t: unknown) => destroyed.push(t);
+    const { sys, t } = parked(ctx);
+    (ctx as { retreating?: boolean }).retreating = true;
+    const dist = () => Math.hypot(t.position.x, t.position.z);
+    let last = dist();
+    for (let s = 0; s < 5; s++) {
+      run(sys, ctx, 1);
+      expect(dist()).toBeGreaterThan(last);
+      last = dist();
+    }
+    run(sys, ctx, 200);
+    expect(sys.count()).toBe(0);
+    expect(destroyed).toEqual([]);
+  });
 });

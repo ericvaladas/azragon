@@ -6,6 +6,7 @@ import { dist2, type Vec2 } from '../util/math';
 import { rotateToward, stepAngle, yawPitch } from './aimMath';
 import { beamHits } from './beamMath';
 import { BARREL as BARREL_U, LEG_Z, PIVOT_DEPLOYED, cannonGeometry, chassisGeometry, deployPose, legBoxes, legGeometry, TRUNNION, turretGeometry } from './truckModel';
+import { escaped, fleePoint } from './retreat';
 import type { EnemySystem, WorldContext } from './types';
 
 const T = CONFIG.truck;
@@ -51,6 +52,8 @@ class LaserTruck implements Target {
   readonly aim = new THREE.Vector3(0, 0, 1);
   path: Vec2[] = [];
   replanT = 0;
+  /** Heading out of the map; the route to the monster was dropped when the retreat began. */
+  fleeing = false;
 
   constructor(
     hp: number,
@@ -184,6 +187,7 @@ export class LaserTrucks implements EnemySystem {
   update(dt: number, ctx: WorldContext): void {
     this.ctx = ctx;
     const mp = ctx.monster.position;
+    const retreating = ctx.retreating === true;
     const goal = { x: mp.x, z: mp.z };
     for (let i = this.trucks.length - 1; i >= 0; i--) {
       const t = this.trucks[i]!;
@@ -191,8 +195,20 @@ export class LaserTrucks implements EnemySystem {
         this.trucks.splice(i, 1);
         continue;
       }
-      t.t += dt;
       const here = { x: t.position.x, z: t.position.z };
+      if (retreating && escaped(here, goal)) {
+        this.trucks.splice(i, 1);
+        continue;
+      }
+      t.t += dt;
+      if (retreating) {
+        if (!t.fleeing) {
+          t.fleeing = true;
+          t.path = [];
+        }
+        // Stands down from a cannon still deploying, aiming or locked; a firing beam finishes.
+        if (t.phase === 'deploying' || t.phase === 'aiming' || t.phase === 'locked') this.enter(t, 'driving');
+      }
       const d = dist2(here, goal);
       // Parked trucks keep their road heading; only the turret turns to the monster.
       if (t.phase === 'driving') this.aimForward(t, dt);
@@ -201,14 +217,14 @@ export class LaserTrucks implements EnemySystem {
       t.deploy = THREE.MathUtils.clamp(t.deploy + (t.phase === 'driving' ? -dt : dt) / T.deployTime, 0, 1);
       switch (t.phase) {
         case 'driving': {
-          if (d <= T.range && ctx.monster.alive) {
+          if (!retreating && d <= T.range && ctx.monster.alive) {
             this.enter(t, 'deploying');
             ctx.particles.ring('dust', _p.copy(t.position).setY(0), S * 1.5, 10);
             break;
           }
           t.replanT -= dt;
           if (t.path.length === 0 || t.replanT <= 0) {
-            t.path = ctx.roads.path(here, goal);
+            t.path = ctx.roads.path(here, retreating ? fleePoint(here, goal, CONFIG.cycle.exitDistance + 200) : goal);
             t.replanT = 4;
           }
           const wp = t.path[0];
@@ -250,7 +266,7 @@ export class LaserTrucks implements EnemySystem {
           break;
         }
         case 'cooldown':
-          if (t.t >= T.cooldown) this.enter(t, d <= T.range ? 'aiming' : 'driving');
+          if (t.t >= T.cooldown) this.enter(t, !retreating && d <= T.range ? 'aiming' : 'driving');
           break;
       }
     }

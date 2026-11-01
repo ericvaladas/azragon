@@ -40,6 +40,11 @@ export interface WorldContext {
    */
   readonly quiet?: boolean;
   /**
+   * The army is falling back: no new attacks; units leave and are removed beyond CONFIG.cycle.exitDistance without
+   * being reported destroyed. Absent means false.
+   */
+  readonly retreating?: boolean;
+  /**
    * The road network: nearest road point, nearest road point off every bridge deck (for things that sit on the
    * ground), and a waypoint route over existing segments (excluding `from`).
    */
@@ -67,7 +72,7 @@ export interface WorldContext {
 }
 
 export interface EnemySystem {
-  readonly kind: EnemyKind;
+  readonly kind: EnemyKind | 'mech';
   /** Spawns one; false when there was nowhere to put it (the director then refunds its cost). */
   spawn(ctx: WorldContext): boolean | void;
   update(dt: number, ctx: WorldContext): void;

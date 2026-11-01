@@ -210,4 +210,33 @@ describe('GustavFleet', () => {
     expect(f.targets()).toHaveLength(0);
     for (const m of scene.children) expect((m as THREE.InstancedMesh).count).toBe(0);
   });
+
+  it('fires nothing while retreating', () => {
+    const f = new GustavFleet(new THREE.Scene());
+    const c = makeCtx();
+    c.monster.position.set(500, 0, 0);
+    f.spawnAt(0, 0, c.ctx);
+    (c.ctx as { retreating?: boolean }).retreating = true;
+    run(f, c, 20);
+    expect(c.shots).toEqual([]);
+  });
+
+  it('drives away and is removed past exitDistance without a kill', () => {
+    const f = new GustavFleet(new THREE.Scene());
+    const c = makeCtx();
+    c.monster.position.set(500, 0, 0);
+    f.spawnAt(0, 0, c.ctx);
+    (c.ctx as { retreating?: boolean }).retreating = true;
+    const g = f.targets()[0]!;
+    const dist = () => Math.hypot(g.position.x - 500, g.position.z);
+    let last = dist();
+    for (let s = 0; s < 5; s++) {
+      run(f, c, 1);
+      expect(dist()).toBeGreaterThan(last);
+      last = dist();
+    }
+    run(f, c, 600);
+    expect(f.count()).toBe(0);
+    expect(c.destroyed).toEqual([]);
+  });
 });

@@ -5,6 +5,7 @@ import type { EnemySystem, WorldContext } from './types';
 import { toonMat } from '../render/toon';
 import { TURRET, hullGeometry, turretGeometry } from './tankModel';
 import { dist2, type Vec2 } from '../util/math';
+import { escaped, fleePoint } from './retreat';
 
 const REPLAN_EVERY = 4;
 const MAX_TANKS = CONFIG.spawns.tank.cap;
@@ -27,6 +28,8 @@ class Tank implements Target {
   turretYaw = 0;
   path: Vec2[] = [];
   replanT = 0;
+  /** Heading out of the map; the route to the monster was dropped when the retreat began. */
+  fleeing = false;
   fireCd = 0;
   flashT = 0;
 
@@ -110,6 +113,7 @@ export class TankFleet implements EnemySystem {
     this.ctx = ctx;
     const monster = ctx.monster.position;
     const T = CONFIG.tank;
+    const retreating = ctx.retreating === true;
     const goal = { x: monster.x, z: monster.z };
     for (let i = this.tanks.length - 1; i >= 0; i--) {
       const t = this.tanks[i]!;
@@ -119,10 +123,18 @@ export class TankFleet implements EnemySystem {
       }
       t.flashT = Math.max(0, t.flashT - dt);
       const here = { x: t.position.x, z: t.position.z };
+      if (retreating && escaped(here, goal)) {
+        this.tanks.splice(i, 1);
+        continue;
+      }
+      if (retreating && !t.fleeing) {
+        t.fleeing = true;
+        t.path = [];
+      }
       const d = dist2(here, goal);
       t.turretYaw = Math.atan2(goal.x - here.x, goal.z - here.z);
 
-      if (d <= T.range) {
+      if (!retreating && d <= T.range) {
         t.fireCd -= dt;
         if (t.fireCd <= 0) {
           t.fireCd = T.fireCooldown;
@@ -135,7 +147,7 @@ export class TankFleet implements EnemySystem {
 
       t.replanT -= dt;
       if (t.path.length === 0 || t.replanT <= 0) {
-        t.path = ctx.roads.path(here, goal);
+        t.path = ctx.roads.path(here, retreating ? fleePoint(here, goal, CONFIG.cycle.exitDistance + 200) : goal);
         t.replanT = REPLAN_EVERY;
       }
       const wp = t.path[0];

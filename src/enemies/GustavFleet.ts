@@ -4,6 +4,7 @@ import type { Target } from '../combat';
 import type { EnemySystem, WorldContext } from './types';
 import { toonMat } from '../render/toon';
 import { angleDelta, dist2, type Vec2 } from '../util/math';
+import { escaped, fleePoint } from './retreat';
 import { gustavMuzzle, hullGeometry, turretGeometry } from './gustavModel';
 
 const G = CONFIG.gustav;
@@ -42,6 +43,8 @@ class Gustav implements Target {
   /** Within range of the monster (stopped) since the last time it drove, and the time to its next shot. */
   engaged = false;
   fireCd = 0;
+  /** Heading out of the map; the route to the monster was dropped when the retreat began. */
+  fleeing = false;
   flashT = 0;
   /** Seconds since the last shot (drives the turret's recoil). */
   recoilT: number = G.recoilTime;
@@ -152,6 +155,7 @@ export class GustavFleet implements EnemySystem {
   update(dt: number, ctx: WorldContext): void {
     this.ctx = ctx;
     const m = ctx.monster.position;
+    const retreating = ctx.retreating === true;
     const goal = { x: m.x, z: m.z };
     for (let i = this.units.length - 1; i >= 0; i--) {
       const g = this.units[i]!;
@@ -162,10 +166,19 @@ export class GustavFleet implements EnemySystem {
       g.flashT = Math.max(0, g.flashT - dt);
       g.recoilT += dt;
       const here = { x: g.position.x, z: g.position.z };
+      if (retreating && escaped(here, goal)) {
+        this.units.splice(i, 1);
+        continue;
+      }
+      if (retreating && !g.fleeing) {
+        g.fleeing = true;
+        g.engaged = false;
+        g.path = [];
+      }
       const aim = Math.atan2(goal.x - here.x, goal.z - here.z);
-      g.turretYaw = turn(g.turretYaw, aim, G.aimRate * dt);
+      if (!retreating) g.turretYaw = turn(g.turretYaw, aim, G.aimRate * dt);
       // Once stopped it holds until the monster is clearly out of range, so a monster at the edge can't stall its fire.
-      if (dist2(here, goal) <= G.range + (g.engaged ? G.disengageMargin : 0)) {
+      if (!retreating && dist2(here, goal) <= G.range + (g.engaged ? G.disengageMargin : 0)) {
         if (!g.engaged) {
           g.engaged = true;
           g.fireCd = G.firstShotMin + ctx.rng() * (G.firstShotMax - G.firstShotMin);
@@ -185,7 +198,7 @@ export class GustavFleet implements EnemySystem {
       }
       g.replanT -= dt;
       if (g.path.length === 0 || g.replanT <= 0) {
-        g.path = ctx.roads.path(here, goal);
+        g.path = ctx.roads.path(here, retreating ? fleePoint(here, goal, CONFIG.cycle.exitDistance + 200) : goal);
         g.replanT = G.replanEvery;
       }
       const wp = g.path[0];
