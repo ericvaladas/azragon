@@ -539,12 +539,12 @@ export const CONFIG = {
     ultimate: {
       radius: 900, timeScale: 0.25, maxFigures: 24, handStagger: 0.9,
       /**
-       * A hand: its scale (the anti-air hands are 2), how fast it rises (m/s, real time), how long it takes to reach a
+       * A hand: its scale (the anti-air hands are 2; bossScale for a boss), how fast it rises (m/s, real time), how long it takes to reach a
        * flyer (s, however high), how long it brakes to a stop at the top of its rise (s), how long it takes to close into a fist (s), how fast it sinks back (m/s), how
        * long it takes to sink back from a flyer (s, however high), and how high its wrist is at the lowest grasp (m),
        * so the whole hand is above the ground.
        */
-      hand: { scale: 2.2, riseSpeed: 180, airRiseTime: 0.45, easeTime: 0.6, closeTime: 1.6, sinkSpeed: 100, airSinkTime: 1.2, wristClear: 15 },
+      hand: { scale: 2.2, bossScale: 5, riseSpeed: 180, airRiseTime: 0.45, easeTime: 0.6, closeTime: 1.6, sinkSpeed: 100, airSinkTime: 1.2, wristClear: 15 },
       bossDamage: 3500,
       cameraDistanceMult: 2.2,
       boltEvery: [0.9, 1.6], boltSpread: 1.3,

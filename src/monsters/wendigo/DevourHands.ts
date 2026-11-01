@@ -76,7 +76,8 @@ const _J = Array.from({ length: 4 }, () => new THREE.Vector3());
  * the ground beneath it,
  * fingers pointing up in a relaxed, neutral grip; reaching the victim the hand takes it (a dark husk of it rides in
  * the hand from then on; a ground victim is lifted up until the whole hand clears the ground), closes into a full
- * fist round it, then sinks straight back down into the ground with it, slowly (devourHand). Pooled: four draw calls.
+ * fist round it, then sinks straight back down into the ground with it, slowly (devourHand). A boss gets a far bigger
+ * hand that crushes it and sinks away empty: it stays where it is. Pooled: four draw calls.
  */
 export class DevourHands {
   private hands: Hand[] = [];
@@ -119,13 +120,15 @@ export class DevourHands {
   /** A hand for `target`, rising after `delay` s, its palm toward `center` (the circle's centre). */
   grab(target: Target, center: THREE.Vector3, delay: number): void {
     if (this.hands.length >= U.maxFigures) return;
-    // Every hand is the same size; the husk in its fist stands in for the victim, whatever its size.
-    const hs = H.scale;
+    // Every hand is the same size, the husk in its fist standing in for the victim, but for a boss's far bigger one.
+    const hs = target.boss ? H.bossScale : H.scale;
     const above = ABOVE * hs;
+    // A bigger hand moves as much faster, so it takes as long as any other and the ultimate isn't held up.
+    const sized = hs / H.scale;
     // A flyer is reached in airRiseTime, however high it is.
-    const riseSpeed = target.airborne ? Math.max(H.riseSpeed, riseSpeedFor(target.position.y + above + 1, H.airRiseTime, H.easeTime)) : H.riseSpeed;
+    const riseSpeed = target.airborne ? Math.max(H.riseSpeed, riseSpeedFor(target.position.y + above + 1, H.airRiseTime, H.easeTime)) : H.riseSpeed * sized;
     // A flyer's hand sinks back under in airSinkTime, however high it grabbed it.
-    const sinkSpeed = target.airborne ? Math.max(H.sinkSpeed, (target.position.y + above + 1) / H.airSinkTime) : H.sinkSpeed;
+    const sinkSpeed = target.airborne ? Math.max(H.sinkSpeed, (target.position.y + above + 1) / H.airSinkTime) : H.sinkSpeed * sized;
     const spec: DevourHandSpec = { riseSpeed, easeTime: H.easeTime, closeTime: H.closeTime, sinkSpeed, below: D.holdFwd * hs, above, clear: D.holdFwd * hs + H.wristClear };
     const n = new THREE.Vector3(center.x - target.position.x, 0, center.z - target.position.z);
     if (n.lengthSq() < 1e-6) n.set(0, 0, 1);
@@ -198,7 +201,7 @@ export class DevourHands {
       nc = this.digit(h, nc, 2, g);
 
       // The victim's husk rides in the hand once taken, inside the closing fist.
-      if (h.state.holding) {
+      if (h.state.holding && !h.target.boss) {
         const r = HUSK * h.hs;
         _q.setFromAxisAngle(_up, Math.atan2(h.n.x, h.n.z));
         this.husks.setMatrixAt(nk++, _m.compose(_hold, _q, _sc.set(r, r, r)));

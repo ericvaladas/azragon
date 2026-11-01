@@ -62,7 +62,7 @@ function circleGeometry(): THREE.BufferGeometry {
 /**
  * Devour, the Wendigo's ultimate, on its real-time timeline (devourPhase): the world slows, the camera pulls back,
  * the sky bleeds red and lightning strikes around; a black circle opens; a hand rises out of the ground under every
- * enemy in it, closes into a fist round it (it is taken; a boss is hurt instead) and sinks back with it; the buildings
+ * enemy in it, closes into a fist round it (it is taken; a boss, hurt instead, stays) and sinks back with it; the buildings
  * in the circle collapse as it opens, nearest first; then everything drains away, the circle last, once every hand
  * is under.
  */
@@ -109,7 +109,9 @@ export class Devour implements Ultimate {
     // Each victim is taken the moment its own hand closes on it.
     // Each victim is taken as its own hand reaches it.
     this.hands = new DevourHands(scene, (t) => {
-      if (this.active && t.isAlive()) this.host.take(t);
+      if (!this.active || !t.isAlive()) return;
+      if (t.boss) this.host.hurtBoss(t, U.bossDamage * this.damageMult);
+      else this.host.take(t);
     });
   }
 
@@ -165,7 +167,9 @@ export class Devour implements Ultimate {
     if (!this.spawned && this.t >= HANDS_AT) {
       // A shadow hand rises for each victim (the nearest maxFigures), slowly, out of a pool beyond it.
       this.spawned = true;
-      this.figured = devourVictims(c, U.radius, this.host.enemies(), U.maxFigures).held;
+      const v = devourVictims(c, U.radius, this.host.enemies(), U.maxFigures);
+      // A boss in the circle gets a hand of its own, first, whatever the cap on the others.
+      this.figured = [...v.bosses, ...v.held].slice(0, U.maxFigures);
       for (const t of this.figured) this.hands.grab(t, this.center, this.rand() * U.handStagger);
     }
     if (!this.grasped && this.t >= T.grasp) {
@@ -179,7 +183,7 @@ export class Devour implements Ultimate {
         this.host.burst(t.position, 'take');
         this.host.take(t);
       }
-      for (const b of now.bosses) this.host.hurtBoss(b, U.bossDamage * this.damageMult);
+      for (const b of now.bosses) if (!handed.has(b)) this.host.hurtBoss(b, U.bossDamage * this.damageMult);
       this.host.shake(0.6);
     }
     if (this.spawned) this.hands.update(realDt);

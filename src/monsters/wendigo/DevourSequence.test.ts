@@ -104,9 +104,21 @@ describe('Devour', () => {
     const boss = unit(100, { boss: true });
     const { d, log, run } = rig([boss]);
     d.start(new THREE.Vector3(), 1.5);
-    run(T.grasp + 0.05);
+    run(T.end + 6);
     expect(log.taken).toEqual([]);
     expect(log.bosses).toEqual([[boss, U.bossDamage * 1.5]]);
+  });
+
+  it('a boss gets a shadow hand of its own, ahead of the cap on the others, hurt as the hand closes', () => {
+    const others = Array.from({ length: U.maxFigures }, (_, i) => unit(50 + i));
+    const boss = unit(300, { boss: true });
+    const { d, log, run } = rig([...others, boss]);
+    d.start(new THREE.Vector3(), 1);
+    run(T.end + 6);
+    const figured = (d as unknown as { hands: { count: number } }).hands;
+    expect(figured.count).toBe(0);
+    expect(log.bosses).toEqual([[boss, U.bossDamage]]);
+    expect(log.taken).not.toContain(boss);
   });
 
   it('pauses freeze the timeline', () => {
