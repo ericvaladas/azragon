@@ -3,7 +3,8 @@ import { CONFIG } from '../config';
 export type ActiveId = 'leap' | 'dash' | 'roar' | 'bubble' | 'ultimate';
 /** Abilities that need a ground point picked before they fire (Dash fires straight ahead instead). */
 export type AimId = 'leap';
-export type AbilityView = { id: ActiveId; ready: boolean; cdFrac: number; aiming: boolean };
+/** `fresh`: just granted; its button draws attention for a moment. */
+export type AbilityView = { id: ActiveId; ready: boolean; cdFrac: number; aiming: boolean; fresh?: boolean };
 
 /** Button order, left to right. */
 const IDS: readonly ActiveId[] = ['leap', 'dash', 'roar', 'bubble', 'ultimate'];

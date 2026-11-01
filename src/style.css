@@ -366,6 +366,14 @@ body {
 /* The ultimate: bigger than the rest, a heavier accent border, and a glow only while it is ready. */
 .ability-btn.ultimate { width: 76px; height: 76px; border-width: 3px; }
 .ability-btn.ultimate.ready { box-shadow: 0 0 14px var(--color-primary); }
+/* The ultimate just granted: a pulsing ring and sparks circling the button, in the crystal's colour. */
+.ability-btn.fresh { overflow: visible; }
+.ult-fresh { position: absolute; inset: 0; pointer-events: none; }
+.ult-fresh-ring { position: absolute; inset: -8px; border-radius: 50%; border: 3px solid var(--color-meteor); animation: ult-ring 1.1s ease-out infinite; }
+.ult-fresh-sparks { position: absolute; left: 50%; top: 50%; width: 0; height: 0; animation: ult-orbit 2.4s linear infinite; }
+.ult-fresh-sparks i { position: absolute; left: -4px; top: -4px; width: 8px; height: 8px; border-radius: 2px; background: var(--color-meteor); }
+@keyframes ult-ring { from { transform: scale(0.9); opacity: 1; } to { transform: scale(1.5); opacity: 0; } }
+@keyframes ult-orbit { to { transform: rotate(360deg); } }
 .ability-btn.locked { opacity: 0.45; filter: grayscale(0.6); }
 .ability-label { font-size: 12px; font-weight: 700; letter-spacing: 0.08em; margin-right: -0.08em; text-transform: uppercase; line-height: 1; }
 .ability-key { position: absolute; left: 0; right: 0; top: 4px; font-size: 8px; opacity: 0.7; letter-spacing: 0.08em; }

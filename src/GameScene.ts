@@ -222,6 +222,8 @@ export class GameScene {
   private fistTarget: Target | null = null;
   /** An ultimate's sequence is running. */
   private ultimateActive = false;
+  /** Game time until which the just-granted ultimate's button draws attention. */
+  private ultimateFreshUntil = 0;
   /** Each kind's ultimate, by id; the current kind's is `ultimate()`. */
   private ultimates: Partial<Record<UltimateId, Ultimate>> = {};
   /** The boss is beaten and the music calms as soon as its wreck has gone. */
@@ -630,6 +632,7 @@ export class GameScene {
     this.openingDone = false;
     this.abilities.reset();
     this.cycle.reset();
+    this.ultimateFreshUntil = 0;
     this.meteor.clear();
     this.pendingCalm = false;
     this.music.fight();
@@ -1057,7 +1060,7 @@ export class GameScene {
 
   /** The ability buttons: Leap and Dash show not ready while snared; the ultimate only when its monster can use it. */
   private abilityView(): AbilityView[] {
-    const view = this.abilities.view().map((v) => (v.id === 'ultimate' ? { ...v, ready: v.ready && this.canUltimate() } : v));
+    const view = this.abilities.view().map((v) => (v.id === 'ultimate' ? { ...v, ready: v.ready && this.canUltimate(), fresh: this.elapsed < this.ultimateFreshUntil } : v));
     if (!this.snare.blocksMobility) return view;
     return view.map((v) => (v.id === 'leap' || v.id === 'dash' ? { ...v, ready: false, aiming: false } : v));
   }
@@ -1087,6 +1090,7 @@ export class GameScene {
     const u = this.ultimate();
     if (!u) return;
     this.ultimateActive = true;
+    this.ultimateFreshUntil = 0;
     this.order = null;
     this.markers.setTarget(null);
     this.abilities.cancelAim();
@@ -1189,6 +1193,7 @@ export class GameScene {
     this.ultimateUnlocked = true;
     this.abilities.setRank('ultimate', this.monster.kind.ultimate ? 1 : 0);
     this.abilities.refill('ultimate');
+    this.ultimateFreshUntil = this.elapsed + CONFIG.meteor.ultimateFreshTime;
     // Only the gold aura's visual: no level, no heal, no slow motion.
     this.aura.start();
     this.cycle.meteorCollected();

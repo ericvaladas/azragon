@@ -166,6 +166,8 @@ export const CONFIG = {
   /** First-break meteor timing (s after the retreat starts, or after the meteor lands or is collected). */
   meteor: {
     cutsceneDelay: 3, graceTime: 25, bossDelay: 3,
+    /** How long (s) the just-granted ultimate's button is ringed by a glow and circling sparks. */
+    ultimateFreshTime: 6,
     /** Landing spot: distance band from the monster (m); fall: start height, sideways slant (m) and time (s). */
     landMin: 900, landMax: 1300, startHeight: 3500, slant: 1800, fallTime: 2.6,
     /** Camera blend toward the sky: ease up (s), the fall's release time (s into the cutscene, inside the ease-up so the gem is already streaking down as the camera settles), hold after impact, ease back (s); extra camera height at full blend (m). */
