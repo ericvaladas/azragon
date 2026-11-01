@@ -320,6 +320,8 @@ body {
   background: var(--color-danger, #ff3b2f);
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.8));
 }
+/* The boss's arrow is twice the size of the others'. */
+.edge-arrow.mech .edge-arrow-head { left: -18px; top: -18px; width: 36px; height: 36px; }
 /* The meteor's arrow points at a pickup, not a threat: its own colour and a slow pulse (opacity only, so the inline rotate stays). */
 .edge-arrow.meteor .edge-arrow-head {
   background: var(--color-meteor);

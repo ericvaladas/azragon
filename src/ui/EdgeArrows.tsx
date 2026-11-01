@@ -4,7 +4,7 @@ export function EdgeArrows({ arrows }: { arrows: ThreatArrow[] }) {
   return (
     <div className="edge-arrows">
       {arrows.map((a, i) => (
-        <div key={i} className={a.kind === 'meteor' ? 'edge-arrow meteor' : 'edge-arrow'} style={{ transform: `translate(${a.x}px, ${a.y}px)` }}>
+        <div key={i} className={a.kind === 'meteor' || a.kind === 'mech' ? `edge-arrow ${a.kind}` : 'edge-arrow'} style={{ transform: `translate(${a.x}px, ${a.y}px)` }}>
           <div className="edge-arrow-head" style={{ transform: `rotate(${a.angle}rad)` }} />
         </div>
       ))}
