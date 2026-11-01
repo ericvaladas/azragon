@@ -50,19 +50,25 @@ const AIM_FOLLOW = 8;
 const _strikeLift = new THREE.Vector3(0, 420, -80);
 /**
  * Spike Rain (an ultimate's roar, while carried): a spider's threat display. The body stands DISPLAY_LIFT taller with
- * its front tilted up DISPLAY_TILT rad, on the back pair of legs, its tail held straight out behind and down to the
+ * its front tilted up DISPLAY_TILT rad, on the back pair of legs (their feet drawn in to STAND_X from the middle so
+ * they straighten), its tail held straight out behind and down to the
  * ground as a counterweight; the front pair is raised high and wide (RAISED, body
  * space, x to the leg's side, z from its hip) and the second pair held out lower (SPREAD). The raised legs wave slowly
- * (WAVE m at WAVE_RATE rad/s of world time) with a fine quiver (QUIVER m at QUIVER_RATE); the mandibles open MOUTH_OPEN rad to shoot.
+ * (WAVE m at WAVE_RATE rad/s of world time) with a fine quiver (QUIVER m at QUIVER_RATE), and now and then each kicks
+ * out and forward (up to KICK m, at KICK_RATE), at its own moment; the mandibles open MOUTH_OPEN rad to shoot.
  */
-const DISPLAY_LIFT = 110;
+const DISPLAY_LIFT = 330;
+const STAND_X = 230;
+const KICK = 110;
+const KICK_RATE = 5;
+const KICK_DIR = new THREE.Vector3(0.6, 0.25, 0.75).normalize();
 const DISPLAY_TILT = 0.52;
 /** The braced tail's tip rests this high (m) on the ground behind; it never points down steeper than TAIL_MAX_DROP (rad). */
 const TAIL_REST = 15;
 const TAIL_MAX_DROP = 1.1;
 const RAISED = new THREE.Vector3(420, 760, 260);
 const SPREAD = new THREE.Vector3(520, 420, 120);
-const WAVE = 45;
+const WAVE = 70;
 const WAVE_RATE = 2.5;
 const QUIVER = 6;
 const QUIVER_RATE = 23;
@@ -119,8 +125,14 @@ export class InsectBody implements MonsterBody {
         const pose = i < 2 ? RAISED : SPREAD;
         const wave = Math.sin(f.time * WAVE_RATE + i * 1.7) * WAVE;
         const quiver = Math.sin(f.time * QUIVER_RATE + i * 2.3) * QUIVER;
-        _raised.set(leg.side * (pose.x + wave * 0.5), pose.y + wave + quiver, leg.hipLocal.z + pose.z + quiver).applyMatrix4(body.matrix);
+        const kick = Math.max(0, Math.sin(f.time * KICK_RATE + i * 1.9)) ** 2 * KICK;
+        _raised
+          .set(leg.side * (pose.x + wave * 0.5 + KICK_DIR.x * kick), pose.y + wave + quiver + KICK_DIR.y * kick, leg.hipLocal.z + pose.z + quiver + KICK_DIR.z * kick)
+          .applyMatrix4(body.matrix);
         _foot.lerp(_raised, rear);
+      } else if (rear > 0) {
+        // A back leg: its foot drawn in under its hip, so it straightens and the Insect stands tall.
+        _foot.x += (leg.side * STAND_X - _foot.x) * rear;
       }
       this.feet[i]!.copy(_foot);
       _pole.copy(_hip).add(_knee.set(leg.side * 120, 700, 0));

@@ -27,6 +27,38 @@ describe('InsectBody for Spike Rain', () => {
     expect(Math.abs(up.feet[5]!.y)).toBeLessThan(10);
   });
 
+  it('stands tall on its back legs: they straighten to most of their length', () => {
+    const reach = (roar: number) => {
+      const body = new InsectBody();
+      for (let i = 0; i < 30; i++) body.animate({ ...base(), time: i / 60, carried: true, roar }, () => {});
+      const m = body['model'];
+      return [4, 5].map((i) => m.legs[i]!.hipLocal.clone().applyMatrix4(m.body.matrix).distanceTo(body.feet[i]!) / 700);
+    };
+    for (const r of reach(1)) expect(r).toBeGreaterThanOrEqual(0.8);
+    for (const r of reach(0)) expect(r).toBeLessThan(0.75);
+  });
+
+  it('the raised legs kick out slowly now and then, each at its own moment', () => {
+    const body = new InsectBody();
+    const paths: THREE.Vector3[][] = [[], [], [], []];
+    for (let i = 0; i < 180; i++) {
+      body.animate({ ...base(), time: i / 60, carried: true, roar: 1 }, () => {});
+      for (let k = 0; k < 4; k++) paths[k]!.push(body.feet[k]!.clone());
+    }
+    const peaks = new Set<number>();
+    for (const path of paths) {
+      const from = path[0]!;
+      const far = path.map((p) => p.distanceTo(from));
+      expect(Math.max(...far)).toBeGreaterThanOrEqual(100);
+      for (let i = 1; i < path.length; i++) expect(path[i]!.distanceTo(path[i - 1]!)).toBeLessThan(15);
+      for (const p of path) expect(p.y).toBeGreaterThan(150);
+      // When it reaches furthest out from the body's middle.
+      const out = path.map((p) => Math.hypot(p.x, p.z));
+      peaks.add(Math.round(out.indexOf(Math.max(...out)) / 6));
+    }
+    expect(peaks.size).toBeGreaterThanOrEqual(3);
+  });
+
   it('braces with its tail: held straight out behind and down, its tip on the ground', () => {
     const tail = (carried: boolean) => {
       const body = new InsectBody();
