@@ -1137,7 +1137,7 @@ export class GameScene {
         this.enemies.dismiss(this.ctx);
         this.dropDismissedTargets();
         this.mech.summon(this.ctx);
-        this.music.fight();
+        this.music.boss();
         break;
       case 'army':
         this.music.fight();

@@ -7,14 +7,17 @@ const M = CONFIG.music;
 const SILENT_WAV = 'data:audio/wav;base64,UklGRiYAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQIAAAAAAA==';
 type Stream = { el: HTMLAudioElement; gain: GainNode; ready: boolean; pending: boolean };
 
+/** Every track, each streamed through its own element. */
+const TRACKS = ['intro', 'main1', 'rest1', 'boss1'] as const;
+
 const report = (e: unknown): void => RundotGameAPI.error('[music]', e);
 
 /**
  * The soundtrack, driven by game events through musicStep.
  * - The first gesture starts the Intro, which loops as a whole file.
  * - The silhouette reveal crossfades the Intro into Main 1 at once, over `crossfade` s.
- * - Main 1 loops through the fighting; Main 2 loops during the breaks. calm() and fight() crossfade between them
- *   over `phaseFade` s.
+ * - Main 1 loops through the army fight, Rest 1 during the breaks, Boss 1 during the boss fight. calm(), fight() and
+ *   boss() crossfade between them over `phaseFade` s.
  * - A menu brings the Intro back.
  *
  * Every track streams from its CDN URL in an <audio> element routed through a gain node (iOS ignores an element's
@@ -34,7 +37,7 @@ export class Music {
 
   constructor() {
     const resolve = (file: string) => RundotGameAPI.cdn.resolveAssetUrl(file);
-    this.srcs = { intro: resolve(M.intro.file), main1: resolve(M.main1.file), main2: resolve(M.main2.file) };
+    this.srcs = { intro: resolve(M.intro.file), main1: resolve(M.main1.file), rest1: resolve(M.rest1.file), boss1: resolve(M.boss1.file) };
     // Failures are reported where each promise is used; these keep an unused rejection from going unhandled.
     for (const p of Object.values(this.srcs)) p.catch(() => {});
   }
@@ -47,11 +50,11 @@ export class Music {
       this.master = this.ctx.createGain();
       this.master.gain.value = this.target();
       this.master.connect(this.ctx.destination);
-      for (const id of ['intro', 'main1', 'main2'] as const) this.setUp(id);
+      for (const id of TRACKS) this.setUp(id);
     }
     // Anything but running or closed: suspended before the first gesture, or 'interrupted' on iOS after a call or Siri.
     if (this.ctx.state !== 'running' && this.ctx.state !== 'closed') this.ctx.resume().catch(report);
-    for (const id of ['intro', 'main1', 'main2'] as const) if (this.streams[id]?.pending) this.play(id);
+    for (const id of TRACKS) if (this.streams[id]?.pending) this.play(id);
     this.send('unlock');
   }
 
@@ -85,14 +88,19 @@ export class Music {
     if (this.ctx) this.send('reveal');
   }
 
-  /** A break began: Main 1 crossfades into Main 2. */
+  /** A break began: the current gameplay track crossfades into Rest 1. */
   calm(): void {
     if (this.ctx) this.send('calm');
   }
 
-  /** The fighting resumed: Main 2 crossfades into Main 1. */
+  /** The army fight began or resumed: the current gameplay track crossfades into Main 1. */
   fight(): void {
     if (this.ctx) this.send('fight');
+  }
+
+  /** The boss fight began: the current gameplay track crossfades into Boss 1. */
+  boss(): void {
+    if (this.ctx) this.send('boss');
   }
 
   /** Entered the monster select or title screen. */

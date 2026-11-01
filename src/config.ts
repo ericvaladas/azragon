@@ -889,8 +889,10 @@ export const CONFIG = {
     intro: { file: 'audio/intro.m4a' },
     /** Main gameplay 1: starts from its top on the reveal and loops through the fighting. */
     main1: { file: 'audio/main1.m4a' },
-    /** Main gameplay 2: plays during the breaks between fights and loops as a whole song. */
-    main2: { file: 'audio/main2.m4a' },
+    /** Rest 1: plays during the breaks (the retreat and the recovery) and loops as a whole song. */
+    rest1: { file: 'audio/rest1.m4a' },
+    /** Boss 1: plays during the boss fight and loops as a whole song. */
+    boss1: { file: 'audio/boss1.m4a' },
     /** The Intro and Main 1 crossfade over this long (s) the moment the reveal starts. */
     crossfade: 1.0,
     /** Gameplay music fades out over this long (s) when a menu brings the Intro back. */

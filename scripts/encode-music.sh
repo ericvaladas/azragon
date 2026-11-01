@@ -11,5 +11,4 @@ mkdir -p "$OUT"
 enc() { ffmpeg -hide_banner -loglevel error -y -i "$1" "${@:3}" -c:a aac -b:a 128k -movflags +faststart "$OUT/$2"; }
 enc "$SRC/Intro.wav" intro.m4a
 enc "$SRC/Main gameplay 1.wav" main1.m4a -t "$MAIN1_END" -af "afade=t=out:st=$(echo "$MAIN1_END - $MAIN1_FADE" | bc):d=$MAIN1_FADE"
-enc "$SRC/Main gameplay 2.wav" main2.m4a
 ls -l "$OUT"
