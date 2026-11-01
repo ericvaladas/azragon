@@ -382,7 +382,8 @@ export class GameScene {
           this.lighting.hemi.intensity += k * 3;
         },
         burst: (at, kind) => {
-          this.particles.emit('dust', at, kind === 'bolt' ? 8 : 4, kind === 'bolt' ? 1.2 : 1);
+          if (kind === 'bolt') this.particles.emit('dust', at, 8, 1.2);
+          else this.particles.emit('spikeDust', at, 3, 1.2);
           this.particles.emit('debris', at, 3, 1);
         },
       },

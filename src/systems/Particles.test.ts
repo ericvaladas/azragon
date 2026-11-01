@@ -55,6 +55,27 @@ describe('splash layer', () => {
   });
 });
 
+describe('spikeDust (the clouds Spike Rain kicks up)', () => {
+  it('is dust, bigger than the ordinary kind and tinted green', () => {
+    const d = PRESETS.dust;
+    const g = PRESETS.spikeDust;
+    expect(g.size1).toBeGreaterThanOrEqual(d.size1 * 1.8);
+    expect(g.size0).toBeGreaterThan(d.size0);
+    const c = new THREE.Color(g.color);
+    expect(c.g).toBeGreaterThan(c.r * 1.1);
+    expect(c.g).toBeGreaterThan(c.b * 1.1);
+  });
+
+  it('shares the dust layer, which holds 600 so a full volley of landings is not cut short', () => {
+    const scene = new THREE.Scene();
+    const fx = new Particles(scene);
+    fx.emit('spikeDust', new THREE.Vector3(), 1000);
+    fx.update(0.001);
+    const counts = scene.children.filter((c): c is THREE.InstancedMesh => (c as THREE.InstancedMesh).isInstancedMesh).map((m) => m.count).filter((n) => n > 0);
+    expect(counts).toEqual([600]);
+  });
+});
+
 describe('Particles hold', () => {
   it('a held particle starts ageing only once its hold runs out', () => {
     const scene = new THREE.Scene();

@@ -348,6 +348,8 @@ export const CONFIG = {
       boltCore: 0xf0ffe8,
       boltEdge: 0x5cff3a,
       boltScorch: 0x142010,
+      /** The green-tinted dust clouds the spikes kick up as they land. */
+      spikeDust: 0x7f9a5c,
     },
   },
   /** The Kraken. Stats feed its MonsterKind; arms tune the tentacles; colours its body and effects. */
