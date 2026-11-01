@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { resolveHit } from './combat';
+import { paysExp, resolveHit } from './combat';
 
 const base = { dmgMult: 1.5, deflectChance: 0.3, airborne: false };
 
@@ -31,5 +31,14 @@ describe('resolveHit', () => {
   it('napalm fire is ground fire: misses an airborne monster and is never deflected', () => {
     expect(resolveHit(10, 'napalm', { ...base, airborne: true }, 0.99).damage).toBe(0);
     expect(resolveHit(10, 'napalm', base, 0)).toEqual({ damage: 15, deflected: false });
+  });
+});
+
+describe('paysExp', () => {
+  it('a razed building pays nothing; every other kill pays', () => {
+    expect(paysExp('building', true)).toBe(false);
+    expect(paysExp('building', false)).toBe(true);
+    expect(paysExp('tank', true)).toBe(true);
+    expect(paysExp('mech', true)).toBe(true);
   });
 });

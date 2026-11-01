@@ -7,7 +7,7 @@ import { Lighting } from './render/Lighting';
 import { PixelRenderer } from './render/PixelRenderer';
 import { createSky, skyColors } from './render/Sky';
 import { clampDelta, yawTo, type Vec2 } from './util/math';
-import { resolveHit, type DamageSource, type Target } from './combat';
+import { paysExp, resolveHit, type DamageSource, type Target } from './combat';
 import { City, CRATER_RADIUS } from './world/City';
 import { IntroCinematic } from './intro/IntroCinematic';
 import { Music } from './audio/Music';
@@ -228,6 +228,8 @@ export class GameScene {
   private pendingCalm = false;
   /** Set while Devour takes a victim: its death skips the usual explosion. */
   private quietKill = false;
+  /** The buildings being damaged now pay no EXP if they fall (see razeBuildings). */
+  private razing = false;
   private shieldFx: ShieldFx;
   private passives: Passives;
   private acid: AcidPools;
@@ -1615,6 +1617,12 @@ export class GameScene {
       },
       damageMonster: (amount, source, attacker) => this.damageMonster(amount, source, attacker),
       damageBuildings: (p, r, amount) => this.city.forEachStandingInRadius(p, r, (t) => t.applyDamage(amount)),
+      razeBuildings: (p, r, amount) => {
+        // A collapse reports onTargetDestroyed synchronously, inside applyDamage.
+        this.razing = true;
+        this.city.forEachStandingInRadius(p, r, (t) => t.applyDamage(amount));
+        this.razing = false;
+      },
       snareMonster: (duration) => this.snareMonster(duration),
       spawnDir: () => spawnDirection(this.rng, this.runaway.dir),
       openGround: (rMin, rMax) => this.city.openGround({ x: this.monster.position.x, z: this.monster.position.z }, rMin, rMax),
@@ -2263,7 +2271,7 @@ export class GameScene {
       // The boss's reward is exactly the rest of the current level.
       exp = bossExp(this.progression.level, this.progression.exp);
     }
-    if (!this.monster.alive) return;
+    if (!this.monster.alive || !paysExp(target.kind, this.razing)) return;
     this.progression.addExp(exp);
     this.events.emit('expGain', exp);
     if (levelUpNow(this.progression.pendingLevels, this.state === 'playing', this.ultimateActive)) this.startLevelUpMoment();

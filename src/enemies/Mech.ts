@@ -365,8 +365,8 @@ export class Mech implements EnemySystem {
     _here.x = this.x;
     _here.z = this.z;
     const crush = M.crushDps * M.hopCrush;
-    ctx.damageBuildings(_here, M.crushRadius, crush);
-    for (let i = 0; i < 4; i++) ctx.damageBuildings(this.foot(i, _foot), M.crushRadius, crush);
+    ctx.razeBuildings(_here, M.crushRadius, crush);
+    for (let i = 0; i < 4; i++) ctx.razeBuildings(this.foot(i, _foot), M.crushRadius, crush);
     ctx.particles.ring('dust', _p.set(this.x, 0, this.z), M.radius, 20);
     ctx.shake(M.hopShake);
   }
@@ -385,7 +385,7 @@ export class Mech implements EnemySystem {
   private footfalls(step: number, dt: number, ctx: WorldContext, dist: number): void {
     const before = Math.floor(this.stride / Math.PI + 0.5);
     this.stride += (Math.PI * step) / (STEP * H);
-    for (let i = 0; i < 4; i++) ctx.damageBuildings(this.foot(i, _foot), M.crushRadius, M.crushDps * dt);
+    for (let i = 0; i < 4; i++) ctx.razeBuildings(this.foot(i, _foot), M.crushRadius, M.crushDps * dt);
     if (Math.floor(this.stride / Math.PI + 0.5) === before) return;
     // A footfall: the diagonal pair swung furthest forward plants, raising dust under each foot.
     for (const i of PAIRS[Math.sin(this.stride) > 0 ? 0 : 1]) {
@@ -471,7 +471,7 @@ export class Mech implements EnemySystem {
     }
     _here.x = this.x;
     _here.z = this.z;
-    ctx.damageBuildings(_here, M.crushRadius, M.crushDps * dt);
+    ctx.razeBuildings(_here, M.crushRadius, M.crushDps * dt);
     ctx.particles.emit('dust', _p.set(this.x, 0, this.z), 2, 1.5);
     // The legs gallop through the lunge.
     this.stride += (Math.PI * step) / (2 * STEP * H);

@@ -38,3 +38,8 @@ export function resolveHit(
   if (DEFLECTABLE.has(source) && roll < c.deflectChance) return { damage: 0, deflected: true };
   return { damage: amount * c.dmgMult, deflected: false };
 }
+
+/** Whether destroying a target of `kind` pays EXP: everything does, except a building brought down by razing. */
+export function paysExp(kind: string, razing: boolean): boolean {
+  return !(razing && kind === 'building');
+}

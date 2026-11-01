@@ -23,6 +23,8 @@ function makeCtx(opts: { hpMult?: number; rng?: () => number } = {}) {
   const shakes: number[] = [];
   const vents: { kind: string; at: THREE.Vector3; dir: THREE.Vector3 }[] = [];
   const crushes: { p: Vec2; r: number; amount: number }[] = [];
+  /** Building damage that could pay EXP: the mech must never deal any. */
+  const paid: { p: Vec2; r: number; amount: number }[] = [];
   const destroyed: { t: Target; exp: number }[] = [];
   const monster = { position: new THREE.Vector3(0, 0, 0), yaw: 0, alive: true, airborne: false, bodyRadius: CONFIG.monster.bodyRadius, height: CONFIG.monster.height, width: 200, leapTo: null, surface: () => 0 };
   const ctx = {
@@ -35,13 +37,14 @@ function makeCtx(opts: { hpMult?: number; rng?: () => number } = {}) {
     particles: { ring: () => {}, explosion: () => {}, emit: () => {}, vent: (kind: string, at: THREE.Vector3, dx: number, dy: number, dz: number) => vents.push({ kind, at: at.clone(), dir: new THREE.Vector3(dx, dy, dz) }) },
     roads: { nearest: (p: Vec2) => p, nearestLand: (p: Vec2) => p, path: (_a: Vec2, b: Vec2) => [b] },
     damageMonster: (amount: number, source: DamageSource) => hits.push({ amount, source }),
-    damageBuildings: (p: Vec2, r: number, amount: number) => crushes.push({ p: { ...p }, r, amount }),
+    damageBuildings: (p: Vec2, r: number, amount: number) => paid.push({ p: { ...p }, r, amount }),
+    razeBuildings: (p: Vec2, r: number, amount: number) => crushes.push({ p: { ...p }, r, amount }),
     fireRocket: (from: THREE.Vector3, to: THREE.Vector3, damage: number) => rockets.push({ from: from.clone(), to: to.clone(), damage }),
     fireCannon: (from: THREE.Vector3, to: THREE.Vector3, damage: number) => cannons.push({ from: from.clone(), to: to.clone(), damage }),
     shake: (amount: number) => shakes.push(amount),
     onDestroyed: (t: Target, exp: number) => destroyed.push({ t, exp }),
   } as unknown as WorldContext;
-  return { ctx, hits, rockets, cannons, shakes, vents, crushes, destroyed, monster };
+  return { ctx, hits, rockets, cannons, shakes, vents, crushes, paid, destroyed, monster };
 }
 
 function run(mech: Mech, c: ReturnType<typeof makeCtx>, seconds: number, each?: () => void): void {
@@ -98,6 +101,7 @@ describe('Mech', () => {
     // Walking crushes buildings around its feet.
     expect(c.crushes.length).toBeGreaterThan(0);
     expect(c.crushes[0]!.r).toBe(M.crushRadius);
+    expect(c.paid).toEqual([]);
   });
 
   it('a punch misses an airborne monster', () => {
@@ -140,6 +144,8 @@ describe('Mech', () => {
     run(mech, c, 6);
     expect(distTo(mech, c.monster.position)).toBeLessThanOrEqual(CONTACT + M.stopGap + 100);
     expect(distTo(mech, c.monster.position)).toBeGreaterThanOrEqual(CONTACT);
+    expect(c.crushes.length).toBeGreaterThan(0);
+    expect(c.paid).toEqual([]);
   });
 
   it('stops with a small gap between the bodies, whatever the monster\'s size', () => {
@@ -357,6 +363,7 @@ describe('Mech', () => {
       expect(peak).toBeLessThanOrEqual(M.hopHeight + 1e-6);
       expect(inner(mech).root.position.y).toBe(0);
       expect(c.crushes.some((x) => x.amount >= M.crushDps * M.hopCrush)).toBe(true);
+      expect(c.paid).toEqual([]);
     });
 
     it('stays a hittable ground target through a hopback', () => {
