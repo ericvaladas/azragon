@@ -60,6 +60,20 @@ describe('SpawnDirector', () => {
     expect(b).toBeGreaterThan(a * 1.5);
   });
 
+  it('spawns only the given kinds, at the scaled rate, dropping a saved-up other kind', () => {
+    const kinds: EnemyKind[] = ['tank', 'heli'];
+    const dir = new SpawnDirector(mulberry32(8));
+    run(dir, 20, 12);
+    const out: EnemyKind[] = [];
+    for (let t = 0; t < 40; t += 0.05) out.push(...dir.update(0.05, zero(), 12, kinds));
+    expect(out.length).toBeGreaterThan(0);
+    expect(new Set(out)).toEqual(new Set(kinds));
+    const slow = new SpawnDirector(mulberry32(8));
+    let halved = 0;
+    for (let t = 0; t < 40; t += 0.05) halved += slow.update(0.05, zero(), 12, kinds, 0.5).length;
+    expect(halved).toBeLessThan(out.length);
+  });
+
   it('reset clears the clock and budget', () => {
     const dir = new SpawnDirector(mulberry32(6));
     run(dir, 30, 5);

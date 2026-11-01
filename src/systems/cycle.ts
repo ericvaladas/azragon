@@ -46,9 +46,14 @@ export class Cycle {
     return this.phase === 'army';
   }
 
-  /** True in every phase except army. */
+  /** True while a boss fight's escorts spawn. */
+  get escorting(): boolean {
+    return this.phase === 'boss';
+  }
+
+  /** True while units on the field fall back: the break before a boss, and the breather after it. */
   get retreating(): boolean {
-    return this.phase !== 'army';
+    return this.phase === 'retreat' || this.phase === 'recover';
   }
 
   /** Back to a fresh run: army phase, clock 0, no cycles. */

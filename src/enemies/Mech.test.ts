@@ -82,7 +82,7 @@ describe('Mech', () => {
     expect(t.position.x).toBeCloseTo(100 + M.spawnDistance, 3);
     expect(t.position.z).toBeCloseTo(-50, 3);
     expect(t.position.y).toBeGreaterThan(M.height * 0.5);
-    expect(mech.current()).toEqual({ hp: 9000 * 1.4, maxHp: 9000 * 1.4 });
+    expect(mech.current()).toEqual({ hp: M.hp * 1.4, maxHp: M.hp * 1.4 });
     expect(mech.yaw()).toBeCloseTo(-Math.PI / 2, 6);
   });
 

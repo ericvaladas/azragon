@@ -27,7 +27,7 @@ import { Projectiles, type Hit, type ShotKind } from './systems/Projectiles';
 import { spikeTargets } from './systems/projectileMath';
 import { EnemyRegistry } from './enemies/EnemyRegistry';
 import { difficulty } from './enemies/spawnTable';
-import type { WorldContext } from './enemies/types';
+import { ENEMY_KINDS, type WorldContext } from './enemies/types';
 import { TankFleet } from './enemies/TankFleet';
 import { JetSquadron } from './enemies/JetSquadron';
 import { Blimps } from './enemies/Blimps';
@@ -986,7 +986,8 @@ export class GameScene {
         }
       }
       // No new enemies arrive while an ultimate runs or outside the army phase (the director's budget waits too, so none pile up for after).
-      this.enemies.update(dt, this.ctx, this.state === 'playing' && !this.ultimateActive && this.cycle.spawning);
+      const escorting = this.cycle.escorting;
+      this.enemies.update(dt, this.ctx, this.state === 'playing' && !this.ultimateActive && (this.cycle.spawning || escorting), escorting ? CONFIG.cycle.bossEscorts : ENEMY_KINDS, escorting ? CONFIG.cycle.bossEscortRate : 1);
       const met = this.meteor.update(dt, this.monster.position, this.ms.bodyRadius, this.monster.airborne);
       if (met === 'landed') this.onMeteorLanded();
       else if (met === 'collected') this.onMeteorCollected();
@@ -1153,6 +1154,9 @@ export class GameScene {
         this.music.boss();
         break;
       case 'army':
+        // Escorts still falling back from the boss fight are cleared before the army returns.
+        this.enemies.dismiss(this.ctx);
+        this.dropDismissedTargets();
         this.pendingCalm = false;
         this.music.fight();
         break;

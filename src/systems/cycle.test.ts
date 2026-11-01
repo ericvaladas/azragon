@@ -122,4 +122,21 @@ describe('devArmyTime', () => {
     expect(devArmyTime('?army=0')).toBeNull();
     expect(devArmyTime('?army=x')).toBeNull();
   });
+
+  it('escorts spawn only in the boss phase, and units fall back after it', () => {
+    const c = new Cycle(1);
+    while (c.phase !== 'retreat') c.update(0.1);
+    expect(c.escorting).toBe(false);
+    c.meteorLanded();
+    c.meteorCollected();
+    while ((c.phase as string) !== 'boss') c.update(0.1);
+    expect(c.escorting).toBe(true);
+    expect(c.retreating).toBe(false);
+    expect(c.spawning).toBe(false);
+    c.bossDefeated();
+    c.update(0.1);
+    expect(c.phase).toBe('recover');
+    expect(c.escorting).toBe(false);
+    expect(c.retreating).toBe(true);
+  });
 });

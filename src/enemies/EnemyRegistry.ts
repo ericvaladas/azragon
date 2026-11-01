@@ -32,10 +32,10 @@ export class EnemyRegistry {
     return out;
   }
 
-  /** Spawns (when `spawning`), then updates every system. */
-  update(dt: number, ctx: WorldContext, spawning: boolean): void {
+  /** Spawns (when `spawning`, from `kinds` with the rate scaled by `rateMult`), then updates every system. */
+  update(dt: number, ctx: WorldContext, spawning: boolean, kinds: readonly EnemyKind[] = ENEMY_KINDS, rateMult = 1): void {
     if (spawning) {
-      for (const kind of this.director.update(dt, this.counts(), ctx.level)) {
+      for (const kind of this.director.update(dt, this.counts(), ctx.level, kinds, rateMult)) {
         if (this.systems.get(kind)?.spawn(ctx) === false) this.director.refund(kind);
       }
     }

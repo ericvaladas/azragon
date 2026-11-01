@@ -161,8 +161,11 @@ export const CONFIG = {
     reflectRim: 0xe2c2ff,
   },
   fog: { near: 2200, far: 4700 },
-  /** The army / retreat / boss / recover loop (s). exitDistance (m) sits beyond fog.far, where retreating units leave. */
-  cycle: { armyTime: 180, breakTime: 20, recoverTime: 10, retreatTimeout: 12, exitDistance: 5000 },
+  /**
+   * The army / retreat / boss / recover loop (s). exitDistance (m) sits beyond fog.far, where retreating units leave.
+   * During a boss fight only bossEscorts spawn, with the director's budget growing at bossEscortRate × its usual rate.
+   */
+  cycle: { armyTime: 180, breakTime: 20, recoverTime: 10, retreatTimeout: 12, exitDistance: 5000, bossEscorts: ['tank', 'heli'], bossEscortRate: 0.5 },
   /** First-break meteor timing (s after the retreat starts, or after the meteor lands or is collected). */
   meteor: {
     cutsceneDelay: 3, graceTime: 25, bossDelay: 3,
@@ -775,15 +778,15 @@ export const CONFIG = {
    */
   mech: {
     height: MONSTER_HEIGHT, width: 0.9 * MONSTER_HEIGHT, radius: 0.4 * MONSTER_HEIGHT,
-    hp: 9000, approachSpeed: 160, walkSpeed: 90, turnRate: 1.2, stopGap: 25,
-    punchReach: 0.3 * MONSTER_HEIGHT, punchArc: 0.7, punchDamage: 70,
-    slamRadius: 0.35 * MONSTER_HEIGHT, slamDamage: 125, slamChance: 0.35, meleeCooldown: 2.6,
+    hp: 13500, approachSpeed: 160, walkSpeed: 90, turnRate: 1.2, stopGap: 25,
+    punchReach: 0.3 * MONSTER_HEIGHT, punchArc: 0.7, punchDamage: 88,
+    slamRadius: 0.35 * MONSTER_HEIGHT, slamDamage: 156, slamChance: 0.35, meleeCooldown: 2.6,
     /** It engages (and may dash) once within dashTrigger m of the monster, or engageAfter s after its summoning, whichever comes first. */
     dashTrigger: 1600, engageAfter: 25, dashSpeed: 900, dashCooldown: 9, crushRadius: 0.25 * MONSTER_HEIGHT, crushDps: 600,
-    rocketCooldown: 4, rocketsPerVolley: 2, rocketDamage: 8.5, rocketRange: 2200, cannonShellSpeed: 1040,
+    rocketCooldown: 4, rocketsPerVolley: 2, rocketDamage: 10.5, rocketRange: 2200, cannonShellSpeed: 1040,
     cannonRecoil: 0.08, cannonRecoilTime: 0.35, cannonJoltShift: 0.014, cannonJoltPitch: 0.035,
     cannonFlash: 4, cannonSparks: 6, cannonSmoke: 6, cannonSmokeSpeed: 420, cannonShake: 0.1,
-    barrageCooldown: 17, barrageCount: 7, barrageSpread: 450, barrageRadius: 130, barrageFill: 2.0, barrageDamage: 63, barrageMissileSpeed: 1600, barrageRunOut: 120, barrageRise: 150, barrageBack: 0.6,
+    barrageCooldown: 17, barrageCount: 7, barrageSpread: 450, barrageRadius: 130, barrageFill: 2.0, barrageDamage: 79, barrageMissileSpeed: 1600, barrageRunOut: 120, barrageRise: 150, barrageBack: 0.6,
     spawnDistance: 4200, footfallShake: 0.06, dyingTime: 2.5, wreckVanish: 0.6, wreckBursts: 8, wreckBurstScale: 2.5, wreckShake: 0.9, wreckRing: 28, wreckVeils: 16, wreckBillows: 24,
     evadeCooldown: 6, evadeCheck: 0.5, evadeChance: 0.35, hopChance: 0.4,
     sidestepDistance: 0.9 * MONSTER_HEIGHT, hopDistance: 1.3 * MONSTER_HEIGHT, hopHeight: 0.25 * MONSTER_HEIGHT, hopCrush: 0.4, hopShake: 0.2,
