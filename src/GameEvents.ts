@@ -2,7 +2,8 @@ import type { TargetKind } from './combat';
 import type { AbilityView } from './systems/abilities';
 import type { RosterEntry } from './monsters/roster';
 
-export type ThreatArrow = { x: number; y: number; angle: number; kind: TargetKind };
+/** An edge arrow toward something off screen: a threat, or the meteor waiting to be picked up. */
+export type ThreatArrow = { x: number; y: number; angle: number; kind: TargetKind | 'meteor' };
 
 export type GameState = 'loading' | 'title' | 'select' | 'intro' | 'playing' | 'paused' | 'levelup' | 'dying' | 'gameover';
 
@@ -36,6 +37,8 @@ export type GameEventMap = {
   gameOver: RunStats;
   threats: ThreatArrow[];
   abilities: AbilityView[];
+  /** The live boss's health, or null when no boss is up (on the HUD tick). */
+  boss: { hp: number; maxHp: number } | null;
   roster: { entries: RosterEntry[]; index: number };
   /** Whether the intro's skip hint shows: on when the intro starts, off once a skip has jumped to the reveal. */
   skipHint: boolean;

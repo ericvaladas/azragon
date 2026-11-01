@@ -35,6 +35,10 @@ import { Helicopters } from './enemies/Helicopters';
 import { NapalmBombers } from './enemies/NapalmBombers';
 import { OspreyNets } from './enemies/OspreyNets';
 import { GustavFleet } from './enemies/GustavFleet';
+import { Mech } from './enemies/Mech';
+import { Cycle, bossExp, devArmyTime, type CycleEvent } from './systems/cycle';
+import { Meteor } from './systems/Meteor';
+import { fallbackSite, pickLandSite } from './systems/meteorMath';
 import { Snare } from './systems/snare';
 import { Runaway, WaveGate, spawnDirection, waveCenter } from './systems/runaway';
 import { buildHeightfield, surfaceAt, type Heightfield } from './systems/heightfield';
@@ -100,6 +104,8 @@ const NET_SURFACE_CELLS = 32;
 
 /** Events that can carry a user gesture for audio. */
 const GESTURES = ['pointerdown', 'pointerup', 'touchend', 'keydown'] as const;
+/** The walking keys' input when they are ignored. */
+const NO_DRIVE = { throttle: 0, turn: 0 } as const;
 
 export class GameScene {
   readonly events = new GameEventEmitter();
@@ -220,6 +226,14 @@ export class GameScene {
   private passives: Passives;
   private acid: AcidPools;
   private intro: IntroCinematic;
+  /** The run's rhythm: army, retreat (the first with the meteor), boss, recover. `?army=<s>` shortens the army phase in dev. */
+  private cycle = new Cycle((import.meta.env.DEV ? devArmyTime(location.search) : null) ?? CONFIG.cycle.armyTime);
+  /** The first break's meteor: its pickup unlocks the ultimate. */
+  private meteor: Meteor;
+  /** The boss, summoned by the cycle. */
+  private mech: Mech;
+  /** The ultimate is the monster's to use this run (from the meteor, or from the start with CONFIG.ultimate.startUnlocked). */
+  private ultimateUnlocked: boolean = CONFIG.ultimate.startUnlocked;
   private selIndex = 0;
   private menuT = 0;
   private menuPose = { pos: new THREE.Vector3(), look: new THREE.Vector3() };
@@ -407,6 +421,9 @@ export class GameScene {
     this.enemies.add(new NapalmBombers(this.scene));
     this.enemies.add(new OspreyNets(this.scene));
     this.enemies.add(new GustavFleet(this.scene));
+    this.mech = new Mech(this.scene);
+    this.enemies.add(this.mech);
+    this.meteor = new Meteor(this.scene, this.particles);
     this.ctx = this.buildContext();
     this.intro = new IntroCinematic({ scene: this.scene, camera: this.camera, overlay: container, monster: this.monster, city: this.city, particles: this.particles, onReveal: () => this.music.reveal() });
     this.city.onCollapseStart = (pos, size) => {
@@ -433,12 +450,12 @@ export class GameScene {
     this.monster.onRangedSpent = () => this.snare.onAttack();
     this.input = new Input(this.pixel.domElement, {
       tap: this.onTap,
-      // The camera is the ultimate's while it runs.
+      // The camera is the ultimate's (or the meteor cutscene's) while it runs.
       drag: (dx, dy) => {
-        if (!this.ultimateActive) this.rig.drag(dx, dy);
+        if (!this.held()) this.rig.drag(dx, dy);
       },
       wheel: (dy) => {
-        if (!this.ultimateActive) this.rig.zoom(dy);
+        if (!this.held()) this.rig.zoom(dy);
       },
       hover: this.onHover,
       menuKey: (k) => {
@@ -603,7 +620,13 @@ export class GameScene {
     this.runTime = 0;
     this.openingDone = false;
     this.abilities.reset();
-    this.abilities.setRank('ultimate', this.monster.kind.ultimate ? 1 : 0);
+    this.cycle.reset();
+    this.meteor.clear();
+    this.music.fight();
+    this.ultimateUnlocked = CONFIG.ultimate.startUnlocked;
+    this.abilities.setRank('ultimate', this.monster.kind.ultimate && this.ultimateUnlocked ? 1 : 0);
+    // Unlocked from the start (a testing switch), it starts ready, as the meteor's gift does.
+    if (this.ultimateUnlocked) this.abilities.refill('ultimate');
     this.snare.clear();
     this.pendingSnare = 0;
     this.netHF = null;
@@ -707,7 +730,7 @@ export class GameScene {
     this.shockwave.setColor(kind.id === 'wendigo' ? CONFIG.wendigo.colors.shade : CONFIG.palette.stinger);
     this.breath.clear();
     this.cancelUltimate();
-    this.abilities.setRank('ultimate', kind.ultimate ? 1 : 0);
+    this.abilities.setRank('ultimate', kind.ultimate && this.ultimateUnlocked ? 1 : 0);
   }
 
   /** All of the monster's damage: upgrades × the creature's own multiplier. */
@@ -809,6 +832,12 @@ export class GameScene {
         const a = edgeArrow(this.tmpV.x, this.tmpV.y, behind, w, h, CONFIG.readability.arrowMarginPx);
         if (a) out.push({ ...a, kind: t.kind });
       }
+      // The meteor waiting on the ground always gets its arrow, beyond the threats' cap.
+      if (this.meteor.onGround) {
+        this.tmpV.copy(this.meteor.position).project(this.camera);
+        const a = edgeArrow(this.tmpV.x, this.tmpV.y, this.tmpV.z > 1, w, h, CONFIG.readability.arrowMarginPx);
+        if (a) out.push({ ...a, kind: 'meteor' });
+      }
       this.events.emit('threats', out);
     }
 
@@ -882,6 +911,7 @@ export class GameScene {
       this.elapsed += dt;
       if (this.state === 'playing') {
         this.runTime += dt;
+        for (const ev of this.cycle.update(dt)) this.onCycle(ev);
         // Cooldowns recover on their own clock, sped up by Haste When Hurt.
         const cdRate = this.cdRate();
         const cdDt = dt * cdRate;
@@ -893,7 +923,7 @@ export class GameScene {
         }
         if (this.snare.update(dt)) this.enemies.get<OspreyNets>('osprey').netTornFree();
         const mp = this.monster.position;
-        if (this.runaway.update(dt, { x: mp.x, z: mp.z }) && this.runaway.dir && !this.ultimateActive && this.waveGate.open(this.runTime)) {
+        if (this.runaway.update(dt, { x: mp.x, z: mp.z }) && this.runaway.dir && !this.ultimateActive && this.cycle.phase === 'army' && this.waveGate.open(this.runTime)) {
           // The monster has started running away: drop a wave of tanks on the roads ahead of it.
           const R = CONFIG.runaway;
           const at = waveCenter({ x: mp.x, z: mp.z }, this.runaway.dir);
@@ -910,7 +940,7 @@ export class GameScene {
         if (this.passives.tryReflect(this.threatImminent())) this.rig.addTrauma(0.1);
         if (this.passives.reflectActive()) this.reflectProjectiles();
         if (this.monster.dashing) this.dashCrush();
-        if (!this.openingDone && this.runTime >= CONFIG.opening.time) {
+        if (!this.openingDone && this.runTime >= CONFIG.opening.time && this.cycle.phase === 'army') {
           this.openingDone = true;
           const c = { x: this.monster.position.x, z: this.monster.position.z };
           for (const p of ringOnRoads(this.city.style, c, CONFIG.opening.count, CONFIG.opening.radius)) this.enemies.get<TankFleet>('tank').spawnAt(p.x, p.z, this.ctx);
@@ -941,8 +971,11 @@ export class GameScene {
           });
         }
       }
-      // No new enemies arrive while an ultimate runs (the director's budget waits too, so none pile up for after).
-      this.enemies.update(dt, this.ctx, this.state === 'playing' && !this.ultimateActive);
+      // No new enemies arrive while an ultimate runs or outside the army phase (the director's budget waits too, so none pile up for after).
+      this.enemies.update(dt, this.ctx, this.state === 'playing' && !this.ultimateActive && this.cycle.spawning);
+      const met = this.meteor.update(dt, this.monster.position, this.ms.bodyRadius, this.monster.airborne);
+      if (met === 'landed') this.onMeteorLanded();
+      else if (met === 'collected') this.onMeteorCollected();
       this.projectiles.update(dt);
       this.updateGazes(dt);
       this.city.update(dt, this.monster.position);
@@ -979,6 +1012,7 @@ export class GameScene {
         this.emitHud();
         this.emitThreats();
         this.events.emit('abilities', this.abilityView());
+        this.events.emit('boss', this.mech.current());
       }
     }
 
@@ -996,7 +1030,8 @@ export class GameScene {
       this.camera.position.copy(this.menuPose.pos);
       this.camera.lookAt(this.menuPose.look);
     } else if (!this.intro.active) {
-      // While the intro runs (even paused) it owns the camera.
+      // While the intro runs (even paused) it owns the camera. The meteor cutscene blends the view toward the sky.
+      this.rig.lookToward(this.meteor.lookK(), this.meteor.lookPoint());
       this.rig.update(frozen ? 0 : dt, this.monster.position);
     }
     this.chevrons.update(this.enemyTargets(), this.camera, this.elapsed);
@@ -1025,7 +1060,7 @@ export class GameScene {
       dashing: m.dashing,
       snared: this.snare.blocksMobility,
       leveling: this.moment.active,
-      running: this.ultimateActive,
+      running: this.held(),
     });
   }
 
@@ -1061,8 +1096,71 @@ export class GameScene {
     this.ultimateActive = false;
   }
 
+  /** Something else owns the monster and the camera: an ultimate's sequence or the meteor cutscene. */
+  private held(): boolean {
+    return this.ultimateActive || this.meteor.cutsceneActive;
+  }
+
+  /** The cycle moved on: the music follows the phase, the army leaves, the meteor falls or the boss arrives. */
+  private onCycle(ev: CycleEvent): void {
+    switch (ev) {
+      case 'retreat':
+      case 'recover':
+        this.music.calm();
+        break;
+      case 'cutscene': {
+        const M = CONFIG.meteor;
+        const m = this.monster.position;
+        const spot =
+          pickLandSite(this.ctx.openGround(M.landMin, M.landMax), (x, z) => this.city.blockedAt(x, z), this.rng) ??
+          fallbackSite({ x: m.x, z: m.z }, this.rng, this.ctx.roads.nearestLand);
+        this.meteor.start(spot);
+        // The monster stands and watches: no order or Leap aim carries through the cutscene.
+        this.order = null;
+        this.markers.setTarget(null);
+        this.abilities.cancelAim();
+        this.monster.crouch = false;
+        this.markers.setAim(null, 0);
+        break;
+      }
+      case 'dismiss':
+        this.enemies.dismiss(this.ctx);
+        break;
+      case 'boss':
+        this.enemies.dismiss(this.ctx);
+        this.mech.summon(this.ctx);
+        this.music.fight();
+        break;
+      case 'army':
+        this.music.fight();
+        break;
+    }
+  }
+
+  /** The meteor hit the ground: it flattens the buildings around it and shakes the camera. */
+  private onMeteorLanded(): void {
+    const M = CONFIG.meteor;
+    const p = this.meteor.position;
+    this.city.blast({ x: p.x, z: p.z }, M.impactRadius, false);
+    this.particles.explosion(this.tmpV.set(p.x, M.size * 0.3, p.z), 1.5);
+    this.particles.ring('spark', this.tmpV.set(p.x, 0, p.z), M.impactRadius, 24);
+    this.shockwave.start(this.tmpV, M.impactRadius * 2);
+    this.rig.addTrauma(0.5);
+    this.cycle.meteorLanded();
+  }
+
+  /** The monster picked up the meteor: its ultimate is unlocked and ready. */
+  private onMeteorCollected(): void {
+    this.ultimateUnlocked = true;
+    this.abilities.setRank('ultimate', this.monster.kind.ultimate ? 1 : 0);
+    this.abilities.refill('ultimate');
+    // Only the gold aura's visual: no level, no heal, no slow motion.
+    this.aura.start();
+    this.cycle.meteorCollected();
+  }
+
   pressAbility(id: ActiveId): void {
-    if (this.state !== 'playing' || !this.monster.alive || this.ultimateActive) return;
+    if (this.state !== 'playing' || !this.monster.alive || this.held()) return;
     if (id === 'ultimate') {
       if (this.canUltimate() && this.abilities.trigger('ultimate')) this.startUltimate();
       return;
@@ -1466,6 +1564,9 @@ export class GameScene {
       get level() {
         return self.progression.level;
       },
+      get retreating() {
+        return self.cycle.retreating;
+      },
       rng: this.rng,
       blocked: (x, z) => this.city.blockedAt(x, z),
       particles: this.particles,
@@ -1575,7 +1676,7 @@ export class GameScene {
       this.skipIntro();
       return;
     }
-    if (this.state !== 'playing') return;
+    if (this.state !== 'playing' || this.meteor.cutsceneActive) return;
     if (this.abilities.aiming) {
       this.setRay(x, y);
       const g = this.raycaster.ray.intersectPlane(this.groundPlane, this.tmpV);
@@ -1741,7 +1842,8 @@ export class GameScene {
     const pos = { x: m.position.x, z: m.position.z };
     // Walking keys (WASD / arrows) take over from any tap order, and keep the camera behind the monster, except while
     // a pointer is held down (the player panning the camera), so the camera is theirs until they let go.
-    const drive = this.input.drive();
+    // The walking keys do nothing while the meteor cutscene holds the monster.
+    const drive = this.meteor.cutsceneActive ? NO_DRIVE : this.input.drive();
     const driving = drive.throttle !== 0 || drive.turn !== 0;
     if (driving) {
       if (this.order) {
@@ -1751,7 +1853,7 @@ export class GameScene {
       if (cameraFollowsWalk(this.input.pointerHeld(), this.ultimateActive)) this.rig.swingBehind(m.yaw, dt);
     }
     // An ultimate holds the monster still (its howl may end before the last hand is down).
-    if (!m.busy && !this.ultimateActive) {
+    if (!m.busy && !this.held()) {
       // A breather only picks targets its neck can reach, so the body never has to turn away from its path.
       const reach = this.ms.meleeRange * 0.8;
       const groundOnly = m.kind.ranged === 'hurl' || m.kind.ranged === 'gaze';
@@ -2113,9 +2215,15 @@ export class GameScene {
   };
 
   private onTargetDestroyed = (target: Target, exp: number): void => {
-    // Taken by Devour: it goes down into the dark, not up in flames.
-    if (target.kind !== 'building' && !this.quietKill) this.particles.explosion(target.position, target.airborne ? 1.2 : 1);
+    const boss = target.kind === 'mech';
+    // Taken by Devour: it goes down into the dark, not up in flames. The mech plays its own death.
+    if (target.kind !== 'building' && !boss && !this.quietKill) this.particles.explosion(target.position, target.airborne ? 1.2 : 1);
     if (target.kind !== 'building') this.kills++;
+    if (boss) {
+      this.cycle.bossDefeated();
+      // The boss's reward is exactly the rest of the current level.
+      exp = bossExp(this.progression.level, this.progression.exp);
+    }
     if (!this.monster.alive) return;
     this.progression.addExp(exp);
     this.events.emit('expGain', exp);

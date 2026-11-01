@@ -1,4 +1,5 @@
 import { CONFIG } from '../config';
+import { expToNext } from './Progression';
 
 /** Where the loop is: the army attacks, retreats while the meteor/boss comes, fights the boss, or recovers. */
 export type Phase = 'army' | 'retreat' | 'boss' | 'recover';
@@ -135,4 +136,9 @@ export function devArmyTime(search: string): number | null {
   if (raw === null) return null;
   const n = Number(raw);
   return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+/** EXP for killing the boss: exactly enough to finish the current level (at least 1). */
+export function bossExp(level: number, exp: number): number {
+  return Math.max(1, expToNext(level) - exp);
 }
