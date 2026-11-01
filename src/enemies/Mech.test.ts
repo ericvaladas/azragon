@@ -298,6 +298,9 @@ describe('Mech', () => {
     expect(c.shakes.length).toBeGreaterThanOrEqual(c.cannons.length);
     // The barrels ease home after the volley.
     run(mech, c, M.cannonRecoilTime + 2 * DT);
+    // Two shells a volley, one per barrel: the second barrel ends it.
+    expect(M.rocketsPerVolley).toBe(2);
+    expect(c.cannons.length).toBe(2);
     expect(rig.barrelOffset).toBe(0);
   });
 

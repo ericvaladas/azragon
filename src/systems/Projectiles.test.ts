@@ -4,14 +4,14 @@ import { Projectiles, type Hit, type ShotKind } from './Projectiles';
 import { CONFIG } from '../config';
 
 describe('Projectiles.fireCannon', () => {
-  it('flies a straight line at rocket speed with no trail, counts as incoming, and lands as a cannon hit with its damage', () => {
+  it('flies a straight line at cannonShellSpeed with no trail, counts as incoming, and lands as a cannon hit with its damage', () => {
     const p = new Projectiles(new THREE.Scene());
     const hits: Hit[] = [];
     const trails: ShotKind[] = [];
     p.onHit = (h) => hits.push(h);
     p.onTrail = (_at, kind) => trails.push(kind);
     const from = new THREE.Vector3(0, 400, 0);
-    const to = new THREE.Vector3(0, 400, CONFIG.jet.rocketSpeed * 0.5);
+    const to = new THREE.Vector3(0, 400, CONFIG.mech.cannonShellSpeed * 0.5);
     p.fireCannon(from, to, 6);
     expect(p.incoming().map((s) => s.kind)).toEqual(['cannon']);
     for (let i = 0; i < 29; i++) p.update(1 / 60);
@@ -22,6 +22,36 @@ describe('Projectiles.fireCannon', () => {
     expect(hits[0]!.damage).toBe(6);
     expect(hits[0]!.point.distanceTo(to)).toBeLessThan(1e-6);
     expect(trails).toEqual([]);
+  });
+
+  it('flies faster than a jet rocket', () => {
+    expect(CONFIG.mech.cannonShellSpeed).toBeGreaterThan(CONFIG.jet.rocketSpeed * 1.5);
+  });
+
+  it('registers its hit even when one long frame carries it past the target', () => {
+    const p = new Projectiles(new THREE.Scene());
+    const hits: Hit[] = [];
+    p.onHit = (h) => hits.push(h);
+    const to = new THREE.Vector3(0, 400, 1000);
+    p.fireCannon(new THREE.Vector3(0, 400, 0), to, 6);
+    p.update(5);
+    expect(hits.length).toBe(1);
+    expect(hits[0]!.point.distanceTo(to)).toBeLessThan(1e-6);
+  });
+
+  it('has its point on its forward axis, the widest part behind it', () => {
+    const scene = new THREE.Scene();
+    new Projectiles(scene);
+    const pos = (scene.children.find((c) => c.name === 'shot-cannon') as THREE.InstancedMesh).geometry.getAttribute('position') as THREE.BufferAttribute;
+    let top = -Infinity;
+    for (let i = 0; i < pos.count; i++) top = Math.max(top, pos.getY(i));
+    expect(top).toBeCloseTo(0.5, 6);
+    for (let i = 0; i < pos.count; i++) {
+      // Forward of the body, the section narrows to nothing at the tip.
+      const r = Math.hypot(pos.getX(i), pos.getZ(i));
+      if (pos.getY(i) > top - 1e-6) expect(r).toBeLessThan(1e-6);
+      if (pos.getY(i) > 0.2) expect(r).toBeLessThanOrEqual(0.3 + 1e-6);
+    }
   });
 
   it('draws a black shell', () => {

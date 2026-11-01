@@ -7,7 +7,7 @@ import { ballistic } from './projectileMath';
 
 /**
  * `wisp`: a Hungry Ghost (homes like a spike). `shard`: a cosmetic Bone Ward shard. `gustav`: the Schwerer Gustav's huge
- * shell. `cannon`: the boss mech's black shell, a rocket's flight with no trail.
+ * shell. `cannon`: the boss mech's pointed black shell, a straight flight with no trail.
  */
 export type ShotKind = 'spike' | 'shell' | 'rocket' | 'glob' | 'chunk' | 'wisp' | 'shard' | 'gustav' | 'cannon';
 /** An enemy shell or rocket in flight, as seen by Spine Shield. */
@@ -57,12 +57,16 @@ function gustavShellGeometry(): THREE.BufferGeometry {
   return g;
 }
 
-/** The mech's cannon shell along +Y in a unit box: a black body and a gunmetal nose (drawn pointing along its flight). */
+/**
+ * The mech's cannon shell along +Y in a unit box, its point at (0, 0.5, 0): a black body tapering through an ogive to a
+ * gunmetal cone (drawn with the point leading along its flight).
+ */
 function cannonShellGeometry(): THREE.BufferGeometry {
   const P = CONFIG.palette;
   const g = mergeGeometries([
-    painted(faceted(new THREE.CylinderGeometry(0.5, 0.5, 0.7, 6).translate(0, -0.15, 0)), P.cannonShell),
-    painted(faceted(new THREE.ConeGeometry(0.5, 0.3, 6).translate(0, 0.35, 0)), P.cannonShellNose),
+    painted(faceted(new THREE.CylinderGeometry(0.5, 0.5, 0.5, 8).translate(0, -0.25, 0)), P.cannonShell),
+    painted(faceted(new THREE.CylinderGeometry(0.3, 0.5, 0.2, 8).translate(0, 0.1, 0)), P.cannonShell),
+    painted(faceted(new THREE.ConeGeometry(0.3, 0.3, 8).translate(0, 0.35, 0)), P.cannonShellNose),
   ]);
   if (!g) throw new Error('Projectiles: cannon shell merge failed');
   return g;
@@ -90,7 +94,7 @@ export class Projectiles {
     wisp: [30, 42, 30],
     shard: [18, 64, 18],
     gustav: [CONFIG.gustav.shellDiameter, CONFIG.gustav.shellLength, CONFIG.gustav.shellDiameter],
-    cannon: [10, 36, 10],
+    cannon: [10, 44, 10],
   };
 
   constructor(scene: THREE.Scene) {
@@ -212,10 +216,10 @@ export class Projectiles {
     s.dur = Math.max(0.2, from.distanceTo(to) / CONFIG.jet.rocketSpeed);
   }
 
-  /** The mech's cannon shell: a rocket's straight flight, black, with no trail. */
+  /** The mech's cannon shell: a straight flight at CONFIG.mech.cannonShellSpeed, black and pointed, with no trail. */
   fireCannon(from: THREE.Vector3, to: THREE.Vector3, damage: number): void {
     const s = this.alloc('cannon', from, to, damage, null);
-    s.dur = Math.max(0.2, from.distanceTo(to) / CONFIG.jet.rocketSpeed);
+    s.dur = Math.max(0.2, from.distanceTo(to) / CONFIG.mech.cannonShellSpeed);
   }
 
   update(dt: number): void {
