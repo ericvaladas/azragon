@@ -248,22 +248,22 @@ function glow(): Part {
   return merge(parts);
 }
 
-/** The upper leg from the hip: an armoured hip drum and a white beam out to the knee. */
+/** The upper leg from the hip: an armoured hip drum and a thick white beam out to the knee. */
 function legUpper(): Part {
   const P = CONFIG.palette;
   const V = MECH_PIVOTS;
   return merge([
-    cyl(0.05, 0.07, 12, 'x', 0, 0, 0, P.mech),
-    cyl(0.03, 0.09, 10, 'x', 0, 0, 0, P.mechMetal),
-    box(0.074, 0.01, 0.08, 0, 0.0, 0, P.mechDark),
-    beam(0, 0, V.kneeY, V.kneeZ, 0.07, 0.07, P.mech, 0.85),
-    beam(-0.03, 0.02, V.kneeY - 0.03, V.kneeZ, 0.074, 0.025, P.mechDark),
+    cyl(0.06, 0.11, 12, 'x', 0, 0, 0, P.mech),
+    cyl(0.036, 0.13, 10, 'x', 0, 0, 0, P.mechMetal),
+    box(0.114, 0.012, 0.096, 0, 0.0, 0, P.mechDark),
+    beam(0, 0, V.kneeY, V.kneeZ, 0.105, 0.105, P.mech, 0.85),
+    beam(-0.045, 0.02, V.kneeY - 0.045, V.kneeZ, 0.111, 0.0375, P.mechDark),
     // A hydraulic ram under the beam.
-    beam(-0.04, 0.03, V.kneeY - 0.05, V.kneeZ - 0.03, 0.025, 0.025, P.mechMetal),
+    beam(-0.06, 0.03, V.kneeY - 0.075, V.kneeZ - 0.03, 0.0375, 0.0375, P.mechMetal),
   ]);
 }
 
-/** The lower leg from the knee: a knee joint and cap, a long tapered white blade with a dark spine, and a spike foot. */
+/** The lower leg from the knee: a knee joint and cap, a long thick tapered white blade with a dark spine, and a spike foot. */
 function legLower(): Part {
   const P = CONFIG.palette;
   const V = MECH_PIVOTS;
@@ -273,16 +273,16 @@ function legLower(): Part {
   const spike = 0.08;
   const by = V.footY - dy * spike;
   const bz = V.footZ - dz * spike;
-  const tip = new THREE.ConeGeometry(0.02, spike, 6).rotateX(Math.PI).translate(0, -spike / 2, 0);
+  const tip = new THREE.ConeGeometry(0.03, spike, 6).rotateX(Math.PI).translate(0, -spike / 2, 0);
   // Point the cone's tip along the leg, ending on the foot.
   tip.rotateX(-Math.atan2(dz, -dy)).translate(0, V.footY - dy * spike, V.footZ - dz * spike);
   return merge([
-    cyl(0.045, 0.1, 10, 'x', 0, 0, 0, P.mechMetal),
-    box(0.08, 0.05, 0.09, 0, 0.035, 0.005, P.mech),
-    beam(0, 0, by, bz, 0.06, 0.1, P.mech, 0.35),
-    beam(-0.02, -0.04, by * 0.7, bz * 0.7 - 0.04, 0.064, 0.03, P.mechDark, 0.6),
-    beam(-0.05, 0.03, -0.26, 0.1, 0.02, 0.02, P.mechMetal),
-    box(0.066, 0.02, 0.06, 0, -0.18, 0.06, P.mechDark),
+    cyl(0.0625, 0.15, 10, 'x', 0, 0, 0, P.mechMetal),
+    box(0.12, 0.07, 0.13, 0, 0.045, 0.005, P.mech),
+    beam(0, 0, by, bz, 0.09, 0.15, P.mech, 0.35),
+    beam(-0.03, -0.06, by * 0.7, bz * 0.7 - 0.06, 0.096, 0.045, P.mechDark, 0.6),
+    beam(-0.05, 0.05, -0.26, 0.13, 0.03, 0.03, P.mechMetal),
+    box(0.099, 0.03, 0.09, 0, -0.18, 0.07, P.mechDark),
     painted(faceted(tip), P.mechMetal),
   ]);
 }

@@ -110,9 +110,9 @@ describe('mech pose', () => {
   it('no leg passes through the hull, the launcher or the hip frame', () => {
     const parts = mechParts();
     const box = (g: THREE.BufferGeometry) => new THREE.Box3().setFromBufferAttribute(g.getAttribute('position') as THREE.BufferAttribute);
-    const hull = box(parts.hull).expandByScalar(0.02);
-    const launcher = box(mechLauncher()).expandByScalar(0.03);
-    // Outside the drum at the hip, the leg stays clear of the frame plate.
+    const hull = box(parts.hull).expandByScalar(0.06);
+    const launcher = box(mechLauncher()).expandByScalar(0.08);
+    // The margins are a leg's half section. Outside the drum at the hip, the leg stays clear of the frame plate.
     const frame = new THREE.Box3(new THREE.Vector3(-HIP_FRAME_W / 2, -HIP_FRAME_T / 2, -HIP_FRAME_D / 2), new THREE.Vector3(HIP_FRAME_W / 2, HIP_FRAME_T / 2, HIP_FRAME_D / 2));
     for (const [, p] of WINDUPS()) {
       for (let i = 0; i < 4; i++) {
@@ -121,7 +121,7 @@ describe('mech pose', () => {
           const local = q.clone().setY(q.y - PV.bodyY);
           expect(hull.containsPoint(local)).toBe(false);
           expect(launcher.containsPoint(local)).toBe(false);
-          if (local.distanceTo(hip) > 0.08) expect(frame.containsPoint(local)).toBe(false);
+          if (local.distanceTo(hip) > 0.12) expect(frame.containsPoint(local)).toBe(false);
         }
       }
     }
