@@ -1266,7 +1266,7 @@ export class GameScene {
   private tailSwat(cdDt: number): void {
     this.swatCd = Math.max(0, this.swatCd - cdDt);
     if (this.swatCd > 0 || this.monster.airborne || this.monster.swatting || !autoStrikes(this.ultimateActive)) return;
-    const sw = this.passives.swat();
+    const sw = this.passives.swat(this.monster.kind.builtInSwat);
     if (!sw) return;
     const head = this.bodyPoint(this.ms.headHeight);
     const flyers = this.enemyTargets().filter((t) => t.airborne && t.isAlive());
@@ -1759,14 +1759,14 @@ export class GameScene {
       const rangedPool =
         m.kind.ranged === 'breath' ? this.enemyTargets().filter((t) => this.canBreatheAt(t))
         : groundOnly ? this.enemyTargets().filter((t) => !t.airborne && Math.hypot(t.position.x - pos.x, t.position.z - pos.z) > reach)
-        // The Insect's tail never takes anything straight behind it.
-        : spikes ? this.enemyTargets().filter((t) => inTailReach(pos, m.yaw, t.position))
+        // The Insect's tail never takes anything straight behind it, nor aircraft until Anti-Air is taken.
+        : spikes ? this.enemyTargets().filter((t) => this.spikeCanTake(t, pos, m.yaw))
         : this.enemyTargets();
       let auto = nearestInRange(pos, rangedPool, this.ms.rangedRange);
       if (spikes) {
         const o = this.order?.kind === 'attack' && this.order.target.kind !== 'building' ? this.order.target : null;
         const reachable = (t: Target) =>
-          t.isAlive() && Math.hypot(t.position.x - pos.x, t.position.z - pos.z) <= this.ms.rangedRange && inTailReach(pos, m.yaw, t.position);
+          t.isAlive() && Math.hypot(t.position.x - pos.x, t.position.z - pos.z) <= this.ms.rangedRange && this.spikeCanTake(t, pos, m.yaw);
         const orderedInRange = o && reachable(o) ? o : null;
         // The tail stays on its target while it can, settles on a new one only when it must (pausing first), and that
         // is the one the spikes go to.
@@ -2015,6 +2015,11 @@ export class GameScene {
     this.rig.addTrauma(0.25);
   };
 
+  /** The Insect's tail may take `t`: not straight behind it, and not an aircraft until Anti-Air is taken. */
+  private spikeCanTake(t: Target, from: Vec2, yaw: number): boolean {
+    return inTailReach(from, yaw, t.position) && (!t.airborne || this.passives.antiAirSpikes() !== null);
+  }
+
   private fireSpikes(target: Target | null): void {
     if (!target) return;
     const m = this.monster;
@@ -2023,15 +2028,19 @@ export class GameScene {
     const s = this.progression.stats;
     const count = 1 + s.extraSpikes;
     const pos = { x: m.position.x, z: m.position.z };
+    const air = this.passives.antiAirSpikes();
     const others = this.enemyTargets()
-      .filter((t) => t.isAlive() && Math.hypot(t.position.x - pos.x, t.position.z - pos.z) <= this.ms.rangedRange)
+      .filter((t) => t.isAlive() && (!t.airborne || air) && Math.hypot(t.position.x - pos.x, t.position.z - pos.z) <= this.ms.rangedRange)
       .sort((a, b) => a.position.distanceToSquared(target.position) - b.position.distanceToSquared(target.position));
     const from = m.rangedOrigin(new THREE.Vector3());
+    // Anti-Air's ranks make spikes at aircraft hit harder and come round faster.
+    const airDamage = air?.damageMult ?? 1;
     spikeTargets(target, others, count).forEach((t, i) => {
-      this.projectiles.fireSpike(from, t, this.ms.rangedDamage * this.dmgMult(), (i - (count - 1) / 2) * CONFIG.monster.spikeSpreadRad, true);
+      const dmg = this.ms.rangedDamage * this.dmgMult() * (t.airborne ? airDamage : 1);
+      this.projectiles.fireSpike(from, t, dmg, (i - (count - 1) / 2) * CONFIG.monster.spikeSpreadRad, true);
     });
     this.particles.emit('spark', from, 4);
-    m.consumeRanged(this.rangedCdMult());
+    m.consumeRanged(this.rangedCdMult() * (target.airborne && air ? air.cooldownMult : 1));
   }
 
   private onProjectileHit = (h: Hit): void => {

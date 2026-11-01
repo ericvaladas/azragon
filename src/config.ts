@@ -565,6 +565,8 @@ export const CONFIG = {
     /** Arrays are indexed by rank (0 = not taken). */
     spines: { rate: [0, 2, 3, 4.5], radius: [0, 500, 600, 700] },
     swat: { cooldown: [0, 3.75, 2.85, 1.95], range: [0, 450, 525, 600], damage: [0, 120, 220, 320], targets: [0, 1, 2, 3], headHeight: 380 },
+    /** The Insect's Anti-Air, by rank: its tail spikes may shoot aircraft, at these damage and cooldown multipliers. */
+    antiAirSpikes: { damageMult: [0, 1, 1.3, 1.6], cooldownMult: [1, 1, 0.85, 0.7] },
     nova: { interval: [0, 7, 6, 5], radius: [0, 600, 700, 800], damage: [0, 80, 120, 170] },
     mortar: { interval: [0, 4, 3.5, 3], globs: [0, 2, 3, 4], splash: [0, 90, 110, 130], damage: 90, range: 1800, flightTime: 1.2, arc: 300 },
     /**

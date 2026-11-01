@@ -254,7 +254,7 @@ describe('INSECT kind', () => {
       for (let i = 0; i < 200 && m.swatting; i++) { m.tick(0.01); t += 0.01; }
       return { hit, end: t };
     };
-    const shared = impactAt(kind());
+    const shared = impactAt({ ...kind(), swatTiming: undefined });
     expect(shared.hit).toBeCloseTo(SWAT_TIMES.impact, 1);
     expect(shared.end).toBeCloseTo(SWAT_TIMES.total, 1);
     const own = swatTiming(0.2, 0.1, 0.1, 0.4);

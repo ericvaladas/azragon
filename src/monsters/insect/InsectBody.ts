@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { CONFIG } from '../../config';
+import { swingPhase, TAIL_SWING_TIMES } from '../../monster/tailSwat';
 import { InsectTitanModel } from '../../monster/InsectTitanModel';
 import { didLand, footState } from '../../monster/gait';
 import { placeSegment, solveTwoBone } from '../../monster/ik';
@@ -94,6 +95,7 @@ export class InsectBody implements MonsterBody {
   private aimW = 0;
   private aim = new THREE.Vector3();
   private aimErr = 0;
+  private swing = { target: new THREE.Vector3(), sweep: 0, blend: 0 };
   /** Each leg's foot as last posed (root space). */
   readonly feet: THREE.Vector3[] = Array.from({ length: 6 }, () => new THREE.Vector3());
 
@@ -203,7 +205,15 @@ export class InsectBody implements MonsterBody {
     }
     this.aimW = THREE.MathUtils.clamp(this.aimW + (f.lookAt ? 1 : -1) * AIM_RATE * f.dt, 0, 1);
     const aimW = this.aimW * this.aimW * (3 - 2 * this.aimW);
-    const swat = f.antiAir ? body.worldToLocal(_swat.copy(f.antiAir.target)) : null;
+    // The tail swat: a sideways swing through the flyer, not a stab at it.
+    let swing: { target: THREE.Vector3; sweep: number; blend: number } | null = null;
+    if (f.antiAir) {
+      const p = swingPhase(f.antiAir.t, TAIL_SWING_TIMES);
+      this.swing.target = body.worldToLocal(_swat.copy(f.antiAir.target));
+      this.swing.sweep = p.sweep;
+      this.swing.blend = p.blend;
+      swing = this.swing;
+    }
     // Braced: the tail straight out behind and down so its tip rests on the ground, balancing the raised front.
     let brace: THREE.Vector3 | null = null;
     if (rear > 0) {
@@ -212,7 +222,7 @@ export class InsectBody implements MonsterBody {
       const drop = Math.min(Math.asin(Math.min(1, Math.max(0, (_tailRoot.y - TAIL_REST) / L))), TAIL_MAX_DROP);
       brace = _tailDir.set(0, -Math.sin(drop), -Math.cos(drop)).applyQuaternion(_unbody.copy(body.quaternion).invert());
     }
-    this.model.updateTail(f.time, swat, f.antiAir?.weight ?? 0, aimW > 0 ? this.aim : null, aimW, brace, rear);
+    this.model.updateTail(f.time, swing, aimW > 0 ? this.aim : null, aimW, brace, rear);
 
     for (const m of this.model.materials) {
       if (f.flash) m.emissive.setHex(0xffffff);

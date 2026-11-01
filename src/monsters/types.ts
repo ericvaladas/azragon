@@ -150,11 +150,13 @@ export type MonsterKind = PoolSpec & {
   leapCrouch?: number;
   /** Spine Shield intercept-rate multiplier for this kind's version of it; 1 when absent. */
   interceptRate?: number;
+  /** Its anti-air swat is built in from the start (the Insect's tail); its Anti-Air pick then does something else. */
+  builtInSwat?: boolean;
   /** This kind's own anti-air timeline (impact, end); the shared SWAT_TIMES when absent. */
   swatTiming?: SwatTiming;
   /** Has the auto Tail Sweep melee (CONFIG.kaiju.tail). */
   tailSweep: boolean;
-  /** This kind's ultimate (Q), named on its button; absent until the kind has one. */
+  /** This kind's ultimate (Q), with its name (not shown on the button); absent until the kind has one. */
   ultimate?: { id: UltimateId; label: string };
   fx: FxTheme;
   createBody(): MonsterBody;

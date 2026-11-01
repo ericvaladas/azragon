@@ -1,5 +1,6 @@
 import { CONFIG } from '../../config';
 import { STRIKE_TIMES } from '../../monster/strike';
+import { TAIL_SWING_TIMES } from '../../monster/tailSwat';
 import type { MonsterKind } from '../types';
 import { InsectBody } from './InsectBody';
 
@@ -41,7 +42,11 @@ export const INSECT: MonsterKind = {
   antiAir: 'tail',
   tailSweep: false,
   signatures: ['storm', 'chitin', 'spines', 'swat', 'nova', 'mortar'],
-  abilityText: {},
+  builtInSwat: true,
+  swatTiming: TAIL_SWING_TIMES,
+  abilityText: {
+    swat: { desc: (r) => (r === 1 ? 'Tail spikes can shoot aircraft' : 'Spikes hit aircraft harder and faster') },
+  },
   upgradeText: {},
   fx: { spike: P.stinger, glob: P.acid, pool: P.acid, nova: P.acid, particle: 'acid', intercept: 'spark', spikeTrail: false },
   leapCrouch: 0.2,

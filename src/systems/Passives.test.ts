@@ -48,6 +48,21 @@ describe('Passives', () => {
     expect(r3!.targets).toBe(P.swat.targets[3]);
   });
 
+  it("a built-in tail swat (the Insect) works from the start at rank-1 strength, whatever Anti-Air's rank", () => {
+    const r1 = { cooldown: P.swat.cooldown[1], range: P.swat.range[1], damage: P.swat.damage[1], targets: P.swat.targets[1] };
+    expect(new Passives(ranks({})).swat(true)).toEqual(r1);
+    expect(new Passives(ranks({ swat: 3 })).swat(true)).toEqual(r1);
+  });
+
+  it("Anti-Air spikes: none until picked; then the tail may shoot aircraft, harder and faster per rank", () => {
+    expect(new Passives(ranks({})).antiAirSpikes()).toBeNull();
+    const r1 = new Passives(ranks({ swat: 1 })).antiAirSpikes()!;
+    expect(r1).toEqual({ damageMult: 1, cooldownMult: 1 });
+    const r3 = new Passives(ranks({ swat: 3 })).antiAirSpikes()!;
+    expect(r3.damageMult).toBeGreaterThan(r1.damageMult);
+    expect(r3.cooldownMult).toBeLessThan(r1.cooldownMult);
+  });
+
   it('fires Venom Nova on its rank interval with rank radius and damage', () => {
     const p = new Passives(ranks({ nova: 2 }));
     expect(p.update(P.nova.interval[2]! - 0.1).nova).toBe(0);

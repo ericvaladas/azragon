@@ -28,11 +28,21 @@ export class Passives {
     return this.ranks().chitin * P.chitin.perRank;
   }
 
-  /** Anti-Air (a level-up pick): cooldown, reach from the head, damage, and how many flyers per swing; null until taken. */
-  swat(): { cooldown: number; range: number; damage: number; targets: number } | null {
-    const r = this.ranks().swat;
+  /**
+   * The anti-air swat: cooldown, reach from the head, damage, and how many flyers per swing; null until Anti-Air is
+   * taken. A `builtIn` swat (the Insect's tail) is always there at rank-1 strength (its Anti-Air pick does other things).
+   */
+  swat(builtIn = false): { cooldown: number; range: number; damage: number; targets: number } | null {
+    const r = builtIn ? 1 : this.ranks().swat;
     if (r === 0) return null;
     return { cooldown: P.swat.cooldown[r]!, range: P.swat.range[r]!, damage: P.swat.damage[r]!, targets: P.swat.targets[r]! };
+  }
+
+  /** The Insect's Anti-Air: its tail spikes may shoot aircraft, with this damage and cooldown multiplier on them; null until taken. */
+  antiAirSpikes(): { damageMult: number; cooldownMult: number } | null {
+    const r = this.ranks().swat;
+    if (r === 0) return null;
+    return { damageMult: P.antiAirSpikes.damageMult[r]!, cooldownMult: P.antiAirSpikes.cooldownMult[r]! };
   }
 
   nova(): { radius: number; damage: number } {

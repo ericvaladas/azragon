@@ -3,7 +3,7 @@ import { CONFIG } from '../config';
 import { faceted, toonMat } from '../render/toon';
 import { placeSegment } from './ik';
 import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
-import { tailSwatPoints } from './tailSwat';
+import { tailSwingPoints } from './tailSwat';
 import { tailAimPoints } from './tailAim';
 import { angleDelta } from '../util/math';
 
@@ -94,6 +94,12 @@ const TAIL_REACH: number[] = TAIL_BASE.map((_, i) => TAIL_BASE.slice(1, i + 1).r
 
 /** Built from primitives. Faces +Z, Y-up; +X is the monster's left. ~550 tall at the stinger. */
 const _braced = new THREE.Vector3();
+const _sway = new THREE.Vector3();
+const _xAxis = new THREE.Vector3(1, 0, 0);
+const _yAxis = new THREE.Vector3(0, 1, 0);
+/** The idle sway's side-to-side and up-and-down turn per segment (rad), at the tip. */
+const SWAY_YAW = 0.06;
+const SWAY_PITCH = 0.03;
 const _old = new THREE.Vector3();
 const _oldPrev = new THREE.Vector3();
 
@@ -199,22 +205,33 @@ export class InsectTitanModel {
   }
 
   /**
-   * Pose the tail: its idle sway, eased toward `aim` by aimW and bent toward a swat target by w; braced (by braceW) it
-   * uncurls from its root toward the unit direction `brace` (body space), as a counterweight.
+   * Pose the tail: its idle sway, eased toward `aim` by aimW, and swinging at a swat target (its sweep and blend, see
+   * swingPhase); braced (by braceW) it uncurls from its root toward the unit direction `brace` (body space), as a
+   * counterweight.
    */
-  updateTail(time: number, swatTarget: THREE.Vector3 | null = null, w = 0, aim: THREE.Vector3 | null = null, aimW = 0, brace: THREE.Vector3 | null = null, braceW = 0): void {
+  updateTail(
+    time: number,
+    swing: { target: THREE.Vector3; sweep: number; blend: number } | null = null,
+    aim: THREE.Vector3 | null = null,
+    aimW = 0,
+    brace: THREE.Vector3 | null = null,
+    braceW = 0,
+  ): void {
+    // Idle sway: each segment turns a little (side to side, and a ripple up and down), more toward the tip, keeping its
+    // length.
     for (let i = 1; i < this.tailPts.length; i++) {
-      const base = TAIL_BASE[i]!;
       const k = i / (this.tailPts.length - 1);
-      this.tailPts[i]!.set(base.x + Math.sin(time * 1.3) * 25 * k, base.y + Math.sin(time * 2.1 + i) * 10 * k, base.z);
+      _sway.subVectors(TAIL_BASE[i]!, TAIL_BASE[i - 1]!);
+      _sway.applyAxisAngle(_yAxis, Math.sin(time * 1.3) * SWAY_YAW * k).applyAxisAngle(_xAxis, Math.sin(time * 2.1 + i) * SWAY_PITCH * k);
+      this.tailPts[i]!.copy(this.tailPts[i - 1]!).add(_sway);
     }
     if (aim && aimW > 0) {
       const aimed = tailAimPoints(this.tailPts, aim, aimW);
       aimed.forEach((p, i) => this.tailPts[i]!.copy(p));
     }
-    if (swatTarget && w !== 0) {
-      const bent = tailSwatPoints(this.tailPts, swatTarget, w);
-      bent.forEach((p, i) => this.tailPts[i]!.copy(p));
+    if (swing && swing.blend > 0) {
+      const swung = tailSwingPoints(this.tailPts, swing.target, swing.sweep, swing.blend);
+      swung.forEach((p, i) => this.tailPts[i]!.copy(p));
     }
     if (brace && braceW > 0) this.uncurl(brace, braceW);
     for (let i = 0; i < this.tailSegs.length; i++) {
