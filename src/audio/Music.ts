@@ -33,7 +33,7 @@ export class Music {
   private disposed = false;
   private muted = false;
   /** The player's volume, 0..1, scaling CONFIG.music.volume. */
-  private level = 1;
+  private level: number = CONFIG.music.defaultVolume;
 
   constructor() {
     const resolve = (file: string) => RundotGameAPI.cdn.resolveAssetUrl(file);

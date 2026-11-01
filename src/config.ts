@@ -936,6 +936,8 @@ export const CONFIG = {
   music: {
     /** Master volume, 0..1. */
     volume: 0.8,
+    /** The player's volume slider, 0..1, until they have saved one. */
+    defaultVolume: 0.5,
     /** The Intro: loops as a whole file through the menus and the cutscene. */
     intro: { file: 'audio/intro.m4a' },
     /** Main gameplay 1: starts from its top on the reveal and loops through the fighting. */

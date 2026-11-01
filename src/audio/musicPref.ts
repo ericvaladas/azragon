@@ -1,3 +1,4 @@
+import { CONFIG } from '../config';
 import type { PickStore } from '../monsters/pick';
 
 /** RUN appStorage keys may not contain "." (nor start with "__"). */
@@ -29,19 +30,19 @@ export async function saveMusicOn(store: PickStore | null, on: boolean): Promise
 
 export const VOLUME_KEY = 'azragon_music_volume';
 
-/** The saved music volume, 0..1; full when nothing valid was saved. */
+/** The saved music volume, 0..1; CONFIG.music.defaultVolume when nothing valid was saved. */
 export function parseVolume(raw: string | null | undefined): number {
   const v = raw == null || raw === '' ? NaN : Number(raw);
-  return Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 1;
+  return Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : CONFIG.music.defaultVolume;
 }
 
-/** The saved music volume; full when storage is missing, failing, or holds anything else. */
+/** The saved music volume; CONFIG.music.defaultVolume when storage is missing, failing, or holds anything else. */
 export async function loadVolume(store: PickStore | null): Promise<number> {
-  if (!store) return 1;
+  if (!store) return CONFIG.music.defaultVolume;
   try {
     return parseVolume(await store.getItem(VOLUME_KEY));
   } catch {
-    return 1;
+    return CONFIG.music.defaultVolume;
   }
 }
 

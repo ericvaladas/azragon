@@ -159,7 +159,7 @@ export class GameScene {
   private stateBeforePause: GameState = 'playing';
   private music = new Music();
   private musicOn = true;
-  private musicVolume = 1;
+  private musicVolume: number = CONFIG.music.defaultVolume;
   /** A slider drag saves once it settles, not on every step. */
   private volumeSaveTimer = 0;
   /**

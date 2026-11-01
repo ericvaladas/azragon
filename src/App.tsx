@@ -14,6 +14,7 @@ import { Title } from './ui/Title';
 import { MonsterSelect } from './ui/MonsterSelect';
 import type { RosterEntry } from './monsters/roster';
 import type { PickStore } from './monsters/pick';
+import { CONFIG } from './config';
 import './style.css';
 
 /** Touch devices tap; desktops click or press a key. */
@@ -46,7 +47,7 @@ function applySafeArea(el: HTMLElement): void {
 function App() {
   const gameRef = useRef<GameScene | null>(null);
   const [musicOn, setMusicOn] = useState(true);
-  const [musicVolume, setMusicVolume] = useState(1);
+  const [musicVolume, setMusicVolume] = useState<number>(CONFIG.music.defaultVolume);
   const [state, setState] = useState<GameState>('loading');
   const [skipHint, setSkipHint] = useState(false);
   const [hud, setHud] = useState<HudSnapshot>(EMPTY_HUD);
