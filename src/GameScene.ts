@@ -1220,12 +1220,13 @@ export class GameScene {
       this.dash();
       return;
     }
-    // Walking forward (W held), Leap needs no aim: it jumps its full range straight ahead.
-    if (this.input.drive().throttle > 0) {
+    // With W or S held, Leap needs no aim: it jumps its full range straight ahead, or straight back still facing forward.
+    const throttle = this.input.drive().throttle;
+    if (throttle !== 0) {
       const m = this.monster;
       if (m.busy) return;
-      const to = dashTarget({ x: m.position.x, z: m.position.z }, m.yaw, CONFIG.abilities.leap.range);
-      this.leapTo(new THREE.Vector3(to.x, 0, to.z));
+      const to = dashTarget({ x: m.position.x, z: m.position.z }, m.yaw + (throttle < 0 ? Math.PI : 0), CONFIG.abilities.leap.range);
+      this.leapTo(new THREE.Vector3(to.x, 0, to.z), throttle < 0);
       return;
     }
     const aiming = this.abilities.toggleAim(id);
@@ -1268,14 +1269,14 @@ export class GameScene {
     this.particles.emit('dust', p.clone().setY(10), 2, 0.8);
   }
 
-    private leapTo(ground: THREE.Vector3): void {
+    private leapTo(ground: THREE.Vector3, keepFacing = false): void {
       if (this.snare.blocksMobility) return;
       const m = this.monster;
       const from = { x: m.position.x, z: m.position.z };
       const to = leapLanding(this.city.style, from, { x: ground.x, z: ground.z }, CONFIG.abilities.leap.range, this.ms.bodyRadius);
       if (!this.abilities.trigger('leap')) return;
             m.crouch = false;
-      m.startLeap(to);
+      m.startLeap(to, keepFacing);
       this.order = null;
       this.markers.setTarget(null);
       this.markers.setAim(null, 0);

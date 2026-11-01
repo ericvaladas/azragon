@@ -269,13 +269,14 @@ export class Monster {
     this.meleeT = -1;
   }
 
-  startLeap(to: Vec2): void {
+  /** Leaps to `to`, turning to face it unless `keepFacing` (a jump backward stays facing forward). */
+  startLeap(to: Vec2, keepFacing = false): void {
     this.leapFrom = { x: this.position.x, z: this.position.z };
     this.leapTo = { x: to.x, z: to.z };
     const L = CONFIG.abilities.leap;
     this.leapHeight = leapPeak(Math.hypot(to.x - this.leapFrom.x, to.z - this.leapFrom.z), L.range, L.peak, L.minPeak);
     this.leapT = 0;
-    this.yaw = yawTo(this.leapFrom, this.leapTo);
+    if (!keepFacing) this.yaw = yawTo(this.leapFrom, this.leapTo);
     this.meleeT = -1;
   }
 

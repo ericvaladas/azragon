@@ -126,6 +126,14 @@ describe('Monster tail sweep', () => {
 });
 
 describe('Monster frame flags', () => {
+  it('a backward leap keeps its facing; a forward one turns to the target', () => {
+    const m = new Monster(new THREE.Scene(), INSECT);
+    m.yaw = 0;
+    m.startLeap({ x: 0, z: -500 }, true);
+    expect(m.yaw).toBe(0);
+    expect(m.leapTarget).toEqual({ x: 0, z: -500 });
+  });
+
   it('tells the body when it is airborne (Leap) or dashing', () => {
     const m = new Monster(new THREE.Scene(), kind());
     const body = m.body as ReturnType<typeof stubBody>;
