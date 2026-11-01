@@ -110,6 +110,11 @@ export class Artillery implements EnemySystem {
   }
 
   /** A strike circle that has filled past half is on top of `p` (an imminent hit). */
+  /** Strikes painted and not yet landed. */
+  paintedCount(): number {
+    return this.strikes.length;
+  }
+
   strikeNear(p: Vec2): boolean {
     return this.strikes.some((s) => s.t >= A.fillTime * 0.5 && strikeHits(p, s.at, A.radius));
   }
@@ -165,11 +170,11 @@ export class Artillery implements EnemySystem {
         g.sinceShot += dt;
       }
       b.salvoT -= dt;
-      // A battery fires only while the monster is within range of it; beyond that it holds its next salvo ready.
+      // A battery fires only while the monster is within range of it and the army is not retreating; beyond that it holds its next salvo ready.
       const cx = b.guns.reduce((n, g) => n + g.position.x, 0) / b.guns.length;
       const cz = b.guns.reduce((n, g) => n + g.position.z, 0) / b.guns.length;
       const inRange = Math.hypot(m.x - cx, m.z - cz) <= A.range;
-      if (b.salvoT <= 0 && ctx.monster.alive && inRange) {
+      if (b.salvoT <= 0 && ctx.monster.alive && inRange && ctx.retreating !== true) {
         b.salvoT = A.salvoEvery;
         strikePoints({ x: m.x, z: m.z }, salvoSize(ctx.level), A.spread, ctx.rng).forEach((at, k) => {
           if (this.strikes.length >= MAX_STRIKES) return;

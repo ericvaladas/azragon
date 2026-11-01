@@ -71,6 +71,7 @@ export class OrbitalLaser implements EnemySystem {
   }
 
   spawn(ctx: WorldContext): void {
+    if (ctx.retreating === true) return;
     const m = ctx.monster.position;
     const d = ctx.spawnDir();
     this.state = startLaser(this.state, { x: m.x + d.x * L.startOffset, z: m.z + d.z * L.startOffset });
@@ -79,6 +80,8 @@ export class OrbitalLaser implements EnemySystem {
   update(dt: number, ctx: WorldContext): void {
     this.time += dt;
     const m = ctx.monster.position;
+    // Retreating: a strike in progress is cut short.
+    if (ctx.retreating === true) this.cancel();
     const before = this.state.phase;
     this.state = stepLaser(this.state, dt, { x: m.x, z: m.z }, ctx.rng());
     const s = this.state;

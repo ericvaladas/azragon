@@ -187,7 +187,8 @@ export class SamSilos implements EnemySystem {
       if (s.phase === 'rising') {
         s.raise = Math.min(1, s.t / C.riseTime);
         if (s.t >= C.riseTime) this.enter(s, 'up');
-      } else if (s.t >= s.nextVolley) {
+      } else if (s.t >= s.nextVolley && ctx.retreating !== true) {
+        // While retreating a silo launches nothing and its volley stays due.
         if (ctx.monster.alive) for (let k = 0; k < C.missiles; k++) this.launch(s, k, ctx);
         // The gap a sinking silo took: the rest of its up time, sinking, a random spell down, and rising again.
         const down = C.downMin + ctx.rng() * (C.downMax - C.downMin);

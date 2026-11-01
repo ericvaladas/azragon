@@ -86,3 +86,25 @@ describe('SamSilos stay surfaced', () => {
     }
   });
 });
+
+describe('SamSilos retreat', () => {
+  const launched = (retreating: boolean | undefined): number => {
+    const c = { ...ctx(), damageMonster: () => {}, splash: () => {}, retreating } as unknown as WorldContext;
+    const s = new SamSilos(new THREE.Scene());
+    s.spawn(c);
+    let seen = 0;
+    for (let i = 0; i < 100; i++) {
+      s.update(0.05, c);
+      seen = Math.max(seen, s.targets().filter((x) => x.kind !== 'sam').length);
+    }
+    return seen;
+  };
+
+  it('control: launches a volley by 5 s with retreating unset', () => {
+    expect(launched(undefined)).toBeGreaterThan(0);
+  });
+
+  it('launches nothing while retreating', () => {
+    expect(launched(true)).toBe(0);
+  });
+});

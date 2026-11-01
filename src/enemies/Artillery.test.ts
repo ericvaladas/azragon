@@ -69,3 +69,50 @@ describe('Artillery range', () => {
     expect(a.strikeNear({ x: 0, z: 0 })).toBe(true);
   });
 });
+
+describe('Artillery retreat', () => {
+  const A = CONFIG.artillery;
+  const rig = (retreating: boolean | undefined) => {
+    let landed = 0;
+    const c = {
+      ...ctx(() => false),
+      particles: { ring: () => {}, explosion: () => {}, emit: () => {} },
+      splash: () => {},
+      shake: () => {},
+      damageMonster: () => {},
+      damageBuildings: () => {
+        landed++;
+      },
+      retreating,
+    } as unknown as WorldContext;
+    const a = new Artillery(new THREE.Scene());
+    a.spawn(c);
+    return { a, c, landed: () => landed };
+  };
+  const run = (a: Artillery, c: WorldContext, seconds: number) => {
+    for (let t = 0; t < seconds; t += 0.05) a.update(0.05, c);
+  };
+
+  it('control: paints and lands a salvo with retreating unset', () => {
+    const r = rig(undefined);
+    run(r.a, r.c, A.salvoEvery * 0.5 + A.fillTime + A.shellFlight + 2);
+    expect(r.landed()).toBeGreaterThan(0);
+  });
+
+  it('launches nothing while retreating', () => {
+    const r = rig(true);
+    run(r.a, r.c, A.salvoEvery * 2 + A.fillTime + A.shellFlight);
+    expect(r.landed()).toBe(0);
+    expect(r.a.paintedCount()).toBe(0);
+  });
+
+  it('painted strikes still land while retreating', () => {
+    const r = rig(undefined);
+    run(r.a, r.c, A.salvoEvery * 0.5 + 0.2);
+    expect(r.a.paintedCount()).toBeGreaterThan(0);
+    expect(r.landed()).toBe(0);
+    (r.c as { retreating?: boolean }).retreating = true;
+    run(r.a, r.c, A.fillTime + A.shellFlight + 1);
+    expect(r.landed()).toBeGreaterThan(0);
+  });
+});
