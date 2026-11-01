@@ -1,4 +1,5 @@
 import type * as THREE from 'three';
+import { CONFIG } from './config';
 
 export type TargetKind = 'tank' | 'jet' | 'blimp' | 'sam' | 'missile' | 'artillery' | 'truck' | 'heli' | 'napalm' | 'osprey' | 'gustav' | 'mech' | 'building';
 
@@ -42,4 +43,11 @@ export function resolveHit(
 /** Whether destroying a target of `kind` pays EXP: everything does, except a building brought down by razing. */
 export function paysExp(kind: string, razing: boolean): boolean {
   return !(razing && kind === 'building');
+}
+
+/** Camera trauma from a building collapsing `dist` m from the monster: full up close, none far off, less if the boss razed it. */
+export function collapseTrauma(dist: number, razed: boolean): number {
+  const C = CONFIG.camera;
+  const near = 1 - Math.min(1, Math.max(0, (dist - C.collapseNear) / (C.collapseFar - C.collapseNear)));
+  return C.collapseShake * near * (razed ? C.razedShake : 1);
 }

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { paysExp, resolveHit } from './combat';
+import { CONFIG } from './config';
+import { collapseTrauma, paysExp, resolveHit } from './combat';
 
 const base = { dmgMult: 1.5, deflectChance: 0.3, airborne: false };
 
@@ -40,5 +41,17 @@ describe('paysExp', () => {
     expect(paysExp('building', false)).toBe(true);
     expect(paysExp('tank', true)).toBe(true);
     expect(paysExp('mech', true)).toBe(true);
+  });
+});
+
+describe('collapseTrauma', () => {
+  const C = CONFIG.camera;
+  it('is full up close, fades with distance, and is gone far off', () => {
+    expect(collapseTrauma(100, false)).toBe(C.collapseShake);
+    expect(collapseTrauma((C.collapseNear + C.collapseFar) / 2, false)).toBeCloseTo(C.collapseShake / 2, 6);
+    expect(collapseTrauma(C.collapseFar + 1, false)).toBe(0);
+  });
+  it('is much less for a building the boss razed', () => {
+    expect(collapseTrauma(100, true)).toBeCloseTo(C.collapseShake * C.razedShake, 6);
   });
 });

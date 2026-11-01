@@ -200,6 +200,11 @@ export const CONFIG = {
     lookAhead: 800 * MONSTER_SCALE,
     dragSensitivity: 0.006,
     wheelSensitivity: 0.8,
+    /**
+     * A building's collapse shakes by collapseShake within collapseNear m of the monster, fading to nothing at
+     * collapseFar; one the boss brought down shakes razedShake times as much.
+     */
+    collapseShake: 0.12, collapseNear: 300, collapseFar: 1200, razedShake: 0.25,
     shakeMaxOffset: 22,
     shakeDecay: 1.6,
     /** While a walking key is held, the camera swings round behind the monster at this rate (1/s; higher is snappier). */

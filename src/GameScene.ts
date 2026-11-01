@@ -7,7 +7,7 @@ import { Lighting } from './render/Lighting';
 import { PixelRenderer } from './render/PixelRenderer';
 import { createSky, skyColors } from './render/Sky';
 import { clampDelta, yawTo, type Vec2 } from './util/math';
-import { paysExp, resolveHit, type DamageSource, type Target } from './combat';
+import { collapseTrauma, paysExp, resolveHit, type DamageSource, type Target } from './combat';
 import { City, CRATER_RADIUS } from './world/City';
 import { IntroCinematic } from './intro/IntroCinematic';
 import { Music } from './audio/Music';
@@ -441,7 +441,7 @@ export class GameScene {
       this.particles.ring('dust', pos, size, 14);
       this.particles.emit('debris', pos.clone().setY(30), 8);
       this.splasher.footprint(pos.x, pos.z, size);
-      this.rig.addTrauma(0.12);
+      this.rig.addTrauma(collapseTrauma(pos.distanceTo(this.monster.position), this.razing));
     };
     this.city.onSplash = (p, size) => this.splasher.at(p, size / 40);
     this.monster.onFootLand = (p) => {
