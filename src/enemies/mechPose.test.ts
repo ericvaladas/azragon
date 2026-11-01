@@ -25,10 +25,12 @@ function kneeAt(p: MechPose, i: number): THREE.Vector3 {
 const kneeRise = (p: MechPose, i: number) => kneeAt(p, i).y - hipOf(i, p, new THREE.Vector3()).y;
 
 describe('mech pose', () => {
-  it('the rest pose needs no bend: each leg yaws to its splay', () => {
+  it('the rest pose needs no bend: each leg pivots on the hip frame and yaws to its splay', () => {
     const p = restPose();
     const a: LegAngles = { yaw: 0, upper: 0, knee: 0 };
     MECH_LEGS.forEach((leg, i) => {
+      // The hip frame is centred on the body pivot's height.
+      expect(hipOf(i, p, new THREE.Vector3()).y).toBeCloseTo(PV.bodyY, 9);
       solveLeg(hipOf(i, p, new THREE.Vector3()), p.feet[i * 3]!, p.feet[i * 3 + 1]!, p.feet[i * 3 + 2]!, leg.splay, a);
       expect(a.yaw).toBeCloseTo(leg.splay, 6);
       expect(a.upper).toBeCloseTo(0, 6);

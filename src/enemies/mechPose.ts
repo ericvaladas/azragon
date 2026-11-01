@@ -218,7 +218,7 @@ export type VisorState = 'dim' | 'bright' | 'off';
 const _angles: LegAngles = { yaw: 0, upper: 0, knee: 0 };
 
 /**
- * The mech's meshes, posed from a MechPose: the hull group (hull, turret, visor, cannons, glow), pitched and rolled
+ * The mech's meshes, posed from a MechPose: the body group (hip frame, hull, turret, visor, cannons, glow), pitched and rolled
  * about the rear hip line, and four legs (a yawed mount at each hip, the upper segment, the lower blade at the knee)
  * solved by IK onto their feet. Drawn in model units; the root carries the world position, heading and scale.
  */
@@ -254,6 +254,7 @@ export class MechRig {
     this.root.add(this.pivot);
     this.pivot.add(this.body);
     this.body.position.z = -REAR_Z;
+    mk(g.hips, this.body);
     mk(g.hull, this.body);
     mk(g.turret, this.body);
     this.cannons = mk(g.cannons, this.body);

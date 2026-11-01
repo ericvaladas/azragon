@@ -139,12 +139,13 @@ export const CONFIG = {
     gustavHazard: 0xf2c230,
     gustavHazardDark: 0x1e1e1e,
     /**
-     * The boss mech: white armour plates over a gunmetal-black frame, gunmetal joints, barrels and rams, a red sensor
-     * eye (mechVisorBright while it winds up a strike), the cyan glow of its launcher tube caps, coolant canisters and
-     * light strips, and the warm tint it flashes when hit.
+     * The boss mech: white armour plates over a gunmetal-black frame, the near-black hip frame its legs mount on,
+     * gunmetal joints, barrels and rams, a red sensor eye (mechVisorBright while it winds up a strike), the cyan glow of
+     * its launcher tube caps, coolant canisters and light strips, and the warm tint it flashes when hit.
      */
     mech: 0xe6eaee,
     mechDark: 0x24282e,
+    mechFrame: 0x14161a,
     mechMetal: 0x50565e,
     mechVisor: 0xff2a1a,
     mechVisorBright: 0xffe0d0,
