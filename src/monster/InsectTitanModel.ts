@@ -5,6 +5,7 @@ import { placeSegment } from './ik';
 import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
 import { tailSwatPoints } from './tailSwat';
 import { tailAimPoints } from './tailAim';
+import { angleDelta } from '../util/math';
 
 export type LegRig = {
   side: 1 | -1;
@@ -87,12 +88,14 @@ const TAIL_BASE: THREE.Vector3[] = [
   new THREE.Vector3(0, 550, -190),
   new THREE.Vector3(0, 510, -90),
 ].map((p) => p.sub(TAIL_ROOT).multiplyScalar(TAIL_SCALE).add(TAIL_ROOT));
-/** How far along the tail (from its root) each tail point is: a braced tail lays them out along a straight line. */
+/** How far along the tail (from its root) each tail point is; the last is the tail's full length. */
 const TAIL_REACH: number[] = TAIL_BASE.map((_, i) => TAIL_BASE.slice(1, i + 1).reduce((sum, p, k) => sum + p.distanceTo(TAIL_BASE[k]!), 0));
 
 
 /** Built from primitives. Faces +Z, Y-up; +X is the monster's left. ~550 tall at the stinger. */
 const _braced = new THREE.Vector3();
+const _old = new THREE.Vector3();
+const _oldPrev = new THREE.Vector3();
 
 export class InsectTitanModel {
   readonly root = new THREE.Group();
@@ -197,7 +200,7 @@ export class InsectTitanModel {
 
   /**
    * Pose the tail: its idle sway, eased toward `aim` by aimW and bent toward a swat target by w; braced (by braceW) it
-   * straightens out from its root along the unit direction `brace` (body space), as a counterweight.
+   * uncurls from its root toward the unit direction `brace` (body space), as a counterweight.
    */
   updateTail(time: number, swatTarget: THREE.Vector3 | null = null, w = 0, aim: THREE.Vector3 | null = null, aimW = 0, brace: THREE.Vector3 | null = null, braceW = 0): void {
     for (let i = 1; i < this.tailPts.length; i++) {
@@ -213,10 +216,7 @@ export class InsectTitanModel {
       const bent = tailSwatPoints(this.tailPts, swatTarget, w);
       bent.forEach((p, i) => this.tailPts[i]!.copy(p));
     }
-    if (brace && braceW > 0) {
-      const root = this.tailPts[0]!;
-      for (let i = 1; i < this.tailPts.length; i++) this.tailPts[i]!.lerp(_braced.copy(root).addScaledVector(brace, TAIL_REACH[i]!), braceW);
-    }
+    if (brace && braceW > 0) this.uncurl(brace, braceW);
     for (let i = 0; i < this.tailSegs.length; i++) {
       placeSegment(this.tailSegs[i]!, this.tailPts[i]!, this.tailPts[i + 1]!);
     }
@@ -226,5 +226,32 @@ export class InsectTitanModel {
     placeSegment(this.stinger, tip, end);
     this.stinger.scale.set(1, 1, 1);
     this.stingerTip.position.copy(end);
+  }
+
+  /**
+   * Uncurl the tail by w toward lying straight along `brace`, in its own (y, z) plane: the root segment swings round to
+   * the brace direction (the short way, over the back) and every joint's bend relaxes by w, each segment keeping its
+   * length; its small sideways sway fades out with it.
+   */
+  private uncurl(brace: THREE.Vector3, w: number): void {
+    const pts = this.tailPts;
+    const target = Math.atan2(brace.y, brace.z);
+    let prevAngle = 0;
+    let angle = 0;
+    _oldPrev.copy(pts[0]!);
+    for (let i = 1; i < pts.length; i++) {
+      // Each segment as it was (its start may already have moved).
+      _old.copy(pts[i]!);
+      const v = _braced.subVectors(_old, _oldPrev);
+      _oldPrev.copy(_old);
+      const len = v.length();
+      const a = Math.atan2(v.y, v.z);
+      if (i === 1) angle = a + angleDelta(a, target) * w;
+      else angle += angleDelta(prevAngle, a) * (1 - w);
+      prevAngle = a;
+      const x = v.x * (1 - w);
+      const flat = Math.sqrt(Math.max(0, len * len - x * x));
+      pts[i]!.set(pts[i - 1]!.x + x, pts[i - 1]!.y + Math.sin(angle) * flat, pts[i - 1]!.z + Math.cos(angle) * flat);
+    }
   }
 }
