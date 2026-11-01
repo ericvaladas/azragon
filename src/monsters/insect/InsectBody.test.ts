@@ -38,6 +38,27 @@ describe('InsectBody for Spike Rain', () => {
     for (const r of reach(0)) expect(r).toBeLessThan(0.75);
   });
 
+  it('the raised legs move only at the knee: the upper leg holds still while the lower leg kicks', () => {
+    const body = new InsectBody();
+    for (let i = 0; i < 30; i++) body.animate({ ...base(), time: i / 60, carried: true, roar: 1 }, () => {});
+    const m = body['model'];
+    const femur = (k: number) => {
+      const hip = m.legs[k]!.hipLocal.clone().applyMatrix4(m.body.matrix);
+      return m.legs[k]!.knee.position.clone().sub(hip).normalize();
+    };
+    const start = [0, 1, 2, 3].map(femur);
+    const feet0 = body.feet.slice(0, 4).map((f) => f.clone());
+    let moved = 0;
+    for (let i = 30; i < 210; i++) {
+      body.animate({ ...base(), time: i / 60, carried: true, roar: 1 }, () => {});
+      for (let k = 0; k < 4; k++) {
+        expect(femur(k).angleTo(start[k]!)).toBeLessThan(0.02);
+        moved = Math.max(moved, body.feet[k]!.distanceTo(feet0[k]!));
+      }
+    }
+    expect(moved).toBeGreaterThan(100);
+  });
+
   it('the raised legs kick out slowly now and then, each at its own moment', () => {
     const body = new InsectBody();
     const paths: THREE.Vector3[][] = [[], [], [], []];

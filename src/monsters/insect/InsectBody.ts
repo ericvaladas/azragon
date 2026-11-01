@@ -53,27 +53,34 @@ const _strikeLift = new THREE.Vector3(0, 420, -80);
  * its front tilted up DISPLAY_TILT rad, on the back pair of legs (their feet drawn in to STAND_X from the middle so
  * they straighten), its tail held straight out behind and down to the
  * ground as a counterweight; the front pair is raised high and wide (RAISED, body
- * space, x to the leg's side, z from its hip) and the second pair held out lower (SPREAD). The raised legs wave slowly
- * (WAVE m at WAVE_RATE rad/s of world time) with a fine quiver (QUIVER m at QUIVER_RATE), and now and then each kicks
- * out and forward (up to KICK m, at KICK_RATE), at its own moment; the mandibles open MOUTH_OPEN rad to shoot.
+ * space, x to the leg's side, z from its hip) and the second pair held out lower (SPREAD). The raised legs move only at
+ * the knee, the upper leg holding still: a slow wave (WAVE_FLEX rad at WAVE_RATE rad/s of world time), a fine quiver
+ * (QUIVER_FLEX at QUIVER_RATE), and now and then a kick, each at its own moment, swinging the lower leg out (the bend
+ * opening by up to KICK_FLEX rad, at KICK_RATE) and back; the mandibles open MOUTH_OPEN rad to shoot.
  */
 const DISPLAY_LIFT = 330;
 const STAND_X = 230;
-const KICK = 110;
-const KICK_RATE = 5;
-const KICK_DIR = new THREE.Vector3(0.6, 0.25, 0.75).normalize();
+const KICK_FLEX = 0.6;
+const KICK_RATE = 2.2;
+/** The knee's bend (rad from straight) stays within these. */
+const KNEE_MIN_BEND = 0.1;
+const KNEE_MAX_BEND = 2.6;
 const DISPLAY_TILT = 0.52;
 /** The braced tail's tip rests this high (m) on the ground behind; it never points down steeper than TAIL_MAX_DROP (rad). */
 const TAIL_REST = 15;
 const TAIL_MAX_DROP = 1.1;
 const RAISED = new THREE.Vector3(420, 760, 260);
 const SPREAD = new THREE.Vector3(520, 420, 120);
-const WAVE = 70;
+const WAVE_FLEX = 0.2;
 const WAVE_RATE = 2.5;
-const QUIVER = 6;
+const QUIVER_FLEX = 0.01;
 const QUIVER_RATE = 23;
 const MOUTH_OPEN = 0.6;
 const _raised = new THREE.Vector3();
+const _femur = new THREE.Vector3();
+const _shin = new THREE.Vector3();
+const _axis = new THREE.Vector3();
+const _gaitKnee = new THREE.Vector3();
 const _tailRoot = new THREE.Vector3();
 const _tailDir = new THREE.Vector3();
 const _unbody = new THREE.Quaternion();
@@ -120,22 +127,36 @@ export class InsectBody implements MonsterBody {
         _gait.copy(_foot);
         strikeFootPose(f.melee.t, CONFIG.monster.meleeWindup, _gait, _strikeLift, _target, _foot);
       }
+      _pole.copy(_hip).add(_knee.set(leg.side * 120, 700, 0));
       if (rear > 0 && i < 4) {
-        // Raised in display: the front pair high and wide, the second out to the sides; waving slowly, quivering.
+        // Raised in display: the front pair high and wide, the second out to the sides. The upper leg holds its raised
+        // pose; only the knee moves: waving, quivering, and now and then kicking the lower leg out (the bend opening)
+        // and back. Knee and foot are posed directly (not re-solved), blending in from the walking pose by `rear`.
+        solveTwoBone(_hip, _foot, FEMUR, TIBIA, _pole, _gaitKnee);
         const pose = i < 2 ? RAISED : SPREAD;
-        const wave = Math.sin(f.time * WAVE_RATE + i * 1.7) * WAVE;
-        const quiver = Math.sin(f.time * QUIVER_RATE + i * 2.3) * QUIVER;
-        const kick = Math.max(0, Math.sin(f.time * KICK_RATE + i * 1.9)) ** 2 * KICK;
-        _raised
-          .set(leg.side * (pose.x + wave * 0.5 + KICK_DIR.x * kick), pose.y + wave + quiver + KICK_DIR.y * kick, leg.hipLocal.z + pose.z + quiver + KICK_DIR.z * kick)
-          .applyMatrix4(body.matrix);
-        _foot.lerp(_raised, rear);
+        _raised.set(leg.side * pose.x, pose.y, leg.hipLocal.z + pose.z).applyMatrix4(body.matrix);
+        solveTwoBone(_hip, _raised, FEMUR, TIBIA, _pole, _knee);
+        _femur.subVectors(_knee, _hip).normalize();
+        _shin.subVectors(_raised, _knee).normalize();
+        const bend = _femur.angleTo(_shin);
+        const kick = Math.max(0, Math.sin(f.time * KICK_RATE + i * 1.9)) ** 2 * KICK_FLEX;
+        const sway = Math.sin(f.time * WAVE_RATE + i * 1.7) * WAVE_FLEX + Math.sin(f.time * QUIVER_RATE + i * 2.3) * QUIVER_FLEX;
+        const fold = Math.min(Math.max(kick + sway, KNEE_MIN_BEND - bend), KNEE_MAX_BEND - bend);
+        // Turning the shin away from the femur's line opens the bend.
+        _axis.crossVectors(_femur, _shin).normalize();
+        _raised.copy(_knee).addScaledVector(_shin.applyAxisAngle(_axis, fold), TIBIA);
+        _knee.lerpVectors(_gaitKnee, _knee, rear).sub(_hip).setLength(FEMUR).add(_hip);
+        _foot.lerp(_raised, rear).sub(_knee).setLength(TIBIA).add(_knee);
+        this.feet[i]!.copy(_foot);
+        placeSegment(leg.femur, _hip, _knee);
+        placeSegment(leg.tibia, _knee, _foot);
+        leg.knee.position.copy(_knee);
+        continue;
       } else if (rear > 0) {
         // A back leg: its foot drawn in under its hip, so it straightens and the Insect stands tall.
         _foot.x += (leg.side * STAND_X - _foot.x) * rear;
       }
       this.feet[i]!.copy(_foot);
-      _pole.copy(_hip).add(_knee.set(leg.side * 120, 700, 0));
       solveTwoBone(_hip, _foot, FEMUR, TIBIA, _pole, _knee);
       placeSegment(leg.femur, _hip, _knee);
       placeSegment(leg.tibia, _knee, _foot);
