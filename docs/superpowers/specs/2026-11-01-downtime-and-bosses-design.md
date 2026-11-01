@@ -150,3 +150,23 @@ It's a melee brawler that pursues the monster, with ranged attacks as backup.
 ## Left to the builder
 
 Exact timings, HP, damage, speeds and ranges; the mech's exact silhouette and move set within the brief above; the meteor's exact shape and particles; how each enemy kind animates its retreat; and the order the work is split into.
+
+## Owner revision (2026-11-01): a quadruped mech
+
+The owner asked for a quadruped mech in the spirit of a spider-tank concept they shared, as a style reference only, not a copy. This replaces the humanoid look and the fist-based moves above. Its size, HP, timings, damage, tuning, the health bar and the dodge rules are unchanged.
+
+- **Body:**
+  - four long, splayed legs, each with an armoured hip, an upper segment, and a long tapered blade-like lower leg ending in a spike foot;
+  - a compact hull slung between the hips;
+  - a turret on top with a sensor head and a red eye or visor;
+  - a tall box missile launcher on one side of the turret with rows of glowing tube caps (the barrage);
+  - twin long-barrel cannons on the other side, aimed forward (the rockets);
+  - antennas and glowing coolant canisters under the hull.
+  
+  It stands about the monster's height but is wider.
+- **Colours:** white and gunmetal-black armour with cyan-blue glows, replacing the olive. It is still man-made, but cleaner and more high-tech than the army.
+- **Walk:** diagonal legs step in pairs and the hull stays level with a slight bob. Footfalls still shake the camera and crush buildings.
+- **Punch → front-leg stab:** it rears one front leg back, then spikes it forward, with the same wind-up, reach and dodge timing.
+- **Slam → rear-up stomp:** it lifts both front legs high and crashes them down, with a shockwave ring all round.
+- **Dash:** it crouches low on all four legs, then lunges.
+- **Death:** the legs buckle outward, and the hull drops and explodes.
