@@ -1,5 +1,7 @@
 /** Uniform scale of the monster model; world-space monster and camera distances below are multiplied by it. */
 const MONSTER_SCALE = 0.6;
+/** Standing height of the monster model at MONSTER_SCALE (world m); the boss mech stands this tall too. */
+const MONSTER_HEIGHT = 550 * MONSTER_SCALE;
 
 /** All tunable constants. World units are metres; times are seconds. */
 export const CONFIG = {
@@ -131,6 +133,18 @@ export const CONFIG = {
     cottage4: 0xcfe3c8,
     gustavHazard: 0xf2c230,
     gustavHazardDark: 0x1e1e1e,
+    /**
+     * The boss mech: military olive armour, darker olive panels and panel lines, gunmetal joints, launcher tubes and
+     * rivets, a hot amber visor slit (mechVisorBright while it winds up a strike), red warning lights, and the warm
+     * tint it flashes when hit. Its hazard stripes reuse gustavHazard / gustavHazardDark.
+     */
+    mech: 0x5f6b48,
+    mechDark: 0x3a4230,
+    mechMetal: 0x44484b,
+    mechVisor: 0xff9a1f,
+    mechVisorBright: 0xfff0b8,
+    mechLight: 0xff2a1a,
+    mechFlash: 0xffd0a0,
     /** Shield Bubble: the cyan dome's fill and the triangle lattice over it. Reflect Shield's patches are violet. */
     bubbleFill: 0x6fe7ff,
     bubbleRim: 0xbff6ff,
@@ -220,7 +234,7 @@ export const CONFIG = {
   },
   monster: {
     scale: MONSTER_SCALE,
-    height: 550 * MONSTER_SCALE,
+    height: MONSTER_HEIGHT,
     maxHp: 1000,
     regenPerSec: 4,
     moveSpeed: 150,
@@ -713,6 +727,35 @@ export const CONFIG = {
     cloth: { cornerMass: 8, cornerPull: 3, weightSize: 10, tearOut: 90, tearUp: 70, gravity: 400, damping: 0.985, iterations: 8, slack: 0.15, friction: 0.6, thickness: 8, maxPush: 60, catchFrac: 0.45, homing: 5, substep: 1 / 60 },
   },
   jet: { hp: 60, speed: 286, altitude: 430 * MONSTER_SCALE, turnRate: 0.9, damage: 10, rocketsPerSalvo: 3, salvoMin: 700, salvoMax: 1600, rocketSpeed: 650, exp: 15, size: 70, hitRadius: 90, exitDistance: 2600 },
+  /**
+   * The boss mech (world m, s). It stands `height` tall (the standard monster height) and about `width` across; its
+   * target `radius`. Before it has first come within dashTrigger of the monster it walks in at approachSpeed, then at
+   * walkSpeed, turning at turnRate rad/s, and stands at stopAt. Melee: a punch reaches punchReach (+ the monster's body
+   * radius) within punchArc rad of its facing; a slam (picked with slamChance) hits within slamRadius; either then waits
+   * meleeCooldown. Dash: once engaged, beyond dashTrigger, it charges at dashSpeed to dashStopShort short of the
+   * monster, every dashCooldown at most. Every building within crushRadius of a foot (or of it, dashing) takes crushDps.
+   * Rockets: a volley of rocketsPerVolley jet rockets within rocketRange every rocketCooldown. Barrage: barrageCount
+   * marked circles of barrageRadius within barrageSpread of the monster, filling over barrageFill, every
+   * barrageCooldown. Each move runs `moves[move]` windup, strike and recover s. Footfalls shake by footfallShake
+   * (less far off). Dead, it sparks for dyingTime, blows apart, and the wreck sinks over wreckTime.
+   */
+  mech: {
+    height: MONSTER_HEIGHT, width: 0.45 * MONSTER_HEIGHT, radius: 0.3 * MONSTER_HEIGHT,
+    hp: 9000, approachSpeed: 160, walkSpeed: 90, turnRate: 1.2, stopAt: 0.8 * 0.55 * MONSTER_HEIGHT,
+    punchReach: 0.55 * MONSTER_HEIGHT, punchArc: 0.7, punchDamage: 80,
+    slamRadius: 0.6 * MONSTER_HEIGHT, slamDamage: 140, slamChance: 0.35, meleeCooldown: 1.6,
+    dashTrigger: 1600, dashSpeed: 900, dashCooldown: 9, dashStopShort: 0.5 * MONSTER_HEIGHT, crushRadius: 0.25 * MONSTER_HEIGHT, crushDps: 600,
+    rocketCooldown: 4, rocketsPerVolley: 3, rocketDamage: 10, rocketRange: 2200,
+    barrageCooldown: 17, barrageCount: 7, barrageSpread: 450, barrageRadius: 130, barrageFill: 1.6, barrageDamage: 45,
+    spawnDistance: 4200, footfallShake: 0.06, dyingTime: 2.5, wreckTime: 6,
+    moves: {
+      punch: { windup: 0.55, strike: 0.15, recover: 0.4 },
+      slam: { windup: 1.0, strike: 0.2, recover: 0.7 },
+      dash: { windup: 0.6, strike: 0, recover: 0.4 },
+      rockets: { windup: 0.3, strike: 0.4, recover: 0.3 },
+      barrage: { windup: 0.7, strike: 0.5, recover: 0.5 },
+    },
+  },
   director: {
     baseRate: 0.6,
     /** Spawn budget points per second gained per player level above 1. */
@@ -837,7 +880,7 @@ export const CONFIG = {
     phaseFade: 2.0,
   },
   readability: {
-    threatKinds: ['blimp', 'sam', 'artillery', 'truck', 'heli', 'napalm', 'osprey', 'gustav'] as readonly string[],
+    threatKinds: ['blimp', 'sam', 'artillery', 'truck', 'heli', 'napalm', 'osprey', 'gustav', 'mech'] as readonly string[],
     maxArrows: 8,
     arrowMarginPx: 28,
     chevronMax: 80,

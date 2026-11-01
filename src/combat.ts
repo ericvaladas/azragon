@@ -1,6 +1,6 @@
 import type * as THREE from 'three';
 
-export type TargetKind = 'tank' | 'jet' | 'blimp' | 'sam' | 'missile' | 'artillery' | 'truck' | 'heli' | 'napalm' | 'osprey' | 'gustav' | 'building';
+export type TargetKind = 'tank' | 'jet' | 'blimp' | 'sam' | 'missile' | 'artillery' | 'truck' | 'heli' | 'napalm' | 'osprey' | 'gustav' | 'mech' | 'building';
 
 /** Anything the monster can attack. Owners apply damage and report destruction via OnDestroyed. */
 export interface Target {
@@ -18,7 +18,7 @@ export interface Target {
 
 export type OnDestroyed = (target: Target, exp: number) => void;
 
-export type DamageSource = 'shell' | 'rocket' | 'missile' | 'blimp' | 'artillery' | 'laser' | 'beam' | 'napalm';
+export type DamageSource = 'shell' | 'rocket' | 'missile' | 'blimp' | 'artillery' | 'laser' | 'beam' | 'napalm' | 'melee';
 
 const AREA: ReadonlySet<DamageSource> = new Set(['laser', 'artillery', 'napalm']);
 const DEFLECTABLE: ReadonlySet<DamageSource> = new Set(['shell', 'rocket', 'missile', 'blimp']);
