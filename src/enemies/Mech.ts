@@ -4,9 +4,8 @@ import type { Target } from '../combat';
 import { angleDelta, damp, type Vec2 } from '../util/math';
 import { shellProgress, strikeFill, strikeHits, strikePoints } from './artilleryMath';
 import { launchArc } from '../systems/projectileMath';
-import { faceted } from '../render/toon';
 import { chooseAction, movePhase, punchHits, slamHits, type MechAction, type MechMind, type MechMove } from './mechMath';
-import { LEG_REACH, MECH_LEGS, MECH_TUBES } from './mechModel';
+import { LEG_REACH, MECH_LEGS, MECH_TUBES, missileGeometry } from './mechModel';
 import { MechRig, STEP, dampPose, restPose, targetPose, type MechPoseInput, type VisorState } from './mechPose';
 import type { EnemySystem, WorldContext } from './types';
 
@@ -19,7 +18,7 @@ const POSE_RATE = 22;
 const FALL_RATE = 5;
 /**
  * The barrage missiles leave the launcher tubes this many seconds apart, each flying the rest of its circle's fill so
- * it lands as the circle fills; a smoke puff every TRAIL_EVERY s marks its arc, and the glowing missile is this big (m).
+ * it lands as the circle fills; a smoke puff every TRAIL_EVERY s marks its arc, and the missile is this long (m).
  */
 const LAUNCH_GAP = 0.08;
 /** Points checked along an evade's path, and how far past its end it must stay clear of blocked ground (radii). */
@@ -27,7 +26,11 @@ const EVADE_SAMPLES = 4;
 const EVADE_MARGIN = 1;
 const ease = (t: number) => t * t * (3 - 2 * t);
 const TRAIL_EVERY = 0.025;
-const MISSILE_SIZE = 22;
+const MISSILE_LENGTH = 90;
+/** How far ahead along its flight (0..1) a missile looks to point its nose. */
+const MISSILE_LOOK = 0.02;
+const FORWARD = new THREE.Vector3(0, 0, 1);
+const _ahead = new THREE.Vector3();
 const _p = new THREE.Vector3();
 const _dir = new THREE.Vector3();
 const _land = new THREE.Vector3();
@@ -155,7 +158,7 @@ export class Mech implements EnemySystem {
     }
     this.fillMesh.renderOrder = 2;
     this.ringMesh.renderOrder = 10;
-    this.missileMesh = new THREE.InstancedMesh(faceted(new THREE.IcosahedronGeometry(0.5, 0)), new THREE.MeshBasicMaterial({ color: P.mechGlow, fog: false }), MAX_STRIKES);
+    this.missileMesh = new THREE.InstancedMesh(missileGeometry(), new THREE.MeshBasicMaterial({ vertexColors: true, fog: false }), MAX_STRIKES);
     this.missileMesh.frustumCulled = false;
     this.missileMesh.count = 0;
     scene.add(this.missileMesh);
@@ -653,7 +656,11 @@ export class Mech implements EnemySystem {
     for (const s of this.strikes) {
       const k = shellProgress(s.t, M.barrageFill, s.flight);
       if (k === null || !s.launched) continue;
-      _m.compose(this.missilePos(s, k), _q.identity(), _s.setScalar(MISSILE_SIZE));
+      _ahead.copy(this.missilePos(s, Math.min(1, k + MISSILE_LOOK)));
+      const at = this.missilePos(s, k === 1 ? 1 - MISSILE_LOOK : k);
+      _dir.subVectors(_ahead, at).normalize();
+      _q.setFromUnitVectors(FORWARD, _dir);
+      _m.compose(at, _q, _s.setScalar(MISSILE_LENGTH));
       this.missileMesh.setMatrixAt(missiles++, _m);
     }
     this.missileMesh.count = missiles;

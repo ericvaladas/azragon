@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
-import { HIP_FRAME_D, HIP_FRAME_T, HIP_FRAME_W, LAUNCHER, LEG_REACH, LOWER_LEN, MECH_LEGS, MECH_PIVOTS, MECH_TUBES, TORSO_BASE, mechLauncher, mechParts, type MechLeg, type MechParts } from './mechModel';
+import { HIP_FRAME_D, HIP_FRAME_T, HIP_FRAME_W, LAUNCHER, LEG_REACH, LOWER_LEN, MECH_LEGS, MECH_PIVOTS, MECH_TUBES, TORSO_BASE, mechLauncher, mechParts, missileGeometry, type MechLeg, type MechParts } from './mechModel';
 
 const P = MECH_PIVOTS;
 const bounds = (g: THREE.BufferGeometry) => new THREE.Box3().setFromBufferAttribute(g.getAttribute('position') as THREE.BufferAttribute);
@@ -201,5 +201,20 @@ describe('mech model', () => {
       expect(c).toBeDefined();
       expect(c.count).toBe(g.getAttribute('position').count);
     }
+  });
+});
+
+describe('missile model', () => {
+  it('is one unit long, nose on +Z, coloured', () => {
+    const g = missileGeometry();
+    g.computeBoundingBox();
+    const b = g.boundingBox!;
+    expect(b.max.z).toBeCloseTo(0.98, 1);
+    expect(b.min.z).toBeLessThan(0);
+    expect(g.getAttribute('color')).toBeTruthy();
+    const pos = g.getAttribute('position');
+    let tip = 0;
+    for (let i = 0; i < pos.count; i++) if (pos.getZ(i) > b.max.z - 1e-3) tip = Math.max(tip, Math.hypot(pos.getX(i), pos.getY(i)));
+    expect(tip).toBeLessThan(0.01);
   });
 });

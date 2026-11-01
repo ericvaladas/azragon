@@ -133,6 +133,26 @@ function merge(parts: Part[]): Part {
 }
 
 /**
+ * A barrage missile, one unit long and flying +Z with its tail at the origin: a white body, a red-tipped pointed nose,
+ * four gunmetal fins and a short flame behind.
+ */
+export function missileGeometry(): Part {
+  const P = CONFIG.palette;
+  const cone = (rBot: number, h: number, z: number, color: number, flip = false) => {
+    const g = new THREE.ConeGeometry(rBot, h, 6).rotateX(flip ? -Math.PI / 2 : Math.PI / 2).translate(0, 0, z);
+    return painted(faceted(g), color);
+  };
+  return merge([
+    cyl(0.09, 0.62, 6, 'z', 0, 0, 0.36, P.mech),
+    cyl(0.094, 0.08, 6, 'z', 0, 0, 0.64, P.mechVisor),
+    cone(0.09, 0.3, 0.83, P.mech),
+    box(0.3, 0.02, 0.14, 0, 0, 0.13, P.mechMetal),
+    box(0.02, 0.3, 0.14, 0, 0, 0.13, P.mechMetal),
+    cone(0.07, 0.2, -0.05, P.fire, true),
+  ]);
+}
+
+/**
  * The hip frame at the body pivot's height: a flat gunmetal-black pelvis plate with a raised rim, narrower and shorter
  * than the hull, with a hip drum over each corner; a gunmetal neck up to the hull's base, and the coolant canister
  * cradles beneath (the glowing canisters are in the glow part).
