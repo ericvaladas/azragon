@@ -511,7 +511,7 @@ export class Mech implements EnemySystem {
   }
 
   /**
-   * Fills the barrage circles and flies their missiles level out of the launcher's front, over and down onto them; each lands when
+   * Fills the barrage circles and flies their missiles level out of the launcher's front, sweeping round and down onto them; each lands when
    * its circle is full and hits the monster if it is still inside.
    */
   private updateStrikes(dt: number, ctx: WorldContext): void {
@@ -636,7 +636,7 @@ export class Mech implements EnemySystem {
 
   /** Where a strike's missile is, `k` (0..1) through its flight from the tube to the circle. */
   private missilePos(s: Strike, k: number): THREE.Vector3 {
-    return launchArc(s.from, s.fx, s.fz, _land.set(s.at.x, 0, s.at.z), M.barrageRunOut, M.barrageArc, k, _p);
+    return launchArc(s.from, s.fx, s.fz, _land.set(s.at.x, 0, s.at.z), M.barrageRunOut, M.barrageRise, M.barrageBack, k, _p);
   }
 
   private drawStrikes(): void {

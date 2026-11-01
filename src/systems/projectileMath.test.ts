@@ -26,29 +26,66 @@ describe('spikeTargets', () => {
 });
 
 describe('launchArc', () => {
-  const from = new THREE.Vector3(10, 300, 20);
-  const to = new THREE.Vector3(-400, 0, 900);
-  // Facing along -X.
-  const at = (t: number) => launchArc(from, -1, 0, to, 300, 1500, t, new THREE.Vector3());
+  const RUN = 120;
+  const RISE = 150;
+  const BACK = 0.6;
+  const from = new THREE.Vector3(10, 400, 20);
+  /** A point on the curve from `from` facing along +Z, to `to`. */
+  const on = (to: THREE.Vector3, t: number) => launchArc(from, 0, 1, to, RUN, RISE, BACK, t, new THREE.Vector3());
+  /** A ground target `range` m from the tube, `angle` rad off the facing (+ toward +X). */
+  const off = (angle: number, range = 900) => new THREE.Vector3(from.x + Math.sin(angle) * range, 0, from.z + Math.cos(angle) * range);
 
   it('starts at the tube and ends exactly on the target', () => {
-    expect(at(0).distanceTo(from)).toBeLessThan(1e-9);
-    expect(at(1).distanceTo(to)).toBeLessThan(1e-9);
+    const to = off(0.7);
+    expect(on(to, 0).distanceTo(from)).toBeLessThan(1e-9);
+    expect(on(to, 1).distanceTo(to)).toBeLessThan(1e-9);
   });
 
-  it('leaves level along the facing, whichever side the target is on', () => {
-    const p = at(0.01);
-    const moved = p.clone().sub(from);
-    expect(-moved.x).toBeGreaterThan(5);
-    expect(Math.abs(moved.y)).toBeLessThan(0.1 * -moved.x);
-    expect(Math.abs(moved.z)).toBeLessThan(0.1 * -moved.x);
+  it('leaves level along the facing, for a target ahead or beside it', () => {
+    for (const a of [0, 0.7, -1.2, Math.PI / 2]) {
+      const moved = on(off(a), 0.01).sub(from);
+      expect(moved.z).toBeGreaterThan(0);
+      expect(Math.abs(moved.y)).toBeLessThan(0.2 * moved.z);
+    }
   });
 
-  it('climbs over and comes straight down onto the target', () => {
-    let peak = 0;
-    for (let t = 0; t <= 1; t += 0.01) peak = Math.max(peak, at(t).y);
-    expect(peak).toBeGreaterThan(600);
-    const p = at(0.99);
-    expect(Math.hypot(p.x - to.x, p.z - to.z)).toBeLessThan(0.1 * p.y);
+  it('turns one way only, with no loop, wherever the target lies', () => {
+    for (const a of [0.2, 0.7, Math.PI / 2, -Math.PI / 2, 2.4, -2.4, 3.0, -3.0, Math.PI]) {
+      for (const range of [300, 900, 1800]) {
+        const to = off(a, range);
+        let sign = 0;
+        let turned = 0;
+        let prev: number | null = null;
+        const N = 100;
+        for (let i = 0; i < N; i++) {
+          const p = on(to, i / N);
+          const q = on(to, (i + 1) / N);
+          const h = Math.atan2(q.x - p.x, q.z - p.z);
+          if (prev !== null) {
+            const d = Math.atan2(Math.sin(h - prev), Math.cos(h - prev));
+            turned += d;
+            if (Math.abs(d) > 1e-6) {
+              if (sign !== 0) expect(Math.sign(d)).toBe(sign);
+              sign = Math.sign(d);
+            }
+          }
+          prev = h;
+        }
+        // Never more than the half turn from the facing to the target's direction.
+        expect(Math.abs(turned)).toBeLessThanOrEqual(Math.PI + 1e-6);
+      }
+    }
+  });
+
+  it('peaks only a little above the tube, then comes down a diagonal', () => {
+    for (const a of [0, 0.7, Math.PI / 2, Math.PI]) {
+      const to = off(a);
+      let peak = 0;
+      for (let t = 0; t <= 1; t += 0.01) peak = Math.max(peak, on(to, t).y);
+      expect(peak).toBeLessThan(from.y + RISE * 0.3);
+      // The last stretch still crosses ground: not a dive straight down.
+      const end = on(to, 0.95);
+      expect(Math.hypot(end.x - to.x, end.z - to.z)).toBeGreaterThan(end.y * 0.5);
+    }
   });
 });
