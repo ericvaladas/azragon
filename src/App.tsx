@@ -50,6 +50,7 @@ function App() {
   const [state, setState] = useState<GameState>('loading');
   const [skipHint, setSkipHint] = useState(false);
   const [hud, setHud] = useState<HudSnapshot>(EMPTY_HUD);
+  const [boss, setBoss] = useState<{ hp: number; maxHp: number } | null>(null);
   const [offer, setOffer] = useState<{ seq: number; level: number; offers: UpgradeOffer[]; all: boolean } | null>(null);
   const [cardHighlight, setCardHighlight] = useState(-1);
   const [stats, setStats] = useState<RunStats | null>(null);
@@ -68,6 +69,8 @@ function App() {
     game.events.on('music', setMusicOn);
     game.events.on('musicVolume', setMusicVolume);
     game.events.on('hud', setHud);
+    // Returning the previous value skips the re-render (null every tick while no boss is up).
+    game.events.on('boss', (b) => setBoss((p) => (p === b || (p && b && p.hp === b.hp && p.maxHp === b.maxHp) ? p : b)));
     game.events.on('levelUpOffer', setOffer);
     game.events.on('cardHighlight', setCardHighlight);
     game.events.on('gameOver', setStats);
@@ -121,7 +124,7 @@ function App() {
       <div ref={sceneRef} className="scene-container" />
       <div ref={hudRef} className="hud">
         {state === 'playing' && <EdgeArrows arrows={threats} />}
-        {state !== 'loading' && state !== 'intro' && !inMenu && <Hud hud={hud} expPop={expPop} />}
+        {state !== 'loading' && state !== 'intro' && !inMenu && <Hud hud={hud} expPop={expPop} boss={boss} />}
         {state === 'title' && <Title />}
         {state === 'select' && roster && <MonsterSelect entries={roster.entries} index={roster.index} onStep={step} onPlay={play} />}
         {state === 'intro' && skipHint && <div className="skip-hint">{SKIP_HINT}</div>}

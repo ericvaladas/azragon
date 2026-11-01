@@ -176,6 +176,23 @@ body {
 .bar-hp .bar-fill { background: var(--color-primary); }
 .bar-hp.low .bar-fill { background: #ff5a3c; }
 .bar-exp .bar-fill { background: var(--color-secondary); }
+.boss-bar {
+  position: absolute;
+  top: calc(var(--safe-top) + 62px);
+  left: 0;
+  right: 0;
+  margin: 0 auto;
+  width: min(300px, calc(100% - 120px));
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  contain: content;
+  animation: boss-in 250ms ease-out;
+}
+.boss-bar .bar { flex: 1; height: 12px; border-radius: 4px; border-color: rgba(255, 255, 255, 0.12); }
+.boss-bar .bar-fill { background: var(--color-boss); }
+.boss-icon { width: 18px; height: 18px; flex-shrink: 0; color: var(--color-boss); }
+@keyframes boss-in { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
 .bar-label {
   position: relative;
   display: block;
