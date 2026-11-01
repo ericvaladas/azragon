@@ -897,7 +897,7 @@ export const CONFIG = {
     crossfade: 1.0,
     /** Gameplay music fades out over this long (s) when a menu brings the Intro back. */
     returnFade: 1.0,
-    /** Main 1 and Main 2 crossfade over this long (s) when a break begins or ends. */
+    /** The gameplay tracks (Main 1, Rest 1, Boss 1) crossfade over this long (s) when the phase changes. */
     phaseFade: 2.0,
   },
   readability: {

@@ -17,7 +17,7 @@ A run starts at full intensity and never lets up. After a few minutes that gets 
 - **Different bosses.** Every boss fight uses the same mech. New bosses come later.
 - **Extra boss rewards** beyond the one level-up. To be decided later.
 - **On-screen hints or text** about phases ("the army retreats…", "boss incoming"). There are none.
-- **New music.** The owner will source a calm track later. Until then `main2` is the calm track.
+- **New music.** The calm track is `rest1`; the boss fight has `boss1`.
 
 ## Anti-goals (a failure even if it technically works)
 
@@ -34,9 +34,9 @@ The run gets a new **phase** inside the `playing` state. The `GameState` values 
 | Phase | Lasts | What happens |
 |---|---|---|
 | `army` | 3 min (`CONFIG.cycle.armyTime` 180 s) | Today's game: the spawn director runs and enemies pursue. |
-| `retreat` | `CONFIG.cycle.breakTime` ≈ 20 s | No spawns. Every live unit retreats and leaves. Music crossfades to `main2`. On the first cycle only: the meteor cutscene, then the meteor waits to be picked up. |
-| `boss` | until the mech dies | The mech spawns and fights. No regular spawns. Music goes back to `main1`. |
-| `recover` | `CONFIG.cycle.recoverTime` 10 s | No spawns. Music is `main2`. |
+| `retreat` | `CONFIG.cycle.breakTime` ≈ 20 s | No spawns. Every live unit retreats and leaves. Music crossfades to `rest1`. On the first cycle only: the meteor cutscene, then the meteor waits to be picked up. |
+| `boss` | until the mech dies | The mech spawns and fights. No regular spawns. Music crossfades to `boss1`. |
+| `recover` | `CONFIG.cycle.recoverTime` 10 s | No spawns. Music is `rest1`. |
 | → `army` | | The 3-minute clock starts again from zero. |
 
 - **The 3-minute clock only counts `army` time.** It doesn't run during the other phases, while paused, or in the level-up cards. The first break comes 3 min into a run.
@@ -61,8 +61,9 @@ When `army` ends, every live enemy switches to a **retreat** mode:
 
 There are no new tracks. The plan in `src/audio/musicPlan.ts` changes:
 
-- **`main1` loops** during `army` and `boss`. Today it plays once and hands off to `main2`. That handoff is removed.
-- **`main2` is the calm track** for `retreat` and `recover`.
+- **`main1` loops** during `army`.
+- **`boss1` loops** during `boss`.
+- **`rest1` is the calm track** for `retreat` and `recover`.
 - Phase changes crossfade between the two, using the fade machinery `Music.ts` already has.
 - The intro and menu behaviour is unchanged.
 
