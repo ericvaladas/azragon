@@ -12,6 +12,9 @@ export const CONFIG = {
     shadowExtent: 900,
   },
   palette: {
+    meteor: 0x8fe9ff,
+    meteorCore: 0xd9b8ff,
+    meteorGlow: 0xffffff,
     skyZenith: 0x6f9fd8,
     skyHorizon: 0xc4d6e0,
     fog: 0xc4d6e0,
@@ -155,7 +158,15 @@ export const CONFIG = {
   /** The army / retreat / boss / recover loop (s). exitDistance (m) sits beyond fog.far, where retreating units leave. */
   cycle: { armyTime: 180, breakTime: 20, recoverTime: 10, retreatTimeout: 12, exitDistance: 5000 },
   /** First-break meteor timing (s after the retreat starts, or after the meteor lands or is collected). */
-  meteor: { cutsceneDelay: 3, graceTime: 25, bossDelay: 3 },
+  meteor: {
+    cutsceneDelay: 3, graceTime: 25, bossDelay: 3,
+    /** Landing spot: distance band from the monster (m); fall: start height, sideways slant (m) and time (s). */
+    landMin: 900, landMax: 1300, startHeight: 3500, slant: 1800, fallTime: 2.2,
+    /** Camera blend toward the sky: ease up, hold after the fall starts, ease back (s); extra camera height at full blend (m). */
+    lookUp: 1.2, hold: 1.2, lookBack: 1.2, cameraLift: 400,
+    /** Gem size (m), monster pickup radius and building-flattening radius at impact (m), spin (rad/s), bob (m), sparkle interval (s). */
+    size: 100, pickupRadius: 120, impactRadius: 160, spin: 0.6, bob: 8, sparkleEvery: 0.15,
+  },
   camera: {
     near: 5,
     far: 12000,
