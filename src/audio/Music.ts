@@ -13,7 +13,8 @@ const report = (e: unknown): void => RundotGameAPI.error('[music]', e);
  * The soundtrack, driven by game events through musicStep.
  * - The first gesture starts the Intro, which loops as a whole file.
  * - The silhouette reveal crossfades the Intro into Main 1 at once, over `crossfade` s.
- * - Main 2 follows Main 1 and loops.
+ * - Main 1 loops through the fighting; Main 2 loops during the breaks. calm() and fight() crossfade between them
+ *   over `phaseFade` s.
  * - A menu brings the Intro back.
  *
  * Every track streams from its CDN URL in an <audio> element routed through a gain node (iOS ignores an element's
@@ -84,6 +85,16 @@ export class Music {
     if (this.ctx) this.send('reveal');
   }
 
+  /** A break began: Main 1 crossfades into Main 2. */
+  calm(): void {
+    if (this.ctx) this.send('calm');
+  }
+
+  /** The fighting resumed: Main 2 crossfades into Main 1. */
+  fight(): void {
+    if (this.ctx) this.send('fight');
+  }
+
   /** Entered the monster select or title screen. */
   enterMenu(): void {
     if (this.ctx) this.send('menu');
@@ -111,8 +122,9 @@ export class Music {
         this.fadeOut('intro', M.crossfade);
         this.play('main1', M.crossfade);
         break;
-      case 'startMain2':
-        this.play('main2');
+      case 'crossfade':
+        this.fadeOut(a.from, M.phaseFade);
+        this.play(a.to, M.phaseFade);
         break;
     }
   }
@@ -133,9 +145,8 @@ export class Music {
     this.srcs[id]
       .then((url) => {
         if (this.disposed) return;
-        el.loop = id !== 'main1';
+        el.loop = true;
         el.src = url;
-        if (id === 'main1') el.onended = () => this.playing === 'main1' && this.send('main1Ended');
         s.ready = true;
         if (s.pending) this.play(id);
       })

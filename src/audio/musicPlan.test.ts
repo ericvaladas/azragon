@@ -24,9 +24,18 @@ describe('musicStep', () => {
     expect(musicStep('main2', 'reveal')).toEqual({ playing: 'main2', action: { kind: 'none' } });
     expect(musicStep(null, 'reveal')).toEqual({ playing: null, action: { kind: 'none' } });
   });
-  it('starts Main 2 when Main 1 ends, and only then', () => {
-    expect(musicStep('main1', 'main1Ended')).toEqual({ playing: 'main2', action: { kind: 'startMain2' } });
-    for (const t of [null, 'intro', 'main2'] as const) expect(musicStep(t, 'main1Ended').action.kind).toBe('none');
+  it('calm crossfades Main 1 into Main 2', () => {
+    expect(musicStep('main1', 'calm')).toEqual({ playing: 'main2', action: { kind: 'crossfade', from: 'main1', to: 'main2' } });
+  });
+  it('fight crossfades Main 2 into Main 1', () => {
+    expect(musicStep('main2', 'fight')).toEqual({ playing: 'main1', action: { kind: 'crossfade', from: 'main2', to: 'main1' } });
+  });
+  it('calm and fight change nothing elsewhere', () => {
+    for (const t of [null, 'intro', 'main2'] as const) expect(musicStep(t, 'calm').action.kind).toBe('none');
+    for (const t of [null, 'intro', 'main1'] as const) expect(musicStep(t, 'fight').action.kind).toBe('none');
+  });
+  it('menu from Main 2 after a calm returns to the Intro', () => {
+    expect(run(['unlock', 'reveal', 'calm', 'menu']).playing).toBe('intro');
   });
   it('brings the Intro back on a menu from gameplay music, fading the current track; no change from the Intro or silence', () => {
     expect(musicStep('main1', 'menu')).toEqual({ playing: 'intro', action: { kind: 'startIntro', fadeOut: 'main1' } });
@@ -35,8 +44,8 @@ describe('musicStep', () => {
     expect(musicStep(null, 'menu').action.kind).toBe('none');
   });
   it('walks a whole session: run, Play Again, Change Monster, a second run', () => {
-    const r = run(['menu', 'unlock', 'menu', 'reveal', 'main1Ended', 'reveal', 'menu', 'reveal']);
-    expect(r.kinds).toEqual(['none', 'startIntro', 'none', 'handoff', 'startMain2', 'none', 'startIntro', 'handoff']);
+    const r = run(['menu', 'unlock', 'menu', 'reveal', 'calm', 'reveal', 'menu', 'reveal']);
+    expect(r.kinds).toEqual(['none', 'startIntro', 'none', 'handoff', 'crossfade', 'none', 'startIntro', 'handoff']);
     expect(r.playing).toBe('main1');
   });
   it('brings the Intro back when a menu comes before Main 1 has started (handoff window)', () => {

@@ -824,14 +824,16 @@ export const CONFIG = {
     volume: 0.8,
     /** The Intro: loops as a whole file through the menus and the cutscene. */
     intro: { file: 'audio/intro.m4a' },
-    /** Main gameplay 1: starts from its top on the reveal, plays once (the file ends after its final hit). */
+    /** Main gameplay 1: starts from its top on the reveal and loops through the fighting. */
     main1: { file: 'audio/main1.m4a' },
-    /** Main gameplay 2: follows Main 1 and loops as a whole song. */
+    /** Main gameplay 2: plays during the breaks between fights and loops as a whole song. */
     main2: { file: 'audio/main2.m4a' },
     /** The Intro and Main 1 crossfade over this long (s) the moment the reveal starts. */
     crossfade: 1.0,
     /** Gameplay music fades out over this long (s) when a menu brings the Intro back. */
     returnFade: 1.0,
+    /** Main 1 and Main 2 crossfade over this long (s) when a break begins or ends. */
+    phaseFade: 2.0,
   },
   readability: {
     threatKinds: ['blimp', 'sam', 'artillery', 'truck', 'heli', 'napalm', 'osprey', 'gustav'] as readonly string[],
