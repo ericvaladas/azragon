@@ -855,7 +855,8 @@ export const CONFIG = {
   /** Enemy HP and damage multipliers grow with the player's level (not run time). */
   difficulty: { hpPerLevel: 0.12, dmgPerLevel: 0.075 },
   /** EXP to reach the next level is expBase × level^expExponent, × earlyMult for levels up to earlyLevels. */
-  progression: { expBase: 20, expExponent: 1.55, earlyLevels: 3, earlyMult: 1.25, offerCount: 3 },
+  /** levelUpCooldownCut: seconds a level-up takes off every active cooldown but the ultimate's. */
+  progression: { expBase: 20, expExponent: 1.55, earlyLevels: 3, earlyMult: 1.25, offerCount: 3, levelUpCooldownCut: 3 },
   /** One-off wave at the start of every run, outside the spawn budget. */
   opening: { time: 5, count: 8, radius: 1200 },
   /**

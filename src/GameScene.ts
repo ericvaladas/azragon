@@ -781,12 +781,14 @@ export class GameScene {
     this.setState('playing');
   }
 
-  /** EXP bar fills, full heal, gold aura, slow motion; the cards follow when the moment ends. */
+  /** EXP bar fills, full heal, cooldowns cut, gold aura, slow motion; the cards follow when the moment ends. */
   private startLevelUpMoment(): void {
     if (this.moment.active) return;
     this.moment.start();
     this.aura.start();
     this.monster.hp = this.monster.maxHp;
+    this.abilities.cut(CONFIG.progression.levelUpCooldownCut);
+    this.events.emit('abilities', this.abilityView());
     this.rig.addTrauma(0.35);
     this.emitHud();
   }
