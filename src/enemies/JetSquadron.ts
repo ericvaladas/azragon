@@ -27,6 +27,8 @@ class Jet implements Target {
   spin = 0;
   /** Taken quietly: it vanishes below the ground instead of crashing. */
   silent = false;
+  /** Out of the scene: crashed into the ground, flown off, or cleared. */
+  gone = false;
   vy = 0;
   trailT = 0;
   flashT = 0;
@@ -37,7 +39,7 @@ class Jet implements Target {
   ) {}
 
   isAlive(): boolean {
-    return this.mode !== 'crashing';
+    return this.mode !== 'crashing' && !this.gone;
   }
 
   applyDamage(amount: number): void {
@@ -69,7 +71,10 @@ export class JetSquadron implements EnemySystem {
   }
 
   clear(): void {
-    for (const j of this.jets) this.scene.remove(j.group);
+    for (const j of this.jets) {
+      j.gone = true;
+      this.scene.remove(j.group);
+    }
     this.jets = [];
   }
 
@@ -93,7 +98,7 @@ export class JetSquadron implements EnemySystem {
   }
 
   private damage = (j: Jet, amount: number): void => {
-    if (j.mode === 'crashing') return;
+    if (!j.isAlive()) return;
     j.hp -= amount;
     j.flashT = 0.1;
     if (j.hp <= 0) {
@@ -135,11 +140,13 @@ export class JetSquadron implements EnemySystem {
             ctx.splash(p, 2);
             ctx.shake(0.3);
           }
+          j.gone = true;
           this.scene.remove(j.group);
           this.jets.splice(i, 1);
           continue;
         }
       } else if (retreating && escaped(j.position, monster)) {
+        j.gone = true;
         this.scene.remove(j.group);
         this.jets.splice(i, 1);
         continue;

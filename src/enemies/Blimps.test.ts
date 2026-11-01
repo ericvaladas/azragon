@@ -66,3 +66,32 @@ describe('Blimps retreat', () => {
     expect(blasts).toEqual([]);
   });
 });
+
+describe('Blimps dropped units', () => {
+  it('clear marks every blimp dead, and damage to one reports no kill', () => {
+    const { ctx, destroyed } = makeCtx();
+    const b = new Blimps(new THREE.Scene());
+    b.spawn(ctx);
+    b.spawn(ctx);
+    const all = [...b.targets()];
+    b.clear();
+    for (const t of all) {
+      expect(t.isAlive()).toBe(false);
+      t.applyDamage(1e9);
+    }
+    expect(destroyed).toEqual([]);
+  });
+
+  it('an escaped blimp is dead, and damage to it reports no kill', () => {
+    const { ctx, destroyed } = makeCtx();
+    const b = new Blimps(new THREE.Scene());
+    b.spawn(ctx);
+    const blimp = b.targets()[0]!;
+    ctx.retreating = true;
+    run(b, ctx, (CONFIG.cycle.exitDistance - B.spawnDist) / B.speed + 10);
+    expect(b.targets().length).toBe(0);
+    expect(blimp.isAlive()).toBe(false);
+    blimp.applyDamage(1e9);
+    expect(destroyed).toEqual([]);
+  });
+});

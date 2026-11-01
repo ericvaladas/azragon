@@ -128,3 +128,35 @@ describe('Helicopters retreat', () => {
     expect(destroyed).toEqual([]);
   });
 });
+
+describe('Helicopters dropped units', () => {
+  const retreatable = (ctx: WorldContext) => ctx as WorldContext & { retreating?: boolean };
+
+  it('clear marks every helicopter dead, and damage to one reports no kill', () => {
+    const { ctx, destroyed } = makeCtx();
+    const h = new Helicopters(new THREE.Scene());
+    h.spawn(ctx);
+    h.spawn(ctx);
+    const all = [...h.targets()];
+    expect(all.length).toBeGreaterThan(0);
+    h.clear();
+    for (const t of all) {
+      expect(t.isAlive()).toBe(false);
+      t.applyDamage(1e9);
+    }
+    expect(destroyed).toEqual([]);
+  });
+
+  it('an escaped helicopter is dead, and damage to it reports no kill', () => {
+    const { ctx, destroyed } = makeCtx();
+    const h = new Helicopters(new THREE.Scene());
+    h.spawn(ctx);
+    const t = h.targets()[0]!;
+    retreatable(ctx).retreating = true;
+    for (let i = 0; i < 70 * 20; i++) h.update(0.05, ctx);
+    expect(h.targets().length).toBe(0);
+    expect(t.isAlive()).toBe(false);
+    t.applyDamage(1e9);
+    expect(destroyed).toEqual([]);
+  });
+});

@@ -81,6 +81,7 @@ export class Blimps implements EnemySystem {
   }
 
   clear(): void {
+    for (const b of this.blimps) b.alive = false;
     this.blimps = [];
     this.draw(0);
   }
@@ -119,6 +120,7 @@ export class Blimps implements EnemySystem {
       b.phase += dt;
       if (ctx.retreating === true) {
         if (escaped(b.position, m)) {
+          b.alive = false;
           this.blimps.splice(i, 1);
           continue;
         }

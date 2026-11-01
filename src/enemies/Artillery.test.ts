@@ -116,3 +116,24 @@ describe('Artillery retreat', () => {
     expect(r.landed()).toBeGreaterThan(0);
   });
 });
+
+describe('Artillery dropped units', () => {
+  it('clear marks every gun dead, and damage to one reports no kill', () => {
+    const destroyed: unknown[] = [];
+    const c = {
+      ...ctx(() => false),
+      particles: { ring: () => {}, explosion: () => {}, emit: () => {} },
+      onDestroyed: (t: unknown) => destroyed.push(t),
+    } as unknown as WorldContext;
+    const a = new Artillery(new THREE.Scene());
+    a.spawn(c);
+    const all = [...a.targets()];
+    expect(all.length).toBeGreaterThan(0);
+    a.clear();
+    for (const t of all) {
+      expect(t.isAlive()).toBe(false);
+      t.applyDamage(1e9);
+    }
+    expect(destroyed).toEqual([]);
+  });
+});

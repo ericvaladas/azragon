@@ -235,3 +235,33 @@ describe('LaserTrucks', () => {
     expect(destroyed).toEqual([]);
   });
 });
+
+describe('LaserTrucks dropped units', () => {
+  it('clear marks every truck dead, and damage to one reports no kill', () => {
+    const destroyed: unknown[] = [];
+    const { ctx } = makeCtx();
+    (ctx as { onDestroyed: unknown }).onDestroyed = (t: unknown) => destroyed.push(t);
+    const { sys } = parked(ctx);
+    const all = [...sys.targets()];
+    sys.clear();
+    for (const t of all) {
+      expect(t.isAlive()).toBe(false);
+      t.applyDamage(1e9);
+    }
+    expect(destroyed).toEqual([]);
+  });
+
+  it('an escaped truck is dead, and damage to it reports no kill', () => {
+    const destroyed: unknown[] = [];
+    const { ctx } = makeCtx();
+    (ctx as { onDestroyed: unknown }).onDestroyed = (t: unknown) => destroyed.push(t);
+    const { sys } = parked(ctx);
+    const truck = sys.targets()[0]!;
+    (ctx as { retreating?: boolean }).retreating = true;
+    run(sys, ctx, 205);
+    expect(sys.count()).toBe(0);
+    expect(truck.isAlive()).toBe(false);
+    truck.applyDamage(1e9);
+    expect(destroyed).toEqual([]);
+  });
+});

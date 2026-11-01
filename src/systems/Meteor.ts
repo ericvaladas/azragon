@@ -19,6 +19,8 @@ export class Meteor {
   /** Where it falls to, then sits (y 0 on the ground; the gem hovers above it). */
   readonly position = new THREE.Vector3();
   private readonly mesh: THREE.Mesh;
+  /** The scorched dish under the landing site: shown on landing, kept after pickup, hidden by clear(). */
+  private readonly crater: THREE.Mesh;
   private readonly look = new THREE.Vector3();
   private readonly target: Vec2 = { x: 0, z: 0 };
   private phase: Phase = 'idle';
@@ -34,6 +36,16 @@ export class Meteor {
     this.mesh.visible = false;
     this.mesh.frustumCulled = false;
     scene.add(this.mesh);
+    // A flat dark disc a little above the ground, pulled forward by polygon offset so it never fights the roads.
+    this.crater = new THREE.Mesh(
+      new THREE.CircleGeometry(CONFIG.meteor.impactRadius, 24).rotateX(-Math.PI / 2),
+      new THREE.MeshBasicMaterial({ color: CONFIG.palette.meteorCrater, transparent: true, opacity: 0.75, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }),
+    );
+    this.crater.name = 'meteor-crater';
+    this.crater.position.y = 0.6;
+    this.crater.renderOrder = 2;
+    this.crater.visible = false;
+    scene.add(this.crater);
   }
 
   get onGround(): boolean {
@@ -56,6 +68,7 @@ export class Meteor {
     this.time = 0;
     this.sparkle = 0;
     this.mesh.visible = false;
+    this.crater.visible = false;
   }
 
   update(dt: number, monster: Vec2, monsterRadius: number, airborne: boolean): MeteorEvent | null {
@@ -76,6 +89,8 @@ export class Meteor {
         this.sparkle = 0;
         this.mesh.position.set(this.position.x, m.size * 0.45, this.position.z);
         this.look.copy(this.position);
+        this.crater.position.set(this.position.x, 0.6, this.position.z);
+        this.crater.visible = true;
         this.impact();
         return 'landed';
       }
@@ -138,5 +153,6 @@ export class Meteor {
     this.phase = 'idle';
     this.t = 0;
     this.mesh.visible = false;
+    this.crater.visible = false;
   }
 }

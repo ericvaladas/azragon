@@ -76,6 +76,7 @@ export class TankFleet implements EnemySystem {
   }
 
   clear(): void {
+    for (const t of this.tanks) t.alive = false;
     this.tanks = [];
     this.draw();
   }
@@ -124,6 +125,7 @@ export class TankFleet implements EnemySystem {
       t.flashT = Math.max(0, t.flashT - dt);
       const here = { x: t.position.x, z: t.position.z };
       if (retreating && escaped(here, goal)) {
+        t.alive = false;
         this.tanks.splice(i, 1);
         continue;
       }

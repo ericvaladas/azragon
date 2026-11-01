@@ -172,6 +172,26 @@ describe('Mech', () => {
     expect(x0 - body(mech).position.x).toBeLessThan(M.approachSpeed * 3 + 1);
   });
 
+  it('engages after engageAfter s even when the monster stays far away, and dashes at it', () => {
+    const mech = new Mech(new THREE.Scene());
+    const c = makeCtx();
+    mech.summon(c.ctx);
+    let t = 0;
+    let firstDash: number | null = null;
+    let last = body(mech).position.x;
+    // The monster flees at the mech's own approach pace, holding it about spawnDistance away.
+    run(mech, c, M.engageAfter + 5, () => {
+      const p = body(mech).position;
+      if (firstDash === null && last - p.x > M.approachSpeed * DT * 2) firstDash = t;
+      last = p.x;
+      c.monster.position.set(p.x - M.spawnDistance, 0, p.z);
+      t += DT;
+    });
+    expect(firstDash).not.toBeNull();
+    expect(firstDash!).toBeGreaterThanOrEqual(M.engageAfter);
+    expect(firstDash!).toBeLessThanOrEqual(M.engageAfter + 3);
+  });
+
   it('fires rocket volleys and barrages over time', () => {
     const mech = new Mech(new THREE.Scene());
     const c = makeCtx();

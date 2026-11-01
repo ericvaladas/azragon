@@ -81,3 +81,23 @@ describe('Meteor', () => {
     expect(m.onGround).toBe(true);
   });
 });
+
+describe('Meteor crater', () => {
+  it('appears at the landing site on impact, stays after pickup, and clear hides it', () => {
+    const scene = new THREE.Scene();
+    const m = new Meteor(scene, stub);
+    const crater = scene.getObjectByName('meteor-crater')!;
+    expect(crater.visible).toBe(false);
+    m.start(AT);
+    run(m, M.lookUp + M.fallTime - 0.2);
+    expect(crater.visible).toBe(false);
+    run(m, 0.5);
+    expect(crater.visible).toBe(true);
+    expect(crater.position.x).toBeCloseTo(AT.x);
+    expect(crater.position.z).toBeCloseTo(AT.z);
+    expect(run(m, 0.1, AT)).toEqual(['collected']);
+    expect(crater.visible).toBe(true);
+    m.clear();
+    expect(crater.visible).toBe(false);
+  });
+});

@@ -22,6 +22,8 @@ class Heli implements Target {
   readonly tail = new THREE.Group();
   hp: number;
   crashing = false;
+  /** Out of the scene: crashed into the ground, flown off, or cleared. */
+  gone = false;
   flashT = 0;
   /** Crash fall: vertical speed, yaw spin (rad/s) and the trail clock. */
   vy = 0;
@@ -43,7 +45,7 @@ class Heli implements Target {
   }
 
   isAlive(): boolean {
-    return !this.crashing;
+    return !this.crashing && !this.gone;
   }
 
   applyDamage(amount: number): void {
@@ -80,7 +82,10 @@ export class Helicopters implements EnemySystem {
   }
 
   clear(): void {
-    for (const h of this.helis) this.scene.remove(h.group);
+    for (const h of this.helis) {
+      h.gone = true;
+      this.scene.remove(h.group);
+    }
     this.helis = [];
   }
 
@@ -112,7 +117,7 @@ export class Helicopters implements EnemySystem {
   }
 
   private damage = (h: Heli, amount: number): void => {
-    if (h.crashing) return;
+    if (!h.isAlive()) return;
     h.hp -= amount;
     h.flashT = 0.1;
     if (h.hp > 0) return;
@@ -156,12 +161,14 @@ export class Helicopters implements EnemySystem {
             ctx.splash(p, 2);
             ctx.shake(0.3);
           }
+          h.gone = true;
           this.scene.remove(h.group);
           this.helis.splice(i, 1);
           continue;
         }
       } else if (ctx.retreating === true) {
         if (escaped(h.position, monster)) {
+          h.gone = true;
           this.scene.remove(h.group);
           this.helis.splice(i, 1);
           continue;

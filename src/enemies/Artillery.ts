@@ -104,17 +104,18 @@ export class Artillery implements EnemySystem {
   }
 
   clear(): void {
+    for (const b of this.batteries) for (const g of b.guns) g.alive = false;
     this.batteries = [];
     this.strikes = [];
     this.draw();
   }
 
-  /** A strike circle that has filled past half is on top of `p` (an imminent hit). */
   /** Strikes painted and not yet landed. */
   paintedCount(): number {
     return this.strikes.length;
   }
 
+  /** A strike circle that has filled past half is on top of `p` (an imminent hit). */
   strikeNear(p: Vec2): boolean {
     return this.strikes.some((s) => s.t >= A.fillTime * 0.5 && strikeHits(p, s.at, A.radius));
   }

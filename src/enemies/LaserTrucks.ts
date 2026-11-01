@@ -127,6 +127,7 @@ export class LaserTrucks implements EnemySystem {
   }
 
   clear(): void {
+    for (const t of this.trucks) t.alive = false;
     this.trucks = [];
     this.draw();
   }
@@ -197,6 +198,7 @@ export class LaserTrucks implements EnemySystem {
       }
       const here = { x: t.position.x, z: t.position.z };
       if (retreating && escaped(here, goal)) {
+        t.alive = false;
         this.trucks.splice(i, 1);
         continue;
       }

@@ -122,7 +122,10 @@ export class OspreyNets implements EnemySystem {
   }
 
   clear(): void {
-    for (const o of this.all) this.scene.remove(o.group);
+    for (const o of this.all) {
+      o.gone = true;
+      this.scene.remove(o.group);
+    }
     for (const n of this.nets) this.dropNet(n);
     this.teams = [];
     this.nets = [];

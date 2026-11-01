@@ -6,8 +6,8 @@ export type MechMove = Exclude<MechAction, 'walk'>;
 
 /**
  * What the mech's brain sees: its distance to the monster (centre to centre), the contact distance (its radius plus the
- * monster's body radius, where the surfaces touch), whether it has been within dashTrigger of it yet, the time left on
- * each cooldown, and a uniform roll in [0, 1) that picks a slam over a punch.
+ * monster's body radius, where the surfaces touch), whether it has engaged (been within dashTrigger of it, or
+ * spent engageAfter s since its summoning), the time left on each cooldown, and a uniform roll in [0, 1) that picks a slam over a punch.
  */
 export type MechMind = { dist: number; contact: number; engaged: boolean; meleeCd: number; dashCd: number; rocketCd: number; barrageCd: number; roll: number };
 

@@ -202,3 +202,46 @@ describe('NapalmBombers retreat', () => {
     expect(destroyed).toEqual([]);
   });
 });
+
+describe('NapalmBombers dropped units', () => {
+  const retreatable = (ctx: WorldContext) => ctx as WorldContext & { retreating?: boolean };
+
+  it('clear marks every bomber dead, and damage to one reports no kill', () => {
+    const { ctx, destroyed } = makeCtx();
+    const sys = new NapalmBombers(new THREE.Scene());
+    sys.spawn(ctx);
+    const all = [...sys.targets()];
+    expect(all.length).toBeGreaterThan(0);
+    sys.clear();
+    for (const t of all) {
+      expect(t.isAlive()).toBe(false);
+      t.applyDamage(1e9);
+    }
+    expect(destroyed).toEqual([]);
+  });
+
+  it('an escaped bomber is dead, and damage to it reports no kill', () => {
+    const { ctx, destroyed } = makeCtx();
+    const sys = new NapalmBombers(new THREE.Scene());
+    sys.spawn(ctx);
+    const t = sys.targets()[0]!;
+    retreatable(ctx).retreating = true;
+    run(sys, ctx, 43);
+    expect(sys.targets().length).toBe(0);
+    expect(t.isAlive()).toBe(false);
+    t.applyDamage(1e9);
+    expect(destroyed).toEqual([]);
+  });
+
+  it('a bomber that finishes its run and flies out is dead', () => {
+    const { ctx, destroyed } = makeCtx();
+    const sys = new NapalmBombers(new THREE.Scene());
+    sys.spawn(ctx);
+    const t = sys.targets()[0]!;
+    run(sys, ctx, 120);
+    expect(sys.targets().length).toBe(0);
+    expect(t.isAlive()).toBe(false);
+    t.applyDamage(1e9);
+    expect(destroyed).toEqual([]);
+  });
+});

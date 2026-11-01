@@ -55,6 +55,8 @@ class Bomber implements Target {
   propSpeed: number = N.propSpin;
   /** Heading out of the map; the bombing run was dropped when the retreat began. */
   fleeing = false;
+  /** Out of the scene: crashed into the ground, flown off, or cleared. */
+  gone = false;
 
   constructor(
     readonly run: NapalmRun,
@@ -69,7 +71,7 @@ class Bomber implements Target {
   }
 
   isAlive(): boolean {
-    return !this.crashing;
+    return !this.crashing && !this.gone;
   }
 
   applyDamage(amount: number): void {
@@ -157,6 +159,7 @@ export class NapalmBombers implements EnemySystem {
 
   clear(): void {
     for (const b of this.bombers) {
+      b.gone = true;
       this.scene.remove(b.group);
       this.dropStrip(b.strip);
     }
@@ -203,7 +206,7 @@ export class NapalmBombers implements EnemySystem {
   }
 
   private damage = (b: Bomber, amount: number): void => {
-    if (b.crashing) return;
+    if (!b.isAlive()) return;
     b.hp -= amount;
     b.flashT = 0.1;
     if (b.hp > 0) return;
@@ -231,12 +234,14 @@ export class NapalmBombers implements EnemySystem {
       b.material.emissive.setHex(b.flashT > 0 ? 0xffffff : 0x000000);
       if (b.crashing) {
         if (this.crash(b, dt, ctx)) {
+          b.gone = true;
           this.scene.remove(b.group);
           this.bombers.splice(i, 1);
           continue;
         }
       } else if (ctx.retreating === true) {
         if (escaped(b.position, ctx.monster.position)) {
+          b.gone = true;
           this.scene.remove(b.group);
           this.dropStrip(b.strip);
           this.bombers.splice(i, 1);
@@ -250,6 +255,7 @@ export class NapalmBombers implements EnemySystem {
         for (; b.next < b.releases.length && b.t >= b.releases[b.next]!.t; b.next++) this.release(b, b.releases[b.next]!, ctx);
         this.drawStrip(b.strip, warningAlpha(b.run, b.t));
         if (bomberDone(b.run, b.t)) {
+          b.gone = true;
           this.scene.remove(b.group);
           this.dropStrip(b.strip);
           this.bombers.splice(i, 1);

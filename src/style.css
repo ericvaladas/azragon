@@ -192,6 +192,7 @@ body {
 .boss-bar .bar { flex: 1; height: 12px; border-radius: 4px; border-color: rgba(255, 255, 255, 0.12); }
 .boss-bar .bar-fill { background: var(--color-boss); }
 .boss-icon { width: 18px; height: 18px; flex-shrink: 0; color: var(--color-boss); }
+.boss-icon-visor { fill: var(--color-background); }
 @keyframes boss-in { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
 .bar-label {
   position: relative;
@@ -318,6 +319,16 @@ body {
   clip-path: polygon(100% 50%, 0 0, 25% 50%, 0 100%);
   background: var(--color-danger, #ff3b2f);
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.8));
+}
+/* The meteor's arrow points at a pickup, not a threat: its own colour and a slow pulse (opacity only, so the inline rotate stays). */
+.edge-arrow.meteor .edge-arrow-head {
+  background: var(--color-meteor);
+  filter: drop-shadow(0 0 4px var(--color-meteor));
+  animation: meteor-arrow-pulse 1.4s ease-in-out infinite alternate;
+}
+@keyframes meteor-arrow-pulse {
+  from { opacity: 1; }
+  to { opacity: 0.5; }
 }
 
 .ability-bar {

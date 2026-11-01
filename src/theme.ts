@@ -4,6 +4,8 @@ export const theme = {
   primary: '#9be22d',
   secondary: '#a24bd8',
   boss: '#ff3b30',
+  /** The meteor's cyan glow (CONFIG.palette.meteor): its edge arrow. */
+  meteor: '#8fe9ff',
   text: '#f2f5e8',
   textMuted: 'rgba(242, 245, 232, 0.7)',
 };
@@ -17,6 +19,7 @@ export function applyTheme(t: Theme): void {
   s.setProperty('--color-primary', t.primary);
   s.setProperty('--color-secondary', t.secondary);
   s.setProperty('--color-boss', t.boss);
+  s.setProperty('--color-meteor', t.meteor);
   s.setProperty('--color-text', t.text);
   s.setProperty('--color-text-muted', t.textMuted);
 }

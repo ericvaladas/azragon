@@ -15,6 +15,8 @@ export const CONFIG = {
     meteor: 0x8fe9ff,
     meteorCore: 0xd9b8ff,
     meteorGlow: 0xffffff,
+    /** The scorched dish the meteor leaves on the ground. */
+    meteorCrater: 0x1c1822,
     skyZenith: 0x6f9fd8,
     skyHorizon: 0xc4d6e0,
     fog: 0xc4d6e0,
@@ -758,7 +760,8 @@ export const CONFIG = {
     hp: 9000, approachSpeed: 160, walkSpeed: 90, turnRate: 1.2, stopGap: 25,
     punchReach: 0.3 * MONSTER_HEIGHT, punchArc: 0.7, punchDamage: 50,
     slamRadius: 0.35 * MONSTER_HEIGHT, slamDamage: 90, slamChance: 0.35, meleeCooldown: 2.6,
-    dashTrigger: 1600, dashSpeed: 900, dashCooldown: 9, crushRadius: 0.25 * MONSTER_HEIGHT, crushDps: 600,
+    /** It engages (and may dash) once within dashTrigger m of the monster, or engageAfter s after its summoning, whichever comes first. */
+    dashTrigger: 1600, engageAfter: 25, dashSpeed: 900, dashCooldown: 9, crushRadius: 0.25 * MONSTER_HEIGHT, crushDps: 600,
     rocketCooldown: 4, rocketsPerVolley: 3, rocketDamage: 6, rocketRange: 2200,
     barrageCooldown: 17, barrageCount: 7, barrageSpread: 450, barrageRadius: 130, barrageFill: 2.0, barrageDamage: 45,
     spawnDistance: 4200, footfallShake: 0.06, dyingTime: 2.5, wreckTime: 6,

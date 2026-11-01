@@ -178,6 +178,8 @@ export class GameScene {
   private moment = new LevelUpMoment();
   private aura: LevelUpAura;
   private novaWave: Shockwave;
+  /** The meteor's impact ring, apart from the Roar's so neither cuts the other off. */
+  private meteorWave: Shockwave;
   private breath: BreathBeam;
   /** Set once the player browses the carousel, so a late saved pick cannot move it. */
   private browsed = false;
@@ -260,6 +262,7 @@ export class GameScene {
     this.shockwave = new Shockwave(this.scene);
     this.aura = new LevelUpAura(this.scene);
     this.novaWave = new Shockwave(this.scene, CONFIG.palette.acid);
+    this.meteorWave = new Shockwave(this.scene, CONFIG.palette.meteor);
     this.shieldFx = new ShieldFx(this.scene);
     this.inkFx = new InkFx(this.scene);
     this.passives = new Passives(() => this.progression.ranks);
@@ -986,6 +989,7 @@ export class GameScene {
       this.particles.update(dt);
       this.shockwave.update(dt);
       this.novaWave.update(dt);
+      this.meteorWave.update(dt);
       this.rotRing.update(dt);
       this.shieldFx.update(dt, this.monster.position, this.passives.bubbleActive());
       this.inkFx.update(dt);
@@ -1127,9 +1131,11 @@ export class GameScene {
       }
       case 'dismiss':
         this.enemies.dismiss(this.ctx);
+        this.dropDismissedTargets();
         break;
       case 'boss':
         this.enemies.dismiss(this.ctx);
+        this.dropDismissedTargets();
         this.mech.summon(this.ctx);
         this.music.fight();
         break;
@@ -1139,6 +1145,16 @@ export class GameScene {
     }
   }
 
+  /** Drops a tap-ordered attack on an enemy, and the Insect's tail aim, whose target is no longer alive (dismissed units are dead). */
+  private dropDismissedTargets(): void {
+    const o = this.order;
+    if (o?.kind === 'attack' && o.target.kind !== 'building' && !o.target.isAlive()) {
+      this.order = null;
+      this.markers.setTarget(null);
+    }
+    if (this.spikeAim && !this.spikeAim.isAlive()) this.spikeAim = null;
+  }
+
   /** The meteor hit the ground: it flattens the buildings around it and shakes the camera. */
   private onMeteorLanded(): void {
     const M = CONFIG.meteor;
@@ -1146,7 +1162,7 @@ export class GameScene {
     this.city.blast({ x: p.x, z: p.z }, M.impactRadius, false);
     this.particles.explosion(this.tmpV.set(p.x, M.size * 0.3, p.z), 1.5);
     this.particles.ring('spark', this.tmpV.set(p.x, 0, p.z), M.impactRadius, 24);
-    this.shockwave.start(this.tmpV, M.impactRadius * 2);
+    this.meteorWave.start(this.tmpV, M.impactRadius * 2);
     this.rig.addTrauma(0.5);
     this.cycle.meteorLanded();
   }

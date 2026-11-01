@@ -268,3 +268,31 @@ describe('OspreyNets retreat', () => {
     expect(destroyed).toEqual([]);
   });
 });
+
+describe('OspreyNets dropped units', () => {
+  const retreatable = (ctx: WorldContext) => ctx as WorldContext & { retreating?: boolean };
+
+  it('clear marks every Osprey dead, and damage to one reports no kill', () => {
+    const { nets, destroyed } = spawned();
+    const all = [...nets.targets()];
+    expect(all.length).toBe(4);
+    nets.clear();
+    for (const t of all) {
+      expect(t.isAlive()).toBe(false);
+      kill(t);
+    }
+    expect(destroyed).toEqual([]);
+  });
+
+  it('an escaped Osprey is dead, and damage to it reports no kill', () => {
+    const { nets, ctx, destroyed } = spawned();
+    const all = [...nets.targets()];
+    retreatable(ctx).retreating = true;
+    until(nets, ctx, () => nets.count() === 0, 80);
+    for (const t of all) {
+      expect(t.isAlive()).toBe(false);
+      kill(t);
+    }
+    expect(destroyed).toEqual([]);
+  });
+});

@@ -122,6 +122,8 @@ export class SamSilos implements EnemySystem {
   }
 
   clear(): void {
+    for (const s of this.silos) s.alive = false;
+    for (const m of this.missiles) m.alive = false;
     this.silos = [];
     this.missiles = [];
     this.draw();

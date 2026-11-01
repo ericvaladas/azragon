@@ -79,3 +79,34 @@ describe('JetSquadron retreat', () => {
     expect(destroyed).toEqual([{ t, exp: CONFIG.jet.exp }]);
   });
 });
+
+describe('JetSquadron dropped units', () => {
+  it('clear marks every jet dead, and damage to one reports no kill', () => {
+    const { ctx, destroyed } = makeCtx();
+    const s = new JetSquadron(new THREE.Scene());
+    s.spawn(ctx);
+    const all = [...s.targets()];
+    expect(all.length).toBeGreaterThan(0);
+    s.clear();
+    for (const t of all) {
+      expect(t.isAlive()).toBe(false);
+      t.applyDamage(1e9);
+    }
+    expect(destroyed).toEqual([]);
+  });
+
+  it('an escaped jet is dead, and damage to it reports no kill', () => {
+    const { ctx, destroyed } = makeCtx();
+    const s = new JetSquadron(new THREE.Scene());
+    s.spawn(ctx);
+    const all = [...s.targets()];
+    ctx.retreating = true;
+    run(s, ctx, 160);
+    expect(s.targets().length).toBe(0);
+    for (const t of all) {
+      expect(t.isAlive()).toBe(false);
+      t.applyDamage(1e9);
+    }
+    expect(destroyed).toEqual([]);
+  });
+});

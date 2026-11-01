@@ -240,3 +240,33 @@ describe('GustavFleet', () => {
     expect(c.destroyed).toEqual([]);
   });
 });
+
+describe('GustavFleet dropped units', () => {
+  it('clear marks every Gustav dead, and damage to one reports no kill', () => {
+    const f = new GustavFleet(new THREE.Scene());
+    const c = makeCtx();
+    f.spawn(c.ctx);
+    f.spawn(c.ctx);
+    const all = [...f.targets()];
+    f.clear();
+    for (const t of all) {
+      expect(t.isAlive()).toBe(false);
+      t.applyDamage(1e9);
+    }
+    expect(c.destroyed).toEqual([]);
+  });
+
+  it('an escaped Gustav is dead, and damage to it reports no kill', () => {
+    const f = new GustavFleet(new THREE.Scene());
+    const c = makeCtx();
+    c.monster.position.set(500, 0, 0);
+    f.spawnAt(0, 0, c.ctx);
+    const g = f.targets()[0]!;
+    (c.ctx as { retreating?: boolean }).retreating = true;
+    run(f, c, 605);
+    expect(f.count()).toBe(0);
+    expect(g.isAlive()).toBe(false);
+    g.applyDamage(1e9);
+    expect(c.destroyed).toEqual([]);
+  });
+});

@@ -76,7 +76,7 @@ const _target = restPose();
 /**
  * The boss mech: one giant bipedal walker, summoned by the cycle (never by the spawn director). It walks in toward the
  * monster, crushing buildings underfoot, and fights it with telegraphed punches and ground slams, a gap-closing dash
- * once it has engaged, jet rocket volleys from its shoulder pods and an occasional barrage of marked strike circles.
+ * once it has engaged (come within dashTrigger, or engageAfter s after its summoning), jet rocket volleys from its shoulder pods and an occasional barrage of marked strike circles.
  * Dead, it sparks and flickers, blows apart, collapses and sinks. Drawn as a small group of meshes (legs, pelvis,
  * torso, head, visor, arms) posed at their pivots, the body on one vertex-coloured toon material.
  */
@@ -87,8 +87,10 @@ export class Mech implements EnemySystem {
   private x = 0;
   private z = 0;
   private heading = 0;
-  /** It has been within dashTrigger of the monster at least once. */
+  /** It has been within dashTrigger of the monster at least once, or engageAfter s have passed since its summoning. */
   private engaged = false;
+  /** Seconds since its summoning. */
+  private age = 0;
   private action: MechAction = 'walk';
   private actT = 0;
   /** The current move's one-off effect (the hit check, the barrage, the dash start) has happened. */
@@ -209,6 +211,7 @@ export class Mech implements EnemySystem {
     const hp = M.hp * ctx.difficulty.hpMult;
     this.body = new MechBody(hp, this.damage);
     this.engaged = false;
+    this.age = 0;
     this.action = 'walk';
     this.actT = 0;
     this.dashing = false;
@@ -253,7 +256,9 @@ export class Mech implements EnemySystem {
     const aim = Math.atan2(m.x - this.x, m.z - this.z);
     // Where the walk and the dash stop: stopGap between the two bodies' surfaces.
     const stand = M.radius + ctx.monster.bodyRadius + M.stopGap;
-    if (!this.engaged && dist <= M.dashTrigger) this.engaged = true;
+    this.age += dt;
+    // A monster that outruns the approach is dashed at anyway once engageAfter s have passed.
+    if (!this.engaged && (dist <= M.dashTrigger || this.age >= M.engageAfter)) this.engaged = true;
     this.meleeCd -= dt;
     this.dashCd -= dt;
     this.rocketCd -= dt;

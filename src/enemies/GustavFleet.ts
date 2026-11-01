@@ -103,6 +103,7 @@ export class GustavFleet implements EnemySystem {
   }
 
   clear(): void {
+    for (const g of this.units) g.alive = false;
     this.units = [];
     this.draw();
   }
@@ -167,6 +168,7 @@ export class GustavFleet implements EnemySystem {
       g.recoilT += dt;
       const here = { x: g.position.x, z: g.position.z };
       if (retreating && escaped(here, goal)) {
+        g.alive = false;
         this.units.splice(i, 1);
         continue;
       }

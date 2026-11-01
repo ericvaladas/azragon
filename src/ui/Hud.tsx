@@ -31,7 +31,7 @@ export function Hud({ hud, expPop, boss }: { hud: HudSnapshot; expPop: { amount:
         <div className="boss-bar">
           <svg className="boss-icon" viewBox="0 0 16 16" aria-hidden="true">
             <rect x="2" y="2" width="12" height="12" fill="currentColor" />
-            <rect x="4" y="6" width="8" height="2.5" fill="#000" />
+            <rect className="boss-icon-visor" x="4" y="6" width="8" height="2.5" />
           </svg>
           <div className="bar">
             <div className="bar-fill" style={{ transform: `scaleX(${Math.max(0, Math.min(1, boss.hp / boss.maxHp))})` }} />

@@ -108,3 +108,21 @@ describe('SamSilos retreat', () => {
     expect(launched(true)).toBe(0);
   });
 });
+
+describe('SamSilos dropped units', () => {
+  it('clear marks every silo and missile dead, and damage to one reports no kill', () => {
+    const destroyed: unknown[] = [];
+    const c = { ...ctx(), damageMonster: () => {}, splash: () => {}, onDestroyed: (t: unknown) => destroyed.push(t) } as unknown as WorldContext;
+    const s = new SamSilos(new THREE.Scene());
+    s.spawn(c);
+    for (let i = 0; i < 60; i++) s.update(0.05, c);
+    const all = [...s.targets()];
+    expect(all.some((t) => t.kind !== 'sam')).toBe(true);
+    s.clear();
+    for (const t of all) {
+      expect(t.isAlive()).toBe(false);
+      t.applyDamage(1e9);
+    }
+    expect(destroyed).toEqual([]);
+  });
+});

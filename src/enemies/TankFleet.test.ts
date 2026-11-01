@@ -70,3 +70,32 @@ describe('TankFleet retreat', () => {
     expect(c.destroyed[0]!.exp).toBe(T.exp);
   });
 });
+
+describe('TankFleet dropped units', () => {
+  it('clear marks every tank dead, and damage to one reports no kill', () => {
+    const f = new TankFleet(new THREE.Scene());
+    const c = makeCtx();
+    f.spawnAt(0, 500, c.ctx);
+    f.spawnAt(200, 500, c.ctx);
+    const all = [...f.targets()];
+    f.clear();
+    for (const t of all) {
+      expect(t.isAlive()).toBe(false);
+      t.applyDamage(1e9);
+    }
+    expect(c.destroyed).toEqual([]);
+  });
+
+  it('an escaped tank is dead, and damage to it reports no kill', () => {
+    const f = new TankFleet(new THREE.Scene());
+    const c = makeCtx();
+    f.spawnAt(0, T.range - 100, c.ctx);
+    const tank = f.targets()[0]!;
+    c.ctx.retreating = true;
+    run(f, c.ctx, 200);
+    expect(f.count()).toBe(0);
+    expect(tank.isAlive()).toBe(false);
+    tank.applyDamage(1e9);
+    expect(c.destroyed).toEqual([]);
+  });
+});
