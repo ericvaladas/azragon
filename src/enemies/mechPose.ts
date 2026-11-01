@@ -291,8 +291,6 @@ export class MechRig {
       this.uppers.push(upper);
       this.lowers.push(lower);
     }
-    // Yaw about the world vertical, then tip about its own left-right axis as the wreck settles.
-    this.root.rotation.order = 'YXZ';
   }
 
   apply(p: MechPose): void {

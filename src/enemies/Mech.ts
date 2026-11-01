@@ -85,7 +85,7 @@ const _poseIn: MechPoseInput = { stride: 0, gait: 0, action: 'walk', actT: 0, da
  * toward the monster, crushing buildings underfoot, and fights it with telegraphed front-leg stabs (the punch) and
  * rearing stomps (the slam), a gap-closing dash once it has engaged (come within dashTrigger, or engageAfter s after
  * its summoning), black shell volleys from its twin cannons and an occasional barrage of marked strike circles from its
- * box launcher. Dead, it sparks and flickers, blows apart, its legs splay and it sinks. Drawn by a MechRig.
+ * box launcher. Dead, it sparks and flickers, then blows apart and vanishes inside its dust cloud. Drawn by a MechRig.
  */
 export class Mech implements EnemySystem {
   readonly kind = 'mech' as const;
@@ -165,7 +165,7 @@ export class Mech implements EnemySystem {
     return this.body?.alive ? [this.body] : [];
   }
 
-  /** 1 from its summoning until the wreck has sunk. */
+  /** 1 from its summoning until the wreck has gone in its dust cloud. */
   count(): number {
     return this.body ? 1 : 0;
   }
@@ -219,7 +219,6 @@ export class Mech implements EnemySystem {
     this.wreckT = null;
     restPose(this.pose);
     this.root.visible = true;
-    this.root.rotation.x = 0;
     this.draw();
   }
 
@@ -549,7 +548,8 @@ export class Mech implements EnemySystem {
 
   /**
    * Dying: sparks and small blasts at random points on the body for dyingTime while the visor flickers out, then a
-   * large multi-burst explosion; the wreck falls flat and sinks over wreckTime and is removed. False once removed.
+   * final blast: bursts across the whole body and a dust cloud that swallows it. The meshes go wreckVanish s later, while
+   * the cloud is at its thickest, so nothing is seen to pop out. False once removed.
    */
   private die(dt: number, ctx: WorldContext): boolean {
     const r = ctx.rng;
@@ -566,23 +566,38 @@ export class Mech implements EnemySystem {
         }
       }
       if (this.dyingT < M.dyingTime) return true;
-      for (let k = 0; k < 4; k++) ctx.particles.explosion(this.bodyPoint(r, _p), 3);
-      ctx.particles.ring('dust', _p.set(this.x, 0, this.z), H * 0.8, 24);
-      ctx.shake(0.6);
+      this.blast(ctx);
       this.wreckT = 0;
       return true;
     }
     this.wreckT += dt;
-    if (this.wreckT < M.wreckTime) return true;
+    if (this.wreckT < M.wreckVanish) return true;
     this.body = null;
     this.root.visible = false;
     return false;
   }
 
-  /** A random point on the hull and turret (world m): within a third of its width, between belly and launcher top. */
-  private bodyPoint(r: () => number, out: THREE.Vector3): THREE.Vector3 {
+  /** The final explosion: bursts across the body, a heavy shake, a billowing ground ring, and a cloud over all of it. */
+  private blast(ctx: WorldContext): void {
+    const r = ctx.rng;
+    for (let k = 0; k < M.wreckBursts; k++) ctx.particles.explosion(this.bodyPoint(r, _p, 0.6), M.wreckBurstScale);
+    ctx.particles.ring('billow', _p.set(this.x, 0, this.z), H * 0.8, M.wreckRing);
+    ctx.shake(M.wreckShake);
+    for (let k = 0; k < M.wreckVeils; k++) ctx.particles.emit('veil', this.cloudPoint(r, _p), 1, 0.5);
+    for (let k = 0; k < M.wreckBillows; k++) ctx.particles.emit('billow', this.cloudPoint(r, _p), 1, 0.5);
+  }
+
+  /** A random point in the cloud over the wreck (world m): across its legs' span, from the ground to its full height. */
+  private cloudPoint(r: () => number, out: THREE.Vector3): THREE.Vector3 {
     const a = r() * Math.PI * 2;
-    const d = r() * M.width * 0.3;
+    const d = Math.sqrt(r()) * M.width * 0.6;
+    return out.set(this.x + Math.cos(a) * d, H * r(), this.z + Math.sin(a) * d);
+  }
+
+  /** A random point on the body (world m): within `reach` of its width of the centre, between belly and launcher top. */
+  private bodyPoint(r: () => number, out: THREE.Vector3, reach = 0.3): THREE.Vector3 {
+    const a = r() * Math.PI * 2;
+    const d = r() * M.width * reach;
     return out.set(this.x + Math.cos(a) * d, H * (0.45 + r() * 0.45), this.z + Math.sin(a) * d);
   }
 
@@ -610,11 +625,6 @@ export class Mech implements EnemySystem {
     this.root.position.set(this.x, this.hopY, this.z);
     this.root.rotation.y = this.heading;
     const w = this.wreckT;
-    if (w !== null) {
-      // Settles with a slight tilt, then sinks.
-      this.root.rotation.x = Math.min(1, w) * 0.08;
-      this.root.position.y = -(w / M.wreckTime) * 0.4 * H;
-    }
     b.position.set(this.x, H * 0.6, this.z);
     this.rig.setFlash(this.flashT > 0);
     this.rig.setVisor(this.visorState());

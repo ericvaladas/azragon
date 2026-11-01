@@ -1155,7 +1155,7 @@ export class GameScene {
     }
   }
 
-  /** Calms the music, as the recover phase asked, once the mech's wreck has sunk and left the field. */
+  /** Calms the music, as the recover phase asked, once the mech's wreck has left the field. */
   private updateBossMusic(): void {
     if (!this.pendingCalm || this.mech.count() > 0) return;
     this.pendingCalm = false;

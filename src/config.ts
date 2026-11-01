@@ -767,8 +767,9 @@ export const CONFIG = {
    * evadeCooldown. hopChance of its evades are a hopback (a jump hopDistance straight back, peaking hopHeight up, its
    * landing shaking by hopShake and crushing as hopCrush s of crushDps); the rest are a sidestep of sidestepDistance.
    * Each move runs `moves[move]` windup, strike and
-   * recover s. Footfalls shake by footfallShake (less far off). Dead, it sparks for dyingTime, blows apart, and the wreck sinks
-   * over wreckTime.
+   * recover s. Footfalls shake by footfallShake (less far off). Dead, it sparks for dyingTime, then goes up in wreckBursts
+   * explosions of scale wreckBurstScale with a shake of wreckShake, a ring of wreckRing billows and a cloud of wreckVeils
+   * veil and wreckBillows billow puffs; the meshes are removed wreckVanish s later, inside the cloud.
    */
   mech: {
     height: MONSTER_HEIGHT, width: 0.9 * MONSTER_HEIGHT, radius: 0.4 * MONSTER_HEIGHT,
@@ -781,7 +782,7 @@ export const CONFIG = {
     cannonRecoil: 0.08, cannonRecoilTime: 0.35, cannonJoltShift: 0.014, cannonJoltPitch: 0.035,
     cannonFlash: 4, cannonSparks: 6, cannonSmoke: 6, cannonSmokeSpeed: 420, cannonShake: 0.1,
     barrageCooldown: 17, barrageCount: 7, barrageSpread: 450, barrageRadius: 130, barrageFill: 2.0, barrageDamage: 63, barrageRunOut: 120, barrageRise: 150, barrageBack: 0.6,
-    spawnDistance: 4200, footfallShake: 0.06, dyingTime: 2.5, wreckTime: 6,
+    spawnDistance: 4200, footfallShake: 0.06, dyingTime: 2.5, wreckVanish: 0.6, wreckBursts: 8, wreckBurstScale: 2.5, wreckShake: 0.9, wreckRing: 28, wreckVeils: 16, wreckBillows: 24,
     evadeCooldown: 6, evadeCheck: 0.5, evadeChance: 0.35, hopChance: 0.4,
     sidestepDistance: 0.9 * MONSTER_HEIGHT, hopDistance: 1.3 * MONSTER_HEIGHT, hopHeight: 0.25 * MONSTER_HEIGHT, hopCrush: 0.4, hopShake: 0.2,
     moves: {

@@ -4,6 +4,7 @@ import { CONFIG } from '../config';
 import { Mech } from './Mech';
 import { MECH_PIVOTS as PV } from './mechModel';
 import type { MechRig } from './mechPose';
+import { PRESETS } from '../systems/Particles';
 import { mulberry32 } from '../util/rng';
 import type { WorldContext } from './types';
 import type { DamageSource, Target } from '../combat';
@@ -448,18 +449,48 @@ describe('Mech', () => {
     expect(c.rockets).toEqual([]);
   });
 
-  it('removed after dying and the wreck sinking', () => {
+  it('blows apart after dyingTime and is removed inside its dust cloud, never sinking', () => {
     const scene = new THREE.Scene();
     const mech = new Mech(scene);
     const c = makeCtx();
+    const puffs: string[] = [];
+    let bursts = 0;
+    let rings = 0;
+    c.ctx.particles.emit = ((kind: string) => void puffs.push(kind)) as never;
+    c.ctx.particles.explosion = (() => void bursts++) as never;
+    c.ctx.particles.ring = ((kind: string) => void (kind === 'billow' && rings++)) as never;
     mech.summon(c.ctx);
     body(mech).applyDamage(1e9);
-    run(mech, c, M.dyingTime + 1);
+    const root = (mech as unknown as { root: THREE.Group }).root;
+    let lowest = 0;
+    const step = (s: number) => {
+      for (let t = 0; t < s - 1e-9; t += DT) {
+        mech.update(DT, c.ctx);
+        lowest = Math.min(lowest, root.position.y);
+      }
+    };
+    step(M.dyingTime - 2 * DT);
+    expect(rings).toBe(0);
     expect(mech.count()).toBe(1);
-    run(mech, c, M.wreckTime);
+    const before = bursts;
+    const shakes = c.shakes.length;
+    step(4 * DT);
+    expect(bursts - before).toBeGreaterThanOrEqual(M.wreckBursts);
+    expect(rings).toBe(1);
+    expect(c.shakes.slice(shakes)).toContain(M.wreckShake);
+    expect(puffs.filter((k) => k === 'veil').length).toBe(M.wreckVeils);
+    expect(puffs.filter((k) => k === 'billow').length).toBe(M.wreckBillows);
+    expect(mech.count()).toBe(1);
+    step(M.wreckVanish);
     expect(mech.count()).toBe(0);
     expect(mech.current()).toBeNull();
+    expect(lowest).toBe(0);
     expect(scene.children.every((o) => !o.visible || o.type !== 'Group')).toBe(true);
+  });
+
+  it('the cloud outlasts the wreck by seconds', () => {
+    expect(PRESETS.veil.life).toBeGreaterThan(M.wreckVanish + 2);
+    expect(PRESETS.billow.life).toBeGreaterThan(M.wreckVanish + 1.5);
   });
 
   it('a stale reference from an earlier mech cannot hurt the next one', () => {
