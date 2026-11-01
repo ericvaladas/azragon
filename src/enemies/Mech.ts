@@ -102,7 +102,6 @@ export class Mech implements EnemySystem {
   private actT = 0;
   /** The current move's one-off effect (the hit check, the barrage, the dash start) has happened. */
   private struck = false;
-  private rocketsFired = 0;
   /** Mid-dash: moving to its stopping point, the move's clock held at the end of the wind-up. */
   private dashing = false;
   /** Which front leg the next stab uses (0 left, 1 right); it alternates. */
@@ -287,14 +286,13 @@ export class Mech implements EnemySystem {
     this.gait = damp(this.gait, this.action === 'walk' && dist > stand + 1 ? 1 : 0, 6, dt);
     if (this.action === 'walk') this.walk(dt, ctx, dist, aim, stand);
     else if (this.action === 'sidestep' || this.action === 'hopback') this.evade(this.action, dt, ctx, aim, dist);
-    else this.act(this.action, dt, ctx, aim);
+    else this.act(this.action, dt, ctx, aim, dist);
   }
 
   private start(a: MechMove): void {
     this.action = a;
     this.actT = 0;
     this.struck = false;
-    this.rocketsFired = 0;
     this.dashing = false;
     if (a === 'punch') this.stabLeg = 1 - this.stabLeg;
   }
@@ -409,7 +407,7 @@ export class Mech implements EnemySystem {
     return out;
   }
 
-  private act(a: Exclude<MechMove, 'sidestep' | 'hopback'>, dt: number, ctx: WorldContext, aim: number): void {
+  private act(a: Exclude<MechMove, 'sidestep' | 'hopback'>, dt: number, ctx: WorldContext, aim: number, dist: number): void {
     const mv = M.moves[a];
     if (a === 'dash' && this.dashing) {
       this.dash(dt, ctx, M.radius + ctx.monster.bodyRadius + M.stopGap);
@@ -435,6 +433,8 @@ export class Mech implements EnemySystem {
           ctx.particles.emit('debris', _p.set(m.x, ctx.monster.height * 0.5, m.z), 8, 1);
           ctx.shake(0.12);
         }
+      } else if (a === 'rockets') {
+        this.volley(ctx, dist);
       } else if (a === 'barrage') {
         this.barrage(ctx);
       } else if (a === 'dash') {
@@ -442,11 +442,6 @@ export class Mech implements EnemySystem {
         this.actT = mv.windup;
         return;
       }
-    }
-    if (a === 'rockets' && fired) {
-      // The volley's shells go out evenly through the strike, one barrel then the other.
-      const due = Math.min(M.rocketsPerVolley, Math.floor(((this.actT - mv.windup) / Math.max(mv.strike, 1e-6)) * M.rocketsPerVolley) + 1);
-      while (this.rocketsFired < due) this.cannonShot(ctx, this.rocketsFired++ % 2);
     }
     if (movePhase(a, this.actT) !== 'done') return;
     if (a === 'punch' || a === 'slam') this.meleeCd = M.meleeCooldown;
@@ -483,9 +478,15 @@ export class Mech implements EnemySystem {
     ctx.shake(0.2);
   }
 
+  /** Fires every barrel on the same frame, with one shake for the whole volley (less far off). */
+  private volley(ctx: WorldContext, dist: number): void {
+    for (let k = 0; k < M.rocketsPerVolley; k++) this.cannonShot(ctx, k % 2);
+    ctx.shake(M.cannonShake * Math.max(0.25, 1 - dist / CONFIG.fog.far));
+  }
+
   /**
    * One black shell from a cannon muzzle (0 upper, 1 lower) at the monster's upper body, with a little scatter: a flash
-   * at the muzzle, smoke vented backward out of the breech, the barrels kicked back and a shake.
+   * at the muzzle, smoke vented backward out of the breech and the barrels kicked back.
    */
   private cannonShot(ctx: WorldContext, barrel: number): void {
     const from = this.rig.muzzle(barrel, new THREE.Vector3());
@@ -497,8 +498,6 @@ export class Mech implements EnemySystem {
     ctx.particles.vent('muzzleFlash', from, _dir.x, _dir.y, _dir.z, 160, M.cannonFlash);
     ctx.particles.emit('spark', from, M.cannonSparks, 0.8);
     ctx.particles.vent('ventSmoke', this.rig.breech(barrel, _p), -_dir.x, -_dir.y, -_dir.z, M.cannonSmokeSpeed, M.cannonSmoke);
-    const dist = Math.hypot(ctx.monster.position.x - this.x, ctx.monster.position.z - this.z);
-    ctx.shake(M.cannonShake * Math.max(0.25, 1 - dist / CONFIG.fog.far));
   }
 
   /** Paints barrageCount strike circles around the monster (one on it); a missile for each leaves the launcher in turn. */

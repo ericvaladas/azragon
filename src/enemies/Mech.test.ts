@@ -265,28 +265,31 @@ describe('Mech', () => {
     expect(Math.abs(first.y)).toBeLessThan(ahead * 0.25);
   });
 
-  it('a cannon volley alternates the barrels, each shot flashing, venting backward, kicking and shaking', () => {
+  it('a cannon volley fires both barrels on one frame, each flashing and venting backward, with one kick and one shake', () => {
     const mech = new Mech(new THREE.Scene());
     const c = makeCtx();
     const rig = (mech as unknown as { rig: MechRig }).rig;
     faceOff(mech, c, 1200);
     let kicked = 0;
-    let shots = 0;
     let heading = 0;
+    let shakesOnFrame = 0;
     // One update per step: right after a shot the barrels sit fully back.
     for (let t = 0; t < 12 && c.cannons.length < M.rocketsPerVolley; t += DT) {
       const p = body(mech).position;
       if (distTo(mech, c.monster.position) < 1100) c.monster.position.set(p.x - 1200, 0, p.z);
+      const shakes = c.shakes.length;
       mech.update(DT, c.ctx);
-      if (c.cannons.length > shots) {
-        shots = c.cannons.length;
+      // The loop ends on the first frame that fires, so every shell here left on it.
+      if (c.cannons.length > 0) {
         kicked = rig.barrelOffset;
         heading = mech.yaw();
+        shakesOnFrame = c.shakes.length - shakes;
       }
     }
-    expect(c.cannons.length).toBeGreaterThanOrEqual(2);
+    expect(c.cannons.length).toBe(2);
+    expect(shakesOnFrame).toBe(1);
     expect(c.rockets).toEqual([]);
-    // Upper barrel then lower, each near the top of the mech, the shell leaving far ahead of its body centre.
+    // One from the upper barrel and one from the lower, each near the top of the mech, the shell leaving far ahead of its body centre.
     const a = c.cannons[0]!;
     const b = c.cannons[1]!;
     const drop = (PV.muzzleY[0]! - PV.muzzleY[1]!) * M.height;
@@ -301,10 +304,9 @@ describe('Mech', () => {
     expect(back.x * Math.sin(heading) + back.z * Math.cos(heading)).toBeLessThan(-0.9);
     // The breech sits behind the muzzle.
     expect(smoke[0]!.at.distanceTo(a.from)).toBeGreaterThan((PV.muzzleZ - PV.breechZ) * M.height * 0.8);
-    expect(c.shakes.length).toBeGreaterThanOrEqual(c.cannons.length);
-    // The barrels ease home after the volley.
-    run(mech, c, M.cannonRecoilTime + 2 * DT);
-    // Two shells a volley, one per barrel: the second barrel ends it.
+    // The barrels ease home after the volley, and the rest of the move fires nothing more.
+    const R = M.moves.rockets;
+    run(mech, c, Math.max(M.cannonRecoilTime, R.strike + R.recover) + 2 * DT);
     expect(M.rocketsPerVolley).toBe(2);
     expect(c.cannons.length).toBe(2);
     expect(rig.barrelOffset).toBe(0);

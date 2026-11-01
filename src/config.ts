@@ -755,9 +755,9 @@ export const CONFIG = {
    * punch reaches punchReach past contact within punchArc rad of its facing; a slam (picked with slamChance) hits
    * within slamRadius past contact, all round; either then waits meleeCooldown. Dash: once engaged, beyond dashTrigger,
    * it charges at dashSpeed and stops stopGap past contact, every dashCooldown at most. Every building within
-   * crushRadius of a foot (or of it, dashing) takes crushDps. Rockets: a volley of rocketsPerVolley cannon shells, flying cannonShellSpeed m/s, within
-   * rocketRange every rocketCooldown, fired as black cannon shells that alternate between its two barrels. Each shot
-   * shakes by cannonShake (less far off), flashes cannonFlash puffs and cannonSparks sparks at the muzzle, vents
+   * crushRadius of a foot (or of it, dashing) takes crushDps. Rockets: a volley of rocketsPerVolley cannon shells fired together, flying cannonShellSpeed m/s, within
+   * rocketRange every rocketCooldown, fired as black cannon shells that alternate between its two barrels. A volley
+   * shakes once by cannonShake (less far off); each shot flashes cannonFlash puffs and cannonSparks sparks at the muzzle, vents
    * cannonSmoke puffs out of the breech at cannonSmokeSpeed m/s, kicks the barrels back cannonRecoil (model units) over
    * cannonRecoilTime s and jolts the body back cannonJoltShift (model units) and up cannonJoltPitch rad. Barrage: barrageCount marked circles of barrageRadius within barrageSpread of the
    * monster, filling over barrageFill, every barrageCooldown; their missiles leave its launcher's front level,
