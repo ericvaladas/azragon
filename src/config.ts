@@ -538,7 +538,7 @@ export const CONFIG = {
        * so the whole hand is above the ground.
        */
       hand: { scale: 2.2, riseSpeed: 180, airRiseTime: 0.45, easeTime: 0.6, closeTime: 1.6, sinkSpeed: 100, airSinkTime: 1.2, wristClear: 15 },
-      bossDamage: 2000,
+      bossDamage: 3500,
       cameraDistanceMult: 2.2,
       boltEvery: [0.9, 1.6], boltSpread: 1.3,
       t: { easeIn: 0.2, sky: 0.6, cameraIn: 3.0, cameraOut: 2.4, boltsFrom: 0.3, boltsTo: 3.3, circleFrom: 0.5, circleTo: 1.3, grasp: 1.9, outroFrom: 3.4, end: 4.4 },
@@ -792,7 +792,7 @@ export const CONFIG = {
     rocketCooldown: 4, rocketsPerVolley: 2, rocketDamage: 10.5, rocketRange: 2200, cannonShellSpeed: 1040,
     cannonRecoil: 0.08, cannonRecoilTime: 0.35, cannonJoltShift: 0.014, cannonJoltPitch: 0.035,
     cannonFlash: 4, cannonSparks: 6, cannonSmoke: 6, cannonSmokeSpeed: 420, cannonShake: 0.1,
-    barrageCooldown: 17, barrageCount: 7, barrageSpread: 450, barrageRadius: 130, barrageFill: 2.0, barrageDamage: 79, barrageMissileSpeed: 1600, barrageRunOut: 120, barrageRise: 150, barrageBack: 0.6,
+    barrageCooldown: 17, barrageCount: 7, barrageSpread: 450, barrageRadius: 130, barrageFill: 2.0, barrageDamage: 110, barrageMissileSpeed: 1600, barrageRunOut: 120, barrageRise: 150, barrageBack: 0.6,
     spawnDistance: 4200, footfallShake: 0.06, dyingTime: 2.5, wreckVanish: 0.6, wreckBursts: 8, wreckBurstScale: 2.5, wreckShake: 0.9, wreckRing: 28, wreckVeils: 16, wreckBillows: 24,
     evadeCooldown: 6, evadeCheck: 0.5, evadeChance: 0.35, hopChance: 0.4,
     sidestepDistance: 0.9 * MONSTER_HEIGHT, hopDistance: 1.3 * MONSTER_HEIGHT, hopHeight: 0.25 * MONSTER_HEIGHT, hopCrush: 0.4, hopShake: 0.2,
