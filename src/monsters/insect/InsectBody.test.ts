@@ -8,11 +8,9 @@ const base = (): BodyFrame => ({
   melee: null, antiAir: null, roaring: false, roarDuration: 1.2, airborne: false, carried: false, brace: 0, blaze: 0, roar: 0, dashing: false,
   tailSweep: null, lookAt: null, charge: 0, heat: 0, flash: false, glow: 0,
 });
-/** The chest point the arms beat at (body space), as InsectBody has it. */
-const chest = (body: InsectBody) => new THREE.Vector3(0, 520, 260).applyMatrix4(body['model'].body.matrix);
 
 describe('InsectBody for Spike Rain', () => {
-  it('held for Spike Rain it stays level, its front four feet lifting off to beat at its chest', () => {
+  it('held for Spike Rain it stands up like a threatened spider: lifted, front tilted up a little, on its back pair', () => {
     const pose = (roar: number) => {
       const body = new InsectBody();
       for (let i = 0; i < 30; i++) body.animate({ ...base(), time: i / 60, carried: true, roar }, () => {});
@@ -20,26 +18,42 @@ describe('InsectBody for Spike Rain', () => {
     };
     const up = pose(1);
     const down = pose(0);
-    expect(Math.abs(up['model'].body.rotation.x - down['model'].body.rotation.x)).toBeLessThan(0.05);
+    const tilt = down['model'].body.rotation.x - up['model'].body.rotation.x;
+    expect(tilt).toBeGreaterThan(0.15);
+    expect(tilt).toBeLessThan(0.4);
+    expect(up['model'].body.position.y).toBeGreaterThan(down['model'].body.position.y + 80);
     for (let i = 0; i < 4; i++) expect(up.feet[i]!.y).toBeGreaterThanOrEqual(150);
     expect(Math.abs(up.feet[4]!.y)).toBeLessThan(10);
     expect(Math.abs(up.feet[5]!.y)).toBeLessThan(10);
   });
 
-  it('the front four beat at the chest, alternating sides', () => {
+  it('its front pair is raised high above its head and spread wide; the second pair held out lower', () => {
     const body = new InsectBody();
-    const d0: number[] = [];
-    const d1: number[] = [];
+    for (let i = 0; i < 30; i++) body.animate({ ...base(), time: i / 60, carried: true, roar: 1 }, () => {});
+    const head = body.root.worldToLocal(body.sprayFrom(new THREE.Vector3()));
+    for (const i of [0, 1]) {
+      expect(body.feet[i]!.y).toBeGreaterThan(head.y + 100);
+      expect(Math.abs(body.feet[i]!.x)).toBeGreaterThan(300);
+    }
+    for (const i of [2, 3]) {
+      expect(body.feet[i]!.y).toBeLessThan(Math.min(body.feet[0]!.y, body.feet[1]!.y));
+      expect(Math.abs(body.feet[i]!.x)).toBeGreaterThan(300);
+    }
+  });
+
+  it('the raised legs wave slowly and quiver, staying raised', () => {
+    const body = new InsectBody();
+    const ys: number[] = [];
+    const xs: number[] = [];
     for (let i = 0; i < 120; i++) {
       body.animate({ ...base(), time: i / 60, carried: true, roar: 1 }, () => {});
-      const c = chest(body);
-      d0.push(body.feet[0]!.distanceTo(c));
-      d1.push(body.feet[1]!.distanceTo(c));
+      ys.push(body.feet[0]!.y);
+      xs.push(body.feet[0]!.x);
     }
-    expect(Math.max(...d0) - Math.min(...d0)).toBeGreaterThanOrEqual(60);
-    // Over the first beat, legs 0 and 1 come closest to the chest at different moments.
-    const firstMin = (d: number[]) => d.slice(0, 45).indexOf(Math.min(...d.slice(0, 45)));
-    expect(Math.abs(firstMin(d0) - firstMin(d1)) / 60).toBeGreaterThan(0.15);
+    expect(Math.max(...ys) - Math.min(...ys) + Math.max(...xs) - Math.min(...xs)).toBeGreaterThan(30);
+    expect(Math.min(...ys)).toBeGreaterThan(300);
+    // Slow: it never jumps far in one frame.
+    for (let i = 1; i < ys.length; i++) expect(Math.abs(ys[i]! - ys[i - 1]!)).toBeLessThan(15);
   });
 
   it('its mouth is at the front of the head, between the mandibles, ahead of the stinger curled over its back', () => {
