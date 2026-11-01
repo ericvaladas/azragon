@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { CONFIG } from '../config';
 import type { Target } from '../combat';
 import { angleDelta, damp, type Vec2 } from '../util/math';
-import { shellProgress, strikeFill, strikeHits, strikePoints } from './artilleryMath';
+import { strikeFill, strikeHits, strikePoints } from './artilleryMath';
 import { launchArc } from '../systems/projectileMath';
 import { chooseAction, movePhase, punchHits, slamHits, type MechAction, type MechMind, type MechMove } from './mechMath';
 import { LEG_REACH, MECH_LEGS, MECH_TUBES, missileGeometry } from './mechModel';
@@ -17,8 +17,8 @@ const SPARK_EVERY = 0.12;
 const POSE_RATE = 22;
 const FALL_RATE = 5;
 /**
- * The barrage missiles leave the launcher tubes this many seconds apart, each flying the rest of its circle's fill so
- * it lands as the circle fills; a smoke puff every TRAIL_EVERY s marks its arc, and the missile is this long (m).
+ * The barrage missiles leave the launcher tubes this many seconds apart once their circles have filled; a smoke puff
+ * every TRAIL_EVERY s marks each one's arc, and the missile is this long (m).
  */
 const LAUNCH_GAP = 0.08;
 /** Points checked along an evade's path, and how far past its end it must stay clear of blocked ground (radii). */
@@ -26,7 +26,7 @@ const EVADE_SAMPLES = 4;
 const EVADE_MARGIN = 1;
 const ease = (t: number) => t * t * (3 - 2 * t);
 const TRAIL_EVERY = 0.025;
-const MISSILE_LENGTH = 90;
+const MISSILE_LENGTH = 45;
 /** How far ahead along its flight (0..1) a missile looks to point its nose. */
 const MISSILE_LOOK = 0.02;
 const FORWARD = new THREE.Vector3(0, 0, 1);
@@ -75,9 +75,12 @@ class MechBody implements Target {
 
 /**
  * A barrage circle at `at`, painted `t` s ago, and its missile: launched from launcher tube `tube` at `from` (set at
- * launch), heading along the ground direction (fx, fz) it faced at launch, flying for the last `flight` s of the fill.
+ * launch), heading along the ground direction (fx, fz) it faced at launch. It leaves at age `launchAt`, and flies for `flight` s (set at launch).
  */
-type Strike = { at: Vec2; t: number; tube: number; flight: number; from: THREE.Vector3; fx: number; fz: number; launched: boolean; trailT: number };
+/** Flight progress (0..1) of a launched strike's missile. */
+const missileK = (s: { t: number; launchAt: number; flight: number }): number => Math.min(1, (s.t - s.launchAt) / Math.max(s.flight, 0.01));
+
+type Strike = { at: Vec2; t: number; tube: number; launchAt: number; flight: number; from: THREE.Vector3; fx: number; fz: number; launched: boolean; trailT: number };
 
 /** Scratch target pose and its input, rebuilt every draw. */
 const _target = restPose();
@@ -507,13 +510,13 @@ export class Mech implements EnemySystem {
     const m = ctx.monster.position;
     strikePoints(m, M.barrageCount, M.barrageSpread, ctx.rng).forEach((at, k) => {
       if (this.strikes.length >= MAX_STRIKES) return;
-      this.strikes.push({ at, t: 0, tube: k % MECH_TUBES.length, flight: M.barrageFill - k * LAUNCH_GAP, from: new THREE.Vector3(), fx: 0, fz: 1, launched: false, trailT: 0 });
+      this.strikes.push({ at, t: 0, tube: k % MECH_TUBES.length, launchAt: M.barrageFill + k * LAUNCH_GAP, flight: 0, from: new THREE.Vector3(), fx: 0, fz: 1, launched: false, trailT: 0 });
     });
   }
 
   /**
-   * Fills the barrage circles and flies their missiles level out of the launcher's front, sweeping round and down onto them; each lands when
-   * its circle is full and hits the monster if it is still inside.
+   * Fills the barrage circles; once a circle is full its missile leaves level out of the launcher's front and sweeps round and down onto
+   * it at barrageMissileSpeed, hitting the monster on landing if it is still inside.
    */
   private updateStrikes(dt: number, ctx: WorldContext): void {
     if (this.strikes.length === 0) return;
@@ -521,24 +524,24 @@ export class Mech implements EnemySystem {
     for (let i = this.strikes.length - 1; i >= 0; i--) {
       const s = this.strikes[i]!;
       s.t += dt;
-      const k = shellProgress(s.t, M.barrageFill, s.flight);
-      if (k !== null) {
-        if (!s.launched) {
-          // It leaves its tube with a flash and a puff of smoke.
-          s.launched = true;
-          this.rig.tube(s.tube, s.from);
-          s.fx = Math.sin(this.heading);
-          s.fz = Math.cos(this.heading);
-          ctx.particles.emit('fire', s.from, 3, 0.4);
-          ctx.particles.emit('smoke', s.from, 4, 0.8);
-        }
-        s.trailT += dt;
-        if (s.trailT >= TRAIL_EVERY && k < 1) {
-          s.trailT = 0;
-          ctx.particles.emit('trail', this.missilePos(s, k), 1, 0.05);
-        }
+      if (s.t < s.launchAt) continue;
+      if (!s.launched) {
+        // It leaves its tube with a flash and a puff of smoke.
+        s.launched = true;
+        this.rig.tube(s.tube, s.from);
+        s.fx = Math.sin(this.heading);
+        s.fz = Math.cos(this.heading);
+        s.flight = Math.hypot(s.at.x - s.from.x, s.at.z - s.from.z) / M.barrageMissileSpeed;
+        ctx.particles.emit('fire', s.from, 3, 0.4);
+        ctx.particles.emit('smoke', s.from, 4, 0.8);
       }
-      if (s.t < M.barrageFill) continue;
+      const k = missileK(s);
+      s.trailT += dt;
+      if (s.trailT >= TRAIL_EVERY && k < 1) {
+        s.trailT = 0;
+        ctx.particles.emit('trail', this.missilePos(s, k), 1, 0.05);
+      }
+      if (k < 1) continue;
       _p.set(s.at.x, 10, s.at.z);
       ctx.particles.explosion(_p, 1.4);
       ctx.particles.ring('dust', _p.setY(0), M.barrageRadius, 10);
@@ -584,17 +587,17 @@ export class Mech implements EnemySystem {
   private blast(ctx: WorldContext): void {
     const r = ctx.rng;
     for (let k = 0; k < M.wreckBursts; k++) ctx.particles.explosion(this.bodyPoint(r, _p, 0.6), M.wreckBurstScale);
-    ctx.particles.ring('billow', _p.set(this.x, 0, this.z), H * 0.8, M.wreckRing);
+    ctx.particles.ring('wreckBillow', _p.set(this.x, 0, this.z), H * 0.6, M.wreckRing);
     ctx.shake(M.wreckShake);
-    for (let k = 0; k < M.wreckVeils; k++) ctx.particles.emit('veil', this.cloudPoint(r, _p), 1, 0.5);
-    for (let k = 0; k < M.wreckBillows; k++) ctx.particles.emit('billow', this.cloudPoint(r, _p), 1, 0.5);
+    for (let k = 0; k < M.wreckVeils; k++) ctx.particles.emit('wreckVeil', this.cloudPoint(r, _p), 1, 0.5);
+    for (let k = 0; k < M.wreckBillows; k++) ctx.particles.emit('wreckBillow', this.cloudPoint(r, _p), 1, 0.5);
   }
 
-  /** A random point in the cloud over the wreck (world m): across its legs' span, from the ground to its full height. */
+  /** A random point in the cloud over the wreck (world m): across its legs' span, from the ground to its collapsed height. */
   private cloudPoint(r: () => number, out: THREE.Vector3): THREE.Vector3 {
     const a = r() * Math.PI * 2;
     const d = Math.sqrt(r()) * M.width * 0.6;
-    return out.set(this.x + Math.cos(a) * d, H * r(), this.z + Math.sin(a) * d);
+    return out.set(this.x + Math.cos(a) * d, H * 0.5 * r(), this.z + Math.sin(a) * d);
   }
 
   /** A random point on the body (world m): within `reach` of its width of the centre, between belly and launcher top. */
@@ -654,8 +657,8 @@ export class Mech implements EnemySystem {
   private drawStrikes(): void {
     let missiles = 0;
     for (const s of this.strikes) {
-      const k = shellProgress(s.t, M.barrageFill, s.flight);
-      if (k === null || !s.launched) continue;
+      if (!s.launched) continue;
+      const k = missileK(s);
       _ahead.copy(this.missilePos(s, Math.min(1, k + MISSILE_LOOK)));
       const at = this.missilePos(s, k === 1 ? 1 - MISSILE_LOOK : k);
       _dir.subVectors(_ahead, at).normalize();

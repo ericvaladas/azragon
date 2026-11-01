@@ -763,7 +763,7 @@ export const CONFIG = {
    * cannonSmoke puffs out of the breech at cannonSmokeSpeed m/s, kicks the barrels back cannonRecoil (model units) over
    * cannonRecoilTime s and jolts the body back cannonJoltShift (model units) and up cannonJoltPitch rad. Barrage: barrageCount marked circles of barrageRadius within barrageSpread of the
    * monster, filling over barrageFill, every barrageCooldown; their missiles leave its launcher's front level,
-   * along its facing, and sweep round in one turn onto them, landing as each fills: a run-out of up to barrageRunOut m,
+   * along its facing, once each has filled, and sweep round in one turn onto them at barrageMissileSpeed (m/s): a run-out of up to barrageRunOut m,
    * then a curve whose second control point is barrageBack of the way back from the circle and barrageRise m above the launcher. Evading: engaged, inside punch reach with melee
    * cooling down and evadeCd spent, it rolls every evadeCheck s while it walks; under evadeChance it evades, then waits
    * evadeCooldown. hopChance of its evades are a hopback (a jump hopDistance straight back, peaking hopHeight up, its
@@ -783,7 +783,7 @@ export const CONFIG = {
     rocketCooldown: 4, rocketsPerVolley: 2, rocketDamage: 8.5, rocketRange: 2200, cannonShellSpeed: 1040,
     cannonRecoil: 0.08, cannonRecoilTime: 0.35, cannonJoltShift: 0.014, cannonJoltPitch: 0.035,
     cannonFlash: 4, cannonSparks: 6, cannonSmoke: 6, cannonSmokeSpeed: 420, cannonShake: 0.1,
-    barrageCooldown: 17, barrageCount: 7, barrageSpread: 450, barrageRadius: 130, barrageFill: 2.0, barrageDamage: 63, barrageRunOut: 120, barrageRise: 150, barrageBack: 0.6,
+    barrageCooldown: 17, barrageCount: 7, barrageSpread: 450, barrageRadius: 130, barrageFill: 2.0, barrageDamage: 63, barrageMissileSpeed: 1600, barrageRunOut: 120, barrageRise: 150, barrageBack: 0.6,
     spawnDistance: 4200, footfallShake: 0.06, dyingTime: 2.5, wreckVanish: 0.6, wreckBursts: 8, wreckBurstScale: 2.5, wreckShake: 0.9, wreckRing: 28, wreckVeils: 16, wreckBillows: 24,
     evadeCooldown: 6, evadeCheck: 0.5, evadeChance: 0.35, hopChance: 0.4,
     sidestepDistance: 0.9 * MONSTER_HEIGHT, hopDistance: 1.3 * MONSTER_HEIGHT, hopHeight: 0.25 * MONSTER_HEIGHT, hopCrush: 0.4, hopShake: 0.2,

@@ -242,7 +242,30 @@ describe('Mech', () => {
     expect(trails.some((t) => t.at.y < M.height * 0.5 && Math.hypot(t.at.x - t.mech.x, t.at.z - t.mech.z) > 600)).toBe(true);
   });
 
-  it('each barrage missile leaves level along its facing and lands on its circle as it fills', () => {
+  it('a barrage missile only leaves once its circle has filled, then lands at barrageMissileSpeed', () => {
+    const mech = new Mech(new THREE.Scene());
+    const c = makeCtx();
+    let launchedAt = -1;
+    let clock = 0;
+    let paintedAt = -1;
+    faceOff(mech, c, 1200);
+    (c.ctx.particles as { emit: unknown }).emit = (kind: string) => {
+      if (kind === 'smoke' && launchedAt < 0) launchedAt = clock;
+    };
+    const strikes = () => (mech as unknown as { strikes: unknown[] }).strikes;
+    for (; clock < 30 && !c.hits.some((h) => h.source === 'artillery'); clock += DT) {
+      const p = body(mech).position;
+      if (distTo(mech, c.monster.position) < 1100) c.monster.position.set(p.x - 1200, 0, p.z);
+      mech.update(DT, c.ctx);
+      if (paintedAt < 0 && strikes().length > 0) paintedAt = clock;
+    }
+    expect(paintedAt).toBeGreaterThanOrEqual(0);
+    expect(launchedAt - paintedAt).toBeGreaterThanOrEqual(M.barrageFill - DT);
+    // At this speed the flight is well under a second over this range.
+    expect(clock - launchedAt).toBeLessThan(2 * 1400 / M.barrageMissileSpeed + 0.5);
+  });
+
+  it('each barrage missile leaves level along its facing', () => {
     const mech = new Mech(new THREE.Scene());
     const c = makeCtx();
     const launches: THREE.Vector3[] = [];
@@ -260,7 +283,8 @@ describe('Mech', () => {
       if (distTo(mech, c.monster.position) < 1100) c.monster.position.set(body(mech).position.x - 1200, 0, body(mech).position.z);
     });
     const from = launches[0]!;
-    const first = puffs[0]!.clone().sub(from);
+    // The first puff sits at the tube mouth; the next shows which way it left.
+    const first = puffs[1]!.clone().sub(from);
     const ahead = first.x * Math.sin(heading) + first.z * Math.cos(heading);
     expect(ahead).toBeGreaterThan(0);
     expect(Math.abs(first.y)).toBeLessThan(ahead * 0.25);
@@ -458,7 +482,7 @@ describe('Mech', () => {
     let rings = 0;
     c.ctx.particles.emit = ((kind: string) => void puffs.push(kind)) as never;
     c.ctx.particles.explosion = (() => void bursts++) as never;
-    c.ctx.particles.ring = ((kind: string) => void (kind === 'billow' && rings++)) as never;
+    c.ctx.particles.ring = ((kind: string) => void (kind === 'wreckBillow' && rings++)) as never;
     mech.summon(c.ctx);
     body(mech).applyDamage(1e9);
     const root = (mech as unknown as { root: THREE.Group }).root;
@@ -478,8 +502,8 @@ describe('Mech', () => {
     expect(bursts - before).toBeGreaterThanOrEqual(M.wreckBursts);
     expect(rings).toBe(1);
     expect(c.shakes.slice(shakes)).toContain(M.wreckShake);
-    expect(puffs.filter((k) => k === 'veil').length).toBe(M.wreckVeils);
-    expect(puffs.filter((k) => k === 'billow').length).toBe(M.wreckBillows);
+    expect(puffs.filter((k) => k === 'wreckVeil').length).toBe(M.wreckVeils);
+    expect(puffs.filter((k) => k === 'wreckBillow').length).toBe(M.wreckBillows);
     expect(mech.count()).toBe(1);
     step(M.wreckVanish);
     expect(mech.count()).toBe(0);
