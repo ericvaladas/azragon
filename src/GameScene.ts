@@ -60,6 +60,7 @@ import { PlasmaLance } from './monsters/kaiju/PlasmaLanceSequence';
 import { LANCE_ATMOSPHERE } from './monsters/kaiju/plasmaLance';
 import { SpikeRain } from './monsters/insect/SpikeRainSequence';
 import { RAIN_ATMOSPHERE } from './monsters/insect/spikeRain';
+import { inTailReach, TailTargeting, tailWant } from './monsters/insect/tailTarget';
 import { LevelUpAura } from './systems/LevelUpAura';
 import { ShieldFx } from './systems/ShieldFx';
 import { InkFx } from './monsters/kraken/InkFx';
@@ -201,6 +202,8 @@ export class GameScene {
   /** Dread Gaze and Evil Eye: targets burning with black fire until it flares. */
   /** The Insect's ranged target (the one its spikes go to): its tail aims the stinger there. */
   private spikeAim: Target | null = null;
+  /** Which target the Insect's tail is on, with its pause before switching. */
+  private tailTargeting = new TailTargeting();
   private gazes: { target: Target; at: THREE.Vector3; t: number; dur: number; damage: number; eye: boolean; lit: boolean; flared: boolean }[] = [];
   /** Rending Claws in flight: its kind and side (+1 left/+X, −1 right), both latched when the strike starts. */
   private fistStrike: FistKind = 'slam';
@@ -624,6 +627,7 @@ export class GameScene {
     this.markers.setAim(null, 0);
     this.dyingT = 0;
     this.spikeAim = null;
+    this.tailTargeting.reset();
   }
 
   /** Game over → Play Again: same monster, fresh world, the intro replays. */
@@ -1004,10 +1008,9 @@ export class GameScene {
   };
 
 
-  /** The ability buttons: Leap and Dash show not ready while snared; the ultimate carries its monster's name. */
+  /** The ability buttons: Leap and Dash show not ready while snared; the ultimate only when its monster can use it. */
   private abilityView(): AbilityView[] {
-    const label = this.monster.kind.ultimate?.label;
-    const view = this.abilities.view().map((v) => (v.id === 'ultimate' ? { ...v, label, ready: v.ready && this.canUltimate() } : v));
+    const view = this.abilities.view().map((v) => (v.id === 'ultimate' ? { ...v, ready: v.ready && this.canUltimate() } : v));
     if (!this.snare.blocksMobility) return view;
     return view.map((v) => (v.id === 'leap' || v.id === 'dash' ? { ...v, ready: false, aiming: false } : v));
   }
@@ -1194,7 +1197,8 @@ export class GameScene {
           this.particles.emit('shade', from, 2, 0.6);
           continue;
         }
-        this.projectiles.fireSpike(from, inRange[i % inRange.length]!, dmg, (i - (n - 1) / 2) * 0.25);
+        // The Insect's tail shoots its storm straight; the Kaiju's plates loft theirs.
+        this.projectiles.fireSpike(from, inRange[i % inRange.length]!, dmg, (i - (n - 1) / 2) * 0.25, m.kind.ranged === 'spikes');
         this.particles.emit('spark', from, 3, 1.2);
       }
     }
@@ -1751,15 +1755,23 @@ export class GameScene {
       // A breather only picks targets its neck can reach, so the body never has to turn away from its path.
       const reach = this.ms.meleeRange * 0.8;
       const groundOnly = m.kind.ranged === 'hurl' || m.kind.ranged === 'gaze';
+      const spikes = m.kind.ranged === 'spikes';
       const rangedPool =
         m.kind.ranged === 'breath' ? this.enemyTargets().filter((t) => this.canBreatheAt(t))
         : groundOnly ? this.enemyTargets().filter((t) => !t.airborne && Math.hypot(t.position.x - pos.x, t.position.z - pos.z) > reach)
+        // The Insect's tail never takes anything straight behind it.
+        : spikes ? this.enemyTargets().filter((t) => inTailReach(pos, m.yaw, t.position))
         : this.enemyTargets();
-      const auto = nearestInRange(pos, rangedPool, this.ms.rangedRange);
-      if (m.kind.ranged === 'spikes') {
+      let auto = nearestInRange(pos, rangedPool, this.ms.rangedRange);
+      if (spikes) {
         const o = this.order?.kind === 'attack' && this.order.target.kind !== 'building' ? this.order.target : null;
-        const orderedInRange = o && o.isAlive() && Math.hypot(o.position.x - pos.x, o.position.z - pos.z) <= this.ms.rangedRange ? o : null;
-        this.spikeAim = orderedInRange ?? auto;
+        const reachable = (t: Target) =>
+          t.isAlive() && Math.hypot(t.position.x - pos.x, t.position.z - pos.z) <= this.ms.rangedRange && inTailReach(pos, m.yaw, t.position);
+        const orderedInRange = o && reachable(o) ? o : null;
+        // The tail stays on its target while it can, settles on a new one only when it must (pausing first), and that
+        // is the one the spikes go to.
+        this.spikeAim = this.tailTargeting.update(tailWant(this.spikeAim, orderedInRange, auto, reachable), dt);
+        auto = this.spikeAim;
       } else this.spikeAim = null;
       const autoMelee = nearestInRange(pos, this.enemyTargets().filter((t) => !t.airborne || this.clawReaches(t)), this.ms.meleeRange);
       const order: BrainOrder =
@@ -1803,7 +1815,7 @@ export class GameScene {
         }
         else m.startMelee(s.cooldownMult, plan.leg, plan.point);
       }
-      if (d.attack === 'ranged') this.fireRanged(d.attackOn === 'order' && this.order?.kind === 'attack' ? this.order.target : auto);
+      if (d.attack === 'ranged') this.fireRanged(spikes ? this.spikeAim : d.attackOn === 'order' && this.order?.kind === 'attack' ? this.order.target : auto);
     }
     m.tick(dt);
     // The bay and the island are off limits on foot: walking and dashing slide along the shore. A move order the
@@ -2006,6 +2018,8 @@ export class GameScene {
   private fireSpikes(target: Target | null): void {
     if (!target) return;
     const m = this.monster;
+    // The tail fires once it is on its target, not while it is still swinging round.
+    if (m.aimError() > CONFIG.monster.tailAimTolerance) return;
     const s = this.progression.stats;
     const count = 1 + s.extraSpikes;
     const pos = { x: m.position.x, z: m.position.z };
@@ -2014,7 +2028,7 @@ export class GameScene {
       .sort((a, b) => a.position.distanceToSquared(target.position) - b.position.distanceToSquared(target.position));
     const from = m.rangedOrigin(new THREE.Vector3());
     spikeTargets(target, others, count).forEach((t, i) => {
-      this.projectiles.fireSpike(from, t, this.ms.rangedDamage * this.dmgMult(), (i - (count - 1) / 2) * CONFIG.monster.spikeSpreadRad);
+      this.projectiles.fireSpike(from, t, this.ms.rangedDamage * this.dmgMult(), (i - (count - 1) / 2) * CONFIG.monster.spikeSpreadRad, true);
     });
     this.particles.emit('spark', from, 4);
     m.consumeRanged(this.rangedCdMult());

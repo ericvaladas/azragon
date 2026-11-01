@@ -129,11 +129,15 @@ export class Projectiles {
     return s;
   }
 
-  /** Launches up and outward (with yaw spread), then homes on the target's live position. */
-  fireSpike(from: THREE.Vector3, target: Target, damage: number, yawOffset: number): void {
+  /**
+   * Launches up and outward (with yaw spread), then homes on the target's live position; `straight` (the Insect's tail)
+   * launches it straight at the target instead, so it flies a line.
+   */
+  fireSpike(from: THREE.Vector3, target: Target, damage: number, yawOffset: number, straight = false): void {
     const s = this.alloc('spike', from, target.position, damage, target);
-    _d.subVectors(target.position, from).setY(0).normalize().applyAxisAngle(_yaxis, yawOffset);
-    s.vel.set(_d.x, 0.8, _d.z).normalize().multiplyScalar(CONFIG.monster.spikeSpeed);
+    if (straight) _d.subVectors(target.position, from).normalize().applyAxisAngle(_yaxis, yawOffset);
+    else _d.subVectors(target.position, from).setY(0).normalize().applyAxisAngle(_yaxis, yawOffset).setY(0.8);
+    s.vel.copy(_d).normalize().multiplyScalar(CONFIG.monster.spikeSpeed);
     s.dur = SPIKE_TTL;
   }
 

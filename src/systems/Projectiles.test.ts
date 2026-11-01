@@ -16,6 +16,29 @@ describe('Projectiles.setTheme', () => {
   });
 });
 
+describe('Projectiles.fireSpike', () => {
+  const target = (z: number) => ({ kind: 'tank', position: new THREE.Vector3(0, 100, z), radius: 30, airborne: false, isAlive: () => true, applyDamage: () => {} }) as never;
+  const peak = (straight: boolean) => {
+    const p = new Projectiles(new THREE.Scene());
+    p.fireSpike(new THREE.Vector3(0, 100, 0), target(1500), 10, 0, straight);
+    let top = 0;
+    for (let i = 0; i < 120; i++) {
+      p.update(1 / 60);
+      const s = (p as unknown as { shots: { pos: THREE.Vector3 }[] }).shots[0];
+      if (s) top = Math.max(top, s.pos.y);
+    }
+    return top;
+  };
+
+  it("a straight spike (the Insect's tail) flies at its target without climbing", () => {
+    expect(peak(true)).toBeLessThan(105);
+  });
+
+  it('the default spike still lofts up before it homes in', () => {
+    expect(peak(false)).toBeGreaterThan(200);
+  });
+});
+
 describe('Projectiles.fireChunk', () => {
   it('lobs a chunk on a high arc that lands on the target after the hurl flight time', () => {
     const p = new Projectiles(new THREE.Scene());

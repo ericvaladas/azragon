@@ -43,9 +43,11 @@ const _gait = new THREE.Vector3();
 const _target = new THREE.Vector3();
 const _swat = new THREE.Vector3();
 const _aimWant = new THREE.Vector3();
-/** How fast (per s) the tail swings onto a ranged target and relaxes off it again, and how fast it follows a switch. */
-const AIM_RATE = 5;
-const AIM_FOLLOW = 8;
+const _aimDir = new THREE.Vector3();
+const _wantDir = new THREE.Vector3();
+const _turnAxis = new THREE.Vector3();
+/** How fast (per s) the tail eases onto a ranged target from rest and relaxes off it again. */
+const AIM_RATE = 2;
 /** Foot offset (model units) for the cocked leg: high and pulled back. */
 const _strikeLift = new THREE.Vector3(0, 420, -80);
 /**
@@ -91,6 +93,7 @@ export class InsectBody implements MonsterBody {
   /** The tail's aim: how far on (0..1), and the point (body space) it is easing toward. */
   private aimW = 0;
   private aim = new THREE.Vector3();
+  private aimErr = 0;
   /** Each leg's foot as last posed (root space). */
   readonly feet: THREE.Vector3[] = Array.from({ length: 6 }, () => new THREE.Vector3());
 
@@ -171,10 +174,32 @@ export class InsectBody implements MonsterBody {
     this.model.mandibles[0]!.rotation.y = -twitch;
     this.model.mandibles[1]!.rotation.y = twitch;
     // Ranged aim: the tail eases onto the target (and off again when there is none), following it as it switches.
+    // Its aim turns toward the target at no more than tailTurnRate, so a switch swings it round rather than snapping.
+    this.aimErr = 0;
     if (f.lookAt) {
       body.worldToLocal(_aimWant.copy(f.lookAt));
       if (this.aimW <= 0) this.aim.copy(_aimWant);
-      else this.aim.lerp(_aimWant, 1 - Math.exp(-AIM_FOLLOW * f.dt));
+      else {
+        const root = this.model.tailRoot;
+        _aimDir.subVectors(this.aim, root);
+        const dist = _aimDir.length();
+        _wantDir.subVectors(_aimWant, root);
+        const wantDist = _wantDir.length();
+        _aimDir.normalize();
+        _wantDir.normalize();
+        const off = _aimDir.angleTo(_wantDir);
+        const step = CONFIG.monster.tailTurnRate * f.dt;
+        if (off <= step) _aimDir.copy(_wantDir);
+        else {
+          _turnAxis.crossVectors(_aimDir, _wantDir);
+          if (_turnAxis.lengthSq() < 1e-12) _turnAxis.set(0, 1, 0);
+          _aimDir.applyAxisAngle(_turnAxis.normalize(), step);
+        }
+        this.aimErr = Math.max(0, off - step);
+        this.aim.copy(root).addScaledVector(_aimDir, dist + (wantDist - dist) * (1 - Math.exp(-AIM_RATE * f.dt)));
+      }
+      // Still easing on from rest counts as off target.
+      this.aimErr = Math.max(this.aimErr, (1 - this.aimW) * Math.PI);
     }
     this.aimW = THREE.MathUtils.clamp(this.aimW + (f.lookAt ? 1 : -1) * AIM_RATE * f.dt, 0, 1);
     const aimW = this.aimW * this.aimW * (3 - 2 * this.aimW);
@@ -210,9 +235,9 @@ export class InsectBody implements MonsterBody {
     return this.model.stingerTip.getWorldPosition(out);
   }
 
-  /** The Insect aims with its whole body. */
+  /** How far (rad) the tail's aim still is from its target. */
   aimError(): number {
-    return 0;
+    return this.aimErr;
   }
 
   dispose(): void {

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
+import { CONFIG } from '../../config';
 import type { BodyFrame } from '../types';
 import { InsectBody } from './InsectBody';
 
@@ -149,5 +150,36 @@ describe('InsectBody for Spike Rain', () => {
     const body = new InsectBody();
     for (let i = 0; i < 30; i++) body.animate({ ...base(), time: i / 60, roar: 1 }, () => {});
     for (let i = 0; i < 4; i++) expect(Math.abs(body.feet[i]!.y)).toBeLessThan(10);
+  });
+
+});
+
+describe('InsectBody tail aim', () => {
+  const look = (bearing: number) => new THREE.Vector3(Math.sin(bearing) * 1200, 0, Math.cos(bearing) * 1200);
+  const aimDir = (body: InsectBody) => {
+    const m = body['model'];
+    return body['aim'].clone().sub(m.tailRoot).normalize();
+  };
+
+  it('swings to a new target at no more than tailTurnRate, never jumping', () => {
+    const body = new InsectBody();
+    for (let i = 0; i < 120; i++) body.animate({ ...base(), time: i / 60, lookAt: look(0.9) }, () => {});
+    let prev = aimDir(body);
+    let worst = 0;
+    for (let i = 120; i < 240; i++) {
+      body.animate({ ...base(), time: i / 60, lookAt: look(-0.9) }, () => {});
+      const d = aimDir(body);
+      worst = Math.max(worst, d.angleTo(prev));
+      prev = d;
+    }
+    expect(worst).toBeLessThanOrEqual(CONFIG.monster.tailTurnRate / 60 + 1e-6);
+  });
+
+  it('reports how far the tail still is from its target: off while swinging, on once there', () => {
+    const body = new InsectBody();
+    for (let i = 0; i < 120; i++) body.animate({ ...base(), time: i / 60, lookAt: look(0.9) }, () => {});
+    expect(body.aimError()).toBeLessThan(CONFIG.monster.tailAimTolerance);
+    body.animate({ ...base(), time: 2, lookAt: look(-0.9) }, () => {});
+    expect(body.aimError()).toBeGreaterThan(0.5);
   });
 });

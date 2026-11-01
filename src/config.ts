@@ -242,6 +242,15 @@ export const CONFIG = {
     spikeCooldown: 1.0,
     spikeSpeed: 1100,
     spikeSpreadRad: 0.12,
+    /**
+     * The Insect's tail: it won't target anything within spikeBlindHalf (rad) of straight behind; after losing or
+     * switching a target it waits spikeRetarget (s) before taking the next; its aim turns at most tailTurnRate (rad/s),
+     * and it fires only once within tailAimTolerance (rad) of its target.
+     */
+    spikeBlindHalf: 0.87,
+    spikeRetarget: 0.6,
+    tailTurnRate: 2.5,
+    tailAimTolerance: 0.15,
     deathTime: 2.2,
   },
   /** Reptile Kaiju. Stats feed its MonsterKind; breath tunes Plasma Breath; colours its body and effects. */

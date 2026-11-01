@@ -3,8 +3,7 @@ import { CONFIG } from '../config';
 export type ActiveId = 'leap' | 'dash' | 'roar' | 'bubble' | 'ultimate';
 /** Abilities that need a ground point picked before they fire (Dash fires straight ahead instead). */
 export type AimId = 'leap';
-/** `label`: the button's name when it isn't the ability's own (a monster's ultimate). */
-export type AbilityView = { id: ActiveId; ready: boolean; cdFrac: number; aiming: boolean; label?: string };
+export type AbilityView = { id: ActiveId; ready: boolean; cdFrac: number; aiming: boolean };
 
 /** Button order, left to right. */
 const IDS: readonly ActiveId[] = ['leap', 'dash', 'roar', 'bubble', 'ultimate'];

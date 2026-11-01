@@ -5,13 +5,13 @@ const META: Record<ActiveId, { key: string; label: string }> = {
   dash: { key: 'E', label: 'Dash' },
   roar: { key: 'R', label: 'Roar' },
   bubble: { key: 'T', label: 'Shield' },
-  ultimate: { key: 'Q', label: 'Ultimate' },
+  ultimate: { key: 'Q', label: 'ULT' },
 };
 
 function AbilityButton({ v, onPress }: { v: AbilityView; onPress: (id: ActiveId) => void }) {
   const m = META[v.id];
   const cls = ['ability-btn', v.id === 'ultimate' ? 'ultimate' : '', v.ready ? 'ready' : '', v.aiming ? 'aiming' : ''].join(' ');
-  const label = v.label ?? m.label;
+  const label = m.label;
   return (
     <button className={cls} onPointerDown={(e) => { e.stopPropagation(); onPress(v.id); }} aria-label={label}>
       <span className="ability-label">{label}</span>
