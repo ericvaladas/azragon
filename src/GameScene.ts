@@ -787,7 +787,7 @@ export class GameScene {
     this.moment.start();
     this.aura.start();
     this.monster.hp = this.monster.maxHp;
-    this.abilities.cut(CONFIG.progression.levelUpCooldownCut);
+    this.abilities.cut(CONFIG.progression.levelUpCooldownCut, true);
     this.events.emit('abilities', this.abilityView());
     this.rig.addTrauma(0.35);
     this.emitHud();

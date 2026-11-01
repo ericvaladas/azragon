@@ -646,7 +646,7 @@ export const CONFIG = {
    */
   snare: { duration: 6, perAttack: 1, minDuration: 2, speedMult: 0.3 },
   /**
-   * The ultimate (Q): its cooldown in seconds of plain game time (no upgrade or Haste When Hurt shortens it).
+   * The ultimate (Q): its cooldown in seconds of plain game time (no upgrade or Haste When Hurt shortens it; a level-up's cut does).
    * `startUnlocked`: when true, a run starts with the ultimate unlocked and ready, for testing ultimates; when false,
    * the meteor pickup grants it.
    */
@@ -855,7 +855,7 @@ export const CONFIG = {
   /** Enemy HP and damage multipliers grow with the player's level (not run time). */
   difficulty: { hpPerLevel: 0.12, dmgPerLevel: 0.075 },
   /** EXP to reach the next level is expBase × level^expExponent, × earlyMult for levels up to earlyLevels. */
-  /** levelUpCooldownCut: seconds a level-up takes off every active cooldown but the ultimate's. */
+  /** levelUpCooldownCut: seconds a level-up takes off every active cooldown, the ultimate's included. */
   progression: { expBase: 20, expExponent: 1.55, earlyLevels: 3, earlyMult: 1.25, offerCount: 3, levelUpCooldownCut: 3 },
   /** One-off wave at the start of every run, outside the spawn budget. */
   opening: { time: 5, count: 8, radius: 1200 },

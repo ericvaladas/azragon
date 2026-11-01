@@ -70,9 +70,9 @@ export class Abilities {
     this.aiming = null;
   }
 
-  /** Takes `seconds` off every cooldown, down to 0 at most. Nothing shortens the ultimate's. */
-  cut(seconds: number): void {
-    for (const id of IDS) if (id !== 'ultimate') this.cd[id] = Math.max(0, this.cd[id] - seconds);
+  /** Takes `seconds` off every cooldown, down to 0 at most; the ultimate's only with `ultimateToo`. */
+  cut(seconds: number, ultimateToo = false): void {
+    for (const id of IDS) if (ultimateToo || id !== 'ultimate') this.cd[id] = Math.max(0, this.cd[id] - seconds);
   }
 
   /** Set the ability's cooldown to zero, making it ready. Used to grant the ultimate ready. */

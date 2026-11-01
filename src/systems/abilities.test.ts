@@ -112,6 +112,15 @@ describe('Abilities', () => {
     expect(a.ready('bubble')).toBe(true);
   });
 
+  it('cut leaves the ultimate alone unless asked to include it', () => {
+    const a = new Abilities();
+    a.setRank('ultimate', 1);
+    a.cut(CONFIG.ultimate.cooldown);
+    expect(a.ready('ultimate')).toBe(false);
+    a.cut(CONFIG.ultimate.cooldown, true);
+    expect(a.ready('ultimate')).toBe(true);
+  });
+
   it('a granted ultimate is ready at once', () => {
     const a = new Abilities();
     a.setRank('ultimate', 1);
