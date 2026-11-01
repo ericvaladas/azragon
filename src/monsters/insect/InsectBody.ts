@@ -50,12 +50,16 @@ const AIM_FOLLOW = 8;
 const _strikeLift = new THREE.Vector3(0, 420, -80);
 /**
  * Spike Rain (an ultimate's roar, while carried): a spider's threat display. The body stands DISPLAY_LIFT taller with
- * its front tilted up DISPLAY_TILT rad, on the back pair of legs; the front pair is raised high and wide (RAISED, body
+ * its front tilted up DISPLAY_TILT rad, on the back pair of legs, its tail held straight out behind and down to the
+ * ground as a counterweight; the front pair is raised high and wide (RAISED, body
  * space, x to the leg's side, z from its hip) and the second pair held out lower (SPREAD). The raised legs wave slowly
  * (WAVE m at WAVE_RATE rad/s of world time) with a fine quiver (QUIVER m at QUIVER_RATE); the mandibles open MOUTH_OPEN rad to shoot.
  */
 const DISPLAY_LIFT = 110;
-const DISPLAY_TILT = 0.26;
+const DISPLAY_TILT = 0.52;
+/** The braced tail's tip rests this high (m) on the ground behind; it never points down steeper than TAIL_MAX_DROP (rad). */
+const TAIL_REST = 15;
+const TAIL_MAX_DROP = 1.1;
 const RAISED = new THREE.Vector3(420, 760, 260);
 const SPREAD = new THREE.Vector3(520, 420, 120);
 const WAVE = 45;
@@ -64,6 +68,9 @@ const QUIVER = 6;
 const QUIVER_RATE = 23;
 const MOUTH_OPEN = 0.6;
 const _raised = new THREE.Vector3();
+const _tailRoot = new THREE.Vector3();
+const _tailDir = new THREE.Vector3();
+const _unbody = new THREE.Quaternion();
 
 /** The Insect Titan: six IK legs on a tripod gait, a leg strike, a swatting tail with the stinger. */
 export class InsectBody implements MonsterBody {
@@ -139,7 +146,15 @@ export class InsectBody implements MonsterBody {
     this.aimW = THREE.MathUtils.clamp(this.aimW + (f.lookAt ? 1 : -1) * AIM_RATE * f.dt, 0, 1);
     const aimW = this.aimW * this.aimW * (3 - 2 * this.aimW);
     const swat = f.antiAir ? body.worldToLocal(_swat.copy(f.antiAir.target)) : null;
-    this.model.updateTail(f.time, swat, f.antiAir?.weight ?? 0, aimW > 0 ? this.aim : null, aimW);
+    // Braced: the tail straight out behind and down so its tip rests on the ground, balancing the raised front.
+    let brace: THREE.Vector3 | null = null;
+    if (rear > 0) {
+      _tailRoot.copy(this.model.tailRoot).applyMatrix4(body.matrix);
+      const L = this.model.tailLength;
+      const drop = Math.min(Math.asin(Math.min(1, Math.max(0, (_tailRoot.y - TAIL_REST) / L))), TAIL_MAX_DROP);
+      brace = _tailDir.set(0, -Math.sin(drop), -Math.cos(drop)).applyQuaternion(_unbody.copy(body.quaternion).invert());
+    }
+    this.model.updateTail(f.time, swat, f.antiAir?.weight ?? 0, aimW > 0 ? this.aim : null, aimW, brace, rear);
 
     for (const m of this.model.materials) {
       if (f.flash) m.emissive.setHex(0xffffff);

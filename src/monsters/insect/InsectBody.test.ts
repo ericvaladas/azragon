@@ -19,12 +19,32 @@ describe('InsectBody for Spike Rain', () => {
     const up = pose(1);
     const down = pose(0);
     const tilt = down['model'].body.rotation.x - up['model'].body.rotation.x;
-    expect(tilt).toBeGreaterThan(0.15);
-    expect(tilt).toBeLessThan(0.4);
+    expect(tilt).toBeGreaterThan(0.4);
+    expect(tilt).toBeLessThan(0.7);
     expect(up['model'].body.position.y).toBeGreaterThan(down['model'].body.position.y + 80);
     for (let i = 0; i < 4; i++) expect(up.feet[i]!.y).toBeGreaterThanOrEqual(150);
     expect(Math.abs(up.feet[4]!.y)).toBeLessThan(10);
     expect(Math.abs(up.feet[5]!.y)).toBeLessThan(10);
+  });
+
+  it('braces with its tail: held straight out behind and down, its tip on the ground', () => {
+    const tail = (carried: boolean) => {
+      const body = new InsectBody();
+      for (let i = 0; i < 30; i++) body.animate({ ...base(), time: i / 60, carried, roar: 1 }, () => {});
+      const m = body['model'];
+      return (m['tailPts'] as THREE.Vector3[]).map((p) => p.clone().applyMatrix4(m.body.matrix));
+    };
+    const pts = tail(true);
+    const root = pts[0]!;
+    const tip = pts[pts.length - 1]!;
+    expect(tip.y).toBeLessThan(40);
+    expect(tip.z).toBeLessThan(root.z - 300);
+    const line = new THREE.Line3(root, tip);
+    const on = new THREE.Vector3();
+    for (const p of pts) expect(p.distanceTo(line.closestPointToPoint(p, true, on))).toBeLessThan(10);
+    // Not held: the tail as it always is, up off the ground.
+    const free = tail(false);
+    expect(free[free.length - 1]!.y).toBeGreaterThan(200);
   });
 
   it('its front pair is raised high above its head and spread wide; the second pair held out lower', () => {

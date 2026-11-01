@@ -87,8 +87,13 @@ const TAIL_BASE: THREE.Vector3[] = [
   new THREE.Vector3(0, 550, -190),
   new THREE.Vector3(0, 510, -90),
 ].map((p) => p.sub(TAIL_ROOT).multiplyScalar(TAIL_SCALE).add(TAIL_ROOT));
+/** How far along the tail (from its root) each tail point is: a braced tail lays them out along a straight line. */
+const TAIL_REACH: number[] = TAIL_BASE.map((_, i) => TAIL_BASE.slice(1, i + 1).reduce((sum, p, k) => sum + p.distanceTo(TAIL_BASE[k]!), 0));
+
 
 /** Built from primitives. Faces +Z, Y-up; +X is the monster's left. ~550 tall at the stinger. */
+const _braced = new THREE.Vector3();
+
 export class InsectTitanModel {
   readonly root = new THREE.Group();
   readonly body = new THREE.Group();
@@ -180,7 +185,21 @@ export class InsectTitanModel {
    * For Tail Swat, `swatTarget` (body space) and weight `w` bend the chain so the tip reaches the target.
    * `aim` (body space) with weight `aimW` swings the tail round and points the stinger at the ranged target.
    */
-  updateTail(time: number, swatTarget: THREE.Vector3 | null = null, w = 0, aim: THREE.Vector3 | null = null, aimW = 0): void {
+  /** Where the tail leaves the body (body space). */
+  get tailRoot(): THREE.Vector3 {
+    return this.tailPts[0]!;
+  }
+
+  /** The tail's full length, root to tip. */
+  get tailLength(): number {
+    return TAIL_REACH[TAIL_REACH.length - 1]!;
+  }
+
+  /**
+   * Pose the tail: its idle sway, eased toward `aim` by aimW and bent toward a swat target by w; braced (by braceW) it
+   * straightens out from its root along the unit direction `brace` (body space), as a counterweight.
+   */
+  updateTail(time: number, swatTarget: THREE.Vector3 | null = null, w = 0, aim: THREE.Vector3 | null = null, aimW = 0, brace: THREE.Vector3 | null = null, braceW = 0): void {
     for (let i = 1; i < this.tailPts.length; i++) {
       const base = TAIL_BASE[i]!;
       const k = i / (this.tailPts.length - 1);
@@ -193,6 +212,10 @@ export class InsectTitanModel {
     if (swatTarget && w !== 0) {
       const bent = tailSwatPoints(this.tailPts, swatTarget, w);
       bent.forEach((p, i) => this.tailPts[i]!.copy(p));
+    }
+    if (brace && braceW > 0) {
+      const root = this.tailPts[0]!;
+      for (let i = 1; i < this.tailPts.length; i++) this.tailPts[i]!.lerp(_braced.copy(root).addScaledVector(brace, TAIL_REACH[i]!), braceW);
     }
     for (let i = 0; i < this.tailSegs.length; i++) {
       placeSegment(this.tailSegs[i]!, this.tailPts[i]!, this.tailPts[i + 1]!);
