@@ -71,7 +71,7 @@ There are no new tracks. The plan in `src/audio/musicPlan.ts` changes:
 
 ### Cutscene
 
-It starts a few seconds into the first `retreat` phase (`CONFIG.meteor.cutsceneDelay`, ≈ 3 s), so the retreat has visibly begun first.
+It starts 15 s into the first `retreat` phase (`CONFIG.meteor.cutsceneDelay`, 15 s), so the retreat has visibly begun first.
 
 1. The camera eases up from the monster's normal follow view to look at the sky above the city. This is a blend of the camera rig's pose, not a cut.
 2. The meteor appears high up as a bright sparkling streak with a glowing trail, and falls at a slant toward a point **in the near distance**: on open ground about `CONFIG.meteor.landDistance` (≈ 900–1300 m) from the monster, inside fog range so it's visible. Use `ctx.openGround` for the spot so it lands somewhere reachable and not on water or inside a landmark.

@@ -26,10 +26,12 @@ describe('Cycle', () => {
   it('first break: cutscene at cutsceneDelay, dismiss at retreatTimeout, no boss without the meteor before graceTime', () => {
     const c = new Cycle();
     run(c, 180);
-    expect(run(c, 2.8)).toEqual([]);
-    expect(run(c, 0.3)).toEqual(['cutscene']);
-    expect(run(c, 8.7)).toEqual([]);
+    const { cutsceneDelay } = CONFIG.meteor;
+    const { retreatTimeout } = CONFIG.cycle;
+    expect(run(c, retreatTimeout - 0.2)).toEqual([]);
     expect(run(c, 0.3)).toEqual(['dismiss']);
+    expect(run(c, cutsceneDelay - retreatTimeout - 0.3)).toEqual([]);
+    expect(run(c, 0.3)).toEqual(['cutscene']);
     run(c, 48);
     expect(c.phase).toBe('retreat');
   });
@@ -105,7 +107,7 @@ describe('Cycle', () => {
     expect(c.phase).toBe('army');
     expect(c.cycles).toBe(0);
     run(c, 10);
-    expect(run(c, 3.1)).toContain('cutscene');
+    expect(run(c, CONFIG.meteor.cutsceneDelay + 0.1)).toContain('cutscene');
   });
 
   it('constructor armyTime overrides', () => {
