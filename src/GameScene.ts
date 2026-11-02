@@ -237,7 +237,9 @@ export class GameScene {
   private acid: AcidPools;
   private intro: IntroCinematic;
   /** The run's rhythm: army, retreat (the first with the meteor), boss, recover. `?army=<s>` shortens the army phase in dev. */
-  private cycle = new Cycle((import.meta.env.DEV ? devArmyTime(location.search) : null) ?? CONFIG.cycle.armyTime);
+  /** A dev `?army=` length, which overrides the music's end as the army phase's limit. */
+  private armyOverride = import.meta.env.DEV ? devArmyTime(location.search) : null;
+  private cycle = new Cycle(this.armyOverride ?? CONFIG.cycle.armyTime);
   /** The first break's meteor: its pickup unlocks the ultimate. */
   private meteor: Meteor;
   /** The boss, summoned by the cycle. */
@@ -436,6 +438,12 @@ export class GameScene {
     this.enemies.add(this.mech);
     this.meteor = new Meteor(this.scene, this.particles);
     this.ctx = this.buildContext();
+    // Main 1's end starts the break; anywhere else in a run it just plays again.
+    this.music.onMain1End = () => {
+      const inFight = this.state === 'playing' || this.state === 'paused' || this.state === 'levelup';
+      if (inFight && this.armyOverride === null && this.cycle.phase === 'army') this.cycle.endArmy();
+      else this.music.restartMain1();
+    };
     this.intro = new IntroCinematic({ scene: this.scene, camera: this.camera, overlay: container, monster: this.monster, city: this.city, particles: this.particles, onReveal: () => this.music.reveal() });
     this.city.onCollapseStart = (pos, size) => {
       this.particles.ring('dust', pos, size, 14);
@@ -636,6 +644,7 @@ export class GameScene {
     this.meteor.clear();
     this.pendingCalm = false;
     this.music.fight();
+    this.music.restartMain1();
     this.ultimateUnlocked = CONFIG.ultimate.startUnlocked;
     this.abilities.setRank('ultimate', this.monster.kind.ultimate && this.ultimateUnlocked ? 1 : 0);
     // Unlocked from the start (a testing switch), it starts ready, as the meteor's gift does.
@@ -926,7 +935,7 @@ export class GameScene {
       this.elapsed += dt;
       if (this.state === 'playing') {
         this.runTime += dt;
-        for (const ev of this.cycle.update(dt)) this.onCycle(ev);
+        for (const ev of this.cycle.update(dt, this.armyOverride === null && this.music.main1Running)) this.onCycle(ev);
         this.updateBossMusic();
         // Cooldowns recover on their own clock, sped up by Haste When Hurt.
         const cdRate = this.cdRate();

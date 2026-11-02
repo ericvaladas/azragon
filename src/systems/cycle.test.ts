@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { Cycle, devArmyTime, type CycleEvent } from './cycle';
+import { CONFIG } from '../config';
 
 const DT = 0.1;
 
@@ -138,5 +139,32 @@ describe('devArmyTime', () => {
     expect(c.phase).toBe('recover');
     expect(c.escorting).toBe(false);
     expect(c.retreating).toBe(true);
+  });
+
+  it('the music ending starts the retreat at once, and endArmy elsewhere does nothing', () => {
+    const c = new Cycle();
+    for (let i = 0; i < 100; i++) c.update(0.1, true);
+    c.endArmy();
+    expect(c.update(0.1, true)).toEqual(['retreat']);
+    expect(c.phase).toBe('retreat');
+    c.endArmy();
+    c.meteorLanded();
+    c.meteorCollected();
+    while ((c.phase as string) !== 'boss') c.update(0.1);
+    c.bossDefeated();
+    while ((c.phase as string) !== 'army') c.update(0.1);
+    expect(c.update(0.1)).toEqual([]);
+  });
+
+  it('while the music drives it, armyTime passes without a retreat, up to armyMaxTime', () => {
+    const c = new Cycle();
+    let t = 0;
+    while (t < CONFIG.cycle.armyMaxTime - 0.2) {
+      expect(c.update(0.1, true)).toEqual([]);
+      t += 0.1;
+    }
+    let last: string[] = [];
+    for (let i = 0; i < 5; i++) last = last.concat(c.update(0.1, true));
+    expect(last).toContain('retreat');
   });
 });

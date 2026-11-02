@@ -164,11 +164,12 @@ export const CONFIG = {
   },
   fog: { near: 2200, far: 4700 },
   /**
-   * The army / retreat / boss / recover loop (s). exitDistance (m) sits beyond fog.far, where retreating units leave.
+   * The army / retreat / boss / recover loop (s). The army phase ends when Main 1 plays out; with no music playing it
+   * lasts armyTime, and armyMaxTime is the limit if the track stalls. exitDistance (m) sits beyond fog.far, where retreating units leave.
    * During a boss fight only bossEscorts spawn, with the director's budget growing at bossEscortRate × its usual rate
    * and bossEscortCaps replacing their usual caps.
    */
-  cycle: { armyTime: 180, breakTime: 20, recoverTime: 10, retreatTimeout: 12, exitDistance: 5000, bossEscorts: ['tank', 'heli'], bossEscortRate: 0.5, bossEscortCaps: { heli: 10 } },
+  cycle: { armyTime: 180, armyMaxTime: 240, breakTime: 20, recoverTime: 10, retreatTimeout: 12, exitDistance: 5000, bossEscorts: ['tank', 'heli'], bossEscortRate: 0.5, bossEscortCaps: { heli: 10 } },
   /** First-break meteor timing (s after the retreat starts, or after the meteor lands or is collected). */
   meteor: {
     cutsceneDelay: 3, graceTime: 25, bossDelay: 3,
@@ -945,7 +946,7 @@ export const CONFIG = {
     defaultVolume: 0.5,
     /** The Intro: loops as a whole file through the menus and the cutscene. */
     intro: { file: 'audio/intro.m4a' },
-    /** Main gameplay 1: starts from its top on the reveal and loops through the fighting. */
+    /** Main gameplay 1: starts from its top on the reveal and plays once through the fighting; its end starts the break. */
     main1: { file: 'audio/main1.m4a' },
     /** Rest 1: plays during the breaks (the retreat and the recovery) and loops as a whole song. */
     rest1: { file: 'audio/rest1.m4a' },

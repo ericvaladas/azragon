@@ -171,3 +171,8 @@ The owner asked for a quadruped mech in the spirit of a spider-tank concept they
 - **Slam → rear-up stomp:** it lifts both front legs high and crashes them down, with a shockwave ring all round.
 - **Dash:** it crouches low on all four legs, then lunges.
 - **Death:** the legs buckle outward, and the hull drops and explodes.
+
+## Owner revision: the break follows the music
+
+The army phase ends when `main1` finishes, so the break lands on the end of the song rather than the song looping just before it. `armyTime` (180 s of game time) is the fallback when no music is playing, and `armyMaxTime` (240 s) caps a track that stalls. A dev `?army=` length overrides all of this.
+

@@ -16,7 +16,7 @@ const report = (e: unknown): void => RundotGameAPI.error('[music]', e);
  * The soundtrack, driven by game events through musicStep.
  * - The first gesture starts the Intro, which loops as a whole file.
  * - The silhouette reveal crossfades the Intro into Main 1 at once, over `crossfade` s.
- * - Main 1 loops through the army fight, Rest 1 during the breaks, Boss 1 during the boss fight. calm(), fight() and
+ * - Main 1 plays once through the army fight (onMain1End hears it finish), Rest 1 during the breaks, Boss 1 during the boss fight. calm(), fight() and
  *   boss() crossfade between them over `phaseFade` s.
  * - A menu brings the Intro back.
  *
@@ -89,6 +89,23 @@ export class Music {
   }
 
   /** A break began: the current gameplay track crossfades into Rest 1. */
+  /** Heard when Main 1 finishes playing. */
+  onMain1End: () => void = () => {};
+
+  /** Main 1 is audibly running (muted counts), so it will reach its end. */
+  get main1Running(): boolean {
+    const s = this.streams.main1;
+    return this.playing === 'main1' && !!s?.ready && !s.el.paused;
+  }
+
+  /** Main 1 from its top, if it is the current track. */
+  restartMain1(): void {
+    const s = this.streams.main1;
+    if (this.playing !== 'main1' || !s?.ready) return;
+    s.el.currentTime = 0;
+    s.el.play().catch(() => {});
+  }
+
   calm(): void {
     if (this.ctx) this.send('calm');
   }
@@ -153,7 +170,9 @@ export class Music {
     this.srcs[id]
       .then((url) => {
         if (this.disposed) return;
-        el.loop = true;
+        // Main 1's end starts the break, so it never loops by itself.
+        el.loop = id !== 'main1';
+        if (id === 'main1') el.onended = () => this.playing === 'main1' && this.onMain1End();
         el.src = url;
         s.ready = true;
         if (s.pending) this.play(id);

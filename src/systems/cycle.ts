@@ -20,6 +20,7 @@ export class Cycle {
   private _cycles = 0;
 
   private readonly armyTime: number;
+  private armyDone = false;
   private clock = 0;
   private cutsceneFired = false;
   private dismissFired = false;
@@ -64,14 +65,23 @@ export class Cycle {
   }
 
   /** Advances the phase clock by `dt` seconds and returns the events that fired. */
-  update(dt: number): CycleEvent[] {
+  /** The army phase's music has played out: the retreat starts on the next update. Ignored in any other phase. */
+  endArmy(): void {
+    if (this.phase === 'army') this.armyDone = true;
+  }
+
+  /**
+   * `musicDriven`: the music is playing and will call endArmy, so the timer is only the armyMaxTime backstop for a
+   * track that stalls. Otherwise the army phase runs for armyTime.
+   */
+  update(dt: number, musicDriven = false): CycleEvent[] {
     const out: CycleEvent[] = [];
     this.clock += dt;
     const t = this.clock + EPS;
     const first = this.cycles === 0;
     switch (this.phase) {
       case 'army':
-        if (t >= this.armyTime) this.enter('retreat', out);
+        if (this.armyDone || t >= (musicDriven ? CONFIG.cycle.armyMaxTime : this.armyTime)) this.enter('retreat', out);
         break;
       case 'retreat': {
         if (!this.dismissFired && t >= CONFIG.cycle.retreatTimeout) {
@@ -126,6 +136,7 @@ export class Cycle {
   }
 
   private clearPhaseState(): void {
+    this.armyDone = false;
     this.clock = 0;
     this.cutsceneFired = false;
     this.dismissFired = false;
