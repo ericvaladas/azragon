@@ -798,20 +798,20 @@ export const CONFIG = {
    */
   mech: {
     height: MONSTER_HEIGHT, width: 0.9 * MONSTER_HEIGHT, radius: 0.4 * MONSTER_HEIGHT,
-    hp: 13500, approachSpeed: 160, walkSpeed: 90, turnRate: 1.2, stopGap: 25,
+    hp: 12000, approachSpeed: 160, walkSpeed: 90, turnRate: 1.2, stopGap: 25,
     /**
      * Having reached the monster it stays put until a gap of more than chaseGap m past its stopping point has lasted
      * chaseDelay s. chaseGap is where punchReach runs out, so it never settles out of its own melee reach.
      */
     chaseGap: 0.3 * MONSTER_HEIGHT - 25, chaseDelay: 2,
-    punchReach: 0.3 * MONSTER_HEIGHT, punchArc: 0.7, punchDamage: 88,
-    slamRadius: 0.35 * MONSTER_HEIGHT, slamDamage: 156, slamChance: 0.35, meleeCooldown: 2.6,
+    punchReach: 0.3 * MONSTER_HEIGHT, punchArc: 0.7, punchDamage: 101,
+    slamRadius: 0.35 * MONSTER_HEIGHT, slamDamage: 179, slamChance: 0.35, meleeCooldown: 2.6,
     /** It engages (and may dash) once within dashTrigger m of the monster, or engageAfter s after its summoning, whichever comes first. */
     dashTrigger: 1600, engageAfter: 25, dashSpeed: 900, dashCooldown: 9, dashStopShort: 220, crushRadius: 0.25 * MONSTER_HEIGHT, crushDps: 600,
-    rocketCooldown: 4, rocketsPerVolley: 2, rocketDamage: 10.5, rocketRange: 2200, cannonShellSpeed: 1040,
+    rocketCooldown: 4, rocketsPerVolley: 2, rocketDamage: 12, rocketRange: 2200, cannonShellSpeed: 1040,
     cannonRecoil: 0.08, cannonRecoilTime: 0.35, cannonJoltShift: 0.014, cannonJoltPitch: 0.035,
     cannonFlash: 4, cannonSparks: 6, cannonSmoke: 6, cannonSmokeSpeed: 420, cannonShake: 0.1,
-    barrageCooldown: 17, barrageCount: 7, barrageSpread: 450, barrageRadius: 130, barrageFill: 2.0, barrageDamage: 110, barrageMissileSpeed: 1600, barrageRunOut: 120, barrageRise: 150, barrageBack: 0.6,
+    barrageCooldown: 17, barrageCount: 7, barrageSpread: 450, barrageRadius: 130, barrageFill: 2.0, barrageDamage: 126, barrageMissileSpeed: 1600, barrageRunOut: 120, barrageRise: 150, barrageBack: 0.6,
     /**
      * The crawl walk, in model units (1 = its height). gaitStep is the ground covered in one full cycle of four
      * footfalls; each foot stays planted for gaitDuty of the cycle and lifts gaitLift mid-swing. Each foot's travel is
@@ -831,7 +831,7 @@ export const CONFIG = {
     sidestepDistance: 0.9 * MONSTER_HEIGHT, hopDistance: 1.3 * MONSTER_HEIGHT, hopHeight: 0.25 * MONSTER_HEIGHT, hopCrush: 0.4, hopShake: 0.2,
     laserHops: 2, laserFirst: 15, laserCooldown: 22, laserRange: 1400,
     laserCharge: 1.5, laserAim: 1.6, laserTrackRate: 0.08, laserLock: 1, laserFire: 1.6, laserRecover: 0.8,
-    laserDps: 170, laserHitRadius: 100, laserBuildingDps: 500, laserLength: 3000,
+    laserDps: 195, laserHitRadius: 100, laserBuildingDps: 500, laserLength: 3000,
     laserWidth: 70, laserAimWidth: 6, laserLockWidth: 12, laserEyeSize: 50, laserShake: 0.5, laserRumble: 0.03, laserBurnEvery: 0.06,
     laserSparkEvery: 0.05, laserSparkReach: 70,
     laserStreaks: [10, 14] as readonly [number, number], laserStreakReach: [60, 120] as readonly [number, number], laserStreakLife: [0.5, 0.3] as readonly [number, number], laserStreakLength: 0.6,

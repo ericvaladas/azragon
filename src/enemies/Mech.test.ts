@@ -699,8 +699,8 @@ describe('Mech', () => {
       const total = c.hits.reduce((a, h) => a + h.amount, 0);
       expect(c.hits.every((h) => h.source === 'beam')).toBe(true);
       expect(c.hits[0]!.amount).toBeCloseTo(M.laserDps * DT, 6);
-      expect(total).toBeGreaterThan(240);
-      expect(total).toBeLessThan(310);
+      expect(total).toBeGreaterThan(M.laserDps * M.laserFire * 0.85);
+      expect(total).toBeLessThan(M.laserDps * M.laserFire * 1.05);
       expect(Math.max(...c.shakes)).toBeGreaterThanOrEqual(M.laserShake);
     });
 
