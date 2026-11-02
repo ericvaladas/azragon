@@ -2,6 +2,8 @@
 
 You are a skyscraper-sized alien that has crash-landed on Earth. Flatten the city while the military throws everything it has at you.
 
+https://github.com/user-attachments/assets/e43d8e8b-9a73-4ec5-b255-f29e37eb5411
+
 ## Controls
 
 | Action | Phone | Desktop |
