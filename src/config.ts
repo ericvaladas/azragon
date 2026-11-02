@@ -176,7 +176,7 @@ export const CONFIG = {
     /** How long (s) the just-granted ultimate's button is ringed by a glow and circling sparks. */
     ultimateFreshTime: 6,
     /** Landing spot: distance band from the monster (m); fall: start height, sideways slant (m) and time (s). */
-    landMin: 900, landMax: 1300, startHeight: 3500, slant: 1800, fallTime: 2.6,
+    landMin: 1200, landMax: 1600, startHeight: 3500, slant: 1800, fallTime: 2.6,
     /** Camera blend toward the sky: ease up (s), the fall's release time (s into the cutscene, inside the ease-up so the gem is already streaking down as the camera settles), hold after impact, ease back (s); extra camera height at full blend (m). */
     lookUp: 1.4, fallStart: 0.5, hold: 1.6, lookBack: 1.3, cameraLift: 400,
     /** Gem size (m), monster pickup radius and building-flattening radius at impact (m), spin (rad/s), bob (m). */
