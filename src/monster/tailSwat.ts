@@ -7,16 +7,18 @@ export function swatTiming(windup: number, strike: number, hold: number, recover
   return { windup, strike, hold, recover, impact: windup + strike, total: windup + strike + hold + recover };
 }
 
+const ease = (u: number) => u * u * (3 - 2 * u);
+
 /** The shared anti-air timeline (Tail Swat, Snap Bite, Tentacle Lash; any kind without its own `swatTiming`). */
 export const SWAT_TIMES = swatTiming(0.12, 0.1, 0.08, 0.22);
 
-/** How far the tail is bent toward the target on timeline T: slightly negative while cocking back, 1 at full extension. */
+/** How far the tail is bent toward the target on timeline T: slightly negative while cocking back, 1 at full extension; it eases into the cock and out of the recovery. */
 export function swatWeight(t: number, T: SwatTiming = SWAT_TIMES): number {
   if (t <= 0 || t >= T.total) return 0;
-  if (t < T.windup) return -0.25 * (t / T.windup);
+  if (t < T.windup) return -0.25 * ease(t / T.windup);
   if (t < T.impact) return -0.25 + 1.25 * ((t - T.windup) / T.strike);
   if (t < T.impact + T.hold) return 1;
-  return 1 - (t - T.impact - T.hold) / T.recover;
+  return 1 - ease((t - T.impact - T.hold) / T.recover);
 }
 
 /** The Insect's tail swat: a longer timeline than the shared one, so the swing reads (cock, whip, follow through, recover). */
@@ -25,7 +27,6 @@ export const TAIL_SWING_TIMES = swatTiming(0.4, 0.3, 0.15, 0.6);
 const COCK = 0.9;
 const FOLLOW = 0.6;
 
-const ease = (u: number) => u * u * (3 - 2 * u);
 
 /**
  * A tail swat at `t` on timeline T: how far the swing pose is blended in (0 at rest), and its sweep (rad round the

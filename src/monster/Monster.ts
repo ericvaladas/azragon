@@ -3,6 +3,7 @@ import { CONFIG } from '../config';
 import { angleDelta, dist2, yawTo, type Vec2 } from '../util/math';
 import { addSilhouette } from '../render/silhouette';
 import { leapPeak, leapPosition } from './leap';
+import { meleeLean } from './strike';
 import { SWAT_TIMES, swatWeight, type SwatTiming } from './tailSwat';
 import type { BodyFrame, MonsterBody, MonsterKind, MonsterStats, StrikeKind } from '../monsters/types';
 
@@ -496,13 +497,12 @@ export class Monster {
     }
     this.meleeT += dt;
     const T = this.meleeTiming;
-    if (this.meleeT < T.windup) {
-      // Rear back slightly while the strike cocks.
-      this.pose.pitch = -0.12 * (this.meleeT / T.windup);
-    } else if (this.meleeT >= T.impact && !this.impactDone) {
+    // Rear back while the strike cocks, lean and sink into the hit, settle after it.
+    const lean = meleeLean(this.meleeT, T);
+    this.pose.pitch = lean.pitch;
+    this.pose.dip += ((this.crouch ? 35 : 0) + lean.dip - this.pose.dip) * (1 - Math.exp(-25 * dt));
+    if (this.meleeT >= T.impact && !this.impactDone) {
       this.impactDone = true;
-      this.pose.pitch = 0.1;
-      this.pose.dip = 25;
       this.onMeleeImpact(this.strikePoint.clone());
     }
     if (this.meleeT > T.end) this.meleeT = -1;

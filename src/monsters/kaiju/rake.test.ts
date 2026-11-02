@@ -13,3 +13,14 @@ describe('rakeSwing', () => {
     expect(rakeSwing(2, T)).toBe(0);
   });
 });
+
+describe('rakeSwing smoothness', () => {
+  it('never jumps more than a sixth of the slash between 60 fps frames', () => {
+    let prev = rakeSwing(0, T);
+    for (let t = 1 / 60; t <= T.end + 0.05; t += 1 / 60) {
+      const cur = rakeSwing(t, T);
+      expect(Math.abs(cur - prev)).toBeLessThan(0.33);
+      prev = cur;
+    }
+  });
+});

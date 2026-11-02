@@ -1,6 +1,7 @@
 import { CONFIG } from '../../config';
 import type { MonsterKind } from '../types';
 import { KaijuBody } from './KaijuBody';
+import { swatTiming } from '../../monster/tailSwat';
 
 const K = CONFIG.kaiju;
 
@@ -18,6 +19,7 @@ export const KAIJU: MonsterKind = {
   melee: { kind: 'arc', halfAngle: K.rakeHalfAngle },
   ranged: 'breath',
   antiAir: 'bite',
+  swatTiming: swatTiming(K.bite.windup, K.bite.strike, K.bite.hold, K.bite.recover),
   leapCrouch: 0.2,
   tailSweep: true,
   ultimate: { id: 'plasmaLance', label: 'Plasma Lance' },

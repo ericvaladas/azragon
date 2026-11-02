@@ -340,6 +340,8 @@ export const CONFIG = {
     tail: { reach: 520, rearHalf: 1.9, hitHalf: 0.8, damage: 90, buildingMult: 3, cooldown: 2.0, timing: { windup: 0.25, impact: 0.45, end: 1.0 } },
     /** Claw Rake: half-angle (rad) of the forward arc. */
     rakeHalfAngle: 0.9,
+    /** Snap Bite's timeline (s): cock back, lunge to the flyer, hold the bite, recover. Slower than the shared anti-air timeline so the lunge reads. */
+    bite: { windup: 0.18, strike: 0.14, hold: 0.12, recover: 0.32 },
     /** Plasma Breath: charge (s), beam on-screen time (s), beam half-width (m), visual sweep (rad), fan per extra beam (rad), beam cap, building damage per hit. */
     breath: { charge: 0.4, show: 0.35, halfWidth: 45, sweep: 0.1, fan: 0.12, maxLines: 4, buildingDamage: 120 },
     /**

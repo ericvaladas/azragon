@@ -284,7 +284,7 @@ export class KaijuBody implements MonsterBody {
       const arm = this.shortArms[i]!;
       let swing = Math.sin(f.time * 1.3 + i) * 0.06 - shift * arm.side * 0.12 * m;
       swing += lp.arms;
-      if (f.melee && f.melee.side === i) swing = rakeSwing(f.melee.t, K.stats.meleeTiming);
+      if (f.melee && f.melee.side === i) swing += rakeSwing(f.melee.t, K.stats.meleeTiming);
       // While slashing forward (negative swing) the arm also sweeps across the body.
       arm.pivot.rotation.set(swing + ARM_DROP, 0, -arm.side * Math.max(0, -swing) * 0.5);
     }

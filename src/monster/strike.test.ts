@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
-import { footTargets, strikeFootPose, STRIKE_TIMES } from './strike';
+import { footTargets, meleeLean, strikeFootPose, STRIKE_TIMES } from './strike';
 import { strikePlan } from './strike';
 
 const t = (x: number, z: number, opts: { airborne?: boolean; alive?: boolean; radius?: number } = {}) => ({
@@ -58,5 +58,25 @@ describe('strikeFootPose', () => {
     expect(mid.distanceTo(target)).toBeGreaterThan(1);
     expect(mid.distanceTo(gait)).toBeGreaterThan(1);
     expect(at(W + STRIKE_TIMES.recover).distanceTo(gait)).toBeCloseTo(0);
+  });
+});
+
+describe('meleeLean', () => {
+  const T = { windup: 0.25, impact: 0.4, end: 0.8 };
+  it('rears back by the windup, leans and sinks fully into the hit, and is upright at both ends', () => {
+    expect(meleeLean(0, T)).toEqual({ pitch: 0, dip: 0 });
+    expect(meleeLean(T.windup, T).pitch).toBeCloseTo(-0.12);
+    expect(meleeLean(T.impact, T).pitch).toBeCloseTo(0.1);
+    expect(meleeLean(T.impact, T).dip).toBeCloseTo(25);
+    expect(meleeLean(T.end, T)).toEqual({ pitch: 0, dip: 0 });
+  });
+  it('never jumps between 60 fps frames', () => {
+    let prev = meleeLean(0, T);
+    for (let t = 1 / 60; t <= T.end + 0.05; t += 1 / 60) {
+      const cur = meleeLean(t, T);
+      expect(Math.abs(cur.pitch - prev.pitch)).toBeLessThan(0.05);
+      expect(Math.abs(cur.dip - prev.dip)).toBeLessThan(6);
+      prev = cur;
+    }
   });
 });

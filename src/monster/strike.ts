@@ -48,3 +48,22 @@ export function strikeFootPose(t: number, windup: number, gait: THREE.Vector3, l
   if (u < S.hold) return out.copy(target);
   return out.copy(target).lerp(gait, Math.min(1, (u - S.hold) / (S.recover - S.hold)));
 }
+
+const smooth = (u: number) => u * u * (3 - 2 * u);
+
+/**
+ * The body's lean through a melee strike at t seconds on timeline T: it rears back (pitch −) through the windup,
+ * pitches forward and sinks (dip) into the hit, accelerating, then settles back to upright. Continuous throughout,
+ * 0 at both ends.
+ */
+export function meleeLean(t: number, T: { windup: number; impact: number; end: number }): { pitch: number; dip: number } {
+  if (t <= 0 || t >= T.end) return { pitch: 0, dip: 0 };
+  if (t < T.windup) return { pitch: -0.12 * smooth(t / T.windup), dip: 0 };
+  if (t < T.impact) {
+    const u = (t - T.windup) / (T.impact - T.windup);
+    const a = (u * (1 + u)) / 2;
+    return { pitch: -0.12 + 0.22 * a, dip: 25 * a };
+  }
+  const k = 1 - smooth((t - T.impact) / (T.end - T.impact));
+  return { pitch: 0.1 * k, dip: 25 * k };
+}
