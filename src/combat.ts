@@ -51,3 +51,9 @@ export function collapseTrauma(dist: number, razed: boolean): number {
   const near = 1 - Math.min(1, Math.max(0, (dist - C.collapseNear) / (C.collapseFar - C.collapseNear)));
   return C.collapseShake * near * (razed ? C.razedShake : 1);
 }
+
+/** What Roar does to `t`: an aircraft is brought down outright, a boss takes `bossDamage`, anything else `damage`; both × `mult`. */
+export function roarDamage(t: Pick<Target, 'airborne' | 'boss'>, damage: number, bossDamage: number, mult: number): number {
+  if (t.airborne) return 1e9;
+  return (t.boss ? bossDamage : damage) * mult;
+}

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { CONFIG } from './config';
-import { collapseTrauma, paysExp, resolveHit } from './combat';
+import { collapseTrauma, paysExp, resolveHit, roarDamage } from './combat';
 
 const base = { dmgMult: 1.5, deflectChance: 0.3, airborne: false };
 
@@ -53,5 +53,13 @@ describe('collapseTrauma', () => {
   });
   it('is much less for a building the boss razed', () => {
     expect(collapseTrauma(100, true)).toBeCloseTo(C.collapseShake * C.razedShake, 6);
+  });
+});
+
+describe('roarDamage', () => {
+  it('downs aircraft, hits a boss for its own damage, and anything else for the usual', () => {
+    expect(roarDamage({ airborne: true }, 120, 600, 1.5)).toBe(1e9);
+    expect(roarDamage({ airborne: false, boss: true }, 120, 600, 1.5)).toBe(900);
+    expect(roarDamage({ airborne: false }, 120, 600, 1.5)).toBe(180);
   });
 });

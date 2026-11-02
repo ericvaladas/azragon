@@ -7,7 +7,7 @@ import { Lighting } from './render/Lighting';
 import { PixelRenderer } from './render/PixelRenderer';
 import { createSky, skyColors } from './render/Sky';
 import { clampDelta, yawTo, type Vec2 } from './util/math';
-import { collapseTrauma, paysExp, resolveHit, type DamageSource, type Target } from './combat';
+import { collapseTrauma, paysExp, roarDamage, resolveHit, type DamageSource, type Target } from './combat';
 import { City, CRATER_RADIUS } from './world/City';
 import { IntroCinematic } from './intro/IntroCinematic';
 import { Music } from './audio/Music';
@@ -1322,11 +1322,10 @@ export class GameScene {
       m.startRoar();
       this.order = null;
             this.shockwave.start(p, R.radius);
-      const dmg = R.damage * this.dmgMult();
       this.city.forEachStandingInRadius({ x: p.x, z: p.z }, R.radius, (t) => t.applyDamage(R.buildingDamage));
       for (const t of [...this.enemyTargets()]) {
         if (Math.hypot(t.position.x - p.x, t.position.z - p.z) > R.radius + t.radius) continue;
-        t.applyDamage(t.airborne ? 1e9 : dmg);
+        t.applyDamage(roarDamage(t, R.damage, R.bossDamage, this.dmgMult()));
       }
       this.particles.ring('dust', p, R.radius * 0.5, 30);
       this.rig.addTrauma(0.7);

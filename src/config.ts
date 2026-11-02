@@ -546,7 +546,7 @@ export const CONFIG = {
        * so the whole hand is above the ground.
        */
       hand: { scale: 2.2, bossScale: 5, riseSpeed: 180, airRiseTime: 0.45, easeTime: 0.6, closeTime: 1.6, sinkSpeed: 100, airSinkTime: 1.2, wristClear: 15 },
-      bossDamage: 3500,
+      bossDamage: 5000,
       cameraDistanceMult: 2.2,
       boltEvery: [0.9, 1.6], boltSpread: 1.3,
       t: { easeIn: 0.2, sky: 0.6, cameraIn: 3.0, cameraOut: 2.4, boltsFrom: 0.3, boltsTo: 3.3, circleFrom: 0.5, circleTo: 1.3, grasp: 1.9, outroFrom: 3.4, end: 4.4 },
@@ -659,7 +659,7 @@ export const CONFIG = {
     dash: { cooldown: 10, range: 900, speedMult: 6, crushRadius: 95, bossDamage: 500 },
     /** `peak` is the height of a full-range leap; shorter leaps arc lower in proportion, down to `minPeak` × peak. */
     leap: { cooldown: 8, range: 1280, duration: 1.4, peak: 340, minPeak: 0.2, landRadius: 260, damage: 150 },
-    roar: { cooldown: 20, radius: 600, duration: 1.2, damage: 120, buildingDamage: 300 },
+    roar: { cooldown: 20, radius: 600, duration: 1.2, damage: 120, bossDamage: 600, buildingDamage: 300 },
   },
   laser: {
     trackTime: 2.5, lockTime: 0.8, fireTime: 1.5, cooldownMin: 20, cooldownMax: 30,
