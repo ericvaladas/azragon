@@ -36,7 +36,7 @@ The run gets a new **phase** inside the `playing` state. The `GameState` values 
 | `army` | 3 min (`CONFIG.cycle.armyTime` 180 s) | Today's game: the spawn director runs and enemies pursue. |
 | `retreat` | `CONFIG.cycle.breakTime` ≈ 20 s | No spawns. Every live unit retreats and leaves. Music crossfades to `rest1`. On the first cycle only: the meteor cutscene, then the meteor waits to be picked up. |
 | `boss` | until the mech dies | The mech spawns and fights. No regular spawns. Music crossfades to `boss1`. |
-| `recover` | `CONFIG.cycle.recoverTime` 10 s | No spawns. Music is `rest1`. |
+| `recover` | `CONFIG.cycle.recoverTime` 20 s | No spawns. Music is `rest1`. |
 | → `army` | | The 3-minute clock starts again from zero. |
 
 - **The 3-minute clock only counts `army` time.** It doesn't run during the other phases, while paused, or in the level-up cards. The first break comes 3 min into a run.

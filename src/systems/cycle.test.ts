@@ -3,6 +3,7 @@ import { Cycle, devArmyTime, type CycleEvent } from './cycle';
 import { CONFIG } from '../config';
 
 const DT = 0.1;
+const RECOVER = CONFIG.cycle.recoverTime;
 
 /** Steps the cycle for `seconds` and returns every event fired. */
 function run(c: Cycle, seconds: number): CycleEvent[] {
@@ -68,7 +69,7 @@ describe('Cycle', () => {
     expect(c.phase).toBe('boss');
     c.bossDefeated();
     run(c, 0.2);
-    run(c, 10);
+    run(c, RECOVER);
     expect(c.cycles).toBe(1);
     const evs = run(c, 10.2);
     expect(evs).toEqual(['retreat']);
@@ -89,7 +90,7 @@ describe('Cycle', () => {
     c.bossDefeated();
     expect(c.update(DT)).toEqual(['recover']);
     expect(c.phase).toBe('recover');
-    expect(run(c, 9.8)).toEqual([]);
+    expect(run(c, RECOVER - 0.2)).toEqual([]);
     expect(run(c, 0.3)).toEqual(['army']);
     expect(c.phase).toBe('army');
     expect(c.cycles).toBe(1);

@@ -169,7 +169,7 @@ export const CONFIG = {
    * During a boss fight only bossEscorts spawn, with the director's budget growing at bossEscortRate × its usual rate
    * and bossEscortCaps replacing their usual caps.
    */
-  cycle: { armyTime: 180, armyMaxTime: 240, breakTime: 20, recoverTime: 10, retreatTimeout: 12, exitDistance: 5000, bossEscorts: ['tank', 'heli'], bossEscortRate: 0.5, bossEscortCaps: { heli: 10 } },
+  cycle: { armyTime: 180, armyMaxTime: 240, breakTime: 20, recoverTime: 20, retreatTimeout: 12, exitDistance: 5000, bossEscorts: ['tank', 'heli'], bossEscortRate: 0.5, bossEscortCaps: { heli: 10 } },
   /** First-break meteor timing (s after the retreat starts, or after the meteor lands or is collected). */
   meteor: {
     cutsceneDelay: 15, graceTime: 25, bossDelay: 3,
