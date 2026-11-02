@@ -1446,7 +1446,7 @@ export class GameScene {
     this.monster.startSwat(hits[0]!.position);
   }
 
-  /** Overload triggers: the absorbed energy cuts the active abilities' cooldowns, and the buttons show it at once. */
+  /** Overload triggers: a laser hit cuts the active abilities' cooldowns, and the buttons show it at once. */
   private overload(): void {
     this.abilities.cut(this.passives.overloadCut());
     this.events.emit('abilities', this.abilityView());
@@ -1652,18 +1652,14 @@ export class GameScene {
     const m = this.monster;
     if (!m.alive || this.state !== 'playing') return;
     const shielded = untouchable(this.passives.bubbleActive(), this.ultimateActive);
-    const absorbed = (source === 'beam' || source === 'laser') && !shielded ? this.passives.tryOverload() : null;
-    if (absorbed) {
-      if (source === 'laser') this.enemies.get<OrbitalLaser>('laser').cancel();
-      if (absorbed === 'trigger') this.overload();
-      return;
-    }
-    const r = resolveHit(amount, source, { dmgMult: difficulty(this.progression.level).dmgMult, deflectChance: this.deflectChance(), airborne: m.airborne, invulnerable: shielded }, Math.random());
+    const laser = source === 'beam' || source === 'laser';
+    const r = resolveHit(laser ? amount * this.passives.laserDamageMult() : amount, source, { dmgMult: difficulty(this.progression.level).dmgMult, deflectChance: this.deflectChance(), airborne: m.airborne, invulnerable: shielded }, Math.random());
     if (r.deflected) {
       this.particles.emit('spark', m.position.clone().setY(300 * CONFIG.monster.scale), 8);
       return;
     }
     if (r.damage <= 0) return;
+    if (laser && this.passives.tryOverload()) this.overload();
     m.hp = Math.max(0, m.hp - r.damage);
     m.flash();
     if (this.passives.core()) this.heat = heatAfterHit(this.heat, r.damage, m.maxHp, CONFIG.passives.core.gain);

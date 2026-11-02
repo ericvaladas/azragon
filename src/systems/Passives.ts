@@ -10,26 +10,22 @@ export class Passives {
   private mortarT = 0;
   private interceptBank = 0;
   private overloadCd = 0;
-  /** Seconds left in which beam and orbital hits are absorbed for free. */
-  private absorbT = 0;
   private bubbleT = 0;
   private reflectT = 0;
   private reflectCd = 0;
 
   constructor(private ranks: () => Record<AbilityId, number>) {}
 
-  /**
-   * Overload, on a beam or orbital hit: 'trigger' absorbs it, starting the cooldown and the absorb window; 'window' absorbs
-   * it free inside that window; null lets it through.
-   */
-  tryOverload(): 'trigger' | 'window' | null {
-    const r = this.ranks().overload;
-    if (r <= 0) return null;
-    if (this.absorbT > 0) return 'window';
-    if (this.overloadCd > 0) return null;
-    this.overloadCd = P.overload.cooldown[r]!;
-    this.absorbT = P.overload.absorbTime;
-    return 'trigger';
+  /** What beam and orbital damage is multiplied by: less once Laser Absorb is taken. */
+  laserDamageMult(): number {
+    return this.ranks().overload > 0 ? P.overload.damageMult : 1;
+  }
+
+  /** Overload, on a beam or orbital hit that lands: true when it is ready, starting its recharge. */
+  tryOverload(): boolean {
+    if (this.ranks().overload <= 0 || this.overloadCd > 0) return false;
+    this.overloadCd = P.overload.recharge;
+    return true;
   }
 
   /** Seconds a triggered Overload cuts from the active abilities' cooldowns. */
@@ -135,7 +131,6 @@ export class Passives {
       }
     }
     this.overloadCd = Math.max(0, this.overloadCd - cdDt);
-    this.absorbT = Math.max(0, this.absorbT - dt);
     this.bubbleT = Math.max(0, this.bubbleT - dt);
     this.reflectT = Math.max(0, this.reflectT - dt);
     this.reflectCd = Math.max(0, this.reflectCd - cdDt);
@@ -159,7 +154,7 @@ export class Passives {
     this.mortarT = 0;
     this.interceptBank = 0;
     this.bubbleT = this.reflectT = this.reflectCd = 0;
-    this.overloadCd = this.absorbT = 0;
+    this.overloadCd = 0;
   }
 }
 

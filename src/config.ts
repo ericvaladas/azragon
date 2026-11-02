@@ -611,11 +611,10 @@ export const CONFIG = {
     storm: { interval: 8, intervalStep: 1, spikes: 4, extraSpikes: 2 },
     chitin: { perRank: 0.15 },
     /**
-     * Laser Absorb: a beam or orbital hit is absorbed, cutting every active ability's cooldown but the ultimate's by
-     * cooldownCut s (by rank) and cancelling an orbital strike. For absorbTime s after that, further beam and orbital hits
-     * are absorbed too, with no second cut. It recharges over cooldown s (by rank).
+     * Laser Absorb: beam and orbital hits land at damageMult × their damage. One that lands also cuts every active
+     * ability's cooldown but the ultimate's by cooldownCut s (by rank), at most once every recharge s.
      */
-    overload: { cooldown: [0, 20, 15, 11], cooldownCut: [0, 4, 6, 8], absorbTime: 1.5 },
+    overload: { damageMult: 0.7, recharge: 15, cooldownCut: [0, 4, 6, 8] },
     /** Arrays are indexed by rank (0 = not taken). */
     spines: { rate: [0, 2, 3, 4.5], radius: [0, 500, 600, 700] },
     swat: { cooldown: [0, 3.75, 2.85, 1.95], range: [0, 450, 525, 600], damage: [0, 120, 220, 320], targets: [0, 1, 2, 3], headHeight: 380 },
