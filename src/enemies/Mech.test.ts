@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import { CONFIG } from '../config';
 import { Mech } from './Mech';
-import { MECH_PIVOTS as PV } from './mechModel';
-import type { MechRig } from './mechPose';
+import { CRAWL_ORDER, MECH_PIVOTS as PV } from './mechModel';
+import type { MechPose, MechRig } from './mechPose';
 import { PRESETS } from '../systems/Particles';
 import { mulberry32 } from '../util/rng';
 import type { WorldContext } from './types';
@@ -829,6 +829,171 @@ describe('Mech', () => {
       expect(inner(mech).action).toBe('walk');
       expect(inner(mech).laser.visible).toBe(false);
       expect(inner(mech).laserCd).toBeGreaterThan(0);
+    });
+  });
+
+  describe('crawl gait', () => {
+    const FRAME = 1 / 60;
+    type Gaited = { foot(i: number, out: Vec2): Vec2; pose: MechPose; gait: number; stride: number; x: number; z: number; heading: number; engaged: boolean };
+    const inner = (m: Mech) => m as unknown as Gaited;
+    /** The foot `i` as drawn, on the ground, from the pose and the mech's position and heading. */
+    const drawn = (g: Gaited, i: number): Vec2 => {
+      const across = g.pose.feet[i * 3]! * M.height;
+      const fwd = g.pose.feet[i * 3 + 2]! * M.height;
+      const s = Math.sin(g.heading);
+      const c = Math.cos(g.heading);
+      return { x: g.x + c * across + s * fwd, z: g.z - s * across + c * fwd };
+    };
+    /** A mech walking at the monster, kept 3000 m ahead, engaged (walkSpeed) or not (approachSpeed). */
+    function walker(engaged: boolean) {
+      const mech = new Mech(new THREE.Scene());
+      const c = makeCtx();
+      faceOff(mech, c, 3000);
+      noLaser(mech);
+      const g = inner(mech);
+      Object.assign(mech, { rocketCd: Infinity, barrageCd: Infinity, dashCd: Infinity, evadeCd: Infinity });
+      g.engaged = engaged;
+      const frames = (n: number, each?: () => void) => {
+        for (let k = 0; k < n; k++) {
+          // The monster keeps its distance, so the mech walks on.
+          c.monster.position.x = g.x - 3000;
+          mech.update(FRAME, c.ctx);
+          each?.();
+        }
+      };
+      return { mech, c, g, frames };
+    }
+
+    for (const [label, engaged] of [['walkSpeed', true], ['approachSpeed', false]] as const) {
+      it(`a planted foot stays still in the world at ${label}`, () => {
+        const { g, frames } = walker(engaged);
+        frames(60);
+        expect(g.gait).toBe(1);
+        const held: (Vec2 | null)[] = [null, null, null, null];
+        let checked = 0;
+        frames(600, () => {
+          for (let i = 0; i < 4; i++) {
+            if (g.pose.feet[i * 3 + 1]! > 1e-9) {
+              held[i] = null;
+              continue;
+            }
+            const f = drawn(g, i);
+            const was = held[i];
+            if (was) {
+              checked++;
+              expect(Math.hypot(f.x - was.x, f.z - was.z)).toBeLessThan(0.01);
+            }
+            held[i] = f;
+          }
+        });
+        expect(checked).toBeGreaterThan(1000);
+      });
+
+      it(`foot() matches the drawn foot at ${label}`, () => {
+        const { g, frames } = walker(engaged);
+        const out = { x: 0, z: 0 };
+        frames(300, () => {
+          for (let i = 0; i < 4; i++) {
+            const f = drawn(g, i);
+            g.foot(i, out);
+            expect(Math.hypot(f.x - out.x, f.z - out.z)).toBeLessThan(1e-6);
+          }
+        });
+      });
+    }
+
+    it('walks one full cycle in 1.5 to 2.25 s at walkSpeed, and plants at most 3.25 feet a second at approachSpeed', () => {
+      const cycle = (M.gaitStep * M.height) / M.walkSpeed;
+      expect(cycle).toBeGreaterThanOrEqual(1.5);
+      expect(cycle).toBeLessThanOrEqual(2.25);
+      expect((4 * M.approachSpeed) / (M.gaitStep * M.height)).toBeLessThanOrEqual(3.25);
+    });
+
+    for (const [label, engaged, speed] of [['walkSpeed', true, M.walkSpeed], ['approachSpeed', false, M.approachSpeed]] as const) {
+      it(`one dust ring and one shake per plant, in crawl order, under the planting foot at ${label}`, () => {
+        const { c, g, frames } = walker(engaged);
+        frames(60);
+        const rings: { at: THREE.Vector3; n: number }[] = [];
+        const planted: number[] = [];
+        (c.ctx.particles as unknown as { ring: (k: string, at: THREE.Vector3, r: number, n: number) => void }).ring = (_k, at, _r, n) => {
+          rings.push({ at: at.clone(), n });
+          const dists = [0, 1, 2, 3].map((i) => {
+            const f = drawn(g, i);
+            return Math.hypot(f.x - at.x, f.z - at.z);
+          });
+          planted.push(dists.indexOf(Math.min(...dists)));
+        };
+        c.shakes.length = 0;
+        const seconds = 12;
+        frames(seconds * 60);
+        const expected = (4 * speed * seconds) / (M.gaitStep * M.height);
+        expect(Math.abs(rings.length - expected)).toBeLessThanOrEqual(1);
+        expect(c.shakes.length).toBe(rings.length);
+        expect(rings.every((r) => r.n === M.footfallDust)).toBe(true);
+        expect(c.shakes.every((a) => a <= M.footfallShake)).toBe(true);
+        const start = CRAWL_ORDER.indexOf(planted[0] as 0);
+        planted.forEach((leg, k) => expect(leg).toBe(CRAWL_ORDER[(start + k) % 4]));
+      });
+    }
+
+    it('crushes under all four feet at crushDps each, as it walks', () => {
+      const { c, frames } = walker(true);
+      frames(60);
+      c.crushes.length = 0;
+      frames(120);
+      const footCrush = c.crushes.filter((x) => x.r === M.crushRadius).reduce((sum, x) => sum + x.amount, 0);
+      expect(footCrush).toBeCloseTo(4 * M.crushDps * 2, 3);
+    });
+
+    it('stopping settles the feet to rest with no planted foot skating', () => {
+      const { mech, c, g, frames } = walker(true);
+      frames(137);
+      // The monster is suddenly at the stopping distance: the mech stops where it stands.
+      const stand = M.radius + CONFIG.monster.bodyRadius + M.stopGap;
+      const hx = () => g.x - stand;
+      const was = [0, 1, 2, 3].map((i) => drawn(g, i));
+      const wasDown = [0, 1, 2, 3].map((i) => g.pose.feet[i * 3 + 1]! <= 1e-6);
+      let slip = 0;
+      for (let k = 0; k < 90; k++) {
+        c.monster.position.x = hx();
+        mech.update(FRAME, c.ctx);
+        for (let i = 0; i < 4; i++) {
+          const f = drawn(g, i);
+          const down = g.pose.feet[i * 3 + 1]! <= 1e-6;
+          if (down && wasDown[i]) slip = Math.max(slip, Math.hypot(f.x - was[i]!.x, f.z - was[i]!.z));
+          was[i] = f;
+          wasDown[i] = down;
+        }
+      }
+      expect(g.gait).toBe(0);
+      expect(slip).toBeLessThan(0.5);
+    });
+
+    it('starting from rest skates no planted foot by more than a tenth of its height', () => {
+      const { c, g, mech } = walker(true);
+      c.monster.position.x = g.x - (M.radius + CONFIG.monster.bodyRadius + M.stopGap);
+      mech.update(FRAME, c.ctx);
+      const was = [0, 1, 2, 3].map((i) => drawn(g, i));
+      const slip = [0, 0, 0, 0];
+      for (let k = 0; k < 60; k++) {
+        c.monster.position.x = g.x - 3000;
+        mech.update(FRAME, c.ctx);
+        for (let i = 0; i < 4; i++) {
+          const f = drawn(g, i);
+          if (g.pose.feet[i * 3 + 1]! <= 1e-6) slip[i]! += Math.hypot(f.x - was[i]!.x, f.z - was[i]!.z);
+          was[i] = f;
+        }
+      }
+      expect(Math.max(...slip)).toBeLessThan(0.1 * M.height);
+    });
+
+    it('winds its gait down as it dies, so no foot hangs in the air', () => {
+      const { c, g, mech, frames } = walker(true);
+      frames(100);
+      body(mech).applyDamage(1e9);
+      run(mech, c, 1);
+      expect(g.gait).toBe(0);
+      for (let i = 0; i < 4; i++) expect(g.pose.feet[i * 3 + 1]!).toBeCloseTo(0, 3);
     });
   });
 });

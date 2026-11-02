@@ -3,33 +3,27 @@ import { CONFIG } from '../config';
 import { toonMat } from '../render/toon';
 import { damp } from '../util/math';
 import { laserPhase, movePhase, type MechAction } from './mechMath';
-import { LEG_REACH, LOWER_LEN, MECH_LEGS, MECH_PIVOTS as PV, MECH_TUBES, UPPER_LEN, mechParts } from './mechModel';
+import { CRAWL_ORDER, LEG_REACH, LOWER_LEN, MECH_LEGS, MECH_PIVOTS as PV, MECH_TUBES, UPPER_LEN, mechParts } from './mechModel';
 
-/** Ground covered per footfall (model units). A planted foot slides back half of it either side of its rest spot. */
-export const STEP = 0.25;
-const HALF_STEP = STEP / 2;
-/** How high a swinging foot lifts, and how far the hull bobs, at full stride (model units). */
-const LIFT = 0.07;
-const BOB = 0.012;
-/** Mid-dash the legs gallop at this multiple of a full walking stride. */
-const GALLOP = 1.4;
+const M = CONFIG.mech;
+const TAU = Math.PI * 2;
 /** The hull pitches and rolls about the line through the rear hips, so the rear feet stay put as it rears up. */
 const REAR_Z = MECH_LEGS[2]!.z;
 /** The leg's upper and lower segments' rest angles in its plane (rad up from straight out). */
 const UPPER_REST = Math.atan2(PV.kneeY, PV.kneeZ);
 const LOWER_REST = Math.atan2(PV.footY, PV.footZ);
 const MIN_REACH = Math.abs(LOWER_LEN - UPPER_LEN) + 1e-3;
-const MAX_REACH = UPPER_LEN + LOWER_LEN - 1e-3;
+export const MAX_REACH = UPPER_LEN + LOWER_LEN - 1e-3;
 
 /**
  * Where the mech's body and feet are, in model units in the mech's own frame (1 tall, facing +Z, +X its left): the hull
  * raised by `lift`, pitched (nose down positive) and rolled (left side up positive) about the rear hip line, slid
- * forward by `shift`; the cannons' recoil (0..1); and the four feet (x, y, z each, in MECH_LEGS order).
+ * forward by `shift` and to its left by `sway`; the cannons' recoil (0..1); and the four feet (x, y, z each, in MECH_LEGS order).
  */
-export type MechPose = { lift: number; pitch: number; roll: number; shift: number; recoil: number; feet: number[] };
-const SCALARS = ['lift', 'pitch', 'roll', 'shift', 'recoil'] as const;
+export type MechPose = { lift: number; pitch: number; roll: number; shift: number; sway: number; recoil: number; feet: number[] };
+const SCALARS = ['lift', 'pitch', 'roll', 'shift', 'sway', 'recoil'] as const;
 
-export function restPose(out: MechPose = { lift: 0, pitch: 0, roll: 0, shift: 0, recoil: 0, feet: new Array<number>(12).fill(0) }): MechPose {
+export function restPose(out: MechPose = { lift: 0, pitch: 0, roll: 0, shift: 0, sway: 0, recoil: 0, feet: new Array<number>(12).fill(0) }): MechPose {
   for (const k of SCALARS) out[k] = 0;
   MECH_LEGS.forEach((leg, i) => setFoot(out, i, leg.x + Math.sin(leg.splay) * LEG_REACH, 0, leg.z + Math.cos(leg.splay) * LEG_REACH));
   return out;
@@ -41,20 +35,26 @@ export function dampPose(pose: MechPose, target: MechPose, rate: number, dt: num
   for (let i = 0; i < 12; i++) pose.feet[i] = damp(pose.feet[i]!, target.feet[i]!, rate, dt);
 }
 
+/** Copies every value of `from` into `to`. */
+export function copyPose(from: MechPose, to: MechPose): void {
+  for (const k of SCALARS) to[k] = from[k];
+  for (let i = 0; i < 12; i++) to.feet[i] = from.feet[i]!;
+}
+
 function setFoot(p: MechPose, i: number, x: number, y: number, z: number): void {
   p.feet[i * 3] = x;
   p.feet[i * 3 + 1] = y;
   p.feet[i * 3 + 2] = z;
 }
 
-/** Leg `i`'s hip in the mech's frame under the pose's hull lift, pitch, roll and shift; written into `out`. */
+/** Leg `i`'s hip in the mech's frame under the pose's hull lift, pitch, roll, shift and sway; written into `out`. */
 export function hipOf(i: number, p: MechPose, out: THREE.Vector3): THREE.Vector3 {
   const leg = MECH_LEGS[i]!;
   // Roll about Z, then pitch about X (three.js's XYZ Euler order), about the rear hip line.
   const x1 = leg.x * Math.cos(p.roll);
   const y1 = leg.x * Math.sin(p.roll);
   const z = leg.z - REAR_Z;
-  return out.set(x1, PV.bodyY + p.lift + y1 * Math.cos(p.pitch) - z * Math.sin(p.pitch), REAR_Z + p.shift + y1 * Math.sin(p.pitch) + z * Math.cos(p.pitch));
+  return out.set(x1 + p.sway, PV.bodyY + p.lift + y1 * Math.cos(p.pitch) - z * Math.sin(p.pitch), REAR_Z + p.shift + y1 * Math.sin(p.pitch) + z * Math.cos(p.pitch));
 }
 
 /** A leg's joint angles: its yaw about +Y, then the upper segment's and the knee's turns about the leg's X axis. */
@@ -99,8 +99,68 @@ export type MechPoseInput = {
   recoil: number;
 };
 
+/** A foot's offset from its rest spot in the mech's frame (model units): `z` forward, `y` up. */
+export type FootOffset = { z: number; y: number };
+
 const _hip = new THREE.Vector3();
+const _leg: FootOffset = { z: 0, y: 0 };
 const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+
+/**
+ * A foot's path through one crawl cycle, `phase` 0..1 from its plant; written into `out`. Planted, it moves back at
+ * gaitStep per cycle, which is the body's speed, so it holds still on the ground. Swinging, it follows a cubic that
+ * leaves and rejoins the ground at that same speed, under a sin² lift.
+ */
+export function gaitFoot(phase: number, out: FootOffset): FootOffset {
+  const duty = M.gaitDuty;
+  const travel = M.gaitStep * duty;
+  if (phase < duty) {
+    out.z = travel * (0.5 - phase / duty);
+    out.y = 0;
+    return out;
+  }
+  const t = (phase - duty) / (1 - duty);
+  const t2 = t * t;
+  const t3 = t2 * t;
+  // Cubic Hermite from -travel/2 to +travel/2 with the planted foot's velocity at both ends, per unit of t.
+  const m = -M.gaitStep * (1 - duty);
+  out.z = (travel / 2) * (3 * t2 - 2 * t3 - (2 * t3 - 3 * t2 + 1)) + m * (t3 - 2 * t2 + t + t3 - t2);
+  const s = Math.sin(Math.PI * t);
+  out.y = M.gaitLift * s * s;
+  return out;
+}
+
+/** Leg `i`'s phase 0..1 through its cycle at stride angle `stride`; each leg plants a quarter cycle after the last in CRAWL_ORDER. */
+export function legPhase(i: number, stride: number): number {
+  const p = stride / TAU - CRAWL_ORDER.indexOf(i as (typeof CRAWL_ORDER)[number]) / 4;
+  return p - Math.floor(p);
+}
+
+/**
+ * Leg `i`'s offset from its rest spot at `stride` and blend `gait` (0 standing .. 1 walking); written into `out`. As
+ * `gait` moves, each leg blends across its own gaitSettle-wide window in CRAWL_ORDER, lifted in proportion to the
+ * ground it has to cover, so a foot on its way to or from rest is off the ground.
+ */
+export function gaitLeg(i: number, stride: number, gait: number, out: FootOffset): FootOffset {
+  gaitFoot(legPhase(i, stride), out);
+  const k = CRAWL_ORDER.indexOf(i as (typeof CRAWL_ORDER)[number]);
+  const lo = (k * (1 - M.gaitSettle)) / 3;
+  const u = Math.max(0, Math.min(1, (gait - lo) / M.gaitSettle));
+  const a = u * u * (3 - 2 * u);
+  const z = out.z - Math.sign(MECH_LEGS[i]!.z) * M.gaitInset;
+  const reach = (M.gaitStep * M.gaitDuty) / 2 + M.gaitInset;
+  out.z = a * z;
+  out.y = a * out.y + 4 * a * (1 - a) * M.gaitLift * Math.min(1, Math.abs(z) / reach);
+  return out;
+}
+
+/** Adds the crawl's foot offsets, times `sign`, to the feet of `p`. */
+export function addGait(p: MechPose, stride: number, gait: number, sign: number): void {
+  for (let i = 0; i < 4; i++) {
+    gaitLeg(i, stride, gait, _leg);
+    nudge(p, i, 0, _leg.y * sign, _leg.z * sign);
+  }
+}
 
 /** Moves leg `i`'s foot by (dx, dy, dz). */
 function nudge(p: MechPose, i: number, dx: number, dy: number, dz: number): void {
@@ -116,20 +176,27 @@ function moveFoot(p: MechPose, i: number, out: number, up: number, fwd: number, 
 }
 
 /**
- * The pose the mech's state asks for, written into `out`. Walking, diagonal pairs step together (front-left with
- * rear-right) and the hull bobs as each pair plants. The stab rocks the hull back and draws one front blade up and
+ * The pose the mech's state asks for, written into `out`. Walking, it crawls one leg at a time (see gaitFoot): the hull
+ * dips as each foot plants and leans and shifts away from the swinging side. The stab rocks the hull back and draws one front blade up and
  * back, then spikes it forward; the stomp pitches the hull up with both front blades lifted, then crashes them down; the dash crouches low on all
  * four legs, then gallops; the sidestep shuffles the feet across; the hopback crouches, then tucks all four feet in the air; the laser plants low on spread feet. Dying it sags; wrecked, its legs splay flat and the hull drops.
  */
 export function targetPose(s: MechPoseInput, out: MechPose): MechPose {
   restPose(out);
   out.recoil = s.recoil;
-  const amp = s.dashing ? GALLOP : s.gait;
-  for (let i = 0; i < 4; i++) {
-    const ph = s.stride + (i === 1 || i === 2 ? Math.PI : 0);
-    nudge(out, i, 0, Math.max(0, Math.cos(ph)) * LIFT * amp, Math.sin(ph) * HALF_STEP * amp);
+  addGait(out, s.stride, s.gait, 1);
+  // Stride 0 is the middle of the left legs' two swings, and each foot plants on a quarter turn of the stride.
+  const side = Math.cos(s.stride);
+  out.roll = M.gaitRoll * s.gait * side;
+  out.sway = -M.gaitSway * s.gait * side;
+  out.lift = -M.gaitBob * s.gait * Math.cos(4 * s.stride);
+  if (s.dashing) {
+    for (let i = 0; i < 4; i++) {
+      const ph = s.stride + (i === 1 || i === 2 ? Math.PI : 0);
+      nudge(out, i, 0, Math.max(0, Math.cos(ph)) * M.gallopLift * M.gallopAmp, (Math.sin(ph) * M.gallopStep * M.gallopAmp) / 2);
+    }
+    out.lift += M.gallopBob * M.gallopAmp * Math.cos(2 * s.stride);
   }
-  out.lift = BOB * amp * Math.cos(2 * s.stride);
   if (s.wrecked) {
     restPose(out);
     out.lift = -0.3;
@@ -154,7 +221,6 @@ export function targetPose(s: MechPoseInput, out: MechPose): MechPose {
   if (a === 'walk') return out;
   if (a === 'laser') {
     // Planted low on spread feet, the hull shuddering while the beam fires.
-    const M = CONFIG.mech;
     const ph = laserPhase(s.actT);
     const fireEnd = M.laserCharge + M.laserAim + M.laserLock + M.laserFire;
     const k = ph === 'recover' || ph === 'done' ? Math.max(0, 1 - (s.actT - fireEnd) / M.laserRecover) : ease(Math.min(1, s.actT / M.laserCharge));
@@ -222,7 +288,7 @@ export function targetPose(s: MechPoseInput, out: MechPose): MechPose {
     out.roll = -0.07 * s.evadeSide * k;
     for (let i = 0; i < 4; i++) {
       const legPh = s.stride + (i === 1 || i === 2 ? Math.PI : 0);
-      nudge(out, i, Math.sin(legPh) * HALF_STEP * k * s.evadeSide, Math.max(0, Math.cos(legPh)) * LIFT * k, 0);
+      nudge(out, i, (Math.sin(legPh) * M.gallopStep * k * s.evadeSide) / 2, Math.max(0, Math.cos(legPh)) * M.gallopLift * k, 0);
     }
   } else if (a === 'hopback') {
     if (ph === 'windup' || ph === 'recover') {
@@ -305,7 +371,7 @@ export class MechRig {
   }
 
   apply(p: MechPose): void {
-    this.pivot.position.set(0, PV.bodyY + p.lift, REAR_Z + p.shift);
+    this.pivot.position.set(p.sway, PV.bodyY + p.lift, REAR_Z + p.shift);
     this.pivot.rotation.set(p.pitch, 0, p.roll);
     this.cannons.position.z = -this.barrelKick(p.recoil);
     for (let i = 0; i < 4; i++) {

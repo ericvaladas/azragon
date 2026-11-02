@@ -812,7 +812,21 @@ export const CONFIG = {
     cannonRecoil: 0.08, cannonRecoilTime: 0.35, cannonJoltShift: 0.014, cannonJoltPitch: 0.035,
     cannonFlash: 4, cannonSparks: 6, cannonSmoke: 6, cannonSmokeSpeed: 420, cannonShake: 0.1,
     barrageCooldown: 17, barrageCount: 7, barrageSpread: 450, barrageRadius: 130, barrageFill: 2.0, barrageDamage: 110, barrageMissileSpeed: 1600, barrageRunOut: 120, barrageRise: 150, barrageBack: 0.6,
-    spawnDistance: 4200, footfallShake: 0.06, dyingTime: 2.5, wreckVanish: 0.6, wreckBursts: 8, wreckBurstScale: 2.5, wreckShake: 0.9, wreckRing: 28, wreckVeils: 16, wreckBillows: 24,
+    /**
+     * The crawl walk, in model units (1 = its height). gaitStep is the ground covered in one full cycle of four
+     * footfalls; each foot stays planted for gaitDuty of the cycle and lifts gaitLift mid-swing. Each foot's travel is
+     * centred gaitInset toward the hips, to stay inside the legs' reach. gaitBob is the hull's dip as a foot plants;
+     * gaitRoll (rad) and gaitSway are its lean and shift away from the swinging side.
+     */
+    gaitStep: 0.6, gaitDuty: 0.75, gaitLift: 0.1, gaitInset: 0.05, gaitBob: 0.008, gaitRoll: 0.02, gaitSway: 0.012,
+    /**
+     * How fast the gait blends between standing and walking (1/s). Each leg blends over gaitSettle of that range in
+     * turn, stepping to or from its spot lifted off the ground.
+     */
+    gaitBlend: 2.5, gaitSettle: 0.4,
+    /** The dash's gallop and the sidestep's shuffle (model units): ground per footfall, foot lift and hull bob. The gallop's stride is gallopAmp × these. */
+    gallopStep: 0.25, gallopLift: 0.07, gallopBob: 0.012, gallopAmp: 1.4,
+    spawnDistance: 4200, footfallShake: 0.08, footfallDust: 10, dyingTime: 2.5, wreckVanish: 0.6, wreckBursts: 8, wreckBurstScale: 2.5, wreckShake: 0.9, wreckRing: 28, wreckVeils: 16, wreckBillows: 24,
     evadeCooldown: 6, evadeCheck: 0.5, evadeChance: 0.35, hopChance: 0.4,
     sidestepDistance: 0.9 * MONSTER_HEIGHT, hopDistance: 1.3 * MONSTER_HEIGHT, hopHeight: 0.25 * MONSTER_HEIGHT, hopCrush: 0.4, hopShake: 0.2,
     laserHops: 2, laserFirst: 15, laserCooldown: 22, laserRange: 1400,

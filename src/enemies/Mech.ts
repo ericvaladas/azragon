@@ -6,8 +6,8 @@ import { strikeFill, strikeHits, strikePoints } from './artilleryMath';
 import { launchArc } from '../systems/projectileMath';
 import { chooseAction, laserPhase, movePhase, punchHits, slamHits, type MechAction, type MechMind, type MechMove } from './mechMath';
 import { MechLaser } from './mechLaser';
-import { LEG_REACH, MECH_LEGS, MECH_TUBES, missileGeometry } from './mechModel';
-import { MechRig, STEP, dampPose, restPose, targetPose, type MechPoseInput, type VisorState } from './mechPose';
+import { CRAWL_ORDER, LEG_REACH, MECH_LEGS, MECH_TUBES, missileGeometry } from './mechModel';
+import { MechRig, addGait, copyPose, dampPose, gaitLeg, restPose, targetPose, type FootOffset, type MechPoseInput, type VisorState } from './mechPose';
 import type { EnemySystem, WorldContext } from './types';
 
 const M = CONFIG.mech;
@@ -43,8 +43,11 @@ const _s = new THREE.Vector3();
 const _foot: Vec2 = { x: 0, z: 0 };
 const _here: Vec2 = { x: 0, z: 0 };
 const _mind: MechMind = { dist: 0, contact: 0, engaged: false, meleeCd: 0, dashCd: 0, rocketCd: 0, barrageCd: 0, evadeCd: 0, laserCd: 0, roll: 0, evadeRoll: 1 };
-/** The diagonal leg pairs that step together: front-left with rear-right, front-right with rear-left. */
+/** The diagonal leg pairs that move together in the sidestep: front-left with rear-right, front-right with rear-left. */
 const PAIRS = [[0, 3], [1, 2]] as const;
+
+/** Stride angle per footfall of the crawl (rad). */
+const FOOTFALL = Math.PI / 2;
 
 /** Turns `from` toward `to` by at most `step` rad. */
 const turn = (from: number, to: number, step: number) => from + Math.max(-step, Math.min(step, angleDelta(from, to)));
@@ -84,8 +87,9 @@ const missileK = (s: { t: number; launchAt: number; flight: number }): number =>
 
 type Strike = { at: Vec2; t: number; tube: number; launchAt: number; flight: number; from: THREE.Vector3; fx: number; fz: number; launched: boolean; trailT: number };
 
-/** Scratch target pose and its input, rebuilt every draw. */
+/** Scratch target pose and its input, rebuilt every draw, and a foot's crawl offset. */
 const _target = restPose();
+const _gaitFoot: FootOffset = { z: 0, y: 0 };
 const _poseIn: MechPoseInput = { stride: 0, gait: 0, action: 'walk', actT: 0, dashing: false, stabLeg: 0, evadeSide: 1, alive: true, dying: 0, wrecked: false, recoil: 0 };
 
 /**
@@ -140,7 +144,7 @@ export class Mech implements EnemySystem {
   private landed = false;
   /** Height above the ground mid-hopback (m). */
   private hopY = 0;
-  /** Stride phase (rad; one footfall each π) and how far into its stride it is (0 standing .. 1 walking). */
+  /** Stride angle (rad; a full crawl cycle each 2π) and how far into its stride it is (0 standing .. 1 walking). */
   private stride = 0;
   private gait = 0;
   private flashT = 0;
@@ -151,7 +155,9 @@ export class Mech implements EnemySystem {
   private sparkT = 0;
   private wreckT: number | null = null;
   private strikes: Strike[] = [];
+  /** The drawn pose: `base`, which eases toward the target, plus the crawl's feet, which follow the stride exactly. */
   private pose = restPose();
+  private base = restPose();
   private readonly rig = new MechRig();
   private readonly root = this.rig.root;
   private ringMesh: THREE.InstancedMesh;
@@ -248,6 +254,7 @@ export class Mech implements EnemySystem {
     this.dyingT = this.sparkT = 0;
     this.wreckT = null;
     restPose(this.pose);
+    restPose(this.base);
     this.root.visible = true;
     this.draw();
   }
@@ -321,11 +328,17 @@ export class Mech implements EnemySystem {
     }
     // The laser sequence holds its ground; the chase picks up from where it was once it ends.
     if (this.action !== 'laser' && !this.hoppingToLaser) this.updateChase(dt, dist - stand);
-    this.gait = damp(this.gait, this.action === 'walk' && this.chasing && dist > stand + 1 ? 1 : 0, 6, dt);
+    this.blendGait(this.action === 'walk' && this.chasing && dist > stand + 1 ? 1 : 0, dt);
     if (this.action === 'walk') this.walk(dt, ctx, dist, aim, stand);
     else if (this.action === 'sidestep' || this.action === 'hopback') this.evade(this.action, dt, ctx, aim, dist);
     else if (this.action === 'laser') this.chargeLaser(dt, ctx, aim);
     else this.act(this.action, dt, ctx, aim, dist);
+  }
+
+  /** Moves the gait toward `goal` at gaitBlend per second. */
+  private blendGait(goal: number, dt: number): void {
+    const step = M.gaitBlend * dt;
+    this.gait += Math.max(-step, Math.min(step, goal - this.gait));
   }
 
   private start(a: MechMove | 'laser'): void {
@@ -386,7 +399,7 @@ export class Mech implements EnemySystem {
     this.x = this.evadeX + this.evadeDirX * along;
     this.z = this.evadeZ + this.evadeDirZ * along;
     if (a === 'sidestep') {
-      this.footfalls(Math.hypot(this.x - px, this.z - pz), dt, ctx, dist);
+      this.shuffle(Math.hypot(this.x - px, this.z - pz), dt, ctx, dist);
     } else {
       this.hopY = M.hopHeight * 4 * k * (1 - k);
       if (k >= 1 && !this.landed) this.land(ctx);
@@ -476,28 +489,48 @@ export class Mech implements EnemySystem {
     this.footfalls(step, dt, ctx, dist);
   }
 
-  /** Advances the stride by `step` m, crushing what is underfoot; each footfall raises dust and shakes (less far off). */
+  /** Advances the crawl by `step` m, crushing what is underfoot; each foot that plants raises dust and shakes (less far off). */
   private footfalls(step: number, dt: number, ctx: WorldContext, dist: number): void {
-    const before = Math.floor(this.stride / Math.PI + 0.5);
-    this.stride += (Math.PI * step) / (STEP * H);
-    for (let i = 0; i < 4; i++) ctx.razeBuildings(this.foot(i, _foot), M.crushRadius, M.crushDps * dt);
-    if (Math.floor(this.stride / Math.PI + 0.5) === before) return;
-    // A footfall: the diagonal pair swung furthest forward plants, raising dust under each foot.
-    for (const i of PAIRS[Math.sin(this.stride) > 0 ? 0 : 1]) {
-      const foot = this.foot(i, _foot);
-      ctx.particles.ring('dust', _p.set(foot.x, 0, foot.z), M.crushRadius, 8);
+    const before = Math.floor(this.stride / FOOTFALL);
+    this.stride += (Math.PI * 2 * step) / (M.gaitStep * H);
+    this.crushUnderfoot(dt, ctx);
+    const after = Math.floor(this.stride / FOOTFALL);
+    for (let k = before + 1; k <= after; k++) {
+      this.dustAtFoot(CRAWL_ORDER[k % 4]!, M.footfallDust, ctx);
+      this.footfallRumble(ctx, dist);
     }
+  }
+
+  /** Advances a sidestep's shuffle by `step` m, crushing what is underfoot; each diagonal pair that lands raises dust and shakes. */
+  private shuffle(step: number, dt: number, ctx: WorldContext, dist: number): void {
+    const before = Math.floor(this.stride / Math.PI + 0.5);
+    this.stride += (Math.PI * step) / (M.gallopStep * H);
+    this.crushUnderfoot(dt, ctx);
+    if (Math.floor(this.stride / Math.PI + 0.5) === before) return;
+    for (const i of PAIRS[Math.sin(this.stride) > 0 ? 0 : 1]) this.dustAtFoot(i, 8, ctx);
+    this.footfallRumble(ctx, dist);
+  }
+
+  private crushUnderfoot(dt: number, ctx: WorldContext): void {
+    for (let i = 0; i < 4; i++) ctx.razeBuildings(this.foot(i, _foot), M.crushRadius, M.crushDps * dt);
+  }
+
+  private dustAtFoot(i: number, count: number, ctx: WorldContext): void {
+    const foot = this.foot(i, _foot);
+    ctx.particles.ring('dust', _p.set(foot.x, 0, foot.z), M.crushRadius, count);
+  }
+
+  private footfallRumble(ctx: WorldContext, dist: number): void {
     ctx.shake(M.footfallShake * Math.max(0.25, 1 - dist / CONFIG.fog.far));
   }
 
-  /** Where foot `i` (MECH_LEGS order) is on the ground, with the stride's forward swing; written into `out`. */
+  /** Where foot `i` (MECH_LEGS order) is on the ground, with the crawl's offset; written into `out`. */
   private foot(i: number, out: Vec2): Vec2 {
     const s = Math.sin(this.heading);
     const c = Math.cos(this.heading);
     const leg = MECH_LEGS[i]!;
-    const phase = this.stride + (i === 1 || i === 2 ? Math.PI : 0);
     const across = (leg.x + Math.sin(leg.splay) * LEG_REACH) * H;
-    const fwd = (leg.z + Math.cos(leg.splay) * LEG_REACH + Math.sin(phase) * (STEP / 2) * this.gait) * H;
+    const fwd = (leg.z + Math.cos(leg.splay) * LEG_REACH + gaitLeg(i, this.stride, this.gait, _gaitFoot).z) * H;
     // The model's left (+X) is (cos h, −sin h) on the ground.
     out.x = this.x + c * across + s * fwd;
     out.z = this.z - s * across + c * fwd;
@@ -566,7 +599,7 @@ export class Mech implements EnemySystem {
     ctx.razeBuildings(_here, M.crushRadius, M.crushDps * dt);
     ctx.particles.emit('dust', _p.set(this.x, 0, this.z), 2, 1.5);
     // The legs gallop through the lunge.
-    this.stride += (Math.PI * step) / (2 * STEP * H);
+    this.stride += (Math.PI * step) / (2 * M.gallopStep * H);
     if (left - step > 1) return;
     this.dashing = false;
     this.chasing = true;
@@ -652,6 +685,7 @@ export class Mech implements EnemySystem {
    */
   private die(dt: number, ctx: WorldContext): boolean {
     const r = ctx.rng;
+    this.blendGait(0, dt);
     if (this.wreckT === null) {
       this.dyingT += dt;
       this.sparkT -= dt;
@@ -715,7 +749,12 @@ export class Mech implements EnemySystem {
     s.dying = Math.min(1, this.dyingT / M.dyingTime);
     s.wrecked = this.wreckT !== null;
     s.recoil = this.recoil;
-    dampPose(this.pose, targetPose(s, _target), b.alive ? POSE_RATE : FALL_RATE, dt);
+    // The crawl's feet stay outside the easing: a foot lagging its path slides on the ground.
+    targetPose(s, _target);
+    addGait(_target, s.stride, s.gait, -1);
+    dampPose(this.base, _target, b.alive ? POSE_RATE : FALL_RATE, dt);
+    copyPose(this.base, this.pose);
+    addGait(this.pose, s.stride, s.gait, 1);
     // The barrels' kick is instant; only the body's jolt eases in with the pose.
     this.pose.recoil = this.recoil;
     this.rig.apply(this.pose);

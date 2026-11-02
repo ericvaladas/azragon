@@ -74,13 +74,16 @@ const SPLAY_BACK = Math.PI - SPLAY_FRONT;
 /** The hips' offsets from the body pivot, inside the hip frame's corners. */
 const HIP_X = 0.065;
 const HIP_Z = 0.12;
-/** Front-left, front-right, rear-left, rear-right. Diagonal pairs (0 with 3, 1 with 2) step together. */
+/** Front-left, front-right, rear-left, rear-right. Diagonal pairs (0 with 3, 1 with 2) move together in the gallop and the sidestep. */
 export const MECH_LEGS: readonly MechLeg[] = [
   { x: HIP_X, z: HIP_Z, splay: SPLAY_FRONT },
   { x: -HIP_X, z: HIP_Z, splay: -SPLAY_FRONT },
   { x: HIP_X, z: -HIP_Z, splay: SPLAY_BACK },
   { x: -HIP_X, z: -HIP_Z, splay: -SPLAY_BACK },
 ];
+
+/** The crawl's footfall order, as MECH_LEGS indices: rear-left, front-left, rear-right, front-right. */
+export const CRAWL_ORDER = [2, 0, 3, 1] as const;
 
 /** How far out from its hip a standing foot rests (the knee's and the foot's reach out along the leg). */
 export const LEG_REACH = MECH_PIVOTS.kneeZ + MECH_PIVOTS.footZ;

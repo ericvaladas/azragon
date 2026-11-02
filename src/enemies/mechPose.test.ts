@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import { CONFIG } from '../config';
-import { HIP_FRAME_D, HIP_FRAME_T, HIP_FRAME_W, MECH_LEGS, MECH_PIVOTS as PV, mechLauncher, mechParts } from './mechModel';
-import { hipOf, restPose, solveLeg, targetPose, type LegAngles, type MechPose, type MechPoseInput } from './mechPose';
+import { CRAWL_ORDER, HIP_FRAME_D, HIP_FRAME_T, HIP_FRAME_W, MECH_LEGS, MECH_PIVOTS as PV, mechLauncher, mechParts } from './mechModel';
+import { MAX_REACH, gaitFoot, gaitLeg, hipOf, legPhase, restPose, solveLeg, targetPose, type FootOffset, type LegAngles, type MechPose, type MechPoseInput } from './mechPose';
 
 const input = (o: Partial<MechPoseInput> = {}): MechPoseInput => ({ stride: 0, gait: 0, action: 'walk', actT: 0, dashing: false, stabLeg: 0, evadeSide: 1, alive: true, dying: 0, wrecked: false, recoil: 0, ...o });
 
@@ -28,7 +28,7 @@ const kneeRise = (p: MechPose, i: number) => kneeAt(p, i).y - hipOf(i, p, new TH
 function legInBody(p: MechPose, i: number, n = 24): THREE.Vector3[] {
   const rearZ = MECH_LEGS[2]!.z;
   const body = new THREE.Matrix4()
-    .makeTranslation(0, PV.bodyY + p.lift, rearZ + p.shift)
+    .makeTranslation(p.sway, PV.bodyY + p.lift, rearZ + p.shift)
     .multiply(new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(p.pitch, 0, p.roll)))
     .multiply(new THREE.Matrix4().makeTranslation(0, 0, -rearZ));
   const inv = body.invert();
@@ -50,7 +50,7 @@ const WINDUPS = (): [string, MechPose][] => {
     ['stab right', targetPose(input({ action: 'punch', actT: mv.punch.windup * 0.99, stabLeg: 1 }), restPose())],
     ['stomp', targetPose(input({ action: 'slam', actT: mv.slam.windup * 0.99 }), restPose())],
     ['rest', restPose()],
-    ['walk', targetPose(input({ gait: 1, stride: 0.6 }), restPose())],
+    ...Array.from({ length: 16 }, (_, k): [string, MechPose] => ['walk', targetPose(input({ gait: 1, stride: (k / 16) * Math.PI * 2 }), restPose())]),
   ];
 };
 
@@ -98,13 +98,147 @@ describe('mech pose', () => {
     }
   });
 
-  it('walking, diagonal pairs step together and the planted pair stays on the ground', () => {
-    const p = targetPose(input({ stride: Math.PI / 2 + 0.3, gait: 1 }), restPose());
-    // Front-left and rear-right are mid-plant (on the ground); front-right and rear-left swing (lifted).
-    expect(p.feet[1]).toBeCloseTo(0, 6);
-    expect(p.feet[10]).toBeCloseTo(0, 6);
-    expect(p.feet[4]).toBeGreaterThan(0);
-    expect(p.feet[7]).toBeGreaterThan(0);
+  describe('crawl gait', () => {
+    const G = CONFIG.mech;
+    const TAU = Math.PI * 2;
+    const SAMPLES = 480;
+    const off = (): FootOffset => ({ z: 0, y: 0 });
+    /** Stride angles over one full cycle. */
+    const cycle = () => Array.from({ length: SAMPLES }, (_, k) => ((k + 0.5) / SAMPLES) * TAU);
+    const lifted = (p: MechPose) => [0, 1, 2, 3].filter((i) => p.feet[i * 3 + 1]! > 1e-9);
+
+    it('the crawl goes rear-left, front-left, rear-right, front-right', () => {
+      const name = CRAWL_ORDER.map((i) => (MECH_LEGS[i]!.z > 0 ? 'front' : 'rear') + (MECH_LEGS[i]!.x > 0 ? '-left' : '-right'));
+      expect(name).toEqual(['rear-left', 'front-left', 'rear-right', 'front-right']);
+    });
+
+    it('a planted foot moves back at exactly the body speed: a linear ramp over the planted part of the cycle', () => {
+      const a = gaitFoot(0.1, off());
+      const b = gaitFoot(0.6, off());
+      expect((b.z - a.z) / 0.5).toBeCloseTo(-G.gaitStep, 9);
+      expect(a.y).toBe(0);
+      expect(b.y).toBe(0);
+    });
+
+    it('a swinging foot lifts on a continuous path and meets the ground moving at the planted speed', () => {
+      let last = gaitFoot(0, off());
+      const eps = 1e-5;
+      for (let k = 1; k <= 2000; k++) {
+        const f = gaitFoot((k % 2000) / 2000, off());
+        expect(Math.abs(f.z - last.z)).toBeLessThan(0.002);
+        expect(Math.abs(f.y - last.y)).toBeLessThan(0.002);
+        last = f;
+      }
+      const speed = (gaitFoot(1 - eps, off()).z - gaitFoot(1 - 3 * eps, off()).z) / (2 * eps);
+      expect(speed).toBeCloseTo(-G.gaitStep, 2);
+      expect(gaitFoot(G.gaitDuty + (1 - G.gaitDuty) / 2, off()).y).toBeCloseTo(G.gaitLift, 9);
+    });
+
+    it('at full gait exactly one foot is lifted at a time and at least three are planted', () => {
+      for (const stride of cycle()) {
+        const p = targetPose(input({ gait: 1, stride }), restPose());
+        expect(lifted(p).length).toBe(1);
+      }
+    });
+
+    it('each leg lifts in crawl order, for a quarter of the cycle', () => {
+      const order: number[] = [];
+      const counts = [0, 0, 0, 0];
+      for (const stride of cycle()) {
+        const i = lifted(targetPose(input({ gait: 1, stride }), restPose()))[0]!;
+        counts[i]!++;
+        if (order[order.length - 1] !== i) order.push(i);
+      }
+      // Stride 0 is the rear-left foot planting. Each leg swings in the quarter before its plant.
+      expect(order).toEqual([CRAWL_ORDER[1], CRAWL_ORDER[2], CRAWL_ORDER[3], CRAWL_ORDER[0]]);
+      for (const n of counts) expect(n / SAMPLES).toBeCloseTo(1 - G.gaitDuty, 2);
+    });
+
+    it('legPhase reaches 0, a plant, on the quarter of the cycle matching the crawl order', () => {
+      CRAWL_ORDER.forEach((leg, k) => {
+        const stride = (k / 4) * TAU + 4 * TAU;
+        expect(legPhase(leg, stride + 1e-6)).toBeLessThan(1e-5);
+      });
+    });
+
+    it('every foot target stays inside the IK reach, with margin, at any gait', () => {
+      const hip = new THREE.Vector3();
+      for (const gait of [0, 0.2, 0.5, 0.8, 1]) {
+        for (const stride of cycle()) {
+          const p = targetPose(input({ gait, stride }), restPose());
+          for (let i = 0; i < 4; i++) {
+            hipOf(i, p, hip);
+            expect(hip.distanceTo(new THREE.Vector3(p.feet[i * 3]!, p.feet[i * 3 + 1]!, p.feet[i * 3 + 2]!))).toBeLessThan(MAX_REACH - 0.003);
+          }
+        }
+      }
+    });
+
+    it('the hull leans and shifts away from the swinging side, smoothly and subtly', () => {
+      let last = targetPose(input({ gait: 1, stride: 0 }), restPose());
+      expect(last.sway).toBeLessThan(0);
+      expect(last.roll).toBeGreaterThan(0);
+      for (const stride of cycle()) {
+        const p = targetPose(input({ gait: 1, stride }), restPose());
+        const i = lifted(p)[0]!;
+        const left = MECH_LEGS[i]!.x > 0;
+        // Each side's swings run for half the cycle; the hull is on the far side throughout.
+        const side = Math.cos(stride);
+        if (Math.abs(side) > 1e-3) {
+          expect(left).toBe(side > 0);
+          expect(Math.sign(p.sway)).toBe(left ? -1 : 1);
+          expect(Math.sign(p.roll)).toBe(left ? 1 : -1);
+        }
+        expect(Math.abs(p.sway)).toBeLessThanOrEqual(0.02);
+        expect(Math.abs(p.roll)).toBeLessThanOrEqual(0.03);
+        expect(Math.abs(p.sway - last.sway)).toBeLessThan(0.001);
+        expect(Math.abs(p.roll - last.roll)).toBeLessThan(0.001);
+        last = p;
+      }
+    });
+
+    it('the hull is at its lowest as a foot plants', () => {
+      const plant = targetPose(input({ gait: 1, stride: Math.PI / 2 }), restPose());
+      const mid = targetPose(input({ gait: 1, stride: Math.PI / 2 + Math.PI / 4 }), restPose());
+      expect(plant.lift).toBeCloseTo(-G.gaitBob, 9);
+      expect(mid.lift).toBeCloseTo(G.gaitBob, 9);
+    });
+
+    it('settling to rest moves each foot to its spot only while lifted, one leg at a time', () => {
+      const leg = off();
+      const prev = off();
+      for (const stride of cycle().filter((_, k) => k % 8 === 0)) {
+        let moving = 0;
+        for (let gait = 1; gait > 0; gait -= 0.005) {
+          let now = 0;
+          for (let i = 0; i < 4; i++) {
+            gaitLeg(i, stride, gait, leg);
+            gaitLeg(i, stride, gait - 0.005, prev);
+            const shift = Math.abs(leg.z - prev.z);
+            if (shift > 1e-6) {
+              now++;
+              // A foot only travels clear of the ground, the first and last moments of its hop aside.
+              if (shift > 2e-4) expect(Math.max(leg.y, prev.y)).toBeGreaterThan(0);
+            }
+          }
+          moving = Math.max(moving, now);
+        }
+        expect(moving).toBeLessThanOrEqual(2);
+      }
+      for (const i of [0, 1, 2, 3]) {
+        gaitLeg(i, 1.3, 0, leg);
+        expect(leg.z).toBeCloseTo(0, 12);
+        expect(leg.y).toBeCloseTo(0, 12);
+      }
+    });
+
+    it('the dash still gallops on diagonal pairs', () => {
+      const p = targetPose(input({ action: 'dash', actT: CONFIG.mech.moves.dash.windup, dashing: true, stride: 0 }), restPose());
+      expect(p.feet[1]).toBeGreaterThan(0);
+      expect(p.feet[10]).toBeGreaterThan(0);
+      expect(p.feet[4]).toBeCloseTo(0, 6);
+      expect(p.feet[7]).toBeCloseTo(0, 6);
+    });
   });
 
   it('no leg passes through the hull, the launcher or the hip frame', () => {
